@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "aegis",
+  "version": "0.1.0",
+  "identifier": "com.xeintdm.aegis",
+  "build": {
+    "beforeDevCommand": "bun dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Aegis",
+        "width": 1250,
+        "height": 650,
+        "minWidth": 800,
+        "minHeight": 500,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "deb", "msi"], 
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.icns",
+      "icons/icon.png"
+    ]
+  },
+  "plugins": {
+    "core": {
+      "permissions": [
+        "core:default",
+        "core:webview:default",
+        "core:webview:allow-internal-toggle-devtools",
+        "store:default"
+      ]
+    }
+  }
+}

@@ -1,0 +1,3 @@
+export const CREATE_GROUP_CONTEXT_KEY = {};
+export const FRIENDS_LAYOUT_DATA_CONTEXT_KEY = {};
+export const SERVER_LAYOUT_DATA_CONTEXT_KEY = {};

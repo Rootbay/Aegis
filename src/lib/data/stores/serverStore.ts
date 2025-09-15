@@ -1,0 +1,238 @@
+import { writable, get, type Readable } from 'svelte/store';
+import { invoke } from '@tauri-apps/api/core';
+import type { Server } from '$lib/models/Server';
+import type { User } from '$lib/models/User';
+import type { Channel } from '$lib/models/Channel';
+import { userStore } from './userStore';
+import { serverCache } from '$lib/utils/cache';
+
+type BackendUser = {
+  id: string;
+  username?: string;
+  name?: string;
+  avatar: string;
+  is_online?: boolean;
+  online?: boolean;
+  public_key?: string;
+  bio?: string;
+  tag?: string;
+};
+
+type BackendServer = {
+  id: string;
+  name: string;
+  iconUrl?: string;
+  owner_id?: string;
+  members?: BackendUser[];
+  channels?: Channel[];
+  [key: string]: unknown;
+};
+
+interface ServerStoreState {
+  servers: Server[];
+  loading: boolean;
+  activeServerId: string | null;
+}
+
+interface ServerStore extends Readable<ServerStoreState> {
+  handleServersUpdate: (servers: Server[]) => void;
+  setActiveServer: (serverId: string | null) => void;
+  updateServerMemberPresence: (userId: string, isOnline: boolean) => void;
+  addServer: (server: Server) => void;
+  removeServer: (serverId: string) => void;
+  fetchServerDetails: (serverId: string) => Promise<void>;
+  addChannelToServer: (serverId: string, channel: Channel) => void;
+  updateServer: (serverId: string, patch: Partial<Server>) => void;
+  removeChannelFromServer: (serverId: string, channelId: string) => void;
+  initialize: () => Promise<void>;
+  getServer: (serverId: string) => Promise<Server | null>;
+}
+
+function createServerStore(): ServerStore {
+  const { subscribe, set, update } = writable<ServerStoreState>({
+    servers: [],
+    loading: true,
+    activeServerId: typeof localStorage !== 'undefined' ? localStorage.getItem('activeServerId') : null,
+  });
+
+  const fromBackendUser = (u: BackendUser): User => ({
+    id: u.id,
+    name: u.username ?? u.name,
+    avatar: u.avatar,
+    online: u.is_online ?? u.online ?? false,
+    publicKey: u.public_key,
+    bio: u.bio,
+    tag: u.tag,
+  });
+
+  const mapServer = (s: BackendServer): Server => ({
+    ...s,
+    members: (s.members || []).map((m) => fromBackendUser(m)),
+  });
+
+  const getServer = async (serverId: string): Promise<Server | null> => {
+    if (serverCache.has(serverId)) {
+      return serverCache.get(serverId) || null;
+    }
+    try {
+      const server: BackendServer | null = await invoke('get_server_details', { serverId: serverId });
+      if (server) {
+        const mapped = mapServer(server);
+        serverCache.set(serverId, mapped);
+        return mapped;
+      }
+      return null;
+    } catch (e) {
+      console.error(`Failed to get server ${serverId}:`, e);
+      return null;
+    }
+  };
+
+  const initialize = async () => {
+    update(s => ({ ...s, loading: true }));
+    try {
+      const currentUser = get(userStore).me;
+      if (currentUser) {
+        const fetchedServers: BackendServer[] = await invoke('get_servers', { currentUserId: currentUser.id });
+        const mapped = fetchedServers.map(mapServer);
+        mapped.forEach(server => serverCache.set(server.id, server));
+        update(s => ({ ...s, servers: mapped, loading: false }));
+      } else {
+        console.warn("User not loaded, cannot fetch servers.");
+        update(s => ({ ...s, loading: false }));
+      }
+    } catch (e) {
+      console.error("Failed to fetch servers:", e);
+      update(s => ({ ...s, loading: false }));
+    }
+  };
+
+  const handleServersUpdate = (updatedServers: Server[]) => {
+    updatedServers.forEach(server => serverCache.set(server.id, server));
+    set({ servers: updatedServers, loading: false, activeServerId: get({subscribe}).activeServerId });
+  };
+
+  const setActiveServer = (serverId: string | null) => {
+    update(s => ({ ...s, activeServerId: serverId }));
+    if (typeof localStorage !== 'undefined') {
+      if (serverId) {
+        localStorage.setItem('activeServerId', serverId);
+      } else {
+        localStorage.removeItem('activeServerId');
+      }
+    }
+    if (serverId) {
+      fetchServerDetails(serverId);
+    }
+  };
+
+  const updateServerMemberPresence = (userId: string, isOnline: boolean) => {
+    update(s => ({
+      ...s,
+      servers: s.servers.map(server => ({
+        ...server,
+        members: server.members.map(member =>
+          member.id === userId ? { ...member, online: isOnline } : member
+        )
+      }))
+    }));
+  };
+
+  const addServer = (server: Server) => {
+    update(s => ({ ...s, servers: [...s.servers, server] }));
+    serverCache.set(server.id, server);
+  };
+
+  const removeServer = (serverId: string) => {
+    update(s => ({ ...s, servers: s.servers.filter(s => s.id !== serverId) }));
+    serverCache.delete(serverId);
+  };
+
+  const fetchServerDetails = async (serverId: string) => {
+    const cachedServer = serverCache.get(serverId);
+    if (cachedServer && cachedServer.channels && cachedServer.members) {
+      update(s => ({
+        ...s,
+        servers: s.servers.map(server =>
+          server.id === serverId ? cachedServer : server
+        )
+      }));
+      return;
+    }
+    update(s => ({ ...s, loading: true }));
+    try {
+      const channels: Channel[] = await invoke('get_channels_for_server', { serverId: serverId });
+      const membersBackend: BackendUser[] = await invoke('get_members_for_server', { serverId: serverId });
+      const members: User[] = membersBackend.map(fromBackendUser);
+
+      update(s => {
+        const newServers = s.servers.map(server =>
+          server.id === serverId
+            ? { ...server, channels: channels, members: members }
+            : server
+        );
+        const serverToCache = newServers.find(s => s.id === serverId);
+        if (serverToCache) serverCache.set(serverId, serverToCache);
+        return { ...s, servers: newServers };
+      });
+    } catch (e) {
+      console.error("Failed to get channels or members for server:", e);
+    } finally {
+      update(s => ({ ...s, loading: false }));
+    }
+  };
+
+  const addChannelToServer = (serverId: string, channel: Channel) => {
+    update(s => ({
+      ...s,
+      servers: s.servers.map(server =>
+        server.id === serverId
+          ? { ...server, channels: [...(server.channels || []), channel] }
+          : server
+      )
+    }));
+    const server = get({subscribe}).servers.find(s => s.id === serverId);
+    if (server) serverCache.set(serverId, server);
+  };
+
+  const updateServer = (serverId: string, patch: Partial<Server>) => {
+    update(s => {
+      const servers = s.servers.map(server =>
+        server.id === serverId ? { ...server, ...patch } : server
+      );
+      const updated = servers.find(sv => sv.id === serverId);
+      if (updated) serverCache.set(serverId, updated);
+      return { ...s, servers };
+    });
+  };
+
+  const removeChannelFromServer = (serverId: string, channelId: string) => {
+    update(s => {
+      const servers = s.servers.map(server =>
+        server.id === serverId
+          ? { ...server, channels: (server.channels || []).filter(c => c.id !== channelId) }
+          : server
+      );
+      const updated = servers.find(sv => sv.id === serverId);
+      if (updated) serverCache.set(serverId, updated);
+      return { ...s, servers };
+    });
+  };
+
+  return {
+    subscribe,
+    handleServersUpdate,
+    setActiveServer,
+    updateServerMemberPresence,
+    addServer,
+    removeServer,
+    fetchServerDetails,
+    addChannelToServer,
+    updateServer,
+    removeChannelFromServer,
+    initialize,
+    getServer,
+  };
+}
+
+export const serverStore = createServerStore();

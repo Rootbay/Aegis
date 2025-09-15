@@ -1,0 +1,50 @@
+pub mod commands;
+pub mod bootstrap;
+
+use crate::commands::state::AppStateContainer;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub async fn run() {
+    tauri::Builder::default()
+        .manage(AppStateContainer::default())
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            commands::identity::get_peer_id,
+            commands::identity::get_public_key,
+            commands::messages::send_message,
+            commands::messages::send_encrypted_dm,
+            commands::messages::rotate_group_key,
+            commands::messages::send_encrypted_group_message,
+            commands::presence::send_presence_update,
+            commands::presence::mark_self_presence_local,
+            commands::users::update_user_profile,
+            commands::users::get_user,
+            commands::friends::send_friend_request,
+            commands::friends::accept_friend_request,
+            commands::friends::block_user,
+            commands::friends::unblock_user,
+            commands::friends::remove_friendship,
+            commands::servers::create_server,
+            commands::servers::join_server,
+            commands::servers::create_channel,
+            commands::friends::get_friendships,
+            commands::servers::get_servers,
+            commands::messages::get_messages,
+            commands::servers::get_channels_for_server,
+            commands::servers::get_members_for_server,
+            commands::servers::send_server_invite,
+            commands::servers::delete_channel,
+            commands::servers::delete_server,
+            commands::servers::get_server_details,
+            commands::identity::unlock_identity,
+            commands::identity::is_identity_created,
+            commands::identity::initialize_app,
+            commands::files::send_file,
+            commands::files::approve_file_transfer,
+            commands::files::reject_file_transfer,
+            commands::settings::get_file_acl_policy,
+            commands::settings::set_file_acl_policy
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

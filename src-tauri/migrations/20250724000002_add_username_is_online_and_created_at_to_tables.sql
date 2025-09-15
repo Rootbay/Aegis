@@ -1,0 +1,3 @@
+ALTER TABLE users RENAME COLUMN name TO username;
+ALTER TABLE users RENAME COLUMN online TO is_online;
+ALTER TABLE servers ADD COLUMN created_at TEXT NOT NULL DEFAULT '1970-01-01 00:00:00';
