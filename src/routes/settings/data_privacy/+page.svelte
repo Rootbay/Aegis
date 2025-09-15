@@ -46,7 +46,7 @@
 
   <div class="pt-4 border-t border-zinc-700">
     <h3 class="text-lg font-semibold mb-2">Data Management</h3>
-    <button class="btn btn-info" on:click={exportData}>
+    <button class="btn btn-info" onclick={exportData}>
       Export My Data
     </button>
     <p class="text-sm text-muted-foreground mt-2">Download a copy of your personal data.</p>
@@ -54,7 +54,7 @@
 
   <div class="pt-4 border-t border-zinc-700">
     <h3 class="text-lg font-semibold mb-2">Account Deletion</h3>
-    <button class="btn btn-error" on:click={confirmAccountDeletion}>
+    <button class="btn btn-error" onclick={confirmAccountDeletion}>
       Delete My Account
     </button>
     <p class="text-sm text-muted-foreground mt-2">Permanently delete your account and all associated data.</p>

@@ -1,25 +1,24 @@
 <script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiFile, mdiFileImage, mdiFileDocument, mdiFileMusic, mdiFileVideo, mdiArchive, mdiClose } from '@mdi/js';
+  import { X, File } from '@lucide/svelte';
 
   export let file: File;
   export let onRemove: Function = () => {};
   $: void file;
 
   const fileTypeIcons: { [key: string]: string } = {
-    'image': mdiFileImage,
-    'pdf': mdiFileDocument,
-    'audio': mdiFileMusic,
-    'video': mdiFileVideo,
-    'zip': mdiArchive,
-    'rar': mdiArchive,
+    'image': 'file-image',
+    'pdf': 'file-text',
+    'audio': 'file-music',
+    'video': 'file-video',
+    'zip': 'archive',
+    'rar': 'archive',
   };
 
-  let icon = mdiFile;
+  let icon = 'file';
   let imagePreviewUrl: string | null = null;
 
   if (file.type.startsWith('image/')) {
-    icon = mdiFileImage;
+    icon = 'file';
     imagePreviewUrl = URL.createObjectURL(file);
   } else {
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
@@ -37,7 +36,7 @@
     <img src={imagePreviewUrl} alt={file.name} class="w-12 h-12 object-cover rounded-md" />
   {:else}
     <div class="w-12 h-12 flex items-center justify-center bg-zinc-600 rounded-md">
-      <Icon data={icon} size="8" class="text-muted-foreground" />
+      <File size={12} class="text-muted-foreground" />
     </div>
   {/if}
   <div class="flex-grow overflow-hidden">
@@ -49,6 +48,6 @@
     class="absolute top-0 right-0 -mt-1 -mr-1 bg-card rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
     aria-label="Remove file"
   >
-    <Icon data={mdiClose} size="4" class="text-white" />
+    <X size={10} class="text-white" />
   </button>
 </div>

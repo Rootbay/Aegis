@@ -1,6 +1,5 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { mdiPound, mdiClose, mdiCog, mdiPlus, mdiChevronDown, mdiExitToApp, mdiBellOutline, mdiCalendarPlus, mdiShapePlus, mdiAccountPlus } from '@mdi/js';
   import ServerBackgroundContextMenu from '$lib/components/context-menus/ServerBackgroundContextMenu.svelte';
   import CategoryContextMenu from '$lib/components/context-menus/CategoryContextMenu.svelte';
   import ChannelContextMenu from '$lib/components/context-menus/ChannelContextMenu.svelte';
@@ -8,7 +7,7 @@
   import { chatStore } from '$lib/data/stores/chatStore';
   import { toasts } from '$lib/data/stores/ToastStore';
   import type { Channel } from '$lib/models/Channel';
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { Bell, Plus, Settings, ChevronDown, Hash, X, CircleX } from '@lucide/svelte';
   import type { Server } from '$lib/models/Server';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
@@ -475,33 +474,33 @@
         <div class="flex items-center font-bold text-lg truncate px-4 py-2">
           {server.name}
         </div>
-        <Icon data={mdiChevronDown} size="5" clazz="mr-6" />
+        <ChevronDown size={10} class="mr-6" />
       </button>
 
       {#if showDropdown}
         <div class="absolute top-full left-1/2 -translate-x-1/2 w-[218px] bg-muted border border-border rounded-md shadow-lg z-10 mt-1 p-2 transition-all duration-300 ease-in-out origin-top {showDropdown ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0 pointer-events-none'}">
           <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleServerSettingsClick}>
-            <Icon data={mdiCog} size="5" clazz="mr-2" /> Server Settings
+            <Settings size={10} class="mr-2" /> Server Settings
           </button>
           <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleInvitePeople}>
-            <Icon data={mdiAccountPlus} size="5" clazz="mr-2" /> Invite People
+            <Plus size={10} class="mr-2" /> Invite People
           </button>
           <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleCreateChannelClick}>
-            <Icon data={mdiPlus} size="5" clazz="mr-2" /> Create Channel
+            <Plus size={10} class="mr-2" /> Create Channel
           </button>
           <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleCreateCategory}>
-            <Icon data={mdiShapePlus} size="5" clazz="mr-2" /> Create Category
+            <Plus size={10} class="mr-2" /> Create Category
           </button>
           <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleCreateEvent}>
-            <Icon data={mdiCalendarPlus} size="5" clazz="mr-2" /> Create Event
+            <Plus size={10} class="mr-2" /> Create Event
           </button>
           <div class="border-t border-border/50 my-1"></div>
           <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleNotificationSettings}>
-            <Icon data={mdiBellOutline} size="5" clazz="mr-2" /> Notification Settings
+            <Bell size={10} class="mr-2" /> Notification Settings
           </button>
           <div class="border-t border-border/50 my-1"></div>
           <button class="w-full text-left p-2 text-sm text-destructive hover:bg-red-500/20 flex items-center cursor-pointer rounded-md" onclick={handleLeaveServer}>
-            <Icon data={mdiExitToApp} size="5" clazz="mr-2" /> Leave Server
+            <CircleX size={10} class="mr-2" /> Leave Server
           </button>
         </div>
         {/if}
@@ -540,15 +539,14 @@
             >
               Text Channels
             </h3>
-            <Icon
-              data={mdiChevronDown}
-              size="5"
-              clazz="ml-1 transition-transform duration-200 {textChannelsCollapsed ? 'rotate-[-90deg]' : ''}"
+            <ChevronDown
+              size={10}
+              class="ml-1 transition-transform duration-200 {textChannelsCollapsed ? 'rotate-[-90deg]' : ''}"
             />
           </div>
         </div>
         <button class="text-muted-foreground hover:text-foreground cursor-pointer" onclick={handleCreateChannelClick} aria-label="Create Channel">
-          <Icon data={mdiPlus} size="5" />
+          <Plus size={10} class="mr-2" />
         </button>
       </div>
       
@@ -569,15 +567,15 @@
               oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
             >
               <div class="flex items-center truncate">
-                <Icon data={mdiPound} size="5" clazz="mr-1" />
+                <Hash size={10} class="mr-1" />
                 <span class="truncate select-none ml-2">{channel.name}</span>
               </div>
               <div class="ml-auto flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 <button type="button" class="text-muted-foreground hover:text-foreground p-1 cursor-pointer" onclick={(event) => handleInviteToChannelClick(channel, event)} aria-label="Invite to channel">
-                  <Icon data={mdiAccountPlus} size="4" />
+                  <Plus size={10} />
                 </button>
                 <button type="button" class="text-muted-foreground hover:text-foreground p-1 cursor-pointer" onclick={(event) => handleChannelSettingsClick(channel, event)} aria-label="Channel settings">
-                  <Icon data={mdiCog} size="4" />
+                  <Settings size={10} />
                 </button>
               </div>
             </div>
@@ -640,7 +638,7 @@
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold">Create New Channel</h2>
         <button onclick={() => showCreateChannelModal = false} class="text-muted-foreground hover:text-foreground cursor-pointer">
-          <Icon data={mdiClose} size="6" />
+          <X size={12} />
         </button>
       </div>
       <input
@@ -677,7 +675,7 @@
         onclick={createChannel}
         disabled={!newChannelName.trim()}
       >
-        <Icon data={mdiPlus} size="6" clazz="mr-2" /> Create Channel
+        <Plus size={10} class="mr-2" /> Create Channel
       </button>
     </div>
   </div>

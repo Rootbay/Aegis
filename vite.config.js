@@ -1,12 +1,19 @@
 /// <reference types="vitest" />
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { resolve } from "node:path";
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [sveltekit()],
+
+  resolve: {
+    alias: {
+      sveltejs: resolve("node_modules/@sveltejs")
+    }
+  },
 
   optimizeDeps: {
     exclude: ['@mdi/js'],

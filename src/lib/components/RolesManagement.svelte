@@ -2,7 +2,7 @@
   import type { Role } from '$lib/models/Role';
   import { v4 as uuidv4 } from 'uuid';
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiPlus, mdiPencil, mdiTrashCan, mdiCheck, mdiClose, mdiEyeOutline } from '@mdi/js';
+  import { Plus, Pencil, Trash, X, Check, Eye } from '@lucide/svelte';
 
   export let roles: Role[] = [];
   export let onAddRole: (role: Role) => void;
@@ -122,7 +122,6 @@
 </script>
 
 <div class="flex flex-col md:flex-row gap-4">
-  <!-- Left Column: Role List -->
   <div class="md:w-1/3 bg-muted/50 p-4 rounded-lg flex flex-col">
     <h3 class="text-xl font-semibold text-foreground mb-4">Roles</h3>
 
@@ -135,7 +134,7 @@
         class="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-ring"
       />
       <button onclick={addRole} class="bg-primary hover:bg-accent text-foreground p-2 rounded-md flex items-center justify-center">
-        <Icon data={mdiPlus} size="5" />
+        <Plus size={12} />
       </button>
     </div>
 
@@ -152,15 +151,14 @@
         >
           <span class="font-medium" style="color: {role.color};">{role.name}</span>
           <div class="flex items-center gap-2">
-            <Icon data={mdiPencil} size="5" class="text-muted-foreground hover:text-foreground cursor-pointer" onclick={(e) => { e.stopPropagation(); startEditRole(role); }} />
-            <Icon data={mdiTrashCan} size="5" class="text-destructive hover:text-destructive/80 cursor-pointer" onclick={(e) => { e.stopPropagation(); deleteRole(role.id); }} />
+            <Pencil size={10} class="text-muted-foreground hover:text-foreground cursor-pointer" onclick={(e) => { e.stopPropagation(); startEditRole(role); }} />
+            <Trash size={10} class="text-destructive hover:text-destructive/80 cursor-pointer" onclick={(e) => { e.stopPropagation(); deleteRole(role.id); }} />
           </div>
         </div>
       {/each}
     </div>
   </div>
 
-  <!-- Right Column: Role Details -->
   <div class="md:w-2/3 bg-muted/50 p-4 rounded-lg flex flex-col">
     {#if editingRole}
       <h3 class="text-xl font-semibold text-foreground mb-4">Editing Role: {editingRole.name}</h3>
@@ -219,15 +217,15 @@
 
       <div class="flex justify-end gap-2 mt-4">
         <button onclick={cancelEditRole} class="px-4 py-2 bg-base-400 hover:bg-base-500 text-foreground rounded-md font-semibold">
-          <Icon data={mdiClose} size="5" class="inline-block mr-1" /> Cancel
+          <X size={10} class="inline-block mr-1" /> Cancel
         </button>
         <button onclick={saveEditRole} class="px-4 py-2 bg-primary hover:bg-accent text-foreground rounded-md font-semibold">
-          <Icon data={mdiCheck} size="5" class="inline-block mr-1" /> Save
+          <Check size={10} class="inline-block mr-1" /> Save
         </button>
       </div>
     {:else}
       <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <Icon data={mdiEyeOutline} size="16" class="mb-4" />
+        <Eye size={20} class="mb-4" />
         <p class="text-lg">Select a role to view and edit its settings.</p>
       </div>
     {/if}

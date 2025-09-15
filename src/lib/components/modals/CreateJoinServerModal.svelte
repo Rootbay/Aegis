@@ -1,9 +1,8 @@
 <script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiClose, mdiArrowLeft, mdiUpload } from '@mdi/js';
+  import { invoke } from '@tauri-apps/api/core';
+  import { X, ArrowLeft, Upload } from '@lucide/svelte';
   import { serverStore } from '$lib/data/stores/serverStore';
   import { userStore } from '$lib/data/stores/userStore';
-  import { invoke } from '@tauri-apps/api/core';
   import type { Server } from '$lib/models/Server';
 
   export let onclose: () => void;
@@ -98,7 +97,7 @@
 <div class="fixed inset-0 flex items-center justify-center z-50">
   <div class="bg-card p-8 rounded-lg shadow-lg w-full max-w-md relative">
     <button class="absolute top-4 right-4 text-muted-foreground hover:text-white cursor-pointer" onclick={onclose}>
-      <Icon data={mdiClose} size="8" />
+      <X size={15} />
     </button>
     
     {#if modalView === 'main'}
@@ -152,7 +151,7 @@
           class="flex items-center text-muted-foreground hover:text-white transition-colors cursor-pointer"
           onclick={() => (modalView = 'main')}
         >
-          <Icon data={mdiArrowLeft} size="8" clazz="mr-2" />
+          <ArrowLeft size={12} class="mr-2" />
           Back
         </button>
         <button
@@ -171,7 +170,7 @@
             {#if serverIconPreview}
               <img src={serverIconPreview} alt="Server Icon Preview" class="w-full h-full rounded-full object-cover">
             {:else}
-              <Icon data={mdiUpload} size="10" />
+              <Upload size={15} />
             {/if}
           </label>
           <input type="file" id="serverIcon" class="hidden" accept="image/*" onchange={handleIconUpload}>
@@ -194,7 +193,7 @@
           class="flex items-center text-muted-foreground hover:text-white transition-colors cursor-pointer"
           onclick={() => (modalView = 'main')}
         >
-          <Icon data={mdiArrowLeft} size="8" clazz="mr-2" />
+          <ArrowLeft size={12} class="mr-2" />
           Back
         </button>
         <button

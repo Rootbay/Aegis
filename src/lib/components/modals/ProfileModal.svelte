@@ -1,7 +1,7 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
   import { userStore } from '$lib/data/stores/userStore';
-  import Icon from '.$lib/components/ui/Icon.svelte';
+  import { SendHorizontal, EllipsisVertical } from '@lucide/svelte';
 
   export let profileUser = {
     id: '2',
@@ -87,17 +87,17 @@
           <span>Message</span>
         </button>
         <button class="flex items-center justify-center p-2 bg-gray-200 text-gray-700 rounded-lg border-none cursor-pointer" onclick={showMoreOptions} aria-label="More options">
-          <Icon data="M12 12c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm7-2c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-14 0c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z" size="5" />
+          <EllipsisVertical size={12} />
         </button>
       {:else}
         <button class="flex-grow flex items-center justify-center gap-2 px-4 py-2 text-base font-semibold text-white bg-blue-500 rounded-lg border-none cursor-pointer" onclick={addFriend}>
           <span>Add Friend</span>
         </button>
         <button class="flex items-center justify-center p-2 bg-gray-200 text-gray-700 rounded-lg border-none cursor-pointer" onclick={sendMessage} aria-label="Message">
-          <Icon data="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" size="5" />
+          <SendHorizontal size={12} />
         </button>
         <button class="flex items-center justify-center p-2 bg-gray-200 text-gray-700 rounded-lg border-none cursor-pointer" onclick={showMoreOptions} aria-label="More options">
-          <Icon data="M12 12c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm7-2c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-14 0c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z" size="5" />
+          <EllipsisVertical size={12} />
         </button>
       {/if}
     </div>

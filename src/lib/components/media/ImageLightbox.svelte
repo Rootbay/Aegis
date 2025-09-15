@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { mdiClose, mdiDownload, mdiMagnifyPlus, mdiMagnifyMinus } from '@mdi/js';
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { ZoomIn, ZoomOut, Download, X } from '@lucide/svelte';
   import MagnifierContextMenu from '$lib/components/context-menus/MagnifierContextMenu.svelte';
 
   export let imageUrl = '';
@@ -129,28 +128,28 @@
         onclick={zoomIn}
         aria-label="Zoom In"
       >
-        <Icon data={mdiMagnifyPlus} size="6" />
+        <ZoomIn size={12} />
       </button>
       <button
         class="text-white hover:text-gray-300 z-10 cursor-pointer"
         onclick={zoomOut}
         aria-label="Zoom Out"
       >
-        <Icon data={mdiMagnifyMinus} size="6" />
+        <ZoomOut size={12} />
       </button>
       <button
         class="text-white hover:text-gray-300 z-10 cursor-pointer"
         onclick={saveImage}
         aria-label="Save image"
       >
-        <Icon data={mdiDownload} size="6" />
+        <Download size={12} />
       </button>
       <button
         class="text-white hover:text-gray-300 z-10 cursor-pointer"
         onclick={closeLightbox}
         aria-label="Close image"
       >
-        <Icon data={mdiClose} size="6" />
+        <X size={12} />
       </button>
     </div>
     <div bind:this={parentDivElement} class="relative flex items-center justify-center" role="presentation" tabindex="-1" oncontextmenu={(e) => { e.preventDefault(); handleContextMenu(e); }}>

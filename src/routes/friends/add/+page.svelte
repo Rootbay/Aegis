@@ -1,8 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { toasts } from '$lib/data/stores/ToastStore';
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiAccountPlus, mdiQrcodeScan } from '@mdi/js';
+  import { Plus, Scan } from '@lucide/svelte';
   import QRCodeScanner from '$lib/components/modals/QRCodeScanner.svelte';
 
   let friendIdToAdd = '';
@@ -38,7 +37,7 @@
   <p class="text-muted-foreground mb-4">
     You can add a friend with their Aegis ID. It's case-sensitive!
   </p>
-  <form on:submit|preventDefault={handleAddFriend} class="flex items-center bg-base-100 p-2 rounded-lg border border-border">
+  <form onsubmit={handleAddFriend} preventDefault class="flex items-center bg-base-100 p-2 rounded-lg border border-border">
     <input
       type="search"
       bind:value={friendIdToAdd}
@@ -55,16 +54,16 @@
       {#if isSending}
         Sending...
       {:else}
-        <Icon data={mdiAccountPlus} size="5" clazz="mr-2" />
+        <Plus size={10} class="mr-2" />
         Send Friend Request
       {/if}
     </button>
     <button
       type="button"
       class="bg-muted hover:bg-base-400 text-foreground font-bold py-2 px-4 rounded-md flex items-center ml-2 cursor-pointer"
-      on:click={handleScanQrCode}
+      onclick={handleScanQrCode}
     >
-      <Icon data={mdiQrcodeScan} size="5" clazz="mr-2" />
+      <Scan size={10} class="mr-2" />
       Scan
     </button>
   </form>

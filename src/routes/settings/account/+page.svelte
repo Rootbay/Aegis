@@ -1,18 +1,16 @@
 <script lang="ts">
   let activeTab: string = 'my_profile';
-
-  // User data (initially empty, will be filled by user input)
   let displayName: string = '';
   let statusMessage: string = '';
-  let userId: string = 'user_12345'; // User ID can remain as a placeholder as it's disabled
+  let userId: string = 'user_12345'; // placeholder
 </script>
 
 <h1 class="text-xl font-bold mb-4">Account Settings</h1>
 
 <div class="tabs tabs-boxed mb-4">
-  <button class="tab relative cursor-pointer mr-4 transition-all duration-200 hover:text-sky-400 hover:scale-105" class:tab-active={activeTab === 'my_profile'} on:click={() => (activeTab = 'my_profile')}>My Profile</button>
-  <button class="tab relative cursor-pointer mr-4 transition-all duration-200 hover:text-sky-400 hover:scale-105" class:tab-active={activeTab === 'Standing'} on:click={() => (activeTab = 'Standing')}>Standing</button>
-  <button class="tab relative cursor-pointer mr-4 transition-all duration-200 hover:text-sky-400 hover:scale-105" class:tab-active={activeTab === 'placeholder2'} on:click={() => (activeTab = 'placeholder2')}>Placeholder 2</button>
+  <button class="tab relative cursor-pointer mr-4 transition-all duration-200 hover:text-sky-400 hover:scale-105" class:tab-active={activeTab === 'my_profile'} onclick={() => (activeTab = 'my_profile')}>My Profile</button>
+  <button class="tab relative cursor-pointer mr-4 transition-all duration-200 hover:text-sky-400 hover:scale-105" class:tab-active={activeTab === 'Standing'} onclick={() => (activeTab = 'Standing')}>Standing</button>
+  <button class="tab relative cursor-pointer mr-4 transition-all duration-200 hover:text-sky-400 hover:scale-105" class:tab-active={activeTab === 'placeholder2'} onclick={() => (activeTab = 'placeholder2')}>Placeholder 2</button>
 </div>
 <div class="h-0.5 bg-muted -mt-4 mb-4"></div>
 

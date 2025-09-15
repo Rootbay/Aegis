@@ -13,7 +13,7 @@
         <button
           class="w-full text-left px-3 py-2 rounded-md transition-colors duration-200
           {selectedLanguage === lang ? 'bg-primary text-foreground' : 'hover:bg-muted'}"
-          on:click={() => (selectedLanguage = lang)}
+          onclick={() => (selectedLanguage = lang)}
         >
           {lang}
         </button>

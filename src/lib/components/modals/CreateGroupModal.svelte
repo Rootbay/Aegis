@@ -1,6 +1,5 @@
 <script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiClose, mdiMagnify } from '@mdi/js';
+  import { Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
 
   export let onclose: () => void;
@@ -35,7 +34,7 @@
 <div class="fixed inset-0 flex items-center justify-center z-50">
   <div class="bg-card p-6 rounded-lg shadow-lg w-full max-w-sm relative">
     <button class="absolute top-3 right-3 text-muted-foreground hover:text-white cursor-pointer" onclick={onclose}>
-      <Icon data={mdiClose} size="8" />
+      <X size={15} />
     </button>
     <h2 class="text-xl font-bold mb-4 text-white">Create New Group</h2>
 
@@ -47,7 +46,7 @@
         class="w-full bg-zinc-700 border border-zinc-600 rounded-md pl-12 pr-4 py-2 text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
       />
       <div class="absolute left-4 inset-y-0 flex items-center">
-        <Icon data={mdiMagnify} size="8" clazz="text-muted-foreground" />
+        <Search size={12} class="text-muted-foreground" />
       </div>
     </div>
 

@@ -53,17 +53,17 @@
         <h2 class="text-lg font-bold mb-6">{server.name} Settings</h2>
         <div class="flex-grow overflow-y-auto custom-scrollbar pr-2">
           <nav class="space-y-2">
-            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'overview' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" on:click={() => activeTab = 'overview'}>Overview</button>
-            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'moderation' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" on:click={() => activeTab = 'moderation'}>Moderation</button>
-            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'privacy' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" on:click={() => activeTab = 'privacy'}>Privacy</button>
-            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'roles' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" on:click={() => activeTab = 'roles'}>Roles</button>
-            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'user_management' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" on:click={() => activeTab = 'user_management'}>User Management</button>
+            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'overview' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" onclick={() => activeTab = 'overview'}>Overview</button>
+            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'moderation' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" onclick={() => activeTab = 'moderation'}>Moderation</button>
+            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'privacy' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" onclick={() => activeTab = 'privacy'}>Privacy</button>
+            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'roles' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" onclick={() => activeTab = 'roles'}>Roles</button>
+            <button class="w-full text-left px-3 py-2 rounded {activeTab === 'user_management' ? 'bg-indigo-600' : 'hover:bg-zinc-700'}" onclick={() => activeTab = 'user_management'}>User Management</button>
             <div class="border-t border-zinc-700 my-2"></div>
-            <button class="w-full text-left px-3 py-2 rounded text-red-400 hover:bg-red-600 hover:text-white {activeTab === 'delete' ? 'bg-red-600 text-white' : ''}" on:click={() => activeTab = 'delete'}>Delete Server</button>
+            <button class="w-full text-left px-3 py-2 rounded text-red-400 hover:bg-red-600 hover:text-white {activeTab === 'delete' ? 'bg-red-600 text-white' : ''}" onclick={() => activeTab = 'delete'}>Delete Server</button>
           </nav>
         </div>
         <div class="mt-auto">
-            <button class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded" on:click={close}>
+            <button class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded" onclick={close}>
                 Close
             </button>
         </div>

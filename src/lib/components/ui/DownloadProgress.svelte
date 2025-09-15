@@ -1,6 +1,5 @@
 <script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiFile, mdiCheckCircle, mdiAlertCircle, mdiDownload, mdiClose } from '@mdi/js';
+  import { File, CircleCheck, CircleAlert, X, RotateCcw } from '@lucide/svelte';
 
   export let fileName: string;
   export let progress: number = 0;
@@ -10,9 +9,9 @@
 
   const statusInfo = {
     downloading: { color: 'bg-status-info', text: 'Downloading...' },
-    completed: { color: 'bg-success', text: 'Completed', icon: mdiCheckCircle },
-    failed: { color: 'bg-destructive', text: 'Failed', icon: mdiAlertCircle },
-    queued: { color: 'bg-base-500', text: 'Queued for download', icon: mdiDownload },
+    completed: { color: 'bg-success', text: 'Completed', icon: 'circle-check' },
+    failed: { color: 'bg-destructive', text: 'Failed', icon: 'circle-alert' },
+    queued: { color: 'bg-base-500', text: 'Queued for download', icon: 'download' },
   };
 
   let currentStatus = statusInfo[status];
@@ -22,11 +21,11 @@
 <div class="bg-muted p-2 rounded-md flex items-center space-x-3">
   <div class="w-10 h-10 flex items-center justify-center bg-base-400 rounded-md flex-shrink-0">
     {#if status === 'completed'}
-      <Icon data={mdiCheckCircle} size="8" class="text-success" />
+      <CircleCheck size={12} class="text-success" />
     {:else if status === 'failed'}
-      <Icon data={mdiAlertCircle} size="8" class="text-destructive" />
+      <CircleAlert size={12} class="text-destructive" />
     {:else}
-      <Icon data={mdiFile} size="8" class="text-muted-foreground" />
+      <File size={12} class="text-muted-foreground" />
     {/if}
   </div>
   <div class="flex-grow overflow-hidden">
@@ -42,12 +41,12 @@
   <div class="flex items-center">
     {#if status === 'downloading' || status === 'queued'}
       <button onclick={onCancel} class="text-muted-foreground hover:text-foreground" aria-label="Cancel download">
-        <Icon data={mdiClose} size="5" />
+        <X size={12} />
       </button>
     {/if}
     {#if status === 'failed'}
       <button onclick={onRetry} class="text-muted-foreground hover:text-foreground" aria-label="Retry download">
-        <Icon data={mdiDownload} size="5" />
+        <RotateCcw size={12} />
       </button>
     {/if}
   </div>

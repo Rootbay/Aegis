@@ -15,7 +15,7 @@
 
 <div class="bg-card p-4 rounded-lg">
   <p class="text-gray-300 mb-4">This is a permanent action. Once you delete the server, it cannot be recovered.</p>
-  <button class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" on:click={deleteServer}>
+  <button class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded" onclick={deleteServer}>
     Delete Server
   </button>
 </div>

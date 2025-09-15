@@ -61,7 +61,7 @@
     
     <div class="profile-info">
       <h2 id="profile-username" class="username"><button onclick={handleOpenDetailedProfile} class="hover:underline cursor-pointer">{profileUser.name || 'Unknown User'}</button></h2>
-      <div class="flex items-center text-sm text-gray-500 mb-4">
+      <div class="flex items-center text-sm text-muted-foreground mb-4">
         <span>{profileUser.tag || ''}</span>
         <span class="mx-2">·</span>
         <span class="font-bold">Aegis Member</span>
@@ -69,7 +69,7 @@
       <p class="bio">{profileUser.bio || ''}</p>
 
       {#if isServerMemberContext}
-        <button class="w-full bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg mt-4 hover:bg-gray-300 transition-colors">
+        <button class="w-full bg-muted text-muted-foreground font-semibold py-2 px-4 rounded-lg mt-4 hover:bg-muted/80 transition-colors">
           Add Role
         </button>
       {/if}
@@ -83,7 +83,7 @@
         </button>
       {:else}
         <div class="w-full">
-          <input type="text" placeholder="Message @{profileUser.name}" class="w-full bg-gray-200 border border-gray-300 rounded-md px-3 py-2 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+          <input type="text" placeholder="Message @{profileUser.name}" class="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
       {/if}
     </div>
@@ -98,20 +98,20 @@
 <style>
   .user-card-content {
     position: absolute;
-    background: #2c2c2c;
+    background: var(--color-card);
     border-radius: 16px;
     width: 90%;
     max-width: 300px;
     height: 410px;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--color-foreground) 12%, transparent);
   }
   .profile-header {
     position: relative;
     height: 140px;
   }
   .banner {
-    background-color: #7f8c8d;
+    background-color: var(--color-muted);
     background-size: cover;
     background-position: center;
     width: 100%;
@@ -121,9 +121,9 @@
     position: absolute;
     left: 24px;
     top: 50px;
-    border: 5px solid #ffffff;
+    border: 5px solid var(--color-primary-foreground);
     border-radius: 50%;
-    background-color: #fff;
+    background-color: var(--color-card);
   }
 
   .pfp-container-button {
@@ -151,12 +151,12 @@
     right: 2px;
     width: 20px;
     height: 20px;
-    background-color: #95a5a6;
+    background-color: var(--color-muted);
     border-radius: 50%;
-    border: 3px solid #ffffff;
+    border: 3px solid var(--color-primary-foreground);
   }
   .online-status.online {
-    background-color: #2ecc71;
+    background-color: var(--color-primary);
   }
   .profile-info {
     padding: 16px 24px 24px;
@@ -168,7 +168,7 @@
   }
   .bio {
     margin: 4px 0 0;
-    color: #555;
+    color: var(--color-muted-foreground);
     font-size: 0.95rem;
   }
   .action-buttons {
@@ -188,12 +188,12 @@
     border-radius: 8px;
     border: none;
     cursor: pointer;
-    background-color: #3498db;
-    color: white;
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
     transition: background-color 0.2s;
   }
   .primary-action:hover {
-    background-color: #2980b9;
+    background-color: color-mix(in oklch, var(--color-primary) 85%, var(--color-foreground) 15%);
   }
   
 </style>

@@ -1,15 +1,13 @@
 ﻿<script lang="ts">
-  import { mdiAccountPlus, mdiAccountRemove, mdiMessageText, mdiDotsHorizontal, mdiStar, mdiCheckCircle } from '@mdi/js';
+  import { invoke } from '@tauri-apps/api/core';
   import UserOptionsMenu from '$lib/components/context-menus/UserOptionsMenu.svelte';
-
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
   import { userStore } from '$lib/data/stores/userStore';
   import { serverStore } from '$lib/data/stores/serverStore';
   import { chatStore } from '$lib/data/stores/chatStore';
   import { toasts } from '$lib/data/stores/ToastStore';
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { Star, CircleCheck, Plus, SendHorizontal, Trash, Ellipsis } from '@lucide/svelte';
   import type { Server } from '$lib/models/Server';
-  import { invoke } from '@tauri-apps/api/core';
   import type { User } from '$lib/models/User';
   import { slide } from 'svelte/transition';
   import { goto } from '$app/navigation';
@@ -305,36 +303,36 @@
           AEGIS
         </div>
         <div class="badges flex space-x-1 mb-4">
-          <Icon data={mdiStar} clazz="w-4 h-4 text-white" />
-          <Icon data={mdiCheckCircle} clazz="w-4 h-4 text-white" />
+          <Star class="w-4 h-4 text-white" />
+          <CircleCheck class="w-4 h-4 text-white" />
         </div>
 
         <div class="action-buttons-detailed">
           {#if isMyProfile}
             <button class="primary-action" onclick={editProfile}>
-              <Icon data={mdiAccountPlus} />
+              <Plus />
               <span>Edit Profile</span>
             </button>
           {:else if isFriend}
             <button class="primary-action" onclick={sendMessage}>
-              <Icon data={mdiMessageText} />
+              <SendHorizontal />
               <span>Message</span>
             </button>
             <button class="icon-button" onclick={removeFriend} aria-label="Remove Friend">
-              <Icon data={mdiAccountRemove} />
+              <Trash />
             </button>
           {:else}
             <button class="primary-action" onclick={addFriend}>
-              <Icon data={mdiAccountPlus} />
+              <Plus />
               <span>Add Friend</span>
             </button>
             <button class="primary-action" onclick={sendMessage} aria-label="Message">
-              <Icon data={mdiMessageText} />
+              <SendHorizontal />
               <span>Message</span>
             </button>
           {/if}
           <button class="icon-button" onclick={handleMoreOptions} aria-label="More options">
-            <Icon data={mdiDotsHorizontal} />
+            <Ellipsis />
           </button>
         </div>
 
@@ -481,20 +479,20 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.7);
+    background: color-mix(in srgb, var(--color-foreground) 70%, transparent);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
   }
   .modal-content {
-    background: #18181b;
+    background: var(--color-card);
     border-radius: 16px;
     width: fit-content;
     max-width: 90%;
     max-height: 90%;
     overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--color-foreground) 12%, transparent);
     padding: 48px 36px 0 48px;
   }
   .profile-header {
@@ -502,7 +500,7 @@
     height: 140px;
   }
   .banner {
-    background-color: #7f8c8d;
+    background-color: var(--color-muted);
     background-size: cover;
     background-position: center;
     width: 100%;
@@ -512,9 +510,9 @@
     position: absolute;
     left: 24px;
     top: 50px;
-    border: 5px solid #ffffff;
+    border: 5px solid var(--color-primary-foreground);
     border-radius: 50%;
-    background-color: #fff;
+    background-color: var(--color-card);
   }
 
   .pfp-container-button {
@@ -542,12 +540,12 @@
     right: 2px;
     width: 20px;
     height: 20px;
-    background-color: #95a5a6;
+    background-color: var(--color-muted);
     border-radius: 50%;
     border: 3px solid #ffffff;
   }
   .online-status.online {
-    background-color: #2ecc71;
+    background-color: var(--color-primary);
   }
   .profile-info {
     padding: 4px 32px 32px;
@@ -559,7 +557,7 @@
   }
   .bio {
     margin: 4px 0 0;
-    color: #ccc;
+    color: var(--color-muted-foreground);
     font-size: 0.95rem;
   }
   .action-buttons-detailed {
@@ -577,12 +575,12 @@
     border-radius: 8px;
     border: none;
     cursor: pointer;
-    background-color: #5a67d8;
-    color: white;
+    background-color: var(--color-primary);
+    color: var(--color-primary-foreground);
     transition: background-color 0.2s;
   }
   .primary-action:hover {
-    background-color: #434190;
+    background-color: color-mix(in oklch, var(--color-primary) 82%, var(--color-foreground) 18%);
   }
   .icon-button {
     width: 36px;
@@ -594,22 +592,22 @@
     border-radius: 8px;
     border: none;
     cursor: pointer;
-    background-color: #4a4a4a;
-    color: #eee;
+    background-color: color-mix(in srgb, var(--color-background) 75%, var(--color-foreground) 25%);
+    color: var(--color-card-foreground);
     transition: background-color 0.2s;
   }
   .icon-button:hover {
-    background-color: #5a5a5a;
+    background-color: color-mix(in srgb, var(--color-background) 65%, var(--color-foreground) 35%);
   }
   .my-identity-section {
-    background-color: #333;
+    background-color: color-mix(in srgb, var(--color-background) 80%, var(--color-foreground) 20%);
     padding: 16px 24px;
-    border-top: 1px solid #444;
+    border-top: 1px solid var(--color-border);
   }
   h3 {
     margin: 0 0 8px;
     font-size: 0.8rem;
-    color: #eee;
+    color: var(--color-card-foreground);
     text-transform: uppercase;
     font-weight: 600;
   }
@@ -621,7 +619,7 @@
     border-radius: 8px;
   }
   .key-display {
-    background-color: #444;
+    background-color: color-mix(in srgb, var(--color-background) 70%, var(--color-foreground) 30%);
     padding: 12px;
     border-radius: 8px;
     font-family: monospace;
@@ -629,16 +627,16 @@
     font-size: 0.85rem;
     cursor: pointer;
     transition: background-color 0.2s;
-    color: #eee;
+    color: var(--color-card-foreground);
   }
   .key-display:hover {
-    background-color: #555;
+    background-color: color-mix(in srgb, var(--color-background) 60%, var(--color-foreground) 40%);
   }
   .copy-feedback {
     display: inline-block;
     margin-left: 8px;
     font-size: 0.8rem;
-    color: #2ecc71;
+    color: var(--color-primary);
     font-weight: 600;
   }
 
@@ -649,7 +647,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: #ccc;
+    color: var(--color-muted-foreground);
     z-index: 10;
     padding: 5px;
     border-radius: 50%;
@@ -657,14 +655,14 @@
   }
 
   .close-button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: color-mix(in srgb, var(--color-foreground) 10%, transparent);
   }
 
   .invite-picker {
-    background: #1f1f23;
+    background: var(--color-popover);
     padding: 16px;
     border-radius: 12px;
     min-width: 320px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    box-shadow: 0 10px 30px color-mix(in srgb, var(--color-foreground) 20%, transparent);
   }
 </style>

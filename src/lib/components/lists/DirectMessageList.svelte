@@ -1,14 +1,14 @@
 ﻿<script lang="ts">
+	import { invoke } from '@tauri-apps/api/core';
 	import Icon from '$lib/components/ui/Icon.svelte';
-	import { mdiPlus, mdiClose } from '@mdi/js';
 	import { getContext, onMount, onDestroy } from 'svelte';
 	import BaseContextMenu from '$lib/components/context-menus/BaseContextMenu.svelte';
 	import { CREATE_GROUP_CONTEXT_KEY } from '$lib/data/contextKeys';
 	import type { CreateGroupContext } from '$lib/data/contextTypes';
 	import { browser } from '$app/environment';
 	import type { Friend } from '$lib/models/Friend';
-	import { invoke } from '@tauri-apps/api/core';
 	import { friendStore } from '$lib/data/stores/friendStore';
+	import { Plus, X } from '@lucide/svelte';
 
 	interface ContextMenuItem {
 		label?: string;
@@ -116,7 +116,7 @@ export let onSelect: Function;
 		<div class="flex justify-between items-center mt-4 mb-2">
 			<h2 class="text-sm font-semibold text-muted-foreground">Direct Messages</h2>
 			<button class="text-muted-foreground hover:text-white transition-colors cursor-pointer" onclick={onCreateGroupClick}>
-				<Icon data={mdiPlus} size="6" />
+				<Plus size={12} />
 			</button>
 		</div>
 		
@@ -171,7 +171,7 @@ export let onSelect: Function;
 				<div class="flex justify-between items-center mb-4">
 					<h2 class="text-xl font-bold">Search</h2>
 					<button onclick={() => (showSearchPopup = false)} class="text-muted-foreground hover:text-white cursor-pointer">
-						<Icon data={mdiClose} size="6" />
+						<X size={12} />
 					</button>
 				</div>
 				<input

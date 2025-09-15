@@ -117,7 +117,3 @@
         <FriendRequestModal on:close={() => (showFriendRequestModal = false)} on:requestSent={loadFriendships} />
     {/if}
 </div>
-
-<style>
-    /* Add any specific styles here if needed */
-</style>

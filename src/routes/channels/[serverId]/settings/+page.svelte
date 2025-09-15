@@ -1,6 +1,5 @@
 <script lang="ts">
   import SettingsLayout from '$lib/components/server-settings/SettingsLayout.svelte';
-  import { mdiCog, mdiAccount, mdiBell, mdiLock, mdiMessage, mdiWifi, mdiEmoticonOutline, mdiStickerEmoji, mdiWidgets, mdiContentCopy, mdiShieldCheck, mdiClipboardTextClock } from '@mdi/js';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { page } from '$app/stores';
@@ -8,6 +7,7 @@
   import type { Server } from '$lib/models/Server';
   import type { Channel } from '$lib/models/Channel';
   import { onDestroy } from 'svelte';
+  import { Ban, Boxes, Hash, LayoutPanelTop, MessageSquare, Puzzle, ScrollText, Shield, ShieldCheck, Smile, Sticker, UserCog, Users } from '@lucide/svelte';
 
   let server: (Server & { channels?: Channel[] }) | undefined;
   let serverId: string;
@@ -20,23 +20,23 @@
   }
 
   const sidebarItems = [
-    { label: 'Overview', icon: mdiCog, tab: 'overview' },
+    { label: 'Overview', icon: Hash, tab: 'overview' },
     { type: 'separator' },
-    { label: 'Roles', icon: mdiAccount, tab: 'roles' },
-    { label: 'Channels', icon: mdiMessage, tab: 'channels' },
-    { label: 'Moderation', icon: mdiLock, tab: 'moderation' },
+    { label: 'Roles', icon: UserCog, tab: 'roles' },
+    { label: 'Channels', icon: MessageSquare, tab: 'channels' },
+    { label: 'Moderation', icon: ShieldCheck, tab: 'moderation' },
     { type: 'separator' },
-    { label: 'Emojis', icon: mdiEmoticonOutline, tab: 'emojis' },
-    { label: 'Stickers', icon: mdiStickerEmoji, tab: 'stickers' },
+    { label: 'Emojis', icon: Smile, tab: 'emojis' },
+    { label: 'Stickers', icon: Sticker, tab: 'stickers' },
     { type: 'separator' },
-    { label: 'Widgets', icon: mdiWidgets, tab: 'widgets' },
-    { label: 'Server Templates', icon: mdiContentCopy, tab: 'server_templates' },
-    { label: 'Integrations', icon: mdiWifi, tab: 'integrations' },
+    { label: 'Widgets', icon: Boxes, tab: 'widgets' },
+    { label: 'Server Templates', icon: LayoutPanelTop, tab: 'server_templates' },
+    { label: 'Integrations', icon: Puzzle, tab: 'integrations' },
     { type: 'separator' },
-    { label: 'Safety & Setup', icon: mdiShieldCheck, tab: 'safety_setup' },
-    { label: 'Members', icon: mdiAccount, tab: 'members' },
-    { label: 'Bans', icon: mdiBell, tab: 'bans' },
-    { label: 'Audit Log', icon: mdiClipboardTextClock, tab: 'audit_log' },
+    { label: 'Safety & Setup', icon: Shield, tab: 'safety_setup' },
+    { label: 'Members', icon: Users, tab: 'members' },
+    { label: 'Bans', icon: Ban, tab: 'bans' },
+    { label: 'Audit Log', icon: ScrollText, tab: 'audit_log' },
   ];
 
   $: allSettings = [
@@ -201,6 +201,13 @@
     on:update_server={handleUpdateServer}
     on:delete_server={handleDeleteServer}
     on:toggle_permission={handleTogglePermission}
+    on:close={() => {
+      if (server) {
+        goto(resolve('/channels/' + serverId));
+      } else {
+        goto(resolve('/friends?tab=All'));
+      }
+    }}
     on:close={() => {
       if (server) {
         goto(resolve('/channels/' + serverId));

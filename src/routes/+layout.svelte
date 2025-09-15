@@ -24,8 +24,7 @@
   import ServerSidebar from '$lib/components/sidebars/ServerSidebar.svelte';
   import MemberSidebar from '$lib/components/sidebars/MemberSidebar.svelte';
   import DirectMessageList from '$lib/components/lists/DirectMessageList.svelte';
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiAccountMultiplePlus } from '@mdi/js';
+  import { UserRoundPlus, Plus, Hash, Settings, X } from '@lucide/svelte';
   import ServerManagementModal from '$lib/components/modals/ServerManagementModal.svelte';
   import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
   import { ChatView } from '$features/chat';
@@ -46,17 +45,13 @@
   }
 
   $effect(() => {
-    console.log('Theme store value changed:', $theme);
     if ($theme === 'dark') {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
-      console.log('Added dark class to <html>');
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.classList.add('light');
-      console.log('Removed dark class from <html>');
     }
-    console.log('Current <html> classes:', document.documentElement.classList.value);
   });
 
   onMount(async () => {
@@ -109,7 +104,6 @@
       });
     }
   });
-
 
   let activeModal: string | null = $state(null);
   let modalProps: any = $state({});
@@ -269,12 +263,28 @@
       {#if isFriendsOrRootPage}
         <div class="flex items-center justify-start px-4 pt-4 pb-2 border-b border-border sticky top-0 z-10 bg-card h-[55px]">
           <div class="flex space-x-2">
-            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'All'} class:hover:bg-muted={activeTab !== 'All'} onclick={() => goto(resolve('/?tab=All'))}>All</button>
-            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Online'} class:hover:bg-muted={activeTab !== 'Online'} onclick={() => goto(resolve('/?tab=Online'))}>Online</button>
-            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Blocked'} class:hover:bg-muted={activeTab !== 'Blocked'} onclick={() => goto(resolve('/?tab=Blocked'))}>Blocked</button>
-            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Pending'} class:hover:bg-muted={activeTab !== 'Pending'} onclick={() => goto(resolve('/?tab=Pending'))}>Pending</button>
+            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'All'} class:hover:bg-muted={activeTab !== 'All'} onclick={() => {
+              const url = new URL($page.url);
+              url.searchParams.set('tab', 'All');
+              goto(url.pathname + url.search);
+            }}>All</button>
+            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Online'} class:hover:bg-muted={activeTab !== 'Online'} onclick={() => {
+              const url = new URL($page.url);
+              url.searchParams.set('tab', 'Online');
+              goto(url.pathname + url.search);
+            }}>Online</button>
+            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Blocked'} class:hover:bg-muted={activeTab !== 'Blocked'} onclick={() => {
+              const url = new URL($page.url);
+              url.searchParams.set('tab', 'Blocked');
+              goto(url.pathname + url.search);
+            }}>Blocked</button>
+            <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Pending'} class:hover:bg-muted={activeTab !== 'Pending'} onclick={() => {
+              const url = new URL($page.url);
+              url.searchParams.set('tab', 'Pending');
+              goto(url.pathname + url.search);
+            }}>Pending</button>
             <button class="flex items-center px-3 py-1 rounded-md bg-primary hover:bg-accent text-sm font-medium h-8 ml-4 cursor-pointer" class:bg-muted={activeTab === 'AddFriend'} class:hover:bg-accent={activeTab !== 'AddFriend'} onclick={() => goto(resolve('/friends/add'))}>
-              <Icon data={mdiAccountMultiplePlus} size="6" clazz="mr-2" />
+              <UserRoundPlus size={10} class="mr-2" />
               Add Friend
             </button>
           </div>

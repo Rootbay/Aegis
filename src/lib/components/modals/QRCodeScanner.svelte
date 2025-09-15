@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Html5Qrcode } from 'html5-qrcode';
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiClose } from '@mdi/js';
+  import { X } from '@lucide/svelte';
 
   export let onScanSuccess: (decodedText: string) => void;
   export let onClose: () => void;
@@ -55,7 +54,7 @@
 <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]">
   <div class="bg-card p-6 rounded-lg shadow-lg w-full max-w-md relative">
     <button class="absolute top-3 right-3 text-muted-foreground hover:text-white" onclick={closeModal}>
-      <Icon data={mdiClose} size="8" />
+      <X size={15} />
     </button>
     <h2 class="text-xl font-bold mb-4 text-white">Scan QR Code</h2>
     {#if errorMessage}

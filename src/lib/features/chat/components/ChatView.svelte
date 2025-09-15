@@ -1,6 +1,5 @@
 ﻿<script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiPaperclip, mdiMicrophone, mdiPound, mdiAccountGroup, mdiPhone, mdiVideo, mdiDotsVertical, mdiMagnify, mdiSend, mdiClose } from '@mdi/js';
+  import { Hash, Phone, Video, Search, EllipsisVertical, X, Link, Mic, SendHorizontal, Users } from '@lucide/svelte';
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
   import FilePreview from '$lib/components/media/FilePreview.svelte';
   import DownloadProgress from '$lib/components/ui/DownloadProgress.svelte';
@@ -362,26 +361,26 @@
             <p class="text-xs text-muted-foreground">{chat.friend.online ? 'Online' : 'Offline'}</p>
           </div>
         {:else if chat.type === 'channel'}
-          <Icon data={mdiPound} size="6" class="mr-2 text-zinc-600" />
+          <Hash size={10} class="mr-2 text-zinc-600" />
           <h2 class="font-bold text-lg">{chat.name}</h2>
         {/if}
       </div>
       <div class="flex items-center space-x-4">
-        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="Start voice call"><Icon data={mdiPhone} size="6" /></button>
-        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="Start video call"><Icon data={mdiVideo} size="6" /></button>
+        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="Start voice call"><Phone size={12} /></button>
+        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="Start video call"><Video size={12} /></button>
         {#if searchOpen}
           <div class="flex items-center bg-zinc-700/70 rounded px-2 py-1 gap-1">
             <input type="text" class="bg-transparent focus:outline-none text-sm w-40 chat-search-input" placeholder="Search in chat" bind:value={searchQuery} />
             <span class="text-xs text-muted-foreground">{searchMatches.length ? `${activeMatchIndex + 1}/${searchMatches.length}` : '0/0'}</span>
-            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={() => jumpToMatch(false)} aria-label="Previous match">â†‘</button>
-            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={() => jumpToMatch(true)} aria-label="Next match">â†“</button>
-            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={clearSearch} aria-label="Close search"><Icon data={mdiDotsVertical} size="0" class="hidden" />
-              <Icon data={mdiClose} size="5" /></button>
+            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={() => jumpToMatch(false)} aria-label="Previous match">↑</button>
+            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={() => jumpToMatch(true)} aria-label="Next match">↓</button>
+            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={clearSearch} aria-label="Close search"><EllipsisVertical size="0" class="hidden" />
+              <X size={12} /></button>
           </div>
         {:else}
-          <button class="text-muted-foreground hover:text-white cursor-pointer" onclick={() => { searchOpen = true; setTimeout(() => (document.querySelector('.chat-search-input') as HTMLInputElement)?.focus(), 0); }} aria-label="Open search"><Icon data={mdiMagnify} size="6" /></button>
+          <button class="text-muted-foreground hover:text-white cursor-pointer" onclick={() => { searchOpen = true; setTimeout(() => (document.querySelector('.chat-search-input') as HTMLInputElement)?.focus(), 0); }} aria-label="Open search"><Search size={12} /></button>
         {/if}
-        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="More options"><Icon data={mdiDotsVertical} size="6" /></button>
+        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="More options"><EllipsisVertical size={12} /></button>
       </div>
     </header>
 
@@ -506,7 +505,7 @@
       >
         <input type="file" multiple bind:this={fileInput} onchange={handleFileSelect} class="hidden" />
         <button type="button" onclick={() => fileInput.click()} class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors">
-          <Icon data={mdiPaperclip} size={6} />
+          <Link size={12} />
         </button>
         <textarea
           rows="1"
@@ -519,16 +518,16 @@
           onkeydown={(e) => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); sendMessage(e); } }}
         ></textarea>
         <button type="button" class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors">
-          <Icon data={mdiMicrophone} size={6} />
+          <Mic size={12} />
         </button>
         <button type="submit" class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors" disabled={sending} aria-busy={sending}>
-          <Icon data={mdiSend} size={6} />
+          <SendHorizontal size={12} />
         </button>
       </form>
     </footer>
   {:else}
     <div class="flex flex-col h-full w-full items-center justify-center text-zinc-500">
-      <Icon data={mdiAccountGroup} size="16" />
+      <Users size={20} />
       <p class="text-lg mt-4">
         Select a chat from the sidebar to start messaging.
       </p>

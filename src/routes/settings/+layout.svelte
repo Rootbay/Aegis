@@ -2,31 +2,29 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { mdiClose, mdiAccount, mdiBell, mdiPalette, mdiKeyboard, mdiTranslate, mdiTune, mdiDevices, mdiShieldAccount, mdiShareVariant, mdiWheelchairAccessibility, mdiMicrophone, mdiChat, mdiLink, mdiMagnify, mdiEmoticonSadOutline } from '@mdi/js';
-  
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { X, Search, Smile } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
   let searchQuery = '';
   let pageContents: { [key: string]: string } = {};
 
   const userSettingsItems = [
-    { label: 'Account', icon: mdiAccount, href: '/settings/account' },
-    { label: 'Devices', icon: mdiDevices, href: '/settings/devices' },
-    { label: 'Data & Privacy', icon: mdiShieldAccount, href: '/settings/data_privacy' },
-    { label: 'Content & Social', icon: mdiShareVariant, href: '/settings/content_social' },
-    { label: 'Connected Accounts', icon: mdiLink, href: '/settings/connected_accounts' },
+    { label: 'Account', icon: 'user', href: '/settings/account' },
+    { label: 'Devices', icon: 'monitor-smartphone', href: '/settings/devices' },
+    { label: 'Data & Privacy', icon: 'shield', href: '/settings/data_privacy' },
+    { label: 'Content & Social', icon: 'hand-heart', href: '/settings/content_social' },
+    { label: 'Connected Accounts', icon: 'link', href: '/settings/connected_accounts' },
   ];
 
   const appSettingsItems = [
-    { label: 'Appearance', icon: mdiPalette, href: '/settings/appearance' },
-    { label: 'Accessibility', icon: mdiWheelchairAccessibility, href: '/settings/accessibility' },
-    { label: 'Voice & Video', icon: mdiMicrophone, href: '/settings/voice_video' },
-    { label: 'Chat', icon: mdiChat, href: '/settings/chat' },
-    { label: 'Notifications', icon: mdiBell, href: '/settings/notifications' },
-    { label: 'Keybinds', icon: mdiKeyboard, href: '/settings/keybinds' },
-    { label: 'Language', icon: mdiTranslate, href: '/settings/language' },
-    { label: 'Advanced', icon: mdiTune, href: '/settings/advanced' },
+    { label: 'Appearance', icon: 'palette', href: '/settings/appearance' },
+    { label: 'Accessibility', icon: 'accessibility', href: '/settings/accessibility' },
+    { label: 'Voice & Video', icon: 'audio-lines', href: '/settings/voice_video' },
+    { label: 'Chat', icon: 'message-square', href: '/settings/chat' },
+    { label: 'Notifications', icon: 'bell', href: '/settings/notifications' },
+    { label: 'Keybinds', icon: 'keyboard', href: '/settings/keybinds' },
+    { label: 'Language', icon: 'languages', href: '/settings/language' },
+    { label: 'Advanced', icon: 'pickaxe', href: '/settings/advanced' },
   ];
 
   const allSettingsItems = [...userSettingsItems, ...appSettingsItems, { label: 'Change Log', href: '/settings/change_log' }];
@@ -42,10 +40,12 @@
     }
   }
 
-  onMount(async () => {
-    for (const item of allSettingsItems) {
-      await fetchPageContent(item.href);
-    }
+  onMount(() => {
+    (async () => {
+      for (const item of allSettingsItems) {
+        await fetchPageContent(item.href);
+      }
+    })();
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -81,7 +81,7 @@
         path = `/channels/${id}`;
       }
     })();
-    goto(resolve(path));
+    goto(resolve(path) as string);
   }
 </script>
 
@@ -98,12 +98,12 @@
           />
           <button
             class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            on:click={() => { searchQuery = ''; }}
+            onclick={() => { searchQuery = ''; }}
           >
             {#if searchQuery}
-              <Icon path={mdiClose} clazz="w-4 h-4" />
+              <X class="w-4 h-4" />
             {:else}
-              <Icon path={mdiMagnify} clazz="w-4 h-4" />
+              <Search class="w-4 h-4" />
             {/if}
           </button>
         </div>
@@ -115,7 +115,7 @@
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
                 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                on:click={() => goto(resolve(item.href))}
+                onclick={() => goto(resolve(item.href) as string)}
               >
                 {item.label}
               </button>
@@ -131,7 +131,7 @@
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
                 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                on:click={() => goto(resolve(item.href))}
+                onclick={() => goto(resolve(item.href) as string)}
               >
                 {item.label}
               </button>
@@ -149,7 +149,7 @@
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
                 {$page.url.pathname.startsWith('/settings/change_log') ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                on:click={() => goto(resolve('/settings/change_log'))}
+                onclick={() => goto(resolve('/settings/change_log'))}
               >
                 Change Log
               </button>
@@ -162,7 +162,7 @@
             <li>
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md text-destructive hover:bg-muted transition-colors duration-200 mb-[2px] cursor-pointer"
-                on:click={() => console.log('Log Out clicked')}
+                onclick={() => console.log('Log Out clicked')}
               >
                 Log Out
               </button>
@@ -173,12 +173,12 @@
             <li>
               <button
                 class="w-full text-left text-[12px] font-normal px-[10px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring focus:ring-opacity-50"
-                on:click={() => navigator.clipboard.writeText(`Tauri: 2
-Svelte: 5.0.0
-TypeScript: 5.6.2`)}
-                on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigator.clipboard.writeText(`Tauri: 2
-Svelte: 5.0.0
-TypeScript: 5.6.2`); }}
+                onclick={() => navigator.clipboard.writeText(`Tauri: 2
+                  Svelte: 5.0.0
+                  TypeScript: 5.6.2`)}
+                                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigator.clipboard.writeText(`Tauri: 2
+                  Svelte: 5.0.0
+                  TypeScript: 5.6.2`); }}
                 aria-label="Copy app info to clipboard"
               >
                 <p class="my-0 py-0">Tauri: 2</p>
@@ -190,7 +190,7 @@ TypeScript: 5.6.2`); }}
         {/if}
         {#if isSearching && filteredUserSettingsItems.length === 0 && filteredAppSettingsItems.length === 0 && !('change log'.includes(searchQuery.toLowerCase()) || (pageContents['/settings/change_log'] || '').toLowerCase().includes(searchQuery.toLowerCase()))}
           <div class="flex flex-col items-center justify-center text-muted-foreground mt-8">
-            <Icon path={mdiEmoticonSadOutline} clazz="w-12 h-12 mb-2" />
+            <Smile class="w-12 h-12 mb-2" />
             <p class="text-sm">No Search Results</p>
           </div>
         {/if}
@@ -201,9 +201,9 @@ TypeScript: 5.6.2`); }}
     <div class="w-[740px] p-[60px_40px_80px]">
       <button
         class="absolute top-0 right-0 text-muted-foreground hover:text-foreground transition-colors duration-200 p-4 z-50"
-        on:click={closeSettings}
+        onclick={closeSettings}
       >
-        <Icon path={mdiClose} clazz="w-6 h-6" />
+        <X class="w-6 h-6" />
       </button>
       <slot />
     </div>

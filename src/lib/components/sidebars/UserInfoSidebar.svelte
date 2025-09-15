@@ -1,6 +1,5 @@
 <script lang="ts">
   import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiClose, mdiMessage, mdiPhone, mdiVideo, mdiMicrophoneOff, mdiVolumeOff, mdiPencil, mdiAccountCancel, mdiFlag } from '@mdi/js';
   import type { Friend } from '$lib/models/Friend';
   import type { User } from '$lib/models/User';
 
@@ -12,7 +11,7 @@
   <header class="p-4 flex justify-between items-center border-b border-border/50">
     <h2 class="text-xl font-bold">User Info</h2>
     <button class="text-muted-foreground hover:text-foreground" onclick={onclose}>
-      <Icon data={mdiClose} size="8" />
+      <X size={15} />
     </button>
   </header>
   <div class="flex-grow p-4 overflow-y-auto">
@@ -29,23 +28,23 @@
 
     <div class="space-y-4">
       <button class="w-full flex items-center justify-center p-3 rounded-md bg-primary hover:bg-accent text-foreground font-semibold">
-        <Icon data={mdiMessage} size="6" clazz="mr-2" /> Send Message
+        <SendHorizontal size={10} class="mr-2" /> Send Message
       </button>
       <div class="grid grid-cols-2 gap-2">
         <button class="flex flex-col items-center justify-center p-3 rounded-md bg-muted hover:bg-base-400 text-muted-foreground">
-          <Icon data={mdiPhone} size="6" />
+          <Phone size={12} />
           <span class="text-xs mt-1">Call</span>
         </button>
         <button class="flex flex-col items-center justify-center p-3 rounded-md bg-muted hover:bg-base-400 text-muted-foreground">
-          <Icon data={mdiVideo} size="6" />
+          <Video size={12} />
           <span class="text-xs mt-1">Video</span>
         </button>
         <button class="flex flex-col items-center justify-center p-3 rounded-md bg-muted hover:bg-base-400 text-muted-foreground">
-          <Icon data={mdiMicrophoneOff} size="6" />
+          <MicOff size={12} />
           <span class="text-xs mt-1">Mute</span>
         </button>
         <button class="flex flex-col items-center justify-center p-3 rounded-md bg-muted hover:bg-base-400 text-muted-foreground">
-          <Icon data={mdiVolumeOff} size="6" />
+          <VolumeOff size={12} />
           <span class="text-xs mt-1">Deafen</span>
         </button>
       </div>
@@ -58,13 +57,13 @@
       <div class="border-t border-border/50 pt-4 mt-4 space-y-3">
         <h4 class="text-muted-foreground font-semibold">Actions</h4>
         <button class="w-full flex items-center p-2 rounded-md hover:bg-muted/50 text-muted-foreground">
-          <Icon data={mdiPencil} size="6" clazz="mr-2" /> Edit Profile
+          <Pencil size={10} class="mr-2" /> Edit Profile
         </button>
         <button class="w-full flex items-center p-2 rounded-md hover:bg-muted/50 text-destructive">
-          <Icon data={mdiAccountCancel} size="6" clazz="mr-2" /> Block
+          <Ban size={10} class="mr-2" /> Block
         </button>
         <button class="w-full flex items-center p-2 rounded-md hover:bg-muted/50 text-destructive">
-          <Icon data={mdiFlag} size="6" clazz="mr-2" /> Report
+          <Flag size={10} class="mr-2" /> Report
         </button>
       </div>
     </div>

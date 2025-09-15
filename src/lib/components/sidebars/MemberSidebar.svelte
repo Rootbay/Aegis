@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { mdiAccountGroup } from '@mdi/js';
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { Users } from '@lucide/svelte';
   import type { User } from '$lib/models/User';
 
   export let members: User[] = [];
@@ -23,14 +22,14 @@
     <div class="flex-grow p-2 overflow-y-auto">
       {#if members.length === 0}
         <div class="text-center p-6 text-muted-foreground">
-          <Icon data={mdiAccountGroup} size="10" />
+          <Users size={15} />
           <p class="text-sm mt-2">No members in this chat.</p>
         </div>
       {:else}
         {#each members as member (member.id)}
           <button
             class="w-full text-left px-2 py-1 rounded-md flex items-center transition-colors hover:bg-base-400/50 text-muted-foreground"
-            on:click={(e) => openUserCardModal(member, e.clientX, e.currentTarget.getBoundingClientRect().top, true)}
+            onclick={(e) => openUserCardModal(member, e.clientX, e.currentTarget.getBoundingClientRect().top, true)}
           >
             <div class="relative mr-2">
               <img src={member.avatar} alt={member.name} class="w-8 h-8 rounded-full" />

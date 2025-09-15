@@ -30,7 +30,7 @@
         <p class="text-sm text-muted-foreground">{device.type} - Status: {device.status}</p>
       </div>
       {#if device.status === 'Connected'}
-        <button class="btn btn-error btn-sm" on:click={() => disconnectDevice(device.id)}>
+        <button class="btn btn-error btn-sm" onclick={() => disconnectDevice(device.id)}>
           Disconnect
         </button>
       {:else}

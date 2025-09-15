@@ -1,22 +1,25 @@
 <script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
-  import { mdiClose, mdiPlus, mdiLogin } from '@mdi/js';
+  import { Plus, CirclePlus, X } from '@lucide/svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { v4 as uuidv4 } from 'uuid';
+  import { createEventDispatcher } from 'svelte';
   import { userStore } from '$lib/data/stores/userStore';
   import type { Server } from '$lib/models/Server';
 
   export let show: boolean = false;
-  export let onClose: () => void;
-  export let onServerCreated: (server: Server) => void;
-  export let onServerJoined: (serverId: string) => void;
+
+  const dispatch = createEventDispatcher<{
+    close: void;
+    serverCreated: Server;
+    serverJoined: string;
+  }>();
 
   let newServerName = '';
   let joinServerId = '';
 
   function closeModal() {
     show = false;
-    onClose();
+    dispatch('close');
   }
 
   async function handleCreateServer() {
@@ -36,21 +39,22 @@
       console.log('Server created:', newServer);
       newServerName = '';
       closeModal();
-      onServerCreated(newServer);
+      dispatch('serverCreated', newServer);
     } catch (error) {
       console.error('Failed to create server:', error);
     }
   }
 
   async function handleJoinServer() {
-    if (!joinServerId.trim()) return;
+    const trimmedServerId = joinServerId.trim();
+    if (!trimmedServerId) return;
 
     try {
-      await invoke('send_server_invite', { serverId: joinServerId, userId: $userStore.me.id });
-      console.log('Joined server:', joinServerId);
+      await invoke('send_server_invite', { serverId: trimmedServerId, userId: $userStore.me.id });
+      console.log('Joined server:', trimmedServerId);
       joinServerId = '';
       closeModal();
-      onServerJoined(joinServerId);
+      dispatch('serverJoined', trimmedServerId);
     } catch (error) {
       console.error('Failed to join server:', error);
     }
@@ -63,7 +67,7 @@
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-bold">Server Management</h2>
         <button onclick={closeModal} class="text-muted-foreground hover:text-white">
-          <Icon data={mdiClose} size="6" />
+          <X size={12} />
         </button>
       </div>
 
@@ -79,7 +83,7 @@
           class="w-full bg-cyan-600 text-white rounded-md px-4 py-2 flex items-center justify-center hover:bg-cyan-500"
           onclick={handleCreateServer}
         >
-          <Icon data={mdiPlus} size="6" clazz="mr-2" /> Create Server
+          <Plus size={10} class="mr-2" /> Create Server
         </button>
       </div>
 
@@ -95,7 +99,7 @@
           class="w-full bg-green-600 text-white rounded-md px-4 py-2 flex items-center justify-center hover:bg-green-500"
           onclick={handleJoinServer}
         >
-          <Icon data={mdiLogin} size="6" clazz="mr-2" /> Join Server
+          <CirclePlus size={10} class="mr-2" /> Join Server
         </button>
       </div>
     </div>

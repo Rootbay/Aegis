@@ -25,7 +25,7 @@
     <input type="checkbox" bind:checked={enableReadReceipts} class="form-checkbox h-5 w-5 text-indigo-600" />
   </div>
 
-  <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded" on:click={saveChanges}>
+  <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded" onclick={saveChanges}>
     Save Changes
   </button>
 </div>

@@ -1,13 +1,12 @@
 <script lang="ts">
-	import Icon from '$lib/components/ui/Icon.svelte';
-	import { mdiCog, mdiHome, mdiServerPlus } from '@mdi/js';
+	import { invoke } from '@tauri-apps/api/core';
+	import { Home, Plus, Settings } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { userStore } from '$lib/data/stores/userStore';
 	import { serverStore } from '$lib/data/stores/serverStore';
 	import { friendStore } from '$lib/data/stores/friendStore';
 	import { toasts } from '$lib/data/stores/ToastStore';
-	import { invoke } from '@tauri-apps/api/core';
 	import ServerContextMenu from '$lib/components/context-menus/ServerContextMenu.svelte';
 	import type { Server } from '$lib/models/Server';
 
@@ -20,7 +19,6 @@
 	let serverContextMenuX = 0;
 	let serverContextMenuY = 0;
 	let selectedServer: Server | null = null;
-
 
 	function handleServerContextMenu(event: MouseEvent, server: Server) {
 		event.preventDefault();
@@ -88,7 +86,6 @@
 		}
 		showServerContextMenu = false;
 	}
-
 </script>
 
 <aside class="w-16 min-w-[64px] bg-base-100 flex flex-col items-center py-4 space-y-6">
@@ -100,7 +97,7 @@
 					goto(resolve('/friends/add'));
 				}
 			}} aria-label="Home">
-		<Icon data={mdiHome} size="8" />
+		<Home size={15} />
 	</button>
 
 	<nav class="flex flex-col space-y-2">
@@ -122,7 +119,7 @@
 			onclick={onCreateJoinServerClick}
 			aria-label="Create or Join Server"
 		>
-			<Icon data={mdiServerPlus} />
+			<Plus size={12} />
 		</button>
 	</nav>
 
@@ -135,13 +132,11 @@
 		on:close={() => (showServerContextMenu = false)}
 	/>
 
-	
-
 	<div class="flex-grow"></div>
 
 	<div class="flex flex-col items-center space-y-4">
 		<button class="p-3 rounded-lg hover:bg-card transition cursor-pointer" aria-label="Settings" onclick={() => goto(resolve('/settings'))}>
-			<Icon data={mdiCog} />
+			<Settings size={12} />
 		</button>
 		<button
 			onclick={(e) => onProfileClick(e.clientX, e.clientY)}

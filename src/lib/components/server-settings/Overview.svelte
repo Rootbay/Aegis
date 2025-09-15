@@ -33,7 +33,7 @@
       class="mt-1 block w-full rounded-md bg-zinc-700 border-transparent text-white focus:border-indigo-500 focus:ring-indigo-500"
     ></textarea>
   </div>
-  <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded" on:click={saveChanges}>
+  <button class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded" onclick={saveChanges}>
     Save Changes
   </button>
 </div>

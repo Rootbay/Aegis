@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { mdiClose, mdiMagnify, mdiEmoticonSadOutline } from '@mdi/js';
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { X, Smile, Search } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import type { ComponentType } from 'svelte';
   import RolesManagement from '$lib/components/RolesManagement.svelte';
   import ChannelManagement from '$lib/components/ChannelManagement.svelte';
   import WebhookManagement from '$lib/components/WebhookManagement.svelte';
@@ -29,8 +29,21 @@
     button_click: any;
   };
 
+  type SidebarLinkItem = {
+    label: string;
+    icon: ComponentType;
+    tab: string;
+    type?: undefined;
+  };
+
+  type SidebarSeparator = {
+    type: 'separator';
+  };
+
+  type SidebarItem = SidebarLinkItem | SidebarSeparator;
+
   export let title: string;
-  export let sidebarItems: { label: string; icon: string; tab: string }[];
+  export let sidebarItems: SidebarItem[];
   export let allSettings: any[];
   export let categoryHeadings: { [key: string]: string };
   export let currentData: any;
@@ -42,13 +55,25 @@
 
   $: isSearching = searchQuery.length > 0;
 
+  const isSeparator = (item: SidebarItem): item is SidebarSeparator => item.type === 'separator';
+
   $: filteredSidebarItems = sidebarItems.filter(item => {
+    if (isSeparator(item)) {
+      return !searchQuery;
+    }
     if (!searchQuery) return true;
     const content = pageContents[item.tab] || '';
     return item.label.toLowerCase().includes(searchQuery.toLowerCase()) || content.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  let activeTab: string = sidebarItems[0].tab;
+  let activeTab = '';
+
+  $: if (!activeTab) {
+    const firstTabItem = sidebarItems.find((item): item is SidebarLinkItem => !isSeparator(item));
+    if (firstTabItem) {
+      activeTab = firstTabItem.tab;
+    }
+  }
 
   function closeSettings() {
     dispatch('close');
@@ -64,10 +89,11 @@
   }
 
   onMount(async () => {
-    if (initialActiveTab && sidebarItems.some((i) => i.tab === initialActiveTab)) {
+    if (initialActiveTab && sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)) {
       activeTab = initialActiveTab;
     }
     for (const item of sidebarItems) {
+      if (isSeparator(item)) continue;
       await fetchPageContent(item.tab);
     }
 
@@ -82,11 +108,9 @@
     };
   });
 
-  $: if (initialActiveTab && sidebarItems.some((i) => i.tab === initialActiveTab)) {
+  $: if (initialActiveTab && sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)) {
     if (activeTab !== initialActiveTab) activeTab = initialActiveTab;
   }
-
-  
 
   const componentMap: { [key: string]: any } = {
     RolesManagement,
@@ -119,26 +143,31 @@
             on:click={() => { searchQuery = ''; }}
           >
             {#if searchQuery}
-              <Icon path={mdiClose} class="w-4 h-4" />
+              <X class="w-4 h-4" />
             {:else}
-              <Icon path={mdiMagnify} class="w-4 h-4" />
+              <Search class="w-4 h-4" />
             {/if}
           </button>
         </div>
         <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase" class:hidden={isSearching}>{title}</h2>
         <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase" class:hidden={!isSearching}>Search Result</h2>
     <ul>
-          {#each filteredSidebarItems as item (item.tab)}
+          {#each filteredSidebarItems as item, index (item.type === 'separator' ? `separator-${index}` : item.tab)}
             {#if item.type === 'separator'}
               <div class="h-[1px] my-2 mx-[10px] bg-zinc-700"></div>
             {:else}
+              {@const navItem = item as SidebarLinkItem}
               <li>
                 <button
-                  class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
-                  {activeTab === item.tab ? 'bg-zinc-700 hover:bg-zinc-600' : 'hover:bg-zinc-700'}"
-                  on:click={() => (activeTab = item.tab)}
+                  class="w-full flex items-center gap-2 h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer group
+                  {activeTab === navItem.tab ? 'bg-zinc-700 hover:bg-zinc-600' : 'hover:bg-zinc-700'}"
+                  on:click={() => (activeTab = navItem.tab)}
                 >
-                  {item.label}
+                  <svelte:component
+                    this={navItem.icon}
+                    class={`w-4 h-4 text-muted-foreground group-hover:text-white transition-colors duration-200${activeTab === navItem.tab ? ' text-white' : ''}`}
+                  />
+                  <span class="truncate" class:text-white={activeTab === navItem.tab}>{navItem.label}</span>
                 </button>
               </li>
             {/if}
@@ -159,7 +188,7 @@
         {/if}
         {#if isSearching && filteredSidebarItems.length === 0}
           <div class="flex flex-col items-center justify-center text-muted-foreground mt-8">
-            <Icon path={mdiEmoticonSadOutline} class="w-12 h-12 mb-2" />
+            <Smile class="w-12 h-12 mb-2" />
             <p class="text-sm">No Search Results</p>
           </div>
         {/if}
@@ -173,7 +202,7 @@
       class="absolute top-0 right-0 text-muted-foreground hover:text-white transition-colors duration-200 p-4 z-50"
       on:click={closeSettings}
     >
-      <Icon path={mdiClose} class="w-6 h-6" />
+      <X class="w-6 h-6" />
     </button>
     {#each Object.entries(categoryHeadings) as [category, heading] (category)}
       {#if activeTab === category}
