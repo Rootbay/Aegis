@@ -65,7 +65,7 @@
 
     { id: 'roleManagement', category: 'roles', title: 'Manage Roles', description: 'Create, edit, or delete roles and manage their permissions.', type: 'custom_component', component: 'RolesManagement' },
     { id: 'channelManagement', category: 'channels', title: 'Manage Channels', description: 'Create, edit, or delete channels.', type: 'custom_component', component: 'ChannelManagement' },
-    { id: 'moderationLevel', category: 'moderation', title: 'Moderation Level', description: 'Set the moderation level for new members.', type: 'select', property: 'moderation_level', options: ['None', 'Low', 'Medium', 'High'] },
+    { id: 'moderationLevel', category: 'moderation', title: 'Moderation Level', description: 'Set the moderation level for new members.', type: 'select', property: 'moderation_level', options: ['None', 'Low', 'Medium', 'High'].map(level => ({ label: level, value: level })) },
     { id: 'explicitContentFilter', category: 'moderation', title: 'Explicit Content Filter', description: 'Scan media content from all members.', type: 'toggle', property: 'explicit_content_filter' },
     { id: 'emojiManagement', category: 'emojis', title: 'Manage Emojis', description: 'Add, edit, or delete custom emojis.', type: 'static', property: 'emojis_placeholder' },
     { id: 'stickerManagement', category: 'stickers', title: 'Manage Stickers', description: 'Add, edit, or delete custom stickers.', type: 'static', property: 'stickers_placeholder' },

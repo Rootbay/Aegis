@@ -1,50 +1,53 @@
 <script lang="ts">
-    import { invoke } from '@tauri-apps/api/core';
-    import { get } from 'svelte/store';
-    import { userStore } from '$lib/data/stores/userStore';
-    import { toasts } from '$lib/data/stores/ToastStore';
+  import { invoke } from '@tauri-apps/api/core';
+  import { userStore } from '$lib/data/stores/userStore';
+  import { toasts } from '$lib/data/stores/ToastStore';
 
-    export let onRequestSent: () => void;
-    export let onClose: () => void;
+  type Props = {
+    onRequestSent: () => void;
+    onClose: () => void;
+  };
 
-    let targetUserId = '';
-    let errorMessage = '';
-    let successMessage = '';
+  let { onRequestSent, onClose }: Props = $props();
 
-    async function sendRequest() {
-        errorMessage = '';
-        successMessage = '';
-        const currentUser = get(userStore).me;
+  let targetUserId = $state('');
+  let errorMessage = $state('');
+  let successMessage = $state('');
 
-        if (!currentUser || !currentUser.id) {
-            errorMessage = 'Current user not found.';
-            return;
-        }
+  async function sendRequest() {
+    errorMessage = '';
+    successMessage = '';
+    const currentUser = $userStore.me;
 
-        if (!targetUserId) {
-            errorMessage = 'Please enter a target user ID.';
-            return;
-        }
-
-        try {
-            await invoke('send_friend_request', {
-                current_user_id: currentUser.id,
-                target_user_id: targetUserId,
-            });
-            successMessage = 'Friend request sent successfully!';
-            targetUserId = '';
-            onRequestSent();
-            setTimeout(() => {
-                onClose();
-            }, 1500);
-        } catch (error) {
-            toasts.showErrorToast(`Error sending friend request: ${error}`);
-        }
+    if (!currentUser || !currentUser.id) {
+      errorMessage = 'Current user not found.';
+      return;
     }
 
-    function closeModal() {
+    if (!targetUserId) {
+      errorMessage = 'Please enter a target user ID.';
+      return;
+    }
+
+    try {
+      await invoke('send_friend_request', {
+        current_user_id: currentUser.id,
+        target_user_id: targetUserId,
+      });
+      successMessage = 'Friend request sent successfully!';
+      targetUserId = '';
+      onRequestSent();
+      setTimeout(() => {
         onClose();
+      }, 1500);
+    } catch (error) {
+      toasts.showErrorToast(`Error sending friend request: ${error}`);
     }
+  }
+
+  function closeModal() {
+    onClose();
+  }
 </script>
 
 <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

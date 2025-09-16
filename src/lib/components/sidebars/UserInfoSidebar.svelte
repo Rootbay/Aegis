@@ -3,8 +3,12 @@
   import type { Friend } from '$lib/models/Friend';
   import type { User } from '$lib/models/User';
 
-  export let user: Friend | User;
-  export let onclose: () => void;
+  type Props = {
+    user: Friend | User;
+    onclose: () => void;
+  };
+
+  let { user, onclose }: Props = $props();
 </script>
 
 <aside class="w-[340px] bg-muted/50 flex flex-col border-l border-border/50">

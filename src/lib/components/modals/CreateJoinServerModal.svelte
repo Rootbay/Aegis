@@ -5,13 +5,17 @@
   import { userStore } from '$lib/data/stores/userStore';
   import type { Server } from '$lib/models/Server';
 
-  export let onclose: () => void;
+  type Props = {
+    onclose: () => void;
+  };
 
-  let inviteLink: string = '';
-  let modalView: 'main' | 'joinLink' | 'createServer' = 'main';
-  let serverName: string = '';
-  let serverIcon: File | null = null;
-  let serverIconPreview: string | null = null;
+  let { onclose }: Props = $props();
+
+  let inviteLink = $state('');
+  let modalView = $state<'main' | 'joinLink' | 'createServer'>('main');
+  let serverName = $state('');
+  let serverIcon = $state<File | null>(null);
+  let serverIconPreview = $state<string | null>(null);
 
   async function joinServer() {
     console.log('Joining server with link:', inviteLink);
@@ -23,10 +27,12 @@
       const serverIdToJoin = inviteLink;
       await invoke('join_server', { serverId: serverIdToJoin, userId: $userStore.me.id });
 
-      const newServer = {
+      const newServer: Server = {
         id: serverIdToJoin,
         name: `Joined Server (${serverIdToJoin})`,
-        iconUrl: 'https://api.dicebear.com/8.x/bottts-neutral/svg?seed=' + encodeURIComponent(serverIdToJoin),
+        iconUrl:
+          'https://api.dicebear.com/8.x/bottts-neutral/svg?seed=' +
+          encodeURIComponent(serverIdToJoin),
         owner_id: 'unknown',
         members: [$userStore.me],
         channels: [],
@@ -41,37 +47,40 @@
   }
 
   async function createNewServer() {
-      if (!$userStore.me) {
-          console.error("User not loaded, cannot create a server.");
-          return;
-      }
-      try {
-        const newServerId = `server-${Date.now()}`;
+    if (!$userStore.me) {
+      console.error('User not loaded, cannot create a server.');
+      return;
+    }
+    try {
+      const newServerId = `server-${Date.now()}`;
 
-        const serverForBackend = {
-          id: newServerId,
-          name: serverName,
-          owner_id: $userStore.me.id,
-          created_at: new Date().toISOString(),
-          channels: [],
-          members: [],
-          roles: [],
-        };
-        
-        const createdServer: Server = await invoke('create_server', { server: serverForBackend });
+      const serverForBackend = {
+        id: newServerId,
+        name: serverName,
+        owner_id: $userStore.me.id,
+        created_at: new Date().toISOString(),
+        channels: [],
+        members: [],
+        roles: []
+      };
 
-        const newServerForStore: Server = {
-          ...createdServer,
-          iconUrl: serverIconPreview || 'https://api.dicebear.com/8.x/bottts-neutral/svg?seed=' + encodeURIComponent(createdServer.name),
-        };
+      const createdServer: Server = await invoke('create_server', { server: serverForBackend });
 
-        serverStore.addServer(newServerForStore);
-        serverStore.setActiveServer(newServerForStore.id);
-        
-        onclose();
-      } catch (error) {
-        console.error('Failed to create server:', error);
-      }
+      const newServerForStore: Server = {
+        ...createdServer,
+        iconUrl:
+          serverIconPreview ||
+          'https://api.dicebear.com/8.x/bottts-neutral/svg?seed=' +
+            encodeURIComponent(createdServer.name)
+      };
+
+      serverStore.addServer(newServerForStore);
+      serverStore.setActiveServer(newServerForStore.id);
+
+      onclose();
+    } catch (error) {
+      console.error('Failed to create server:', error);
+    }
   }
 
   function handleIconUpload(event: Event) {
@@ -92,7 +101,7 @@
     { id: 'template-7', name: 'Book Club' },
     { id: 'template-8', name: 'Fitness Group' },
     { id: 'template-9', name: 'Travel Buddies' },
-    { id: 'template-10', name: 'Art & Design' },
+    { id: 'template-10', name: 'Art & Design' }
   ];
 </script>
 

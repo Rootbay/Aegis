@@ -8,13 +8,23 @@
   import UserManagement from '../server-settings/UserManagement.svelte';
   import DeleteServer from '../server-settings/DeleteServer.svelte';
 
-  export let show = false;
-  export let server: Server | null = null;
-  export let onClose: () => void;
-  export let onupdateServer: ((server: Server) => void) | undefined = undefined;
-  export let ondeleteServer: ((server: Server) => void) | undefined = undefined;
+  type Props = {
+    show?: boolean;
+    server: Server | null;
+    onClose: () => void;
+    onupdateServer?: (server: Server) => void;
+    ondeleteServer?: (server: Server) => void;
+  };
 
-  let activeTab = 'overview';
+  let {
+    show = false,
+    server,
+    onClose,
+    onupdateServer,
+    ondeleteServer
+  }: Props = $props();
+
+  let activeTab = $state<'overview' | 'moderation' | 'privacy' | 'roles' | 'user_management' | 'delete'>('overview');
 
   function close() {
     show = false;

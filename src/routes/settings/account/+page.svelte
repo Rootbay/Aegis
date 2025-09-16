@@ -1,8 +1,8 @@
 <script lang="ts">
-  let activeTab: string = 'my_profile';
-  let displayName: string = '';
-  let statusMessage: string = '';
-  let userId: string = 'user_12345'; // placeholder
+  let activeTab = $state<'my_profile' | 'Standing' | 'placeholder2'>('my_profile');
+  let displayName = $state('');
+  let statusMessage = $state('');
+  let userId = $state('user_12345'); // placeholder
 </script>
 
 <h1 class="text-xl font-bold mb-4">Account Settings</h1>

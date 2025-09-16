@@ -1,7 +1,7 @@
 <script lang="ts">
-  let allowDataCollection: boolean = true;
-  let personalizeExperience: boolean = true;
-  let showOnlineStatus: boolean = true;
+  let allowDataCollection = $state(true);
+  let personalizeExperience = $state(true);
+  let showOnlineStatus = $state(true);
 
   function exportData() {
     alert('Simulating data export... Your data would be downloaded here.');

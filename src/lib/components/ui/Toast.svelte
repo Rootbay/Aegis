@@ -3,13 +3,21 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
 
-  let { message, type, duration = 3000, onDismiss } = $props();
+  type Props = {
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning' | 'default';
+    duration?: number;
+    onDismiss?: () => void;
+  };
+
+  let { message, type, duration = 3000, onDismiss }: Props = $props();
 
   let show = $state(false);
+  let hovered = $state(false);
+
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let startTime = 0;
   let remaining = duration;
-  let hovered = $state(false);
 
   function scheduleDismiss(ms: number) {
     clearCurrentTimeout();
@@ -32,6 +40,7 @@
     show = true;
     remaining = duration;
     scheduleDismiss(remaining);
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         clearCurrentTimeout();
@@ -39,6 +48,7 @@
         if (onDismiss) setTimeout(onDismiss, 300);
       }
     };
+
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true } as any);
   });
@@ -56,14 +66,17 @@
       case 'success':
         bgColor = 'bg-success';
         borderLeftColor = 'border-l-green-700';
+        textColor = 'text-white';
         break;
       case 'error':
         bgColor = 'bg-destructive';
         borderLeftColor = 'border-l-red-700';
+        textColor = 'text-white';
         break;
       case 'info':
         bgColor = 'bg-status-info';
         borderLeftColor = 'border-l-blue-700';
+        textColor = 'text-white';
         break;
       case 'warning':
         bgColor = 'bg-status-warning';
@@ -73,6 +86,7 @@
       default:
         bgColor = 'bg-muted';
         borderLeftColor = 'border-l-gray-900';
+        textColor = 'text-white';
     }
   });
 </script>

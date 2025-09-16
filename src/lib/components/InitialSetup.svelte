@@ -37,7 +37,7 @@
 
 <style>
   .loader {
-    --size: 28px;
+    --size: 56px;
     --thickness: 2px;
     --speed: 900ms;
     --color: #d4d4d8;

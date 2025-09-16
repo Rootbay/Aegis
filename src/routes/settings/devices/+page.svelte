@@ -6,11 +6,11 @@
     status: string;
   }
 
-  let devices: Device[] = [
+  let devices = $state<Device[]>([
     { id: '1', name: 'My Desktop PC', type: 'Computer', status: 'Connected' },
     { id: '2', name: 'My Phone', type: 'Mobile', status: 'Connected' },
     { id: '3', name: 'Another Device', type: 'Tablet', status: 'Disconnected' },
-  ];
+  ]);
 
   function disconnectDevice(deviceId: string) {
     devices = devices.map(device =>

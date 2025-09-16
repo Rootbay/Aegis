@@ -4,9 +4,9 @@
   import { Plus, Scan } from '@lucide/svelte';
   import QRCodeScanner from '$lib/components/modals/QRCodeScanner.svelte';
 
-  let friendIdToAdd = '';
-  let isSending = false;
-  let showQrScanner = false;
+  let friendIdToAdd = $state('');
+  let isSending = $state(false);
+  let showQrScanner = $state(false);
 
   async function handleAddFriend(event?: SubmitEvent) {
     event?.preventDefault();
@@ -32,7 +32,6 @@
   function handleScanQrCode() {
     showQrScanner = true;
   }
-
 </script>
 
 <div class="p-4">
