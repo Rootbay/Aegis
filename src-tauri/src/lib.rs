@@ -39,6 +39,7 @@ pub async fn run() {
             commands::identity::unlock_identity,
             commands::identity::is_identity_created,
             commands::identity::initialize_app,
+            commands::identity::rekey_identity,
             commands::files::send_file,
             commands::files::approve_file_transfer,
             commands::files::reject_file_transfer,

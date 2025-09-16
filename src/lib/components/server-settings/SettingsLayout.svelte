@@ -9,7 +9,6 @@
   import BanList from '$lib/components/lists/BanList.svelte';
   import Overview from '$lib/components/server-settings/Overview.svelte';
   import Moderation from '$lib/components/server-settings/Moderation.svelte';
-  import DeleteServer from '$lib/components/server-settings/DeleteServer.svelte';
   import UserManagement from '$lib/components/server-settings/UserManagement.svelte';
   import Roles from '$lib/components/server-settings/Roles.svelte';
   import Privacy from '$lib/components/server-settings/Privacy.svelte';
@@ -102,7 +101,9 @@
   let searchQuery = $state('');
   let isSearching = $derived(searchQuery.length > 0);
 
-  const serverAwareComponents = new Set(['Overview', 'Moderation', 'DeleteServer', 'Privacy']);
+  let showDeleteServerConfirm = $state(false);
+
+  const serverAwareComponents = new Set(['Overview', 'Moderation', 'Privacy']);
   const isSeparator = (item: SidebarItem): item is SidebarSeparator => item.type === 'separator';
 
   const componentMap: { [key: string]: any } = {
@@ -113,7 +114,6 @@
     BanList,
     Overview,
     Moderation,
-    DeleteServer,
     UserManagement,
     Roles,
     Privacy
@@ -245,10 +245,6 @@
       props.onupdateServer = handleUpdateServer;
     }
 
-    if (componentName === 'DeleteServer') {
-      props.ondeleteServer = handleDeleteServer;
-    }
-
     return props;
   }
 </script>
@@ -305,7 +301,7 @@
             <li>
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md text-red-400 hover:bg-zinc-700 transition-colors duration-200 mb-[2px] cursor-pointer"
-                onclick={() => (activeTab = 'delete_server')}
+                onclick={() => (showDeleteServerConfirm = true)}
               >
                 Delete Server
               </button>
@@ -428,23 +424,27 @@
       {/if}
     {/each}
     <div class="h-[1px] my-2 mx-[10px] bg-zinc-700"></div>
-
-    {#if activeTab === 'delete_server'}
-      <h3 class="text-2xl font-semibold mb-6 text-red-400">{categoryHeadings.delete_server}</h3>
-      <div class="bg-zinc-700 p-5 rounded-lg shadow-md">
-        <p class="text-zinc-300 mb-4">
-          This action will permanently delete your server and all its data. This cannot be undone.
-        </p>
-        <button
-          class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors duration-200"
-          onclick={() => onbutton_click?.({ id: 'deleteServer' })}
-        >
-          Delete Server
-        </button>
-      </div>
-    {/if}
     </div>
   </main>
+  {#if showDeleteServerConfirm}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-labelledby="delete-server-dialog-title" onclick={() => (showDeleteServerConfirm = false)}>
+      <div class="w-full max-w-sm rounded-lg border border-border bg-card p-6 text-left shadow-xl" onclick={(event) => event.stopPropagation()}>
+        <h3 id="delete-server-dialog-title" class="text-lg font-semibold text-red-400">Delete server?</h3>
+        <p class="mt-2 text-sm text-muted-foreground">
+          This action permanently removes {currentData?.name ?? 'this server'} and all of its data. You cannot undo this.
+        </p>
+        <div class="mt-6 flex justify-end gap-2">
+          <button class="rounded-md bg-muted px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/80" type="button" onclick={() => (showDeleteServerConfirm = false)}>
+            Cancel
+          </button>
+          <button class="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700" type="button" onclick={() => { showDeleteServerConfirm = false; handleDeleteServer(currentData); }}>
+            Delete Server
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
 </div>
 
 <style lang="postcss">

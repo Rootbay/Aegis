@@ -8,6 +8,7 @@
   import { setContext, onMount, onDestroy, untrack } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import { authStore, type AuthState } from '$lib/data/stores/authStore';
   import { userStore } from '$lib/data/stores/userStore';
   import { friendStore } from '$lib/data/stores/friendStore';
   import { serverStore } from '$lib/data/stores/serverStore';
@@ -33,7 +34,11 @@
 
   let { children } = $props();
 
-  const { subscribe, init } = userStore;
+  const { subscribe } = userStore;
+  let authState = $state<AuthState>({ status: 'checking', loading: true, error: null, onboarding: null, pendingDeviceLogin: null });
+  const unsubscribeAuth = authStore.subscribe((value) => {
+    authState = value;
+  });
   let currentUser = $state<User | null>(null);
   let isLoading = $state(true);
   subscribe(value => {
@@ -57,9 +62,25 @@
     }
   });
 
-  onMount(async () => {
-    await init();
+  let postAuthInitialized = $state(false);
+  let unlistenHandlers: Array<() => void> = [];
+
+  function clearUnlistenHandlers() {
+    for (const handler of unlistenHandlers) {
+      try {
+        handler();
+      } catch (error) {
+        console.error('Failed to detach event listener:', error);
+      }
+    }
+    unlistenHandlers = [];
+  }
+
+  async function bootstrapAfterAuthentication() {
     await serverStore.initialize();
+    await friendStore.initialize();
+
+    clearUnlistenHandlers();
 
     const storedActiveServerId = localStorage.getItem('activeServerId');
     const storedActiveChatId = localStorage.getItem('activeChatId');
@@ -99,12 +120,32 @@
         }
       });
 
-      onDestroy(() => {
-        unlistenFriends();
-        unlistenServers();
-        unlistenMessages();
-        unlistenPresence();
-      });
+      unlistenHandlers.push(unlistenFriends, unlistenServers, unlistenMessages, unlistenPresence);
+    }
+  }
+
+  onMount(() => {
+    authStore.bootstrap();
+  });
+
+  onDestroy(() => {
+    unsubscribeAuth();
+    clearUnlistenHandlers();
+  });
+
+  $effect(() => {
+    if (authState.status !== 'authenticated') {
+      postAuthInitialized = false;
+      clearUnlistenHandlers();
+      chatStore.clearActiveChat();
+      serverStore.setActiveServer(null);
+    }
+  });
+
+  $effect(() => {
+    if (authState.status === 'authenticated' && !postAuthInitialized) {
+      postAuthInitialized = true;
+      bootstrapAfterAuthentication().catch((error) => console.error('Post-auth bootstrap failed:', error));
     }
   });
 
@@ -245,7 +286,7 @@
 </script>
 
 <div class="flex h-screen bg-base-100 text-foreground">
-  {#if !currentUser}
+  {#if authState.status !== 'authenticated' || !currentUser}
     <InitialSetup />
   {:else}
     {#if !isAnySettingsPage}

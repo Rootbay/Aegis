@@ -51,6 +51,46 @@ pub async fn initialize_app<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn rekey_identity<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    old_password: &str,
+    new_password: &str,
+) -> Result<(), String> {
+    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let identity_path = app_data_dir.join("identity.bin");
+    let salt_path = app_data_dir.join("identity.salt");
+    let nonce_path = app_data_dir.join("identity.nonce");
+
+    if !(identity_path.exists() && salt_path.exists() && nonce_path.exists()) {
+        return Err("Identity not initialized".into());
+    }
+
+    let identity = get_or_create_identity(&app, old_password)?;
+
+    let secret = identity
+        .to_secret_bytes()
+        .ok_or_else(|| "Could not get secret bytes".to_string())?;
+
+    let (encrypted_secret, salt, nonce) = crypto::encrypt(&secret, new_password.as_bytes())
+        .map_err(|e| format!("Failed to encrypt identity: {}", e))?;
+
+    fs::File::create(&identity_path)
+        .map_err(|e| e.to_string())?
+        .write_all(&encrypted_secret)
+        .map_err(|e| e.to_string())?;
+    fs::File::create(&salt_path)
+        .map_err(|e| e.to_string())?
+        .write_all(salt.as_ref().as_bytes())
+        .map_err(|e| e.to_string())?;
+    fs::File::create(&nonce_path)
+        .map_err(|e| e.to_string())?
+        .write_all(nonce.as_slice())
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn unlock_identity<R: Runtime>(
     app: tauri::AppHandle<R>,
     password: &str,

@@ -403,8 +403,7 @@
         items={currentChatMessages}
         mode="bottomToTop"
         defaultEstimatedItemHeight={80}
-        containerClass="h-full"
-        viewportClass="h-full overflow-y-auto p-4 chat-viewport"
+        viewportClass="virtual-list-viewport p-4 chat-viewport"
         bind:this={listRef}
       >
         {#snippet renderItem(msg, index)}

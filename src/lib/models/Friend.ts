@@ -10,5 +10,7 @@ export interface Friend extends User {
   lastMessage?: string;
   isFriend?: boolean;
   isPinned?: boolean;
+  friendshipId?: string;
+  relationshipStatus?: string;
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { get } from 'svelte/store';
   import { invoke } from '@tauri-apps/api/core';
   import { userStore } from '$lib/data/stores/userStore';
   import { toasts } from '$lib/data/stores/ToastStore';

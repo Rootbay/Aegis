@@ -86,8 +86,17 @@
 
 	async function removeFriend(friend: Friend) {
 		console.log('Removing friend:', friend);
+		const usesFallbackId = friend.friendshipId == null;
+		const friendshipId = usesFallbackId ? friend.id : friend.friendshipId;
+		if (!friendshipId) {
+			console.warn('Missing friendship identifier for friend', friend);
+			return;
+		}
+		if (usesFallbackId) {
+			console.warn('Falling back to friend.id when removing friendship', friend);
+		}
 		try {
-			await invoke('remove_friendship', { friendshipId: friend.id });
+			await invoke('remove_friendship', { friendshipId });
 			friendStore.removeFriend(friend.id);
 			console.log('Friend removed:', friend);
 		} catch (error) {

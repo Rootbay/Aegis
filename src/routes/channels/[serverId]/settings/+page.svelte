@@ -92,7 +92,6 @@
     members: 'Members',
     bans: 'Bans',
     audit_log: 'Audit Log',
-    delete_server: 'Delete Server',
   };
 
   function handleUpdateSetting({ id, property, rootProperty, nestedProperty, value }: { id: string; property: string; rootProperty?: string; nestedProperty?: string; value: any }) {
@@ -196,12 +195,8 @@
   }
 
   function handleButtonClick({ id }: { id: string }) {
-    if (id === 'deleteServer') {
-      if (server && confirm(`Are you sure you want to delete ${server.name}? This action cannot be undone.`)) {
-        serverStore.removeServer(server.id);
-        serverStore.setActiveServer(null);
-        gotoResolved('/friends?tab=All');
-      }
+    if (id === 'deleteServer' && server) {
+      handleDeleteServer({ serverId: server.id });
     }
   }
 </script>
