@@ -1,26 +1,33 @@
 <script lang="ts">
   import { ZoomIn, ZoomOut, Download, X } from '@lucide/svelte';
   import MagnifierContextMenu from '$lib/components/context-menus/MagnifierContextMenu.svelte';
+  import { onMount, onDestroy } from 'svelte';
 
-  export let imageUrl = '';
-  export let show = false;
-  export let onClose: () => void;
-  export let onSave: (imageUrl: string) => void;
+  let {
+    imageUrl = '',
+    show = false,
+    onClose = () => {},
+    onsave
+  }: {
+    imageUrl?: string;
+    show: $bindable<boolean>;
+    onClose?: () => void;
+    onsave?: (url: string) => void;
+  } = $props();
 
-  let imageZoomLevel = 1;
-  let magnifierZoom = 2;
-  let magnifierSize = 150;
-  let magnifierX = 0;
-  let magnifierY = 0;
-  let imageMouseX = 0;
-  let imageMouseY = 0;
-  let showMagnifier = false;
-  let imageElement: HTMLImageElement;
-  let parentDivElement: HTMLDivElement;
-
-  let showContextMenu = false;
-  let contextMenuX = 0;
-  let contextMenuY = 0;
+  let imageZoomLevel = $state(1);
+  let magnifierZoom = $state(2);
+  let magnifierSize = $state(150);
+  let magnifierX = $state(0);
+  let magnifierY = $state(0);
+  let imageMouseX = $state(0);
+  let imageMouseY = $state(0);
+  let showMagnifier = $state(false);
+  let showContextMenu = $state(false);
+  let contextMenuX = $state(0);
+  let contextMenuY = $state(0);
+  let imageElement = $state<HTMLImageElement>();
+  let parentDivElement = $state<HTMLDivElement>();
 
   function closeLightbox() {
     show = false;
@@ -41,7 +48,7 @@
       document.body.removeChild(link);
 
       URL.revokeObjectURL(url);
-      onSave(imageUrl);
+      onsave?.(imageUrl);
     } catch (error) {
       console.error('Error saving image:', error);
     }
@@ -76,12 +83,12 @@
     contextMenuY = event.clientY;
   }
 
-  function handleSetMagnifierSize(event: CustomEvent) {
-    magnifierSize = event.detail;
+  function handleSetMagnifierSize(size: number) {
+    magnifierSize = size;
   }
 
-  function handleSetMagnifierZoom(event: CustomEvent) {
-    magnifierZoom = event.detail;
+  function handleSetMagnifierZoom(zoom: number) {
+    magnifierZoom = zoom;
   }
 
   function handleMagnifierWheel(event: WheelEvent) {
@@ -101,8 +108,6 @@
   function zoomOut() {
     imageZoomLevel = Math.max(imageZoomLevel - 0.2, 1);
   }
-
-  import { onMount, onDestroy } from 'svelte';
 
   onMount(() => {
     window.addEventListener('keydown', handleKeydown);
@@ -184,9 +189,9 @@
       x={contextMenuX}
       y={contextMenuY}
       show={showContextMenu}
-      on:setMagnifierSize={handleSetMagnifierSize}
-      on:setMagnifierZoom={handleSetMagnifierZoom}
-      on:close={() => (showContextMenu = false)}
+      onsetMagnifierSize={handleSetMagnifierSize}
+      onsetMagnifierZoom={handleSetMagnifierZoom}
+      onclose={() => (showContextMenu = false)}
     />
   </div>
 {/if}

@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <svelte:window onkeydown={handleKeydown} />
 
 <script lang="ts">
@@ -6,12 +8,12 @@
   import { setContext, onMount, onDestroy, untrack } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { userStore } from '$lib/data/stores/userStore';
   import { friendStore } from '$lib/data/stores/friendStore';
   import { serverStore } from '$lib/data/stores/serverStore';
   import { chatStore, messagesByChatId, activeChannelId, activeChatId, activeChatType } from '$lib/data/stores/chatStore';
   import { CREATE_GROUP_CONTEXT_KEY, FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from '$lib/data/contextKeys';
+  import type { FriendsLayoutContext } from '$lib/data/contextTypes';
   import { getListen } from '$services/tauri';
   import type { AepMessage } from '$lib/models/AepMessage';
   import type { Friend } from '$lib/models/Friend';
@@ -24,7 +26,7 @@
   import ServerSidebar from '$lib/components/sidebars/ServerSidebar.svelte';
   import MemberSidebar from '$lib/components/sidebars/MemberSidebar.svelte';
   import DirectMessageList from '$lib/components/lists/DirectMessageList.svelte';
-  import { UserRoundPlus, Plus, Hash, Settings, X } from '@lucide/svelte';
+  import { UserRoundPlus } from '@lucide/svelte';
   import ServerManagementModal from '$lib/components/modals/ServerManagementModal.svelte';
   import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
   import { ChatView } from '$features/chat';
@@ -32,10 +34,11 @@
   let { children } = $props();
 
   const { subscribe, init } = userStore;
-  const state = $state({ me: null, loading: true });
+  let currentUser = $state<User | null>(null);
+  let isLoading = $state(true);
   subscribe(value => {
-    state.me = value.me;
-    state.loading = value.loading;
+    currentUser = value.me;
+    isLoading = value.loading;
   });
 
   function handleKeydown(event: KeyboardEvent) {
@@ -72,20 +75,20 @@
 
     const listen = await getListen();
     if (listen) {
-      const unlistenFriends = await listen('friends-updated', (event: { payload: Friend[] }) => {
+      const unlistenFriends = await listen<{ payload: Friend[] }>('friends-updated', (event) => {
         friendStore.handleFriendsUpdate(event.payload);
       });
 
-      const unlistenServers = await listen('servers-updated', (event: { payload: Server[] }) => {
+      const unlistenServers = await listen<{ payload: Server[] }>('servers-updated', (event) => {
         serverStore.handleServersUpdate(event.payload);
       });
 
-      const unlistenMessages = await listen('messages-updated', (event: { payload: { chatId: string, messages: Message[] } }) => {
+      const unlistenMessages = await listen<{ payload: { chatId: string; messages: Message[] } }>('messages-updated', (event) => {
         const { chatId, messages } = event.payload;
         chatStore.handleMessagesUpdate(chatId, messages);
       });
 
-      const unlistenPresence = await listen('new-message', (event: { payload: AepMessage }) => {
+      const unlistenPresence = await listen<{ payload: AepMessage }>('new-message', (event) => {
         const receivedMessage: AepMessage = event.payload;
         if (receivedMessage.PresenceUpdate) {
           const { user_id, is_online } = receivedMessage.PresenceUpdate;
@@ -226,7 +229,7 @@
     get activeTab() {
       return activeTab;
     },
-  });
+  } satisfies FriendsLayoutContext);
 
   const isAnySettingsPage = $derived($page.url.pathname.includes('/settings'));
   const isFriendsOrRootPage = $derived(($page.url.pathname === '/' || $page.url.pathname.startsWith('/friends')) && !$serverStore.activeServerId);
@@ -242,11 +245,11 @@
 </script>
 
 <div class="flex h-screen bg-base-100 text-foreground">
-  {#if !state.me}
+  {#if !currentUser}
     <InitialSetup />
   {:else}
     {#if !isAnySettingsPage}
-      <Sidebar onProfileClick={(x: number, y: number) => openUserCardModal(state.me!, x, y, false)} onCreateJoinServerClick={() => openModal('serverManagement')} />
+      <Sidebar onProfileClick={(x: number, y: number) => openUserCardModal(currentUser!, x, y, false)} onCreateJoinServerClick={() => openModal('serverManagement')} />
     {/if}
     {#if !isAnySettingsPage}
       {#if $serverStore.activeServerId}
@@ -254,7 +257,7 @@
       {:else}
         <DirectMessageList
           friends={$friendStore.friends}
-          onSelect={(id) => { if (id) chatStore.setActiveChat(id, 'dm'); }}
+          onSelect={(id: string | null) => { if (id) chatStore.setActiveChat(id, 'dm'); }}
           onCreateGroupClick={() => {}}
         />
       {/if}
@@ -266,24 +269,24 @@
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'All'} class:hover:bg-muted={activeTab !== 'All'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'All');
-              goto(url.pathname + url.search);
+              goto(url);
             }}>All</button>
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Online'} class:hover:bg-muted={activeTab !== 'Online'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'Online');
-              goto(url.pathname + url.search);
+              goto(url);
             }}>Online</button>
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Blocked'} class:hover:bg-muted={activeTab !== 'Blocked'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'Blocked');
-              goto(url.pathname + url.search);
+              goto(url);
             }}>Blocked</button>
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Pending'} class:hover:bg-muted={activeTab !== 'Pending'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'Pending');
-              goto(url.pathname + url.search);
+              goto(url);
             }}>Pending</button>
-            <button class="flex items-center px-3 py-1 rounded-md bg-primary hover:bg-accent text-sm font-medium h-8 ml-4 cursor-pointer" class:bg-muted={activeTab === 'AddFriend'} class:hover:bg-accent={activeTab !== 'AddFriend'} onclick={() => goto(resolve('/friends/add'))}>
+            <button class="flex items-center px-3 py-1 rounded-md bg-primary hover:bg-accent text-sm font-medium h-8 ml-4 cursor-pointer" class:bg-muted={activeTab === 'AddFriend'} class:hover:bg-accent={activeTab !== 'AddFriend'} onclick={() => goto('/friends/add')}>
               <UserRoundPlus size={10} class="mr-2" />
               Add Friend
             </button>
@@ -293,7 +296,7 @@
       {:else if $serverStore.activeServerId}
         <div class="flex flex-1">
           <ChatView chat={currentChat} />
-          <MemberSidebar members={currentChat?.members || []} openUserCardModal={openUserCardModal} />
+          <MemberSidebar members={currentChat?.type === 'channel' ? currentChat.members : []} openUserCardModal={openUserCardModal} />
         </div>
       {:else}
         {@render children()}
@@ -303,9 +306,23 @@
 </div>
 
 {#if activeModal === 'serverManagement'}
-  <ServerManagementModal bind:show={activeModal} on:close={closeModal} on:serverCreated={(e) => serverStore.addServer(e.detail)} />
+  <ServerManagementModal
+    show={true}
+    onclose={closeModal}
+    onserverCreated={(server) => serverStore.addServer(server)}
+  />
 {/if}
 
 {#if activeModal === 'userCard'}
   <UserCardModal {...modalProps} close={closeModal} openDetailedProfileModal={openDetailedProfileModal} />
 {/if}
+
+
+
+
+
+
+
+
+
+

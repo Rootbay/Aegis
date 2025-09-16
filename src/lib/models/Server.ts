@@ -11,6 +11,8 @@ export interface Server {
   members: User[];
   roles: Role[];
   iconUrl?: string;
+  description?: string;
+  settings?: Record<string, unknown>;
   default_channel_id?: string;
   allow_invites?: boolean;
   moderation_level?: 'None' | 'Low' | 'Medium' | 'High';

@@ -2,28 +2,35 @@
   import { Plus, CirclePlus, X } from '@lucide/svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { v4 as uuidv4 } from 'uuid';
-  import { createEventDispatcher } from 'svelte';
   import { userStore } from '$lib/data/stores/userStore';
   import type { Server } from '$lib/models/Server';
 
-  export let show: boolean = false;
+  let {
+    show = false,
+    onclose,
+    onserverCreated,
+    onserverJoined
+  }: {
+    show: $bindable<boolean>;
+    onclose?: () => void;
+    onserverCreated?: (server: Server) => void;
+    onserverJoined?: (serverId: string) => void;
+  } = $props();
 
-  const dispatch = createEventDispatcher<{
-    close: void;
-    serverCreated: Server;
-    serverJoined: string;
-  }>();
-
-  let newServerName = '';
-  let joinServerId = '';
+  let newServerName = $state('');
+  let joinServerId = $state('');
 
   function closeModal() {
     show = false;
-    dispatch('close');
+    onclose?.();
   }
 
   async function handleCreateServer() {
     if (!newServerName.trim()) return;
+    if (!$userStore.me) {
+      console.error('User not loaded, cannot create server.');
+      return;
+    }
 
     const newServer: Server = {
       id: uuidv4(),
@@ -32,6 +39,7 @@
       created_at: new Date().toISOString(),
       channels: [],
       members: [],
+      roles: [],
     };
 
     try {
@@ -39,7 +47,7 @@
       console.log('Server created:', newServer);
       newServerName = '';
       closeModal();
-      dispatch('serverCreated', newServer);
+      onserverCreated?.(newServer);
     } catch (error) {
       console.error('Failed to create server:', error);
     }
@@ -48,13 +56,17 @@
   async function handleJoinServer() {
     const trimmedServerId = joinServerId.trim();
     if (!trimmedServerId) return;
+    if (!$userStore.me) {
+      console.error('User not loaded, cannot join server.');
+      return;
+    }
 
     try {
       await invoke('send_server_invite', { serverId: trimmedServerId, userId: $userStore.me.id });
       console.log('Joined server:', trimmedServerId);
       joinServerId = '';
       closeModal();
-      dispatch('serverJoined', trimmedServerId);
+      onserverJoined?.(trimmedServerId);
     } catch (error) {
       console.error('Failed to join server:', error);
     }

@@ -14,7 +14,6 @@ export function persistentStore<T>(key: string, initialValue: T) {
             } catch (e) {
                 console.error(`[persistentStore] Failed to parse localStorage value for key "${key}":`, e);
             }
-        } else {
         }
     }
 
@@ -54,4 +53,5 @@ export function persistentStore<T>(key: string, initialValue: T) {
 
     return { subscribe, set, update };
 }
+
 

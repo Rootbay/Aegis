@@ -1,6 +1,5 @@
-﻿<script lang="ts">
+<script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import Icon from '$lib/components/ui/Icon.svelte';
 	import { getContext, onMount, onDestroy } from 'svelte';
 	import BaseContextMenu from '$lib/components/context-menus/BaseContextMenu.svelte';
 	import { CREATE_GROUP_CONTEXT_KEY } from '$lib/data/contextKeys';
@@ -18,24 +17,31 @@
 		data?: Friend;
 	}
 
-	export let friends: Friend[] = [];
-	export let activeFriendId: string | null = null;
-export let onSelect: Function;
-	export let onCreateGroupClick: () => void;
+	let {
+		friends = [],
+		activeFriendId = null,
+		onSelect,
+		onCreateGroupClick
+	}: {
+		friends?: Friend[];
+		activeFriendId?: string | null;
+		onSelect: Function;
+		onCreateGroupClick: () => void;
+	} = $props();
 
-	const { openDetailedProfileModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
-
-	let showSearchPopup = false;
-	let searchTerm = '';
-	
-	$: searchResults = friends.filter(friend =>
-		friend.name.toLowerCase().includes(searchTerm.toLowerCase())
+	let showSearchPopup = $state(false);
+	let searchTerm = $state('');
+	let showContextMenu = $state(false);
+	let contextMenuX = $state(0);
+	let contextMenuY = $state(0);
+	let selectedFriend: Friend | null = null;
+	let searchResults = $derived(
+		friends.filter(friend =>
+			friend.name.toLowerCase().includes(searchTerm.toLowerCase())
+		)
 	);
 
-	let showContextMenu = false;
-	let contextMenuX = 0;
-	let contextMenuY = 0;
-	let selectedFriend: Friend | null = null;
+	const { openDetailedProfileModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
 
 	const contextMenuItems: ContextMenuItem[] = [
 		{ label: 'View Profile', action: 'view_profile' },
@@ -67,12 +73,14 @@ export let onSelect: Function;
 		selectedFriend = friend;
 	}
 
-	function handleContextMenuAction(event: CustomEvent) {
-		console.log('Context menu action:', event.detail.action, event.detail.itemData);
-		if (event.detail.action === 'view_profile') {
-			openDetailedProfileModal(event.detail.itemData);
-		} else if (event.detail.action === 'remove_friend') {
-			removeFriend(event.detail.itemData);
+	function handleContextMenuAction({ action, itemData }: { action: string; itemData: Friend | null }) {
+		console.log('Context menu action:', action, itemData);
+		if (!itemData) return;
+
+		if (action === 'view_profile') {
+			openDetailedProfileModal(itemData);
+		} else if (action === 'remove_friend') {
+			removeFriend(itemData);
 		}
 	}
 
@@ -86,8 +94,6 @@ export let onSelect: Function;
 			console.error('Failed to remove friend:', error);
 		}
 	}
-
-	//
 
 	onMount(() => {
 		if (browser) {
@@ -160,8 +166,8 @@ export let onSelect: Function;
 			y={contextMenuY}
 			show={showContextMenu}
 			menuItems={contextMenuItems.map(item => ({ ...item, data: selectedFriend }))}
-			on:close={() => (showContextMenu = false)}
-			on:action={handleContextMenuAction}
+			onclose={() => (showContextMenu = false)}
+			onaction={handleContextMenuAction}
 		/>
 	{/if}
 
@@ -216,3 +222,6 @@ export let onSelect: Function;
 		</div>
 	{/if}
 </div>
+
+
+

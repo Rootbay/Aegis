@@ -4,6 +4,8 @@
   export let x = 0;
   export let y = 0;
   export let show = false;
+  export let onaction = undefined;
+  export let onclose = undefined;
 
   const menuItems = [
     { label: 'Invite to Server', action: 'invite_to_server' },
@@ -24,6 +26,6 @@
   {y}
   {show}
   menuItems={menuItems}
-  on:close
-  on:action
+  onclose={onclose}
+  onaction={onaction}
 />

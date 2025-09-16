@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
@@ -37,9 +39,9 @@
 
   let { friend } = $props<{ friend: FriendWithMeta }>();
 
-  let actionInProgress: 'message' | 'accept' | 'decline' | 'remove' | 'block' | 'unblock' | null = null;
-  let cachedFriendship: FriendshipRecord | null = null;
-  let loadingFriendship = false;
+  let actionInProgress = $state<'message' | 'accept' | 'decline' | 'remove' | 'block' | 'unblock' | null>(null);
+  let cachedFriendship = $state<FriendshipRecord | null>(null);
+  let loadingFriendship = $state(false);
 
   function getTargetUserId(): string | null {
     return friend.userId ?? friend.id ?? null;
@@ -356,3 +358,6 @@
     {/if}
   </div>
 </div>
+
+
+

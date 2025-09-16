@@ -1,5 +1,5 @@
-pub mod commands;
 pub mod bootstrap;
+pub mod commands;
 
 use crate::commands::state::AppStateContainer;
 

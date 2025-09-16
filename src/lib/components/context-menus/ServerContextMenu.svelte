@@ -3,14 +3,23 @@
   import type { Server } from '$lib/models/Server';
   import { userStore } from '$lib/data/stores/userStore';
 
-  export let x = 0;
-  export let y = 0;
-  export let show = false;
-  export let server: Server | null = null;
-  export let onAction: (action: { action: string; data: any }) => void;
-  export let onClose: () => void;
+  let {
+    x = 0,
+    y = 0,
+    show = false,
+    server = null,
+    onaction,
+    onclose
+  }: {
+    x?: number;
+    y?: number;
+    show?: boolean;
+    server?: Server | null;
+    onaction?: (detail: { action: string; itemData: any }) => void;
+    onclose?: () => void;
+  } = $props();
 
-  $: menuItems = [
+  let menuItems = $derived([
     { label: 'Mark As Read', action: 'mark_as_read', data: server },
     { label: 'Mute/Unmute Server', action: 'mute_unmute_server', data: server },
     { label: 'Notification Settings', action: 'notification_settings', data: server },
@@ -34,18 +43,19 @@
     ...(server && server.owner_id === $userStore.me?.id
       ? []
       : [{ label: 'Leave Server', action: 'leave_server', isDestructive: true, data: server }]),
-  ];
+  ]);
 
-  function handleAction(event: CustomEvent) {
-    onAction(event.detail);
+  function handleAction(detail: { action: string; itemData: any }) {
+    onaction?.(detail);
   }
 </script>
+
 
 <BaseContextMenu
   {x}
   {y}
   {show}
   menuItems={menuItems}
-  on:close={onClose}
-  on:action={handleAction}
+  onclose={onclose}
+  onaction={handleAction}
 />

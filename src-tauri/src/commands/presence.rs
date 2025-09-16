@@ -1,7 +1,7 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
 use aep::user_service;
+use tauri::State;
 
 #[tauri::command]
 pub async fn send_presence_update(
@@ -17,8 +17,13 @@ pub async fn send_presence_update(
         user_id: peer_id.clone(),
         is_online,
     };
-    let presence_update_bytes = bincode::serialize(&presence_update_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&presence_update_bytes).map_err(|e| e.to_string())?;
+    let presence_update_bytes =
+        bincode::serialize(&presence_update_data).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&presence_update_bytes)
+        .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::PresenceUpdate {
         user_id: peer_id.clone(),

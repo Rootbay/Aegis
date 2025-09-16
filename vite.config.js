@@ -16,11 +16,11 @@ export default defineConfig(async () => ({
   },
 
   optimizeDeps: {
-    exclude: ['@mdi/js'],
+    exclude: ['@mdi/js', '@lucide/svelte'],
   },
 
   ssr: {
-    noExternal: ['@mdi/js'],
+    noExternal: ['@mdi/js', '@lucide/svelte'],
   },
 
   clearScreen: false,

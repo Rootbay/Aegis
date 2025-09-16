@@ -4,10 +4,67 @@ use aegis_shared_types::{AppState, IncomingFile};
 use aegis_protocol::{AepMessage, ChatMessageData, PeerDiscoveryData, PresenceUpdateData, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
+use aegis_core::services;
 use bs58;
+use std::convert::TryInto;
+use std::fs::{self, File};
+use std::io::{self, Write};
+use std::path::Path;
+use std::sync::{Once, OnceLock};
 
 pub mod database;
 pub mod user_service;
+
+static AEP_INIT: Once = Once::new();
+static PROTOCOL_CONFIG: OnceLock<Option<String>> = OnceLock::new();
+
+fn load_protocol_config() -> Option<String> {
+    let mut data_dir = dirs::data_dir()?;
+    data_dir.push("Aegis");
+    data_dir.push("aep");
+
+    if let Err(err) = fs::create_dir_all(&data_dir) {
+        eprintln!("Failed to prepare AEP data directory {}: {}", data_dir.display(), err);
+        return None;
+    }
+
+    let config_path = data_dir.join("protocol_config.json");
+    match fs::read_to_string(&config_path) {
+        Ok(contents) => Some(contents),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            let default = "{}";
+            match fs::write(&config_path, default) {
+                Ok(()) => Some(default.to_string()),
+                Err(write_err) => {
+                    eprintln!(
+                        "Failed to persist default AEP config {}: {}",
+                        config_path.display(),
+                        write_err
+                    );
+                    None
+                }
+            }
+        }
+        Err(err) => {
+            eprintln!(
+                "Failed to load AEP config {}: {}",
+                config_path.display(),
+                err
+            );
+            None
+        }
+    }
+}
+
+pub fn initialize_aep() {
+    AEP_INIT.call_once(|| {
+        let _ = PROTOCOL_CONFIG.set(load_protocol_config());
+    });
+}
+
+pub fn protocol_config() -> Option<&'static str> {
+    PROTOCOL_CONFIG.get().and_then(|config| config.as_deref())
+}
 
 fn get_public_key_from_base58_str(pk_base58: &str) -> Result<PublicKey, AegisError> {
     let decoded_bytes = bs58::decode(pk_base58).into_vec().map_err(|e| AegisError::InvalidInput(format!("Invalid base58 decoding: {}", e)))?;
@@ -24,11 +81,6 @@ async fn fetch_public_key_for_user(db_pool: &Pool<Sqlite>, user_id: &str) -> Res
     } else {
         Err(AegisError::UserNotFound)
     }
-}
-
-pub fn initialize_aep() {
-    // TODO: Add AEP-specific initialization logic here, e.g., loading protocol configurations,
-    // initializing AERP, or setting up on-device AI models.
 }
 
 pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, state: AppState) -> Result<(), AegisError> {
@@ -133,7 +185,8 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 return Err(AegisError::InvalidInput("Invalid signature for profile update.".to_string()));
             }
         }
-        AepMessage::FileTransferRequest { sender_id: _sender_id, recipient_id: _recipient_id, file_name, file_size, encrypted_key, nonce } => {
+        AepMessage::FileTransferRequest { sender_id, recipient_id: _, file_name, file_size, encrypted_key, nonce } => {
+            let map_key = format!("{}:{}", sender_id, file_name);
             let mut incoming_files = state.incoming_files.lock().await;
             let incoming_file = IncomingFile {
                 name: file_name.clone(),
@@ -141,22 +194,130 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 received_chunks: std::collections::HashMap::new(),
                 key: encrypted_key,
                 nonce,
-                sender_id: _sender_id,
+                sender_id: sender_id.clone(),
                 accepted: false,
             };
-            incoming_files.insert(file_name.clone(), incoming_file);
-            println!("Started receiving file {}", file_name);
+            incoming_files.insert(map_key, incoming_file);
+            println!("Started receiving file {} from {}", file_name, sender_id);
         }
-        AepMessage::FileTransferChunk { sender_id: _sender_id, recipient_id: _recipient_id, file_name, chunk_index, data } => {
+        AepMessage::FileTransferChunk { sender_id, recipient_id: _, file_name, chunk_index, data } => {
+            let map_key = format!("{}:{}", sender_id, file_name);
             let mut incoming_files = state.incoming_files.lock().await;
-            if let Some(incoming_file) = incoming_files.get_mut(&file_name) {
+            if let Some(incoming_file) = incoming_files.get_mut(&map_key) {
                 incoming_file.received_chunks.insert(chunk_index, data);
+            } else {
+                eprintln!("Received chunk {} for unknown transfer {} from {}", chunk_index, file_name, sender_id);
             }
         },
-        AepMessage::FileTransferComplete { .. } => todo!(),
-        AepMessage::FileTransferError { sender_id: _sender_id, recipient_id: _recipient_id, file_name, error } => {
-            // TODO: Handle file transfer error
-            eprintln!("File transfer error for file {}: {}", file_name, error);
+        AepMessage::FileTransferComplete { sender_id, recipient_id: _, file_name } => {
+            let map_key = format!("{}:{}", sender_id, file_name);
+            let incoming_file = {
+                let mut incoming_files = state.incoming_files.lock().await;
+                incoming_files.remove(&map_key)
+            };
+
+            if let Some(incoming_file) = incoming_file {
+                if !incoming_file.accepted {
+                    eprintln!(
+                        "File transfer {} from {} completed but was not approved locally",
+                        file_name, sender_id
+                    );
+                    return Ok(());
+                }
+
+                let key: [u8; 32] = incoming_file
+                    .key
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| AegisError::InvalidInput("Invalid symmetric key length".into()))?;
+                let nonce: [u8; 12] = incoming_file
+                    .nonce
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| AegisError::InvalidInput("Invalid nonce length".into()))?;
+
+                let mut ordered_chunks: Vec<_> = incoming_file.received_chunks.into_iter().collect();
+                ordered_chunks.sort_by_key(|(idx, _)| *idx);
+
+                let mut plaintext = Vec::new();
+                for (idx, chunk) in ordered_chunks {
+                    let decrypted = services::decrypt_file_chunk(&chunk, &key, &nonce)
+                        .map_err(|e| AegisError::Internal(format!(
+                            "Failed to decrypt chunk {} for file {}: {}",
+                            idx, file_name, e
+                        )))?;
+                    plaintext.extend_from_slice(&decrypted);
+                }
+
+                if plaintext.len() as u64 != incoming_file.size {
+                    eprintln!(
+                        "Reconstructed file {} from {} has size {} but expected {}",
+                        file_name,
+                        sender_id,
+                        plaintext.len(),
+                        incoming_file.size
+                    );
+                }
+
+                let mut target_dir = dirs::data_dir()
+                    .ok_or_else(|| {
+                        AegisError::Internal("Unable to determine data directory for received files".into())
+                    })?;
+                target_dir.push("Aegis");
+                target_dir.push("received_files");
+                fs::create_dir_all(&target_dir).map_err(|e| {
+                    AegisError::Internal(format!(
+                        "Failed to prepare receive directory {}: {}",
+                        target_dir.display(),
+                        e
+                    ))
+                })?;
+
+                let sanitized_name = Path::new(&file_name)
+                    .file_name()
+                    .ok_or_else(|| {
+                        AegisError::InvalidInput("File name contained invalid path components".into())
+                    })?
+                    .to_owned();
+                let final_path = target_dir.join(sanitized_name);
+                let mut outfile = File::create(&final_path).map_err(|e| {
+                    AegisError::Internal(format!(
+                        "Failed to create file {}: {}",
+                        final_path.display(),
+                        e
+                    ))
+                })?;
+                outfile.write_all(&plaintext).map_err(|e| {
+                    AegisError::Internal(format!(
+                        "Failed to write file {}: {}",
+                        final_path.display(),
+                        e
+                    ))
+                })?;
+                println!(
+                    "Saved received file {} from {} to {}",
+                    file_name,
+                    sender_id,
+                    final_path.display()
+                );
+            } else {
+                eprintln!(
+                    "Received completion message for unknown transfer {} from {}",
+                    file_name,
+                    sender_id
+                );
+            }
+        }
+        AepMessage::FileTransferError { sender_id, recipient_id: _, file_name, error } => {
+            let map_key = format!("{}:{}", sender_id, file_name);
+            let mut incoming_files = state.incoming_files.lock().await;
+            incoming_files.remove(&map_key);
+            eprintln!(
+                "File transfer error for file {} from {}: {}",
+                file_name,
+                sender_id,
+                error
+            );
         },
         AepMessage::FriendRequest { sender_id, target_id, signature } => {
             let friend_request_data = FriendRequestData { sender_id: sender_id.clone(), target_id: target_id.clone() };

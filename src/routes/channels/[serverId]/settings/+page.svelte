@@ -1,25 +1,35 @@
 <script lang="ts">
   import SettingsLayout from '$lib/components/server-settings/SettingsLayout.svelte';
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { page } from '$app/stores';
+  import type { Component } from 'svelte';
   import { serverStore } from '$lib/data/stores/serverStore';
   import type { Server } from '$lib/models/Server';
   import type { Channel } from '$lib/models/Channel';
+  import type { Role } from '$lib/models/Role';
   import { onDestroy } from 'svelte';
   import { Ban, Boxes, Hash, LayoutPanelTop, MessageSquare, Puzzle, ScrollText, Shield, ShieldCheck, Smile, Sticker, UserCog, Users } from '@lucide/svelte';
 
-  let server: (Server & { channels?: Channel[] }) | undefined;
-  let serverId: string;
+  let server: (Server & { channels?: Channel[] }) | null = null;
+  let serverId: string | null = null;
+
+  const gotoResolved = (path: string) => {
+    (goto as unknown as (target: string) => void)(path);
+  };
 
   $: {
-    serverId = $page.params.serverId;
-    server = $serverStore.servers.find(s => s.id === serverId);
+    const params = $page.params;
+    serverId = params.serverId ?? null;
+    server = serverId ? $serverStore.servers.find(s => s.id === serverId) ?? null : null;
     console.log('Server ID from params:', serverId);
     console.log('Found server:', server);
   }
 
-  const sidebarItems = [
+  type SidebarEntry =
+    | { label: string; icon: Component; tab: string; type?: undefined }
+    | { type: 'separator'; label?: undefined; icon?: undefined; tab?: undefined };
+
+  const sidebarItems: SidebarEntry[] = [
     { label: 'Overview', icon: Hash, tab: 'overview' },
     { type: 'separator' },
     { label: 'Roles', icon: UserCog, tab: 'roles' },
@@ -79,8 +89,7 @@
     delete_server: 'Delete Server',
   };
 
-  function handleUpdateSetting(event: CustomEvent) {
-    const { id, property, rootProperty, nestedProperty, value } = event.detail;
+  function handleUpdateSetting({ id, property, rootProperty, nestedProperty, value }: { id: string; property: string; rootProperty?: string; nestedProperty?: string; value: any }) {
     if (server) {
       if (rootProperty && nestedProperty) {
         if (rootProperty === 'roles') {
@@ -103,15 +112,13 @@
     }
   }
 
-  function handleAddRole(event: CustomEvent) {
-    const newRole = event.detail;
+  function handleAddRole(newRole: Role) {
     if (server) {
       serverStore.updateServer(server.id, { roles: [...server.roles, newRole] });
     }
   }
 
-  function handleUpdateRole(event: CustomEvent) {
-    const updatedRole = event.detail;
+  function handleUpdateRole(updatedRole: Role) {
     if (server) {
       const updatedRoles = server.roles.map(role =>
         role.id === updatedRole.id ? updatedRole : role
@@ -120,16 +127,14 @@
     }
   }
 
-  function handleDeleteRole(event: CustomEvent) {
-    const roleIdToDelete = event.detail;
+  function handleDeleteRole(roleIdToDelete: string) {
     if (server) {
       const updatedRoles = server.roles.filter(role => role.id !== roleIdToDelete);
       serverStore.updateServer(server.id, { roles: updatedRoles });
     }
   }
 
-  function handleTogglePermission(event: CustomEvent) {
-    const { roleId, permission } = event.detail;
+  function handleTogglePermission({ roleId, permission }: { roleId: string; permission: keyof Role['permissions'] }) {
     if (server) {
       const updatedRoles = server.roles.map(role => {
         if (role.id === roleId) {
@@ -141,15 +146,13 @@
     }
   }
 
-  function handleAddChannel(event: CustomEvent) {
-    const newChannel = event.detail;
+  function handleAddChannel(newChannel: Channel) {
     if (server) {
       serverStore.updateServer(server.id, { channels: [...(server.channels || []), newChannel] });
     }
   }
 
-  function handleUpdateChannel(event: CustomEvent) {
-    const updatedChannel = event.detail;
+  function handleUpdateChannel(updatedChannel: Channel) {
     if (server) {
       const updatedChannels = (server.channels || []).map(channel =>
         channel.id === updatedChannel.id ? updatedChannel : channel
@@ -158,21 +161,40 @@
     }
   }
 
-  function handleDeleteChannel(event: CustomEvent) {
-    const channelIdToDelete = event.detail;
+  function handleDeleteChannel(channelIdToDelete: string) {
     if (server) {
       const updatedChannels = (server.channels || []).filter(channel => channel.id !== channelIdToDelete);
       serverStore.updateServer(server.id, { channels: updatedChannels });
     }
   }
 
-  function handleButtonClick(event: CustomEvent) {
-    const { id } = event.detail;
+  function handleUpdateServer(updates: Partial<Server>) {
+    if (!server) {
+      return;
+    }
+    if (updates && typeof updates === 'object') {
+      serverStore.updateServer(server.id, updates);
+    }
+  }
+
+  function handleDeleteServer({ serverId }: { serverId?: string }) {
+    const targetId = serverId ?? server?.id;
+    if (!targetId) {
+      return;
+    }
+    serverStore.removeServer(targetId);
+    if ($serverStore.activeServerId === targetId) {
+      serverStore.setActiveServer(null);
+      gotoResolved('/friends?tab=All');
+    }
+  }
+
+  function handleButtonClick({ id }: { id: string }) {
     if (id === 'deleteServer') {
       if (server && confirm(`Are you sure you want to delete ${server.name}? This action cannot be undone.`)) {
         serverStore.removeServer(server.id);
         serverStore.setActiveServer(null);
-        goto(resolve('/friends?tab=All'));
+        gotoResolved('/friends?tab=All');
       }
     }
   }
@@ -190,29 +212,22 @@
     {categoryHeadings}
     currentData={server}
     initialActiveTab={$page.url.searchParams.get('tab') || undefined}
-    on:update_setting={handleUpdateSetting}
-    on:button_click={handleButtonClick}
-    on:add_channel={handleAddChannel}
-    on:update_channel={handleUpdateChannel}
-    on:delete_channel={handleDeleteChannel}
-    on:add_role={handleAddRole}
-    on:update_role={handleUpdateRole}
-    on:delete_role={handleDeleteRole}
-    on:update_server={handleUpdateServer}
-    on:delete_server={handleDeleteServer}
-    on:toggle_permission={handleTogglePermission}
-    on:close={() => {
-      if (server) {
-        goto(resolve('/channels/' + serverId));
+    onupdate_setting={handleUpdateSetting}
+    onbutton_click={handleButtonClick}
+    onadd_channel={handleAddChannel}
+    onupdate_channel={handleUpdateChannel}
+    ondelete_channel={handleDeleteChannel}
+    onadd_role={handleAddRole}
+    onupdate_role={handleUpdateRole}
+    ondelete_role={handleDeleteRole}
+    onupdate_server={handleUpdateServer}
+    ondelete_server={handleDeleteServer}
+    ontoggle_permission={handleTogglePermission}
+    onclose={() => {
+      if (server && serverId) {
+        gotoResolved(`/channels/${serverId}`);
       } else {
-        goto(resolve('/friends?tab=All'));
-      }
-    }}
-    on:close={() => {
-      if (server) {
-        goto(resolve('/channels/' + serverId));
-      } else {
-        goto(resolve('/friends?tab=All'));
+        gotoResolved('/friends?tab=All');
       }
     }}
   >
@@ -222,3 +237,4 @@
     <p class="text-muted-foreground">Server not found or not selected.</p>
   </div>
 {/if}
+

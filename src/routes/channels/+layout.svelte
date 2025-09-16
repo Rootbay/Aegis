@@ -4,14 +4,22 @@
   import { page } from "$app/stores";
   import { invoke } from "@tauri-apps/api/core";
   import { toasts } from "$lib/data/stores/ToastStore";
-  import { setContext } from "svelte";
-  import { SERVER_LAYOUT_DATA_CONTEXT_KEY } from "$lib/data/contextKeys";
+  import { goto } from '$app/navigation';
+  import { setContext, getContext } from "svelte";
+  import { SERVER_LAYOUT_DATA_CONTEXT_KEY, CREATE_GROUP_CONTEXT_KEY } from "$lib/data/contextKeys";
+  import type { CreateGroupContext } from '$lib/data/contextTypes';
 
   let serverId: string | null = null;
   let server: any = null;
   let channels: any[] = [];
   let members: any[] = [];
   let loading = true;
+
+  const { openUserCardModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
+
+  function handleSelectChannel(serverId: string, channelId: string) {
+    (goto as unknown as (target: string) => void)(`/channels/${serverId}/${channelId}`);
+  }
 
   $: if ($page.params.serverId) {
     serverId = $page.params.serverId;
@@ -22,16 +30,15 @@
     loading = true;
     try {
       const fetchedServer = await invoke("get_server_details", { serverId: id });
-      server = fetchedServer;
-
-      const fetchedChannels = await invoke("get_channels_for_server", { serverId: id });
+      const fetchedChannels = await invoke("get_channels_for_server", { serverId: id }) as any[];
+      const fetchedMembers = await invoke("get_members_for_server", { serverId: id }) as any[];
+      server = fetchedServer ? { ...fetchedServer, channels: fetchedChannels, members: fetchedMembers } : null;
       channels = fetchedChannels;
-
-      const fetchedMembers = await invoke("get_members_for_server", { serverId: id });
       members = fetchedMembers;
     } catch (error) {
       console.error("Failed to fetch server data:", error);
-      toasts.addToast(error.message || "Failed to load server data.", "error");
+      const message = error instanceof Error ? error.message : 'Failed to load server data.';
+      toasts.addToast(message, "error");
       server = null;
       channels = [];
       members = [];
@@ -52,13 +59,13 @@
     <p class="text-muted-foreground text-center mt-8">Loading server data...</p>
   {:else if server}
     {#if !$page.url.pathname.includes('/settings')}
-      <ServerSidebar {server} {channels} />
+      <ServerSidebar {server} onSelectChannel={handleSelectChannel} />
     {/if}
     <main class="flex-grow flex flex-col bg-muted">
       <slot />
     </main>
     {#if !$page.url.pathname.includes('/settings')}
-      <MemberSidebar {members} />
+      <MemberSidebar {members} {openUserCardModal} />
     {/if}
   {:else}
     <p class="text-muted-foreground text-center mt-8">Server not found or an error occurred.</p>

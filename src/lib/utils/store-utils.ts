@@ -13,7 +13,7 @@ export function getWritableProperty<T, K extends keyof T>(store: Writable<T>, ke
   return childStore;
 }
 
-export function getNestedWritableProperty<T, V>(store: Writable<T>, path: string) {
+export function getNestedWritableProperty<T extends Record<string, unknown>, V>(store: Writable<T>, path: string) {
   const parts = path.split('.');
   const lastPart = parts[parts.length - 1];
   const pathToParent = parts.slice(0, -1);

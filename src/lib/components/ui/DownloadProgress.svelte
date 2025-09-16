@@ -1,11 +1,19 @@
 <script lang="ts">
   import { File, CircleCheck, CircleAlert, X, RotateCcw } from '@lucide/svelte';
 
-  export let fileName: string;
-  export let progress: number = 0;
-  export let status: 'downloading' | 'completed' | 'failed' | 'queued' = 'queued';
-  export let onCancel: () => void = () => {};
-  export let onRetry: () => void = () => {};
+  let {
+    fileName,
+    progress = 0,
+    status = 'queued',
+    onCancel = () => {},
+    onRetry = () => {}
+  }: {
+    fileName: string;
+    progress?: number;
+    status?: 'downloading' | 'completed' | 'failed' | 'queued';
+    onCancel?: () => void;
+    onRetry?: () => void;
+  } = $props();
 
   const statusInfo = {
     downloading: { color: 'bg-status-info', text: 'Downloading...' },
@@ -14,8 +22,7 @@
     queued: { color: 'bg-base-500', text: 'Queued for download', icon: 'download' },
   };
 
-  let currentStatus = statusInfo[status];
-  $: currentStatus = statusInfo[status];
+  let currentStatus = $derived(statusInfo[status]);
 </script>
 
 <div class="bg-muted p-2 rounded-md flex items-center space-x-3">

@@ -1,12 +1,15 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
   import { X, Search, Smile } from '@lucide/svelte';
   import { onMount } from 'svelte';
 
   let searchQuery = '';
   let pageContents: { [key: string]: string } = {};
+
+  const gotoResolved = (href: string) => {
+    (goto as unknown as (target: string) => void)(href);
+  };
 
   const userSettingsItems = [
     { label: 'Account', icon: 'user', href: '/settings/account' },
@@ -81,7 +84,7 @@
         path = `/channels/${id}`;
       }
     })();
-    goto(resolve(path) as string);
+    gotoResolved(path);
   }
 </script>
 
@@ -115,7 +118,7 @@
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
                 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                onclick={() => goto(resolve(item.href) as string)}
+                onclick={() => gotoResolved(item.href)}
               >
                 {item.label}
               </button>
@@ -131,7 +134,7 @@
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
                 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                onclick={() => goto(resolve(item.href) as string)}
+                onclick={() => gotoResolved(item.href)}
               >
                 {item.label}
               </button>
@@ -149,7 +152,7 @@
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer
                 {$page.url.pathname.startsWith('/settings/change_log') ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                onclick={() => goto(resolve('/settings/change_log'))}
+                onclick={() => gotoResolved('/settings/change_log')}
               >
                 Change Log
               </button>

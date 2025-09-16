@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import ServerBackgroundContextMenu from '$lib/components/context-menus/ServerBackgroundContextMenu.svelte';
@@ -11,7 +13,7 @@
   import type { Server } from '$lib/models/Server';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
+  import { page } from '$app/stores';
   import { v4 as uuidv4 } from 'uuid';
 
   let { server, onSelectChannel } = $props<{ server: Server, onSelectChannel: any }>();
@@ -53,6 +55,11 @@
   let sidebarWidth = $state(parseInt(localStorage.getItem('serverSidebarWidth') || '240'));
 
   const TEXT_COLLAPSED_KEY = 'serverSidebar.textCollapsed';
+
+  function gotoResolved(path: string) {
+    const url = new URL(path, $page.url);
+    goto(url);
+  }
 
   function slugifyChannelName(name: string) {
     return name.trim().toLowerCase().replace(/\s+/g, '-');
@@ -130,7 +137,7 @@
   });
 
   function handleServerSettingsClick() {
-    goto(resolve(`/channels/${server.id}/settings`));
+    gotoResolved(`/channels/${server.id}/settings`);
     showDropdown = false;
   }
 
@@ -161,7 +168,7 @@
   }
 
   function handleNotificationSettings() {
-    goto(resolve('/settings/notifications'));
+    gotoResolved('/settings/notifications');
     showDropdown = false;
   }
 
@@ -184,7 +191,7 @@
         await invoke('leave_server', { serverId: server.id });
         serverStore.removeServer(server.id);
         serverStore.setActiveServer(null);
-        goto('/friends?tab=All' as string);
+        gotoResolved('/friends?tab=All');
       } catch (error) {
         console.error('Failed to leave server:', error);
         toasts.addToast('Failed to leave server. Please try again.', 'error');
@@ -252,8 +259,7 @@
     showCategoryContextMenu = true;
   }
 
-  function handleCategoryAction(event: CustomEvent) {
-    const { action, categoryId } = event.detail;
+  function handleCategoryAction({ action, categoryId }: { action: string; categoryId: string }) {
     toasts.addToast(`Action: ${action} on category: ${categoryId}`, 'info');
     showCategoryContextMenu = false;
   }
@@ -304,8 +310,7 @@
     }
   }
 
-  async function handleChannelAction(event: CustomEvent) {
-    const { action, channelId } = event.detail as { action: string; channelId: string };
+  async function handleChannelAction({ action, channelId }: { action: string; channelId: string }) {
 
     try {
       switch (action) {
@@ -397,7 +402,7 @@
           break;
         }
         case 'notification_settings': {
-          goto(resolve('/settings/notifications'));
+          gotoResolved('/settings/notifications');
           break;
         }
         case 'invite_people': {
@@ -422,8 +427,7 @@
     showServerBackgroundContextMenu = true;
   }
 
-  function handleServerBackgroundAction(event: CustomEvent) {
-    const { action } = event.detail as { action: string };
+  function handleServerBackgroundAction({ action }: { action: string }) {
     switch (action) {
       case 'create_channel':
         showCreateChannelModal = true;
@@ -460,7 +464,7 @@
 
   function handleChannelSettingsClick(channel: Channel, event?: MouseEvent) {
     event?.stopPropagation();
-    goto(resolve(`/channels/${server.id}/settings?tab=channels`));
+    gotoResolved(`/channels/${server.id}/settings?tab=channels`);
   }
 </script>
 
@@ -601,8 +605,8 @@
     <ServerBackgroundContextMenu
       x={serverBackgroundContextMenuX}
       y={serverBackgroundContextMenuY}
-    on:action={handleServerBackgroundAction}
-    on:close={() => showServerBackgroundContextMenu = false}
+      onaction={handleServerBackgroundAction}
+      onclose={() => showServerBackgroundContextMenu = false}
     />
   {/if}
 
@@ -611,8 +615,8 @@
       x={contextMenuX}
       y={contextMenuY}
       categoryId={contextMenuCategoryId}
-    on:action={handleCategoryAction}
-    on:close={() => showCategoryContextMenu = false}
+      onaction={handleCategoryAction}
+      onclose={() => showCategoryContextMenu = false}
     />
   {/if}
 
@@ -621,8 +625,8 @@
       x={channelContextMenuX}
       y={channelContextMenuY}
       channel={selectedChannelForContextMenu}
-    on:action={handleChannelAction}
-    on:close={() => { showChannelContextMenu = false; selectedChannelForContextMenu = null; }}
+      onaction={handleChannelAction}
+      onclose={() => { showChannelContextMenu = false; selectedChannelForContextMenu = null; }}
     />
   {/if}
 
@@ -680,3 +684,10 @@
     </div>
   </div>
 {/if}
+
+
+
+
+
+
+

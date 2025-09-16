@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Icon from '$lib/components/ui/Icon.svelte';
+  import { Ban, Flag, MicOff, Pencil, Phone, SendHorizontal, Video, VolumeOff, X } from '@lucide/svelte';
   import type { Friend } from '$lib/models/Friend';
   import type { User } from '$lib/models/User';
 

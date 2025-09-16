@@ -1,18 +1,17 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use tauri::{Emitter, Runtime, State, Manager};
-use tokio::sync::{mpsc, Mutex};
 use libp2p::futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tauri::{Emitter, Manager, Runtime, State};
+use tokio::sync::{mpsc, Mutex};
 
-use aep::handle_aep_message;
 use aegis_protocol::AepMessage;
-use network::{initialize_network, send_data, ComposedEvent, has_any_peers};
-use aep::database;
 use aegis_shared_types::{AppState, User};
-use e2ee;
-use tokio::sync::mpsc::Sender as TokioSender;
+use aep::{database, handle_aep_message, initialize_aep};
 use bs58;
+use e2ee;
+use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
+use tokio::sync::mpsc::Sender as TokioSender;
 
 pub async fn initialize_app_state<R: Runtime>(
     app: tauri::AppHandle<R>,
@@ -20,7 +19,8 @@ pub async fn initialize_app_state<R: Runtime>(
     state_container: State<'_, crate::commands::state::AppStateContainer>,
 ) -> Result<(), String> {
     let identity = crate::commands::identity::get_or_create_identity(&app, password)?;
-    
+
+    initialize_aep();
 
     let (swarm, topic) = initialize_network(identity.keypair().clone())
         .await
@@ -43,8 +43,12 @@ pub async fn initialize_app_state<R: Runtime>(
                 Some("friends_only") => aegis_shared_types::FileAclPolicy::FriendsOnly,
                 _ => aegis_shared_types::FileAclPolicy::Everyone,
             }
-        } else { aegis_shared_types::FileAclPolicy::Everyone }
-    } else { aegis_shared_types::FileAclPolicy::Everyone };
+        } else {
+            aegis_shared_types::FileAclPolicy::Everyone
+        }
+    } else {
+        aegis_shared_types::FileAclPolicy::Everyone
+    };
     let db_path = app_data_dir.join("aegis.db");
     let db_pool = database::initialize_db(db_path)
         .await
@@ -94,8 +98,14 @@ pub async fn initialize_app_state<R: Runtime>(
     }
 
     let user_bytes = bincode::serialize(&ensure_user).map_err(|e| e.to_string())?;
-    let sig = identity.keypair().sign(&user_bytes).map_err(|e| e.to_string())?;
-    let profile_msg = AepMessage::ProfileUpdate { user: ensure_user.clone(), signature: Some(sig) };
+    let sig = identity
+        .keypair()
+        .sign(&user_bytes)
+        .map_err(|e| e.to_string())?;
+    let profile_msg = AepMessage::ProfileUpdate {
+        user: ensure_user.clone(),
+        signature: Some(sig),
+    };
     let profile_msg_bytes = bincode::serialize(&profile_msg).map_err(|e| e.to_string())?;
     if let Err(e) = new_state.network_tx.send(profile_msg_bytes).await {
         eprintln!("Failed to broadcast initial profile: {}", e);
@@ -108,8 +118,15 @@ pub async fn initialize_app_state<R: Runtime>(
         let bundle = mgr.generate_prekey_bundle(8);
         bincode::serialize(&bundle).map_err(|e| e.to_string())?
     };
-    let sig = identity.keypair().sign(&prekey_bytes_to_broadcast).map_err(|e| e.to_string())?;
-    let msg = AepMessage::PrekeyBundle { user_id: my_peer_id.clone(), bundle: prekey_bytes_to_broadcast, signature: Some(sig) };
+    let sig = identity
+        .keypair()
+        .sign(&prekey_bytes_to_broadcast)
+        .map_err(|e| e.to_string())?;
+    let msg = AepMessage::PrekeyBundle {
+        user_id: my_peer_id.clone(),
+        bundle: prekey_bytes_to_broadcast,
+        signature: Some(sig),
+    };
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
     if let Err(e) = new_state.network_tx.send(bytes).await {
         eprintln!("Failed to broadcast prekey bundle: {}", e);
@@ -149,8 +166,20 @@ pub async fn initialize_app_state<R: Runtime>(
 
                 let mut remaining: Vec<Pending> = Vec::new();
                 for mut p in pending.drain(..) {
-                    if p.retries_left == 0 || p.next_ts > now { remaining.push(p); continue; }
-                    if let Err(e) = broadcast_group_key_update(&db_pool_rotate, &my_id_rotate, &net_tx_rotate, &p.server_id, &p.channel_id, p.epoch).await {
+                    if p.retries_left == 0 || p.next_ts > now {
+                        remaining.push(p);
+                        continue;
+                    }
+                    if let Err(e) = broadcast_group_key_update(
+                        &db_pool_rotate,
+                        &my_id_rotate,
+                        &net_tx_rotate,
+                        &p.server_id,
+                        &p.channel_id,
+                        p.epoch,
+                    )
+                    .await
+                    {
                         eprintln!("Retry group key update failed: {}", e);
                     }
                     p.retries_left -= 1;
@@ -162,17 +191,36 @@ pub async fn initialize_app_state<R: Runtime>(
                 match aep::database::get_all_servers(&db_pool_rotate, &my_id_rotate).await {
                     Ok(servers) => {
                         for s in servers {
-                            if s.owner_id != my_id_rotate { continue; }
+                            if s.owner_id != my_id_rotate {
+                                continue;
+                            }
                             for ch in s.channels {
                                 let gid = format!("{}:{}", s.id, ch.id);
                                 let last = last_rotated.get(&gid).cloned().unwrap_or(0);
-                                if now - last < rotation_interval_secs { continue; }
+                                if now - last < rotation_interval_secs {
+                                    continue;
+                                }
                                 let epoch = now as u64;
-                                if let Err(e) = rotate_and_broadcast_group_key(&db_pool_rotate, &my_id_rotate, &net_tx_rotate, &s.id, &Some(ch.id.clone()), epoch).await {
+                                if let Err(e) = rotate_and_broadcast_group_key(
+                                    &db_pool_rotate,
+                                    &my_id_rotate,
+                                    &net_tx_rotate,
+                                    &s.id,
+                                    &Some(ch.id.clone()),
+                                    epoch,
+                                )
+                                .await
+                                {
                                     eprintln!("Group key rotation failed: {}", e);
                                 } else {
                                     last_rotated.insert(gid, now);
-                                    pending.push(Pending { server_id: s.id.clone(), channel_id: Some(ch.id), epoch, next_ts: now + retry_interval_secs, retries_left: 3 });
+                                    pending.push(Pending {
+                                        server_id: s.id.clone(),
+                                        channel_id: Some(ch.id),
+                                        epoch,
+                                        next_ts: now + retry_interval_secs,
+                                        retries_left: 3,
+                                    });
                                 }
                             }
                         }
@@ -520,17 +568,32 @@ async fn broadcast_group_key_update(
     channel_id: &Option<String>,
     epoch: u64,
 ) -> Result<(), String> {
-    let members = aep::database::get_server_members(db_pool, server_id).await.map_err(|e| e.to_string())?;
+    let members = aep::database::get_server_members(db_pool, server_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut slots: Vec<aegis_protocol::EncryptedDmSlot> = Vec::new();
     for m in members {
-        if m.id == my_id { continue; }
+        if m.id == my_id {
+            continue;
+        }
         let arc = e2ee::init_global_manager();
         let mut mgr = arc.lock();
-        if let Ok(pkt) = mgr.encrypt_for(&m.id, &vec![0u8;32]) {
-            slots.push(aegis_protocol::EncryptedDmSlot { recipient: m.id, init: pkt.init, enc_header: pkt.enc_header, enc_content: pkt.enc_content });
+        if let Ok(pkt) = mgr.encrypt_for(&m.id, &vec![0u8; 32]) {
+            slots.push(aegis_protocol::EncryptedDmSlot {
+                recipient: m.id,
+                init: pkt.init,
+                enc_header: pkt.enc_header,
+                enc_content: pkt.enc_content,
+            });
         }
     }
-    let msg = aegis_protocol::AepMessage::GroupKeyUpdate { server_id: server_id.to_string(), channel_id: channel_id.clone(), epoch, slots, signature: None };
+    let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        server_id: server_id.to_string(),
+        channel_id: channel_id.clone(),
+        epoch,
+        slots,
+        signature: None,
+    };
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
     net_tx.send(bytes).await.map_err(|e| e.to_string())
 }
@@ -549,17 +612,32 @@ async fn rotate_and_broadcast_group_key(
         mgr.generate_and_set_group_key(server_id, channel_id, epoch)
     };
 
-    let members = aep::database::get_server_members(db_pool, server_id).await.map_err(|e| e.to_string())?;
+    let members = aep::database::get_server_members(db_pool, server_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut slots: Vec<aegis_protocol::EncryptedDmSlot> = Vec::new();
     for m in members {
-        if m.id == my_id { continue; }
+        if m.id == my_id {
+            continue;
+        }
         let arc = e2ee::init_global_manager();
         let mut mgr = arc.lock();
         if let Ok(pkt) = mgr.encrypt_for(&m.id, &key) {
-            slots.push(aegis_protocol::EncryptedDmSlot { recipient: m.id, init: pkt.init, enc_header: pkt.enc_header, enc_content: pkt.enc_content });
+            slots.push(aegis_protocol::EncryptedDmSlot {
+                recipient: m.id,
+                init: pkt.init,
+                enc_header: pkt.enc_header,
+                enc_content: pkt.enc_content,
+            });
         }
     }
-    let msg = aegis_protocol::AepMessage::GroupKeyUpdate { server_id: server_id.to_string(), channel_id: channel_id.clone(), epoch, slots, signature: None };
+    let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        server_id: server_id.to_string(),
+        channel_id: channel_id.clone(),
+        epoch,
+        slots,
+        signature: None,
+    };
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
     net_tx.send(bytes).await.map_err(|e| e.to_string())
 }

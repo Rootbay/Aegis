@@ -1,16 +1,21 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import type { ComponentType } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
 
-  export let name: string;
-  export let size: string | number = '6';
-  export let clazz: string = '';
+  const { name, size = '6', clazz = '' } = $props<{
+    name: string;
+    size?: string | number;
+    clazz?: string;
+  }>();
 
   type LucideModule = { default: ComponentType };
   const iconModules = import.meta.glob<LucideModule>(
     '../../../../node_modules/@lucide/svelte/dist/icons/*.js'
   );
 
-  const iconLoaders = new Map<string, () => Promise<LucideModule>>();
+  const iconLoaders = new SvelteMap<string, () => Promise<LucideModule>>();
 
   const toKebab = (value: string) =>
     value
@@ -26,47 +31,52 @@
     iconLoaders.set(toKebab(filename), loader);
   }
 
-  let icon: ComponentType | null = null;
+  let icon = $state<ComponentType | null>(null);
   let currentRequest = '';
   let lastMissing: string | null = null;
 
   const normalizeInput = (value: string) => toKebab(value.trim().replace(/\s+/g, '-'));
 
-  async function loadIcon(requested: string) {
-    const normalized = normalizeInput(requested);
+  $effect(() => {
+    const trimmed = name?.trim();
+    if (!trimmed) {
+      icon = null;
+      currentRequest = '';
+      return;
+    }
+
+    const normalized = normalizeInput(trimmed);
     currentRequest = normalized;
 
     const loader = iconLoaders.get(normalized);
     if (!loader) {
       icon = null;
       if (lastMissing !== normalized) {
-        console.warn(`Icon "${requested}" not found in Lucide set.`);
+        console.warn(`Icon "${trimmed}" not found in Lucide set.`);
         lastMissing = normalized;
       }
       return;
     }
 
     lastMissing = null;
-    try {
-      const module = await loader();
-      if (currentRequest !== normalized) return;
-      icon = module.default ?? null;
-    } catch (error) {
-      if (currentRequest !== normalized) return;
-      icon = null;
-      console.error(`Failed to load Lucide icon "${requested}".`, error);
-    }
-  }
 
-  $: if (name?.trim()) {
-    loadIcon(name);
-  } else {
-    icon = null;
-  }
+    loader()
+      .then((module) => {
+        if (currentRequest !== normalized) return;
+        icon = module.default ?? null;
+      })
+      .catch((error) => {
+        if (currentRequest !== normalized) return;
+        icon = null;
+        console.error(`Failed to load Lucide icon "${trimmed}".`, error);
+      });
+  });
 </script>
 
 <div class="inline-block" style:width="{+size / 4}rem" style:height="{+size / 4}rem">
   {#if icon}
-    <svelte:component this={icon} size={size} class={clazz} />
+    {@const IconComponent = icon}
+    <IconComponent size={size} class={clazz} />
   {/if}
 </div>
+

@@ -7,6 +7,16 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   preprocess: vitePreprocess(),
+  compilerOptions: {
+    // Enable Svelte runes globally so third-party components (e.g. lucide icons)
+    // compiled with the new API work without runtime errors.
+    runes: true,
+    compatibility: {
+      // Keep support for the legacy component API (e.g. `export let`) while we
+      // gradually migrate local components to runes.
+      componentApi: 4
+    }
+  },
   kit: {
     adapter: adapter({
       fallback: 'index.html'
@@ -20,3 +30,6 @@ const config = {
 };
 
 export default config;
+
+
+

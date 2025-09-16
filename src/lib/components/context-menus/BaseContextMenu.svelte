@@ -1,25 +1,34 @@
 <script lang="ts" generics="T">
-  export let x = 0;
-  export let y = 0;
-  export let show = false;
   interface ContextMenuItem {
     label?: string;
     action?: string;
     isDestructive?: boolean;
     isSeparator?: boolean;
-    data?: T;
+    data?: T | null;
   }
 
-  export let menuItems: ContextMenuItem[] = [];
-  export let onAction: (action: { action: string, itemData: T | null }) => void;
-  export let onClose: () => void;
+  let {
+    x = 0,
+    y = 0,
+    show = false,
+    menuItems = [],
+    onaction,
+    onclose
+  }: {
+    x?: number;
+    y?: number;
+    show?: boolean;
+    menuItems?: ContextMenuItem[];
+    onaction?: (payload: { action: string; itemData: T | null }) => void;
+    onclose?: () => void;
+  } = $props();
 
   function handleClickOutside(event?: Event) {
     if (event) {
       event.preventDefault();
     }
     show = false;
-    onClose();
+    onclose?.();
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -41,8 +50,8 @@
   }
 
   function dispatchAction(action: string, itemData: T | null = null) {
-    onAction({ action, itemData });
-    onClose();
+    onaction?.({ action, itemData });
+    onclose?.();
   }
 </script>
 
@@ -71,7 +80,7 @@
           <button
             class="block w-full text-left p-2 text-sm hover:bg-gray-600 cursor-pointer rounded-md"
             class:text-red-400={item.isDestructive}
-            onclick={() => item.action && dispatchAction(item.action, item.data)}
+            onclick={() => item.action && dispatchAction(item.action, item.data ?? null)}
           >
             {item.label || ''}
           </button>

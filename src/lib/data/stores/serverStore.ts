@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Server } from '$lib/models/Server';
 import type { User } from '$lib/models/User';
 import type { Channel } from '$lib/models/Channel';
+import type { Role } from '$lib/models/Role';
 import { userStore } from './userStore';
 import { serverCache } from '$lib/utils/cache';
 
@@ -25,6 +26,12 @@ type BackendServer = {
   owner_id?: string;
   members?: BackendUser[];
   channels?: Channel[];
+  roles?: Role[];
+  created_at?: string;
+  default_channel_id?: string;
+  allow_invites?: boolean;
+  moderation_level?: 'None' | 'Low' | 'Medium' | 'High';
+  explicit_content_filter?: boolean;
   [key: string]: unknown;
 };
 
@@ -55,27 +62,43 @@ function createServerStore(): ServerStore {
     activeServerId: typeof localStorage !== 'undefined' ? localStorage.getItem('activeServerId') : null,
   });
 
-  const fromBackendUser = (u: BackendUser): User => ({
-    id: u.id,
-    name: u.username ?? u.name,
-    avatar: u.avatar,
-    online: u.is_online ?? u.online ?? false,
-    publicKey: u.public_key,
-    bio: u.bio,
-    tag: u.tag,
-  });
+  const fromBackendUser = (u: BackendUser): User => {
+    const fallbackName = u.username ?? u.name;
+    const name = fallbackName && fallbackName.trim().length > 0 ? fallbackName : `User-${u.id.slice(0, 4)}`;
+    return {
+      id: u.id,
+      name,
+      avatar: u.avatar,
+      online: u.is_online ?? u.online ?? false,
+      publicKey: u.public_key ?? undefined,
+      bio: u.bio ?? undefined,
+      tag: u.tag ?? undefined,
+    };
+  };
 
-  const mapServer = (s: BackendServer): Server => ({
-    ...s,
-    members: (s.members || []).map((m) => fromBackendUser(m)),
-  });
+  const mapServer = (s: BackendServer): Server => {
+    const { members = [], channels = [], roles = [], ...rest } = s;
+    const normalizedMembers: BackendUser[] = Array.isArray(members) ? members : [];
+    const normalizedChannels: Channel[] = Array.isArray(channels) ? (channels as Channel[]) : [];
+    const normalizedRoles: Role[] = Array.isArray(roles) ? (roles as Role[]) : [];
+    return {
+      ...rest,
+      id: s.id,
+      name: s.name,
+      owner_id: s.owner_id ?? '',
+      iconUrl: s.iconUrl,
+      channels: normalizedChannels,
+      members: normalizedMembers.map(fromBackendUser),
+      roles: normalizedRoles,
+    } as Server;
+  };
 
   const getServer = async (serverId: string): Promise<Server | null> => {
     if (serverCache.has(serverId)) {
       return serverCache.get(serverId) || null;
     }
     try {
-      const server: BackendServer | null = await invoke('get_server_details', { serverId: serverId });
+      const server = await invoke<BackendServer | null>('get_server_details', { serverId });
       if (server) {
         const mapped = mapServer(server);
         serverCache.set(serverId, mapped);
@@ -93,7 +116,7 @@ function createServerStore(): ServerStore {
     try {
       const currentUser = get(userStore).me;
       if (currentUser) {
-        const fetchedServers: BackendServer[] = await invoke('get_servers', { currentUserId: currentUser.id });
+        const fetchedServers = await invoke<BackendServer[]>('get_servers', { currentUserId: currentUser.id });
         const mapped = fetchedServers.map(mapServer);
         mapped.forEach(server => serverCache.set(server.id, server));
         update(s => ({ ...s, servers: mapped, loading: false }));
@@ -161,8 +184,8 @@ function createServerStore(): ServerStore {
     }
     update(s => ({ ...s, loading: true }));
     try {
-      const channels: Channel[] = await invoke('get_channels_for_server', { serverId: serverId });
-      const membersBackend: BackendUser[] = await invoke('get_members_for_server', { serverId: serverId });
+      const channels = await invoke<Channel[]>('get_channels_for_server', { serverId });
+      const membersBackend = await invoke<BackendUser[]>('get_members_for_server', { serverId });
       const members: User[] = membersBackend.map(fromBackendUser);
 
       update(s => {

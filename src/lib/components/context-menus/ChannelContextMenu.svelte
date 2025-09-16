@@ -1,37 +1,40 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import type { Channel } from '$lib/models/Channel';
 
-  let { x, y, channel, onAction, onClose } = $props<{ 
-    x: number; 
-    y: number; 
+  const props = $props<{
+    x: number;
+    y: number;
     channel: Channel;
-    onAction: (action: { action: string, channelId: string }) => void;
-    onClose: () => void;
+    onaction?: (detail: { action: string; channelId: string }) => void;
+    onclose?: () => void;
   }>();
 
+  let { x, y, channel, onaction, onclose } = props;
+
   function handleAction(action: string) {
-    onAction({ action, channelId: channel.id });
+    onaction?.({ action, channelId: channel.id });
   }
 
   let contextMenuElement: HTMLElement;
 
   function handleClickOutside(event: MouseEvent) {
     if (contextMenuElement && !contextMenuElement.contains(event.target as Node)) {
-      onClose();
+      onclose?.();
     }
   }
 
   function handleScroll() {
-    onClose();
+    onclose?.();
   }
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
-      onClose();
+      onclose?.();
     }
   }
-
-  import { onMount, onDestroy } from 'svelte';
 
   onMount(() => {
     window.addEventListener('click', handleClickOutside);
@@ -47,6 +50,7 @@
     window.removeEventListener('keydown', handleKeydown);
   });
 </script>
+
 
 <div
   class="absolute z-50 bg-card border border-zinc-700 rounded-md shadow-lg py-1 w-48 text-sm"
@@ -87,3 +91,9 @@
     <button class="w-full text-left px-4 py-2 hover:bg-zinc-600" onclick={() => handleAction('copy_channel_id')}>Copy Channel ID</button>
   {/if}
 </div>
+
+
+
+
+
+

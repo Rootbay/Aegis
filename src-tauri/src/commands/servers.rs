@@ -1,8 +1,8 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
+use aegis_protocol::AepMessage;
 use aep::database;
 use aep::user_service;
-use aegis_protocol::AepMessage;
+use tauri::State;
 
 #[tauri::command]
 pub async fn create_server(
@@ -36,13 +36,26 @@ pub async fn create_server(
         server.members.push(owner);
     }
 
-    let create_server_data = aegis_protocol::CreateServerData { server: server.clone() };
+    let create_server_data = aegis_protocol::CreateServerData {
+        server: server.clone(),
+    };
     let create_server_bytes = bincode::serialize(&create_server_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&create_server_bytes).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&create_server_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let aep_message = AepMessage::CreateServer { server: server.clone(), signature: Some(signature) };
+    let aep_message = AepMessage::CreateServer {
+        server: server.clone(),
+        signature: Some(signature),
+    };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(server)
 }
@@ -61,13 +74,28 @@ pub async fn join_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let join_server_data = aegis_protocol::JoinServerData { server_id: server_id.clone(), user_id: user_id.clone() };
+    let join_server_data = aegis_protocol::JoinServerData {
+        server_id: server_id.clone(),
+        user_id: user_id.clone(),
+    };
     let join_server_bytes = bincode::serialize(&join_server_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&join_server_bytes).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&join_server_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let aep_message = AepMessage::JoinServer { server_id, user_id, signature: Some(signature) };
+    let aep_message = AepMessage::JoinServer {
+        server_id,
+        user_id,
+        signature: Some(signature),
+    };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -82,13 +110,27 @@ pub async fn create_channel(
         .await
         .map_err(|e| e.to_string())?;
 
-    let create_channel_data = aegis_protocol::CreateChannelData { channel: channel.clone() };
-    let create_channel_bytes = bincode::serialize(&create_channel_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&create_channel_bytes).map_err(|e| e.to_string())?;
+    let create_channel_data = aegis_protocol::CreateChannelData {
+        channel: channel.clone(),
+    };
+    let create_channel_bytes =
+        bincode::serialize(&create_channel_data).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&create_channel_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let aep_message = AepMessage::CreateChannel { channel, signature: Some(signature) };
+    let aep_message = AepMessage::CreateChannel {
+        channel,
+        signature: Some(signature),
+    };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -98,7 +140,9 @@ pub async fn get_servers(
 ) -> Result<Vec<database::Server>, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
-    database::get_all_servers(&state.db_pool, &current_user_id).await.map_err(|e| e.to_string())
+    database::get_all_servers(&state.db_pool, &current_user_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -108,7 +152,9 @@ pub async fn get_channels_for_server(
 ) -> Result<Vec<database::Channel>, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
-    database::get_channels_for_server(&state.db_pool, &server_id).await.map_err(|e| e.to_string())
+    database::get_channels_for_server(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -118,7 +164,9 @@ pub async fn get_members_for_server(
 ) -> Result<Vec<aegis_shared_types::User>, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
-    database::get_server_members(&state.db_pool, &server_id).await.map_err(|e| e.to_string())
+    database::get_server_members(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -128,7 +176,9 @@ pub async fn get_server_details(
 ) -> Result<database::Server, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
-    database::get_server_by_id(&state.db_pool, &server_id).await.map_err(|e| e.to_string())
+    database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -144,13 +194,29 @@ pub async fn send_server_invite(
         .await
         .map_err(|e| e.to_string())?;
 
-    let send_server_invite_data = aegis_protocol::SendServerInviteData { server_id: server_id.clone(), user_id: user_id.clone() };
-    let send_server_invite_bytes = bincode::serialize(&send_server_invite_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&send_server_invite_bytes).map_err(|e| e.to_string())?;
+    let send_server_invite_data = aegis_protocol::SendServerInviteData {
+        server_id: server_id.clone(),
+        user_id: user_id.clone(),
+    };
+    let send_server_invite_bytes =
+        bincode::serialize(&send_server_invite_data).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&send_server_invite_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let aep_message = AepMessage::SendServerInvite { server_id, user_id, signature: Some(signature) };
+    let aep_message = AepMessage::SendServerInvite {
+        server_id,
+        user_id,
+        signature: Some(signature),
+    };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -165,13 +231,27 @@ pub async fn delete_channel(
         .await
         .map_err(|e| e.to_string())?;
 
-    let delete_channel_data = aegis_protocol::DeleteChannelData { channel_id: channel_id.clone() };
-    let delete_channel_bytes = bincode::serialize(&delete_channel_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&delete_channel_bytes).map_err(|e| e.to_string())?;
+    let delete_channel_data = aegis_protocol::DeleteChannelData {
+        channel_id: channel_id.clone(),
+    };
+    let delete_channel_bytes =
+        bincode::serialize(&delete_channel_data).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&delete_channel_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let aep_message = AepMessage::DeleteChannel { channel_id, signature: Some(signature) };
+    let aep_message = AepMessage::DeleteChannel {
+        channel_id,
+        signature: Some(signature),
+    };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -186,12 +266,24 @@ pub async fn delete_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let delete_server_data = aegis_protocol::DeleteServerData { server_id: server_id.clone() };
+    let delete_server_data = aegis_protocol::DeleteServerData {
+        server_id: server_id.clone(),
+    };
     let delete_server_bytes = bincode::serialize(&delete_server_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&delete_server_bytes).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&delete_server_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let aep_message = AepMessage::DeleteServer { server_id, signature: Some(signature) };
+    let aep_message = AepMessage::DeleteServer {
+        server_id,
+        signature: Some(signature),
+    };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
-

@@ -42,15 +42,19 @@ function createUserStore(): UserStore {
     tag: u.tag ?? undefined,
   });
 
-  const fromBackendUser = (u: BackendUser): User => ({
-    id: u.id,
-    name: u.username ?? u.name,
-    avatar: u.avatar,
-    online: u.is_online ?? u.online ?? false,
-    publicKey: u.public_key,
-    bio: u.bio,
-    tag: u.tag,
-  });
+  const fromBackendUser = (u: BackendUser): User => {
+    const fallbackName = u.username ?? u.name;
+    const name = fallbackName && fallbackName.trim().length > 0 ? fallbackName : `User-${u.id.slice(0, 4)}`;
+    return {
+      id: u.id,
+      name,
+      avatar: u.avatar,
+      online: u.is_online ?? u.online ?? false,
+      publicKey: u.public_key ?? undefined,
+      bio: u.bio ?? undefined,
+      tag: u.tag ?? undefined,
+    };
+  };
 
   const getUser = async (id: string): Promise<User | null> => {
     if (userCache.has(id)) {

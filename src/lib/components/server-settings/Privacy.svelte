@@ -2,7 +2,8 @@
   import type { Server } from '$lib/models/Server';
 
   export let server: Server;
-  export let onUpdateServer: (server: Server) => void;
+
+  export let onupdateServer: ((server: Server) => void) | undefined = undefined;
 
   let enableReadReceipts = false;
 
@@ -10,9 +11,13 @@
     const settings = {
       enableReadReceipts,
     };
-    onUpdateServer({ ...server, settings });
+    onupdateServer?.({ ...server, settings });
   }
 </script>
+
+
+
+
 
 <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase">Privacy Settings</h2>
 
@@ -29,3 +34,9 @@
     Save Changes
   </button>
 </div>
+
+
+
+
+
+

@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
 
@@ -123,7 +125,7 @@
     <div
       class="h-full bg-white/70"
       style="animation: toastProgress linear forwards; animation-duration: {duration}ms; animation-play-state: {hovered ? 'paused' : 'running'};"
-    />
+    ></div>
   </div>
 </div>
 
@@ -133,3 +135,5 @@
     to { width: 0%; }
   }
 </style>
+
+

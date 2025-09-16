@@ -1,9 +1,9 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
+use aegis_protocol::EncryptedDmSlot;
 use aep::database;
 use e2ee;
-use aegis_protocol::EncryptedDmSlot;
+use tauri::State;
 
 #[tauri::command]
 pub async fn send_message(
@@ -44,7 +44,11 @@ pub async fn send_message(
         server_id: server_id.clone(),
     };
     let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
-    let signature = state.identity.keypair().sign(&chat_message_bytes).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&chat_message_bytes)
+        .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::ChatMessage {
         sender: peer_id,
@@ -108,8 +112,13 @@ pub async fn send_encrypted_dm(
         pkt
     };
 
-    let payload_sig_bytes = bincode::serialize(&(my_id.clone(), recipient_id.clone(), &pkt.enc_header, &pkt.enc_content))
-        .map_err(|e| e.to_string())?;
+    let payload_sig_bytes = bincode::serialize(&(
+        my_id.clone(),
+        recipient_id.clone(),
+        &pkt.enc_header,
+        &pkt.enc_content,
+    ))
+    .map_err(|e| e.to_string())?;
     let signature = state
         .identity
         .keypair()
@@ -125,7 +134,11 @@ pub async fn send_encrypted_dm(
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state.network_tx.send(serialized_message).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -150,22 +163,43 @@ pub async fn rotate_group_key(
     }
 
     // Build encrypted slots per member
-    let members = aep::database::get_server_members(&state.db_pool, &server_id).await.map_err(|e| e.to_string())?;
+    let members = aep::database::get_server_members(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
     let mut slots: Vec<EncryptedDmSlot> = Vec::new();
     for m in members {
-        if m.id == state.identity.peer_id().to_base58() { continue; }
+        if m.id == state.identity.peer_id().to_base58() {
+            continue;
+        }
         let arc = e2ee::init_global_manager();
         let mut mgr = arc.lock();
-        let pkt = mgr.encrypt_for(&m.id, &key).map_err(|e| format!("E2EE encrypt error: {e}"))?;
-        slots.push(EncryptedDmSlot { recipient: m.id, init: pkt.init, enc_header: pkt.enc_header, enc_content: pkt.enc_content });
+        let pkt = mgr
+            .encrypt_for(&m.id, &key)
+            .map_err(|e| format!("E2EE encrypt error: {e}"))?;
+        slots.push(EncryptedDmSlot {
+            recipient: m.id,
+            init: pkt.init,
+            enc_header: pkt.enc_header,
+            enc_content: pkt.enc_content,
+        });
     }
 
-    let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate { server_id, channel_id, epoch, slots, signature: None };
+    let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        server_id,
+        channel_id,
+        epoch,
+        slots,
+        signature: None,
+    };
     let bytes = bincode::serialize(&aep_msg).map_err(|e| e.to_string())?;
     // Optionally sign entire packet
     // Not strictly necessary for trusted owner distribution in P2P, but consistent with others
     // Note: We cannot set signature inline since enum variant consumed; sign serialized bytes instead (transport integrity)
-    state.network_tx.send(bytes).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(bytes)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -186,11 +220,35 @@ pub async fn send_encrypted_group_message(
     };
 
     // Sign payload
-    let payload = bincode::serialize(&(state.identity.peer_id().to_base58(), &server_id, &channel_id, epoch, &nonce, &ciphertext)).map_err(|e| e.to_string())?;
-    let sig = state.identity.keypair().sign(&payload).map_err(|e| e.to_string())?;
+    let payload = bincode::serialize(&(
+        state.identity.peer_id().to_base58(),
+        &server_id,
+        &channel_id,
+        epoch,
+        &nonce,
+        &ciphertext,
+    ))
+    .map_err(|e| e.to_string())?;
+    let sig = state
+        .identity
+        .keypair()
+        .sign(&payload)
+        .map_err(|e| e.to_string())?;
 
     // Broadcast
-    let msg = aegis_protocol::AepMessage::EncryptedGroupMessage { sender: state.identity.peer_id().to_base58(), server_id, channel_id, epoch, nonce, ciphertext, signature: Some(sig) };
+    let msg = aegis_protocol::AepMessage::EncryptedGroupMessage {
+        sender: state.identity.peer_id().to_base58(),
+        server_id,
+        channel_id,
+        epoch,
+        nonce,
+        ciphertext,
+        signature: Some(sig),
+    };
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
-    state.network_tx.send(bytes).await.map_err(|e| e.to_string())
+    state
+        .network_tx
+        .send(bytes)
+        .await
+        .map_err(|e| e.to_string())
 }

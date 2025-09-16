@@ -1,5 +1,5 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
+use tauri::State;
 
 #[tauri::command]
 pub async fn send_file(
@@ -11,7 +11,10 @@ pub async fn send_file(
     let state = state.as_ref().ok_or("State not initialized")?.clone();
     state
         .file_cmd_tx
-        .send(aegis_shared_types::FileTransferCommand::Send { recipient_peer_id, path })
+        .send(aegis_shared_types::FileTransferCommand::Send {
+            recipient_peer_id,
+            path,
+        })
         .await
         .map_err(|e| e.to_string())
 }

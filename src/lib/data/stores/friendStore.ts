@@ -1,6 +1,7 @@
 import { writable, type Readable, get } from 'svelte/store';
-import type { Friend } from '$lib/models/Friend';
+import type { Friend, FriendStatus } from '$lib/models/Friend';
 import { getInvoke } from '$services/tauri';
+import type { InvokeFn } from '$services/tauri';
 import { userStore } from './userStore';
 
 type FriendshipBackend = {
@@ -47,44 +48,39 @@ function createFriendStore(): FriendStore {
     update(s => ({ ...s, friends: s.friends.filter(f => f.id !== friendId) }));
   };
 
-  const initialize = async () => {
-    update(s => ({ ...s, loading: true }));
-    try {
-      const invoke = await getInvoke();
-      if (invoke) {
-        const currentUser = get(userStore).me;
-        if (currentUser) {
-          const invoke = await getInvoke();
-          if (invoke) {
-            const friendships: FriendshipBackend[] = await invoke('get_friendships', { currentUserId: currentUser.id });
-            const friends: Friend[] = friendships.map(f => ({
-              id: f.id, 
-              name: f.user_b_id, 
-              online: false, 
-              status: f.status,
-              avatar: `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${f.id}`,
-              timestamp: new Date().toISOString(),
-              messages: [],
-            }));
-            set({ friends, loading: false });
-          } else {
-            console.warn("Tauri invoke not available, cannot fetch friendships.");
-            set({ friends: [], loading: false });
-          }
-        } else {
-          console.warn("User not loaded, cannot fetch friendships.");
-          set({ friends: [], loading: false });
-        }
-      } else {
-        console.warn("Tauri invoke not available, cannot fetch friendships.");
-        set({ friends: [], loading: false });
-      }
-    } catch (error) {
-      console.error("Failed to fetch friendships:", error);
-      set({ friends: [], loading: false });
-    }
-  };
-
+  const initialize = async () => {
+    update(s => ({ ...s, loading: true }));
+    try {
+      const invokeFn: InvokeFn | null = await getInvoke();
+      if (!invokeFn) {
+        console.warn("Tauri invoke not available, cannot fetch friendships.");
+        set({ friends: [], loading: false });
+        return;
+      }
+
+      const currentUser = get(userStore).me;
+      if (!currentUser) {
+        console.warn("User not loaded, cannot fetch friendships.");
+        set({ friends: [], loading: false });
+        return;
+      }
+
+      const friendships = await invokeFn<FriendshipBackend[]>('get_friendships', { currentUserId: currentUser.id });
+      const friends: Friend[] = friendships.map(f => ({
+        id: f.id,
+        name: f.user_b_id,
+        online: false,
+        status: f.status as FriendStatus,
+        avatar: `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${f.id}`,
+        timestamp: new Date().toISOString(),
+        messages: [],
+      }));
+      set({ friends, loading: false });
+    } catch (error) {
+      console.error("Failed to fetch friendships:", error);
+      set({ friends: [], loading: false });
+    }
+  };
   return {
     subscribe,
     handleFriendsUpdate,
@@ -96,3 +92,8 @@ function createFriendStore(): FriendStore {
 }
 
 export const friendStore = createFriendStore();
+
+
+
+
+

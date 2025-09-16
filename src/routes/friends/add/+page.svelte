@@ -8,7 +8,8 @@
   let isSending = false;
   let showQrScanner = false;
 
-  async function handleAddFriend() {
+  async function handleAddFriend(event?: SubmitEvent) {
+    event?.preventDefault();
     if (!friendIdToAdd.trim()) {
       toasts.addToast('Please enter a user ID.', 'error');
       return;
@@ -21,7 +22,8 @@
       friendIdToAdd = '';
     } catch (error) {
       console.error('Failed to send friend request:', error);
-      toasts.addToast(error.message || 'Failed to send friend request.', 'error');
+      const message = error instanceof Error ? error.message : 'Failed to send friend request.';
+      toasts.addToast(message, 'error');
     } finally {
       isSending = false;
     }
@@ -37,7 +39,7 @@
   <p class="text-muted-foreground mb-4">
     You can add a friend with their Aegis ID. It's case-sensitive!
   </p>
-  <form onsubmit={handleAddFriend} preventDefault class="flex items-center bg-base-100 p-2 rounded-lg border border-border">
+  <form onsubmit={handleAddFriend} class="flex items-center bg-base-100 p-2 rounded-lg border border-border">
     <input
       type="search"
       bind:value={friendIdToAdd}
@@ -69,9 +71,9 @@
   </form>
   {#if showQrScanner}
     <QRCodeScanner
-      on:close={() => (showQrScanner = false)}
-      on:scanSuccess={(e) => {
-        const scanned = (e as CustomEvent<string>).detail?.trim?.() ?? '';
+      onclose={() => (showQrScanner = false)}
+      onscanSuccess={(value) => {
+        const scanned = value?.trim?.() ?? '';
         if (scanned) {
           friendIdToAdd = scanned;
           toasts.addToast('Scanned ID added. Ready to send.', 'success');

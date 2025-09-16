@@ -1,12 +1,15 @@
+use aegis_shared_types::AppState;
 use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
-use aegis_shared_types::AppState;
 
 #[derive(Default)]
 pub struct AppStateContainer(pub Arc<Mutex<Option<AppState>>>);
 
-pub async fn with_state<F, R>(state_container: State<'_, AppStateContainer>, f: F) -> Result<R, String>
+pub async fn with_state<F, R>(
+    state_container: State<'_, AppStateContainer>,
+    f: F,
+) -> Result<R, String>
 where
     F: FnOnce(AppState) -> Result<R, String>,
 {
@@ -17,4 +20,3 @@ where
         Err("Application state not initialized. Please unlock your identity.".to_string())
     }
 }
-

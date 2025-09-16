@@ -1,8 +1,8 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
-use aep::database::{self, Friendship, FriendshipStatus};
 use aegis_protocol::AepMessage;
+use aep::database::{self, Friendship, FriendshipStatus};
 use chrono::Utc;
+use tauri::State;
 use uuid::Uuid;
 
 #[tauri::command]
@@ -32,7 +32,8 @@ pub async fn send_friend_request(
         sender_id: current_user_id.clone(),
         target_id: target_user_id.clone(),
     };
-    let friend_request_bytes = bincode::serialize(&friend_request_data).map_err(|e| e.to_string())?;
+    let friend_request_bytes =
+        bincode::serialize(&friend_request_data).map_err(|e| e.to_string())?;
     let signature = state
         .identity
         .keypair()
@@ -113,13 +114,10 @@ pub async fn block_user(
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
     let now = Utc::now();
-    let friendship_option = database::get_friendship(
-        &state.db_pool,
-        &current_user_id,
-        &target_user_id,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let friendship_option =
+        database::get_friendship(&state.db_pool, &current_user_id, &target_user_id)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if let Some(friendship) = friendship_option {
         let new_status = if friendship.user_a_id == current_user_id {
@@ -189,7 +187,8 @@ pub async fn unblock_user(
             unblocker_id: friendship.user_a_id.clone(),
             unblocked_id: friendship.user_b_id.clone(),
         };
-        let unblock_user_bytes = bincode::serialize(&unblock_user_data).map_err(|e| e.to_string())?;
+        let unblock_user_bytes =
+            bincode::serialize(&unblock_user_data).map_err(|e| e.to_string())?;
         let signature = state
             .identity
             .keypair()
@@ -268,4 +267,3 @@ pub async fn get_friendships(
         .await
         .map_err(|e| e.to_string())
 }
-

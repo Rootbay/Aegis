@@ -1,21 +1,29 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
 
-  export let x: number;
-  export let y: number;
-  export let categoryId: string;
-  export let onAction: (action: { action: string, categoryId: string }) => void;
-  export let onClose: () => void;
+  let {
+    x,
+    y,
+    categoryId,
+    onaction,
+    onclose
+  }: {
+    x: number;
+    y: number;
+    categoryId: string;
+    onaction?: (detail: { action: string; categoryId: string }) => void;
+    onclose?: () => void;
+  } = $props();
 
   let contextMenuElement: HTMLElement;
 
   function handleAction(action: string) {
-    onAction({ action, categoryId });
+    onaction?.({ action, categoryId });
   }
 
   function handleClickOutside(event: MouseEvent) {
     if (contextMenuElement && !contextMenuElement.contains(event.target as Node)) {
-      onClose();
+      onclose?.();
     }
   }
 

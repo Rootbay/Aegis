@@ -41,7 +41,7 @@ pub struct AppState {
     pub identity: Identity,
     pub network_tx: mpsc::Sender<Vec<u8>>,
     pub db_pool: Pool<Sqlite>,
-    pub incoming_files: Arc<Mutex<HashMap<String, IncomingFile>>>, // Key is file_name
+    pub incoming_files: Arc<Mutex<HashMap<String, IncomingFile>>>, // Key is "<sender_id>:<file_name>"
     pub file_cmd_tx: mpsc::Sender<FileTransferCommand>,
     pub file_acl_policy: Arc<Mutex<FileAclPolicy>>, // dynamic, shared across clones
 }

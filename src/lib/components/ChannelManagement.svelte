@@ -4,9 +4,9 @@
   import { Hash, Volume2, Plus, Pencil, Trash, X, Check } from '@lucide/svelte';
 
   export let channels: Channel[] = [];
-  export let onAddChannel: (channel: Channel) => void;
-  export let onUpdateChannel: (channel: Channel) => void;
-  export let onDeleteChannel: (channelId: string) => void;
+  export let onadd_channel: ((channel: Channel) => void) | undefined = undefined;
+  export let onupdate_channel: ((channel: Channel) => void) | undefined = undefined;
+  export let ondelete_channel: ((channelId: string) => void) | undefined = undefined;
 
   let newChannelName = '';
   let newChannelType: 'text' | 'voice' = 'text';
@@ -23,7 +23,7 @@
         channel_type: newChannelType,
         private: false,
       };
-      onAddChannel(newChannel);
+      onadd_channel?.(newChannel);
       newChannelName = '';
     }
   }
@@ -36,7 +36,7 @@
 
   function saveEditChannel() {
     if (editingChannel && editingChannelName.trim()) {
-      onUpdateChannel({ ...editingChannel, name: editingChannelName.trim(), channel_type: editingChannelType });
+      onupdate_channel?.({ ...editingChannel, name: editingChannelName.trim(), channel_type: editingChannelType });
       editingChannel = null;
       editingChannelName = '';
     }
@@ -49,7 +49,7 @@
 
   function deleteChannel(channelId: string) {
     if (confirm('Are you sure you want to delete this channel?')) {
-      onDeleteChannel(channelId);
+      ondelete_channel?.(channelId);
       if (editingChannel?.id === channelId) {
         editingChannel = null;
       }
@@ -128,3 +128,5 @@
     {/each}
   </div>
 </div>
+
+

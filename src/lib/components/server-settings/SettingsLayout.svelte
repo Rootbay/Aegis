@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X, Smile, Search } from '@lucide/svelte';
   import { onMount } from 'svelte';
-  import type { ComponentType } from 'svelte';
+  import type { Component } from 'svelte';
   import RolesManagement from '$lib/components/RolesManagement.svelte';
   import ChannelManagement from '$lib/components/ChannelManagement.svelte';
   import WebhookManagement from '$lib/components/WebhookManagement.svelte';
@@ -31,7 +31,7 @@
 
   type SidebarLinkItem = {
     label: string;
-    icon: ComponentType;
+    icon: Component;
     tab: string;
     type?: undefined;
   };
@@ -48,7 +48,21 @@
   export let categoryHeadings: { [key: string]: string };
   export let currentData: any;
   export let initialActiveTab: string | undefined;
-  export let dispatch: <EventKey extends keyof Events>(type: EventKey, detail?: Events[EventKey]) => void;
+
+  type EventHandler<T> = T extends void ? (() => void) | undefined : ((detail: T) => void) | undefined;
+
+  export let onclose: EventHandler<Events['close']> = undefined;
+  export let onupdate_setting: EventHandler<Events['update_setting']> = undefined;
+  export let onadd_role: EventHandler<Events['add_role']> = undefined;
+  export let onupdate_role: EventHandler<Events['update_role']> = undefined;
+  export let ondelete_role: EventHandler<Events['delete_role']> = undefined;
+  export let onupdate_server: EventHandler<Events['update_server']> = undefined;
+  export let ondelete_server: EventHandler<Events['delete_server']> = undefined;
+  export let ontoggle_permission: EventHandler<Events['toggle_permission']> = undefined;
+  export let onadd_channel: EventHandler<Events['add_channel']> = undefined;
+  export let onupdate_channel: EventHandler<Events['update_channel']> = undefined;
+  export let ondelete_channel: EventHandler<Events['delete_channel']> = undefined;
+  export let onbutton_click: EventHandler<Events['button_click']> = undefined;
 
   let searchQuery = '';
   let pageContents: { [key: string]: string } = {};
@@ -76,7 +90,7 @@
   }
 
   function closeSettings() {
-    dispatch('close');
+    onclose?.();
   }
 
   async function fetchPageContent(tab: string) {
@@ -88,14 +102,17 @@
     }
   }
 
-  onMount(async () => {
-    if (initialActiveTab && sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)) {
-      activeTab = initialActiveTab;
-    }
-    for (const item of sidebarItems) {
-      if (isSeparator(item)) continue;
-      await fetchPageContent(item.tab);
-    }
+  onMount(() => {
+    const initialize = async () => {
+      if (initialActiveTab && sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)) {
+        activeTab = initialActiveTab;
+      }
+      for (const item of sidebarItems) {
+        if (isSeparator(item)) continue;
+        await fetchPageContent(item.tab);
+      }
+    };
+    void initialize();
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -125,6 +142,81 @@
     Roles,
     Privacy
   };
+
+  const serverAwareComponents = new Set(['Overview', 'Moderation', 'DeleteServer', 'Privacy']);
+
+  function handleUpdateServer(serverUpdate: unknown) {
+    if (serverUpdate == null) {
+      return;
+    }
+    onupdate_server?.(serverUpdate as any);
+  }
+
+  function handleDeleteServer(detail: unknown) {
+    if (!ondelete_server) {
+      return;
+    }
+
+    if (typeof detail === 'string') {
+      ondelete_server({ serverId: detail } as any);
+      return;
+    }
+
+    if (detail && typeof detail === 'object') {
+      const record = detail as Record<string, unknown>;
+      const serverId =
+        typeof record['serverId'] === 'string'
+          ? (record['serverId'] as string)
+          : typeof record['id'] === 'string'
+            ? (record['id'] as string)
+            : typeof currentData?.id === 'string'
+              ? (currentData.id as string)
+              : undefined;
+
+      if (serverId) {
+        ondelete_server({ serverId, server: detail } as any);
+        return;
+      }
+
+      ondelete_server(detail as any);
+      return;
+    }
+
+    if (typeof currentData?.id === 'string') {
+      ondelete_server({ serverId: currentData.id } as any);
+      return;
+    }
+
+    ondelete_server(detail as any);
+  }
+
+  function handleTogglePermission(detail: unknown) {
+    if (detail == null) {
+      return;
+    }
+    ontoggle_permission?.(detail as any);
+  }
+
+  function getComponentProps(componentName: string) {
+    const props: Record<string, unknown> = {};
+    if (!componentName) {
+      return props;
+    }
+
+    if (serverAwareComponents.has(componentName)) {
+      props.server = currentData;
+    }
+
+    if (componentName === 'Overview' || componentName === 'Moderation' || componentName === 'Privacy') {
+      props.onupdateServer = handleUpdateServer;
+    }
+
+    if (componentName === 'DeleteServer') {
+      props.ondeleteServer = handleDeleteServer;
+    }
+
+    return props;
+  }
 </script>
 
 <div class="flex h-full text-white">
@@ -218,14 +310,14 @@
                   type="text"
                   class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
                   value={currentData[setting.property]}
-                  on:change={(e) => dispatch('update_setting', { id: setting.id, property: setting.property, value: e.currentTarget.value })}
+                  on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
                 />
               {:else if setting.type === 'image'}
                 <input
                   type="text"
                   class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
                   value={currentData[setting.property]}
-                  on:change={(e) => dispatch('update_setting', { id: setting.id, property: setting.property, value: e.currentTarget.value })}
+                  on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
                 />
                 {#if currentData[setting.property]}
                   <img src={currentData[setting.property]} alt="Server Icon" class="mt-4 w-24 h-24 object-cover rounded-full" />
@@ -235,7 +327,7 @@
               {:else if setting.type === 'select'}
                 <select
                   class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
-                  on:change={(e) => dispatch('update_setting', { id: setting.id, property: setting.property, value: e.currentTarget.value })}
+                  on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
                 >
                   {#each setting.options as option (option.value)}
                     <option value={option.value} selected={currentData[setting.property] === option.value}>
@@ -250,7 +342,7 @@
                       type="checkbox"
                       class="sr-only"
                       checked={currentData[setting.property]}
-                      on:change={(e) => dispatch('update_setting', { id: setting.id, property: setting.property, value: e.currentTarget.checked })}
+                      on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.checked })}
                     />
                     <div class="block bg-zinc-600 w-14 h-8 rounded-full"></div>
                     <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
@@ -260,25 +352,37 @@
                   </div>
                 </label>
               {:else if setting.type === 'custom_component'}
-                <svelte:component
-                  this={componentMap[setting.component]}
-                  {currentData}
-                  on:update_setting={(e) => dispatch('update_setting', e.detail)}
-                  on:add_role={(e) => dispatch('add_role', e.detail)}
-                  on:update_role={(e) => dispatch('update_role', e.detail)}
-                  on:delete_role={(e) => dispatch('delete_role', e.detail)}
-                  on:update_server={(e) => dispatch('update_server', e.detail)}
-                  on:delete_server={(e) => dispatch('delete_server', e.detail)}
-                  on:toggle_permission={(e) => dispatch('toggle_permission', e.detail)}
-                  on:add_channel={(e) => dispatch('add_channel', e.detail)}
-                  on:update_channel={(e) => dispatch('update_channel', e.detail)}
-                  on:delete_channel={(e) => dispatch('delete_channel', e.detail)}
-                  on:button_click={(e) => dispatch('button_click', e.detail)}
-                />
+                {#if setting.component === 'RolesManagement'}
+                  <RolesManagement
+                    roles={currentData.roles ?? []}
+                    onadd_role={onadd_role}
+                    onupdate_role={onupdate_role}
+                    ondelete_role={ondelete_role}
+                    on:toggle_permission={(event) => handleTogglePermission(event.detail)}
+                  />
+                {:else if setting.component === 'ChannelManagement'}
+                  <ChannelManagement
+                    channels={currentData.channels ?? []}
+                    onadd_channel={onadd_channel}
+                    onupdate_channel={onupdate_channel}
+                    ondelete_channel={ondelete_channel}
+                  />
+                {:else}
+                  {#if componentMap[setting.component]}
+                    {@const dynamicComponent = componentMap[setting.component]}
+                    {@const componentProps = getComponentProps(setting.component)}
+                    <svelte:component
+                      this={dynamicComponent}
+                      {...componentProps}
+                      onupdate_setting={onupdate_setting}
+                      onbutton_click={onbutton_click}
+                    />
+                  {/if}
+                {/if}
               {:else if setting.type === 'button'}
                 <button
                   class="px-4 py-2 rounded-md {setting.buttonType === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-semibold transition-colors duration-200"
-                  on:click={() => dispatch('button_click', { id: setting.id })}
+                  on:click={() => onbutton_click?.({ id: setting.id })}
                 >
                   {setting.buttonLabel}
                 </button>
@@ -298,7 +402,7 @@
         </p>
         <button
           class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors duration-200"
-          on:click={() => dispatch('button_click', { id: 'deleteServer' })}
+          on:click={() => onbutton_click?.({ id: 'deleteServer' })}
         >
           Delete Server
         </button>
@@ -343,3 +447,6 @@
     background-color: theme('colors.zinc.600');
   }
 </style>
+
+
+

@@ -2,15 +2,19 @@
   import type { Server } from '$lib/models/Server';
 
   export let server: Server;
-  export let onUpdateServer: (server: Server) => void;
+
+  export let onupdateServer: ((server: Server) => void) | undefined = undefined;
 
   let serverName = server.name;
   let serverDescription = server.description || '';
 
   function saveChanges() {
-    onUpdateServer({ ...server, name: serverName, description: serverDescription });
+    onupdateServer?.({ ...server, name: serverName, description: serverDescription });
   }
 </script>
+
+
+
 
 <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase">Overview</h2>
 
@@ -37,3 +41,9 @@
     Save Changes
   </button>
 </div>
+
+
+
+
+
+

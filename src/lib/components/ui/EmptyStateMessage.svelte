@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   let { activeTab } = $props<{ activeTab: string }>();
 </script>

@@ -2,9 +2,15 @@
   import { Users } from '@lucide/svelte';
   import type { User } from '$lib/models/User';
 
-  export let members: User[] = [];
-  export let isSettingsPage: boolean = false;
-  export let openUserCardModal: Function;
+  let {
+    members = [],
+    isSettingsPage = false,
+    openUserCardModal
+  }: {
+    members?: User[];
+    isSettingsPage?: boolean;
+    openUserCardModal: Function;
+  } = $props();
 </script>
 
 <aside class="hidden lg:flex w-[260px] bg-muted/50 flex-col border-l border-border/50">

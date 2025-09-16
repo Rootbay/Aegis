@@ -1,14 +1,23 @@
 <script lang="ts">
-  export let x = 0;
-  export let y = 0;
-  export let show = false;
-  export let onSetMagnifierSize: (size: number) => void;
-  export let onSetMagnifierZoom: (zoom: number) => void;
-  export let onClose: () => void;
+  let {
+    x = 0,
+    y = 0,
+    show = false,
+    onsetMagnifierSize,
+    onsetMagnifierZoom,
+    onclose
+  }: {
+    x?: number;
+    y?: number;
+    show: $bindable<boolean>;
+    onsetMagnifierSize?: (size: number) => void;
+    onsetMagnifierZoom?: (zoom: number) => void;
+    onclose?: () => void;
+  } = $props();
 
   function handleClickOutside() {
     show = false;
-    onClose();
+    onclose?.();
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -18,14 +27,14 @@
   }
 
   function setMagnifierSize(size: number) {
-    onSetMagnifierSize(size);
-    onClose();
+    onsetMagnifierSize?.(size);
+    onclose?.();
     show = false;
   }
 
   function setMagnifierZoom(zoom: number) {
-    onSetMagnifierZoom(zoom);
-    onClose();
+    onsetMagnifierZoom?.(zoom);
+    onclose?.();
     show = false;
   }
 

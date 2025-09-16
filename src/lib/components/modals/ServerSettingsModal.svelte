@@ -1,18 +1,18 @@
 <script lang="ts">
   import type { Server } from '$lib/models/Server';
 
-  import Overview from './server-settings/Overview.svelte';
-  import Moderation from './server-settings/Moderation.svelte';
-  import Privacy from './server-settings/Privacy.svelte';
-  import Roles from './server-settings/Roles.svelte';
-  import UserManagement from './server-settings/UserManagement.svelte';
-  import DeleteServer from './server-settings/DeleteServer.svelte';
+  import Overview from '../server-settings/Overview.svelte';
+  import Moderation from '../server-settings/Moderation.svelte';
+  import Privacy from '../server-settings/Privacy.svelte';
+  import Roles from '../server-settings/Roles.svelte';
+  import UserManagement from '../server-settings/UserManagement.svelte';
+  import DeleteServer from '../server-settings/DeleteServer.svelte';
 
   export let show = false;
   export let server: Server | null = null;
   export let onClose: () => void;
-  export let onUpdateServer: (server: Server) => void;
-  export let onDeleteServer: (server: Server) => void;
+  export let onupdateServer: ((server: Server) => void) | undefined = undefined;
+  export let ondeleteServer: ((server: Server) => void) | undefined = undefined;
 
   let activeTab = 'overview';
 
@@ -21,30 +21,6 @@
     onClose();
   }
 </script>
-
-<style lang="postcss">
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: transparent;
-    border-radius: 4px;
-    border: 2px solid transparent;
-  }
-
-  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: theme('colors.zinc.700');
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: theme('colors.zinc.600');
-  }
-</style>
 
 {#if show && server}
   <div class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[10002]">
@@ -71,19 +47,43 @@
 
       <main class="flex-1 p-8 overflow-y-auto">
         {#if activeTab === 'overview'}
-          <Overview {server} onUpdateServer={onUpdateServer} />
+          <Overview server={server!} onupdateServer={onupdateServer} />
         {:else if activeTab === 'moderation'}
-          <Moderation {server} onUpdateServer={onUpdateServer} />
+          <Moderation server={server!} onupdateServer={onupdateServer} />
         {:else if activeTab === 'privacy'}
-          <Privacy {server} onUpdateServer={onUpdateServer} />
+          <Privacy server={server!} onupdateServer={onupdateServer} />
         {:else if activeTab === 'roles'}
-          <Roles {server} />
+          <Roles />
         {:else if activeTab === 'user_management'}
-          <UserManagement {server} />
+          <UserManagement />
         {:else if activeTab === 'delete'}
-          <DeleteServer {server} onDeleteServer={onDeleteServer} on:close={close} />
+          <DeleteServer server={server!} ondeleteServer={ondeleteServer} />
         {/if}
       </main>
     </div>
   </div>
 {/if}
+
+<style lang="postcss">
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+    border: 2px solid transparent;
+  }
+
+  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: theme('colors.zinc.700');
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.zinc.600');
+  }
+</style>

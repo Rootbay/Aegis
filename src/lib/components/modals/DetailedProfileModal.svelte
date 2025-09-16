@@ -438,7 +438,7 @@
 </div>
 
 {#if showLightbox}
-  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} on:close={() => (showLightbox = false)} />
+  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} onClose={() => (showLightbox = false)} />
 {/if}
 
 {#if showUserOptionsMenu}
@@ -446,8 +446,8 @@
     x={userOptionsMenuX}
     y={userOptionsMenuY}
     show={showUserOptionsMenu}
-    on:close={() => (showUserOptionsMenu = false)}
-    on:action={handleUserOptionAction}
+    onclose={() => (showUserOptionsMenu = false)}
+    onaction={handleUserOptionAction}
   />
 {/if}
 

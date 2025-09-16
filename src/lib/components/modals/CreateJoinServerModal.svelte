@@ -29,7 +29,8 @@
         iconUrl: 'https://api.dicebear.com/8.x/bottts-neutral/svg?seed=' + encodeURIComponent(serverIdToJoin),
         owner_id: 'unknown',
         members: [$userStore.me],
-        channels: []
+        channels: [],
+        roles: []
       };
       serverStore.addServer(newServer);
       serverStore.setActiveServer(newServer.id);
@@ -54,6 +55,7 @@
           created_at: new Date().toISOString(),
           channels: [],
           members: [],
+          roles: [],
         };
         
         const createdServer: Server = await invoke('create_server', { server: serverForBackend });

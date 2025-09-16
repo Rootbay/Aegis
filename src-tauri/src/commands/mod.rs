@@ -1,9 +1,9 @@
-pub mod state;
+pub mod files;
+pub mod friends;
 pub mod identity;
 pub mod messages;
 pub mod presence;
-pub mod users;
-pub mod friends;
 pub mod servers;
-pub mod files;
 pub mod settings;
+pub mod state;
+pub mod users;

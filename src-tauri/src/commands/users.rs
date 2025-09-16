@@ -1,8 +1,8 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
-use aep::user_service;
 use aegis_protocol::AepMessage;
+use aep::user_service;
 use bs58;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_user(

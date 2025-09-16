@@ -1,34 +1,75 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
-  import { X, File } from '@lucide/svelte';
 
-  export let file: File;
-  export let onRemove: Function = () => {};
-  $: void file;
+  import { X, File as FileIcon } from '@lucide/svelte';
 
-  const fileTypeIcons: { [key: string]: string } = {
-    'image': 'file-image',
-    'pdf': 'file-text',
-    'audio': 'file-music',
-    'video': 'file-video',
-    'zip': 'archive',
-    'rar': 'archive',
-  };
+  import { onDestroy } from 'svelte';
 
-  let icon = 'file';
-  let imagePreviewUrl: string | null = null;
 
-  if (file.type.startsWith('image/')) {
-    icon = 'file';
-    imagePreviewUrl = URL.createObjectURL(file);
-  } else {
-    const extension = file.name.split('.').pop()?.toLowerCase() || '';
-    for (const type in fileTypeIcons) {
-      if (file.type.startsWith(type) || extension === type) {
-        icon = fileTypeIcons[type];
-        break;
-      }
+
+  const { file, onRemove = () => {} } = $props<{
+
+    file: File;
+
+    onRemove?: (file: File) => void;
+
+  }>();
+
+
+
+  let imagePreviewUrl = $state<string | null>(null);
+
+  let previousPreviewUrl: string | null = null;
+
+
+
+  function updatePreview(source: File) {
+
+    if (previousPreviewUrl) {
+
+      URL.revokeObjectURL(previousPreviewUrl);
+
+      previousPreviewUrl = null;
+
     }
+
+
+
+    if (source.type.startsWith('image/')) {
+
+      const url = URL.createObjectURL(source);
+
+      imagePreviewUrl = url;
+
+      previousPreviewUrl = url;
+
+    } else {
+
+      imagePreviewUrl = null;
+
+    }
+
   }
+
+
+
+  $effect(() => {
+    updatePreview(file);
+  });
+
+
+
+  onDestroy(() => {
+
+    if (previousPreviewUrl) {
+
+      URL.revokeObjectURL(previousPreviewUrl);
+
+    }
+
+  });
+
 </script>
 
 <div class="relative group bg-zinc-700 p-2 rounded-md flex items-center space-x-2">
@@ -36,7 +77,7 @@
     <img src={imagePreviewUrl} alt={file.name} class="w-12 h-12 object-cover rounded-md" />
   {:else}
     <div class="w-12 h-12 flex items-center justify-center bg-zinc-600 rounded-md">
-      <File size={12} class="text-muted-foreground" />
+      <FileIcon size={12} class="text-muted-foreground" />
     </div>
   {/if}
   <div class="flex-grow overflow-hidden">
@@ -51,3 +92,5 @@
     <X size={10} class="text-white" />
   </button>
 </div>
+
+

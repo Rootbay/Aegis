@@ -1,13 +1,12 @@
 <script lang="ts">
   import type { Role } from '$lib/models/Role';
   import { v4 as uuidv4 } from 'uuid';
-  import Icon from '$lib/components/ui/Icon.svelte';
   import { Plus, Pencil, Trash, X, Check, Eye } from '@lucide/svelte';
 
   export let roles: Role[] = [];
-  export let onAddRole: (role: Role) => void;
-  export let onUpdateRole: (role: Role) => void;
-  export let onDeleteRole: (roleId: string) => void;
+  export let onadd_role: ((role: Role) => void) | undefined = undefined;
+  export let onupdate_role: ((role: Role) => void) | undefined = undefined;
+  export let ondelete_role: ((roleId: string) => void) | undefined = undefined;
 
   let newRoleName = '';
   let editingRole: Role | null = null;
@@ -66,7 +65,7 @@
         mentionable: false,
         permissions: Object.keys(allPermissions).reduce((acc, perm) => ({ ...acc, [perm]: false }), {})
       };
-      onAddRole(newRole);
+      onadd_role?.(newRole);
       newRoleName = '';
     }
   }
@@ -81,7 +80,7 @@
 
   function saveEditRole() {
     if (editingRole && editingRoleName.trim()) {
-      onUpdateRole({
+      onupdate_role?.({
         ...editingRole,
         name: editingRoleName.trim(),
         color: editingRoleColor,
@@ -106,7 +105,7 @@
 
   function deleteRole(roleId: string) {
     if (confirm('Are you sure you want to delete this role?')) {
-      onDeleteRole(roleId);
+      ondelete_role?.(roleId);
       if (editingRole?.id === roleId) {
         editingRole = null;
       }
@@ -231,3 +230,6 @@
     {/if}
   </div>
 </div>
+
+
+

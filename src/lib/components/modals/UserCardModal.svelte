@@ -1,19 +1,28 @@
 <script lang="ts">
   import { userStore } from '$lib/data/stores/userStore';
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
-
   import type { User } from '$lib/models/User';
-  export let profileUser: User;
-  export let close = () => {};
-  export let openDetailedProfileModal: Function;
-  export let x = 0;
-  export let y = 0;
-  export let isServerMemberContext = false;
 
-  let showLightbox = false;
-  let lightboxImageUrl = '';
+  let {
+    profileUser,
+    close = () => {},
+    openDetailedProfileModal,
+    x = 0,
+    y = 0,
+    isServerMemberContext = false
+  }: {
+    profileUser: User;
+    close?: () => void;
+    openDetailedProfileModal: Function;
+    x?: number;
+    y?: number;
+    isServerMemberContext?: boolean;
+  } = $props();
 
-  $: isMyProfile = profileUser.id === $userStore.me?.id;
+  let showLightbox = $state(false);
+  let lightboxImageUrl = $state('');
+
+  let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -92,7 +101,7 @@
 </div>
 
 {#if showLightbox}
-  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} on:close={() => (showLightbox = false)} />
+  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} onClose={() => (showLightbox = false)} />
 {/if}
 
 <style>

@@ -3,7 +3,6 @@
   import { page } from '$app/stores';
   import { serverStore } from '$lib/data/stores/serverStore';
   import { goto } from '$app/navigation';
-  import { resolve } from '$app/paths';
 
   
 
@@ -15,7 +14,7 @@
   import { lastVisitedServerId } from '$lib/data/stores/navigationStore';
 
   const unsubscribePage = page.subscribe(p => {
-    serverId = p.params.serverId;
+    serverId = p.params.serverId ?? null;
     currentPathname = p.url.pathname;
 
     if (serverId && currentPathname.includes('/settings')) {
@@ -38,7 +37,7 @@
       if (textChannel) {
         const targetPath = `/channels/${serverId}/${textChannel.id}`;
         if (currentPathname !== targetPath) {
-          goto(resolve(targetPath));
+          (goto as unknown as (target: string) => void)(targetPath);
         }
       }
     }

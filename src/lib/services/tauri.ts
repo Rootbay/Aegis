@@ -1,21 +1,24 @@
 import { browser } from '$app/environment';
 
+export type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+export type ListenFn = <T>(event: string, handler: (payload: T) => void) => Promise<() => void>;
+
 declare global {
   interface Window {
     __TAURI__?: {
-      invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+      invoke?: InvokeFn;
       event?: {
-        listen?: (event: string, handler: (payload: unknown) => void) => Promise<unknown>;
+        listen?: ListenFn;
       };
     };
   }
 }
 
-export async function getInvoke(): Promise<((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null> {
+export async function getInvoke(): Promise<InvokeFn | null> {
   return new Promise((resolve) => {
     const checkTauri = () => {
       if (browser && window.__TAURI__ && window.__TAURI__.invoke) {
-        resolve(window.__TAURI__.invoke);
+        resolve(window.__TAURI__.invoke as InvokeFn);
       } else if (browser) {
         setTimeout(checkTauri, 50);
       } else {
@@ -26,9 +29,11 @@ export async function getInvoke(): Promise<((cmd: string, args?: Record<string, 
   });
 }
 
-export async function getListen(): Promise<((event: string, handler: (payload: unknown) => void) => Promise<unknown>) | null> {
+export async function getListen(): Promise<ListenFn | null> {
   if (browser && window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
-    return window.__TAURI__.event.listen;
+    return window.__TAURI__.event.listen as ListenFn;
   }
   return null;
 }
+
+

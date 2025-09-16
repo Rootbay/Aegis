@@ -1,4 +1,6 @@
-﻿<script lang="ts">
+<svelte:options runes={true} />
+
+<script lang="ts">
   import { Hash, Phone, Video, Search, EllipsisVertical, X, Link, Mic, SendHorizontal, Users } from '@lucide/svelte';
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
   import FilePreview from '$lib/components/media/FilePreview.svelte';
@@ -128,13 +130,18 @@
   });
 
   const myId = $userStore.me?.id;
-  const searchMatches = $derived(() => {
-    if (!searchQuery) return [] as number[];
+  let searchMatches = $state<number[]>([]);
+
+  $effect(() => {
+    if (!searchQuery) {
+      searchMatches = [];
+      return;
+    }
     const q = searchQuery.toLowerCase();
-    return (currentChatMessages || [])
+    searchMatches = (currentChatMessages || [])
       .map((m, idx) => ({ idx, hit: (m.content || '').toLowerCase().includes(q) }))
-      .filter(x => x.hit)
-      .map(x => x.idx);
+      .filter(({ hit }) => hit)
+      .map(({ idx }) => idx);
   });
 
   $effect(() => {
@@ -173,8 +180,12 @@
     return parts.length ? parts : [{ text, match: false }];
   }
 
-  const contextMenuItems = $derived(() => {
-    const base = [
+  type ContextMenuEntry = { label?: string; action?: string; isDestructive?: boolean; isSeparator?: boolean };
+
+  let contextMenuItems = $state<ContextMenuEntry[]>([]);
+
+  $effect(() => {
+    const base: ContextMenuEntry[] = [
       { label: 'View Profile', action: 'view_profile' },
     ];
     if (chat?.type === 'dm') {
@@ -192,7 +203,7 @@
     } else {
       base.push({ label: 'Invite to Server', action: 'invite_to_server' });
     }
-    return base;
+    contextMenuItems = base;
   });
 
   function handleContextMenu(event: MouseEvent, user: User | Friend) {
@@ -203,13 +214,17 @@
     selectedUser = user;
   }
 
-  function handleContextMenuAction(event: CustomEvent) {
-    if (event.detail.action === 'view_profile') {
-      openDetailedProfileModal(event.detail.itemData);
-    } else if (event.detail.action === 'remove_friend') {
-      removeFriend(event.detail.itemData);
+  function handleContextMenuAction(detail: { action: string; itemData: Friend | User | null }) {
+    const item = detail.itemData;
+    if (!item) {
+      return;
+    }
+    if (detail.action === 'view_profile') {
+      openDetailedProfileModal(item);
+    } else if (detail.action === 'remove_friend') {
+      removeFriend(item as Friend);
     } else {
-      console.log(`Action not implemented: ${event.detail.action}`);
+      console.log(`Action not implemented: ${detail.action}`);
     }
   }
 
@@ -307,8 +322,7 @@
     showMsgMenu = true;
   }
 
-  function handleMessageMenuAction(event: CustomEvent) {
-    const { action } = event.detail as { action: string };
+  function handleMessageMenuAction({ action }: { action: string }) {
     if (!selectedMsg) return;
     switch (action) {
       case 'copy_message':
@@ -321,17 +335,17 @@
         textareaRef?.focus();
         adjustTextareaHeight();
         break;
-      case 'react_ðŸ‘':
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, 'ðŸ‘');
+      case 'react_❤️':
+        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, '❤️');
         break;
-      case 'react_â¤ï¸':
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, 'â¤ï¸');
+      case 'react_😂':
+        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, '😂');
         break;
-      case 'react_ðŸ˜‚':
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, 'ðŸ˜‚');
+      case 'react_👍':
+        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, '👍');
         break;
-      case 'react_ðŸŽ‰':
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, 'ðŸŽ‰');
+      case 'react_🔥':
+        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, '🔥');
         break;
       case 'delete_message':
         if (selectedMsg.senderId === $userStore.me?.id) {
@@ -424,7 +438,7 @@
                     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleMessageContextMenu(e as any as MouseEvent, msg); } }}
                   >
                     {#if searchQuery}
-                      {#each highlightText() as part, i (i)}
+                      {#each highlightText(msg.content, searchQuery) as part, i (i)}
                         {#if part.match}
                           <mark class="bg-yellow-500/60 text-white">{part.text}</mark>
                         {:else}
@@ -437,8 +451,9 @@
                   </div>
                 {/if}
                 {#if msg.reactions}
+                  {@const reactionEntries: Array<[string, string[]]> = Object.entries(msg.reactions)}
                   <div class="mt-1 flex gap-1 flex-wrap">
-                    {#each Object.entries(msg.reactions) as [emoji, users] (emoji)}
+                    {#each reactionEntries as [emoji, users] (emoji)}
                       <button
                         type="button"
                         class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
@@ -504,7 +519,7 @@
         ondragover={handleDragOver}
       >
         <input type="file" multiple bind:this={fileInput} onchange={handleFileSelect} class="hidden" />
-        <button type="button" onclick={() => fileInput.click()} class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors">
+        <button type="button" onclick={() => fileInput?.click()} class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors">
           <Link size={12} />
         </button>
         <textarea
@@ -536,7 +551,7 @@
 </div>
 
 {#if showLightbox}
-  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} on:close={() => (showLightbox = false)} />
+  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} onClose={() => (showLightbox = false)} />
 {/if}
 
 {#if showContextMenu}
@@ -545,8 +560,8 @@
     y={contextMenuY}
     show={showContextMenu}
     menuItems={contextMenuItems.map(item => ({ ...item, data: selectedUser }))}
-    on:close={() => (showContextMenu = false)}
-    on:action={handleContextMenuAction}
+    onclose={() => (showContextMenu = false)}
+    onaction={handleContextMenuAction}
   />
 {/if}
 
@@ -564,10 +579,12 @@
       { label: 'React ðŸŽ‰', action: 'react_ðŸŽ‰' },
       ...(selectedMsg.senderId === $userStore.me?.id ? [{ label: 'Delete Message', action: 'delete_message', isDestructive: true }] : [])
     ]}
-    on:close={() => (showMsgMenu = false)}
-    on:action={handleMessageMenuAction}
+    onclose={() => (showMsgMenu = false)}
+    onaction={handleMessageMenuAction}
   />
 {/if}
   
+
+
 
 

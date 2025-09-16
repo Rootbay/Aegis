@@ -114,6 +114,6 @@
     {/if}
 
     {#if showFriendRequestModal}
-        <FriendRequestModal on:close={() => (showFriendRequestModal = false)} on:requestSent={loadFriendships} />
+        <FriendRequestModal onClose={() => (showFriendRequestModal = false)} onRequestSent={loadFriendships} />
     {/if}
 </div>

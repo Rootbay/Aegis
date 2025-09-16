@@ -1,77 +1,84 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { getContext } from 'svelte';
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from '$lib/data/contextKeys';
+  import type { FriendsLayoutContext } from '$lib/data/contextTypes';
   import FriendItem from '../FriendItem.svelte';
   import EmptyStateMessage from '$lib/components/ui/EmptyStateMessage.svelte';
   import type { Friend } from '$lib/models/Friend';
-  import VirtualList from '@humanspeak/svelte-virtual-list';
 
-  let { clazz = '', friends = [] } = $props<{ clazz?: string; friends: Friend[] }>();
+  const props = $props<{ clazz?: string; friends: Friend[] }>();
+  let { clazz = '', friends } = props;
 
-  const { activeTab } = getContext(FRIENDS_LAYOUT_DATA_CONTEXT_KEY);
+  const { activeTab } = getContext<FriendsLayoutContext>(FRIENDS_LAYOUT_DATA_CONTEXT_KEY);
 
-  let filteredFriends = $derived(friends.filter(friend => {
-    switch (activeTab) {
-      case 'All':
-        return friend.status !== 'Blocked' && friend.status !== 'Pending';
-      case 'Online':
-        return friend.status === 'Online';
-      case 'Blocked':
-        return friend.status === 'Blocked';
-      case 'Pending':
-        return friend.status === 'Pending';
-      default:
-        return false;
-    }
-  }));
+  type FriendsListHeader = { kind: 'header'; status: string; count: number };
+  type FriendsListItem = Friend | FriendsListHeader;
 
-  let virtualListItems = $derived(() => {
-    const items: Array<Friend | { type: 'header', status: string, count: number }> = [];
+  let filteredFriends = $state<Friend[]>([]);
+  $effect(() => {
+    filteredFriends = friends.filter((friend: Friend) => {
+      switch (activeTab) {
+        case 'All':
+          return friend.status !== 'Blocked' && friend.status !== 'Pending';
+        case 'Online':
+          return friend.status === 'Online';
+        case 'Blocked':
+          return friend.status === 'Blocked';
+        case 'Pending':
+          return friend.status === 'Pending';
+        default:
+          return true;
+      }
+    });
+  });
+
+  let listItems = $state<FriendsListItem[]>([]);
+  $effect(() => {
+    const items: FriendsListItem[] = [];
     const groups: Record<string, Friend[]> = {
       Online: [],
       Offline: [],
       Blocked: [],
       Pending: [],
     };
-    filteredFriends.forEach(friend => {
-      if (groups[friend.status]) {
-        groups[friend.status].push(friend);
-      }
+
+    filteredFriends.forEach((friend) => {
+      const bucket = groups[friend.status] ?? groups.Offline;
+      bucket.push(friend);
     });
 
     for (const status of ['Online', 'Offline', 'Blocked', 'Pending']) {
       const friendsInGroup = groups[status];
       if (friendsInGroup.length > 0) {
-        items.push({ type: 'header', status: status, count: friendsInGroup.length });
+        items.push({ kind: 'header', status, count: friendsInGroup.length });
         items.push(...friendsInGroup);
       }
     }
-    return items;
+
+    listItems = items;
   });
 
-  function getItemHeight(item: Friend | { type: 'header', status: string, count: number }) {
-    if (item.type === 'header') {
-      return 40;
-    } else {
-      return 60;
-    }
+  function isHeader(item: FriendsListItem): item is FriendsListHeader {
+    return (item as FriendsListHeader).kind === 'header';
   }
 </script>
 
 <div class="flex flex-col h-full w-full bg-zinc-900 text-zinc-100 {clazz}">
   <div class="flex-grow overflow-y-auto px-4 pb-4">
-    {#if virtualListItems.length > 0}
-      <VirtualList items={virtualListItems} itemHeight={getItemHeight}>
-        {#each virtualListItems as item (item.type === 'header' ? item.status : item.id)}
-          {#if item.type === 'header'}
-            <h2 class="text-xs font-semibold uppercase text-muted-foreground mt-4 mb-2">{item.status} - {item.count}</h2>
+    {#if listItems.length > 0}
+      <ul class="space-y-2">
+        {#each listItems as item (isHeader(item) ? `header-${item.status}` : `friend-${item.id}`)}
+          {#if isHeader(item)}
+            <li class="text-xs font-semibold uppercase text-muted-foreground mt-4 mb-2">{item.status} - {item.count}</li>
           {:else}
             <li>
               <FriendItem friend={item} />
             </li>
           {/if}
         {/each}
-      </VirtualList>
+      </ul>
     {:else}
       <EmptyStateMessage {activeTab} />
     {/if}

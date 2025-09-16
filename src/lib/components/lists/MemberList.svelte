@@ -3,6 +3,22 @@
 
   export let members: User[] = [];
   export let openUserCardModal: Function;
+
+  function openMemberCard(member: User, event: MouseEvent | KeyboardEvent) {
+    let x = 0;
+    let y = 0;
+    if (event instanceof MouseEvent) {
+      x = event.clientX;
+      y = event.clientY;
+    } else {
+      const target = event.currentTarget as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      x = rect.left + rect.width / 2;
+      y = rect.top + rect.height / 2;
+    }
+    console.log('Attempting to open UserCardModal for:', member.name);
+    openUserCardModal(member, x, y, true);
+  }
 </script>
 
 <div class="space-y-4">
@@ -16,8 +32,8 @@
             role="button"
             tabindex="0"
             class="w-full flex items-center justify-between p-2 rounded-md bg-zinc-700 hover:bg-zinc-600/50 transition-colors" 
-            onclick={(e) => { console.log('Attempting to open UserCardModal for:', member.name); openUserCardModal(member, e.clientX, e.clientY, true); }}
-            onkeydown={(e) => { if (e.key === 'Enter') { console.log('Attempting to open UserCardModal for:', member.name); openUserCardModal(member, e.clientX, e.clientY, true); } }}
+            onclick={(e) => openMemberCard(member, e)}
+            onkeydown={(e) => { if (e.key === 'Enter') { openMemberCard(member, e); } }}
           >
             <span class="text-white">{member.name}</span>
             <button class="text-red-400 hover:text-destructive/80" onclick={(e) => e.stopPropagation()}>Remove</button>

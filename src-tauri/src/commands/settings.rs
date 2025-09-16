@@ -1,7 +1,7 @@
-use tauri::State;
 use crate::commands::state::AppStateContainer;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
-use serde::{Serialize, Deserialize};
+use tauri::State;
 
 #[derive(Serialize, Deserialize)]
 struct PersistedSettings {
@@ -40,10 +40,12 @@ pub async fn set_file_acl_policy(
         std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
     }
     let path = app_data_dir.join("settings.json");
-    let to_write = PersistedSettings { file_acl_policy: match &*guard {
-        aegis_shared_types::FileAclPolicy::FriendsOnly => "friends_only".into(),
-        aegis_shared_types::FileAclPolicy::Everyone => "everyone".into(),
-    }};
+    let to_write = PersistedSettings {
+        file_acl_policy: match &*guard {
+            aegis_shared_types::FileAclPolicy::FriendsOnly => "friends_only".into(),
+            aegis_shared_types::FileAclPolicy::Everyone => "everyone".into(),
+        },
+    };
     let json = serde_json::to_vec_pretty(&to_write).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
     Ok(())

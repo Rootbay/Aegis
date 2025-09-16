@@ -2,7 +2,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { Home, Plus, Settings } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
+	import { page } from '$app/stores';
 	import { userStore } from '$lib/data/stores/userStore';
 	import { serverStore } from '$lib/data/stores/serverStore';
 	import { friendStore } from '$lib/data/stores/friendStore';
@@ -10,15 +10,19 @@
 	import ServerContextMenu from '$lib/components/context-menus/ServerContextMenu.svelte';
 	import type { Server } from '$lib/models/Server';
 
-	/** @type {(event: MouseEvent) => void} */
-	export let onProfileClick;
-	/** @type {() => void} */
-	export let onCreateJoinServerClick;
+	const { onProfileClick, onCreateJoinServerClick } = $props<{ onProfileClick: (clientX: number, clientY: number) => void; onCreateJoinServerClick: () => void }>();
 
-	let showServerContextMenu = false;
-	let serverContextMenuX = 0;
-	let serverContextMenuY = 0;
-	let selectedServer: Server | null = null;
+	let showServerContextMenu = $state(false);
+	let serverContextMenuX = $state(0);
+	let serverContextMenuY = $state(0);
+	let selectedServer = $state<Server | null>(null);
+
+	function gotoWithTab(pathname: string, tab: string) {
+		const url = new URL($page.url);
+		url.pathname = pathname;
+		url.searchParams.set('tab', tab);
+		goto(url);
+	}
 
 	function handleServerContextMenu(event: MouseEvent, server: Server) {
 		event.preventDefault();
@@ -28,9 +32,12 @@
 		selectedServer = server;
 	}
 
-	async function handleServerAction(event: CustomEvent) {
-		const { action, itemData } = event.detail;
+	async function handleServerAction({ action, itemData }: { action: string; itemData: Server | null }) {
 		console.log(`Server action: ${action} for server:`, itemData);
+		if (!itemData) {
+			showServerContextMenu = false;
+			return;
+		}
 			switch (action) {
 			case 'mark_as_read':
 				console.log('Mark as Read');
@@ -73,7 +80,7 @@
 						await invoke('leave_server', { serverId: itemData.id });
 						serverStore.removeServer(itemData.id);
 						serverStore.setActiveServer(null);
-						goto(resolve('/friends?tab=All'));
+						gotoWithTab('/friends', 'All');
 					} catch (error) {
 						console.error('Failed to leave server:', error);
 						toasts.addToast('Failed to leave server. Please try again.', 'error');
@@ -92,9 +99,9 @@
 	<button class="p-2 bg-card rounded-lg cursor-pointer" onclick={() => {
 				serverStore.setActiveServer(null);
 				if ($friendStore.friends.length > 0) {
-					goto(resolve('/?tab=All'));
+					gotoWithTab('/', 'All');
 				} else {
-					goto(resolve('/friends/add'));
+					goto('/friends/add');
 				}
 			}} aria-label="Home">
 		<Home size={15} />
@@ -128,14 +135,14 @@
 		y={serverContextMenuY}
 		bind:show={showServerContextMenu}
 		server={selectedServer}
-		on:action={handleServerAction}
-		on:close={() => (showServerContextMenu = false)}
+		onaction={handleServerAction}
+		onclose={() => (showServerContextMenu = false)}
 	/>
 
 	<div class="flex-grow"></div>
 
 	<div class="flex flex-col items-center space-y-4">
-		<button class="p-3 rounded-lg hover:bg-card transition cursor-pointer" aria-label="Settings" onclick={() => goto(resolve('/settings'))}>
+		<button class="p-3 rounded-lg hover:bg-card transition cursor-pointer" aria-label="Settings" onclick={() => goto('/settings')}>
 			<Settings size={12} />
 		</button>
 		<button
