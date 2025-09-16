@@ -1,12 +1,15 @@
 <script lang="ts">
   import type { Server } from '$lib/models/Server';
 
-  export let server: Server;
+  type Props = {
+    server: Server;
+    onupdateServer?: (server: Server) => void;
+  };
 
-  export let onupdateServer: ((server: Server) => void) | undefined = undefined;
+  let { server, onupdateServer }: Props = $props();
 
-  let transparentEdits = false;
-  let deletedMessageDisplay: 'ghost' | 'tombstone' = 'ghost';
+  let transparentEdits = $state(false);
+  let deletedMessageDisplay = $state<'ghost' | 'tombstone'>('ghost');
 
   function saveChanges() {
     const settings = {
@@ -17,11 +20,7 @@
   }
 </script>
 
-
-
-
 <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase">Moderation Settings</h2>
-
 <div class="space-y-6">
   <div class="flex items-center justify-between p-4 bg-card rounded-lg">
     <div>
@@ -49,9 +48,3 @@
     Save Changes
   </button>
 </div>
-
-
-
-
-
-

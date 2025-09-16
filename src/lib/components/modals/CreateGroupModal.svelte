@@ -2,18 +2,29 @@
   import { Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
 
-  export let onclose: () => void;
-  export let allUsers: { id: string; name: string; avatar: string; isFriend: boolean; isPinned: boolean }[];
+  type Props = {
+    onclose: () => void;
+    allUsers: { id: string; name: string; avatar: string; isFriend: boolean; isPinned: boolean }[];
+  };
 
-  let searchTerm: string = '';
-  let selectedUserIds = new SvelteSet<string>();
+  let { onclose, allUsers }: Props = $props();
 
-  $: filteredUsers = allUsers.filter(user =>
-    user.name.toLowerCase().includes(searchTerm.toLowerCase())
+  let searchTerm = $state('');
+  let selectedUserIds = $state(new SvelteSet<string>());
+
+  let filteredUsers = $derived(
+    allUsers.filter(user =>
+      user.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
-  $: pinnedFriends = filteredUsers.filter(user => user.isFriend && user.isPinned);
-  $: otherUsers = filteredUsers.filter(user => !user.isPinned);
+  let pinnedFriends = $derived(
+    filteredUsers.filter(user => user.isFriend && user.isPinned)
+  );
+
+  let otherUsers = $derived(
+    filteredUsers.filter(user => !user.isPinned)
+  );
 
   function toggleUserSelection(userId: string) {
     if (selectedUserIds.has(userId)) {
@@ -21,7 +32,7 @@
     } else {
       selectedUserIds.add(userId);
     }
-    selectedUserIds = selectedUserIds;
+    selectedUserIds = new SvelteSet(selectedUserIds);
   }
 
   function createGroup() {

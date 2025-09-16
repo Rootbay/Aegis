@@ -1,55 +1,59 @@
-
 <script lang="ts">
+  import { lastVisitedServerId } from '$lib/data/stores/navigationStore';
   import { page } from '$app/stores';
   import { serverStore } from '$lib/data/stores/serverStore';
   import { goto } from '$app/navigation';
+  import type { Snippet } from 'svelte';
 
-  
+  type Props = {
+    children?: Snippet;
+  };
 
-  import { onDestroy } from 'svelte';
+  let { children }: Props = $props();
 
-  let serverId: string | null = null;
-  let currentPathname: string;
+  let serverId = $state<string | null>(null);
+  let currentPathname = $state<string>('');
 
-  import { lastVisitedServerId } from '$lib/data/stores/navigationStore';
+  $effect(() => {
+    const unsubscribe = page.subscribe(p => {
+      serverId = p.params.serverId ?? null;
+      currentPathname = p.url.pathname;
 
-  const unsubscribePage = page.subscribe(p => {
-    serverId = p.params.serverId ?? null;
-    currentPathname = p.url.pathname;
+      if (serverId && currentPathname.includes('/settings')) {
+        lastVisitedServerId.set(serverId);
+      }
+    });
+    return unsubscribe;
+  });
 
-    if (serverId && currentPathname.includes('/settings')) {
-      lastVisitedServerId.set(serverId);
+  $effect(() => {
+    if (serverId && !currentPathname.includes('/settings')) {
+      const server = $serverStore.servers.find(s => s.id === serverId);
+      if (!server || !server.channels || !server.members) {
+        serverStore.fetchServerDetails(serverId);
+      }
+      serverStore.setActiveServer(serverId);
     }
   });
 
-  $: if (serverId && !currentPathname.includes('/settings')) {
-    const server = $serverStore.servers.find(s => s.id === serverId);
-    if (!server || !server.channels || !server.members) {
-      serverStore.fetchServerDetails(serverId);
-    }
-    serverStore.setActiveServer(serverId);
-  }
-
-  $: if (serverId && $serverStore.servers.length > 0 && !currentPathname.includes('/settings')) {
-    const server = $serverStore.servers.find(s => s.id === serverId);
-    if (server && server.channels) {
-      const textChannel = server.channels.find(c => c.channel_type === 'text');
-      if (textChannel) {
-        const targetPath = `/channels/${serverId}/${textChannel.id}`;
-        if (currentPathname !== targetPath) {
-          (goto as unknown as (target: string) => void)(targetPath);
+  $effect(() => {
+    if (serverId && $serverStore.servers.length > 0 && !currentPathname.includes('/settings')) {
+      const server = $serverStore.servers.find(s => s.id === serverId);
+      if (server && server.channels) {
+        const textChannel = server.channels.find(c => c.channel_type === 'text');
+        if (textChannel) {
+          const targetPath = `/channels/${serverId}/${textChannel.id}`;
+          if (currentPathname !== targetPath) {
+            (goto as unknown as (target: string) => void)(targetPath);
+          }
         }
       }
     }
-  }
-
-  onDestroy(() => {
-    unsubscribePage();
   });
 </script>
 
-{#if $$slots.default}
-  <slot />
+{#if children}
+  {@render children()}
 {:else}
   <div class="flex-grow min-w-0 flex items-center justify-center bg-card">
     <div class="flex flex-col items-center justify-center text-muted-foreground">

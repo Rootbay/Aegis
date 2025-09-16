@@ -9,11 +9,11 @@
   import { SERVER_LAYOUT_DATA_CONTEXT_KEY, CREATE_GROUP_CONTEXT_KEY } from "$lib/data/contextKeys";
   import type { CreateGroupContext } from '$lib/data/contextTypes';
 
-  let serverId: string | null = null;
-  let server: any = null;
-  let channels: any[] = [];
-  let members: any[] = [];
-  let loading = true;
+  let serverId = $state<string | null>(null);
+  let server = $state<any>(null);
+  let channels = $state<any[]>([]);
+  let members = $state<any[]>([]);
+  let loading = $state(true);
 
   const { openUserCardModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
 
@@ -21,10 +21,12 @@
     (goto as unknown as (target: string) => void)(`/channels/${serverId}/${channelId}`);
   }
 
-  $: if ($page.params.serverId) {
-    serverId = $page.params.serverId;
-    fetchServerData(serverId);
-  }
+  $effect(() => {
+    if ($page.params.serverId) {
+      serverId = $page.params.serverId;
+      fetchServerData(serverId);
+    }
+  });
 
   async function fetchServerData(id: string) {
     loading = true;

@@ -1,15 +1,18 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { Html5Qrcode } from 'html5-qrcode';
   import { X } from '@lucide/svelte';
 
-  export let onscanSuccess: ((value: string) => void) | undefined = undefined;
-  export let onclose: (() => void) | undefined = undefined;
+  type Props = {
+    onscanSuccess?: (value: string) => void;
+    onclose?: () => void;
+  };
 
-  let scanner: Html5Qrcode | null = null;
-  let errorMessage: string | null = null;
+  let { onscanSuccess, onclose }: Props = $props();
 
-  onMount(() => {
+  let scanner = $state<Html5Qrcode | null>(null);
+  let errorMessage = $state<string | null>(null);
+
+  $effect(() => {
     const handleScanSuccess = (decodedText: string) => {
       onscanSuccess?.(decodedText);
       stopScanner();
@@ -21,19 +24,23 @@
       }
     };
 
-    scanner = new Html5Qrcode('qr-reader');
-    scanner.start(
-      { facingMode: 'environment' },
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-      },
-      handleScanSuccess,
-      onScanFailure
-    ).catch(err => {
+    const instance = new Html5Qrcode('qr-reader');
+    scanner = instance;
+
+    instance
+      .start(
+        { facingMode: 'environment' },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        handleScanSuccess,
+        onScanFailure
+      )
+      .catch(err => {
         errorMessage = `Failed to start QR scanner: ${err.message}. Please ensure you have a camera connected and have granted permission.`;
-        console.error("Failed to start scanner", err);
-    });
+        console.error('Failed to start scanner', err);
+      });
 
     return () => {
       stopScanner();
@@ -42,7 +49,7 @@
 
   function stopScanner() {
     if (scanner && scanner.isScanning) {
-      scanner.stop().catch(err => console.error("Failed to stop scanner", err));
+      scanner.stop().catch(err => console.error('Failed to stop scanner', err));
     }
   }
 
@@ -50,7 +57,6 @@
     onclose?.();
   }
 </script>
-
 
 <div class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]">
   <div class="bg-card p-6 rounded-lg shadow-lg w-full max-w-md relative">
@@ -67,6 +73,3 @@
     <p class="text-muted-foreground text-center mt-4">Point your camera at a friend's QR code to add them.</p>
   </div>
 </div>
-
-
-

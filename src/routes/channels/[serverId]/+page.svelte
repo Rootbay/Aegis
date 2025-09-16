@@ -6,19 +6,19 @@
   import type { Channel } from '$lib/models/Channel';
   import type { ChannelChat } from '$lib/models/Chat';
 
-  let serverId: string | null = null;
-  let channels: ChannelChat[] = [];
-  let selectedChannel: ChannelChat | null = null;
-  let loading = true;
+  let serverId = $state<string | null>(null);
+  let channels = $state<ChannelChat[]>([]);
+  let selectedChannel = $state<ChannelChat | null>(null);
+  let loading = $state(true);
 
-  $: {
+  $effect(() => {
     const params = $page.params;
     const nextServerId = params.serverId ?? null;
     if (nextServerId && nextServerId !== serverId) {
       serverId = nextServerId;
       fetchChannels(nextServerId);
     }
-  }
+  });
 
   async function fetchChannels(id: string) {
     loading = true;

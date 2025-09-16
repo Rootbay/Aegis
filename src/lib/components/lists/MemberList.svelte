@@ -1,8 +1,12 @@
 <script lang="ts">
   import type { User } from '$lib/models/User';
 
-  export let members: User[] = [];
-  export let openUserCardModal: Function;
+  type Props = {
+    members?: User[];
+    openUserCardModal: (user: User, x: number, y: number, flag: boolean) => void;
+  };
+
+  let { members = [], openUserCardModal }: Props = $props();
 
   function openMemberCard(member: User, event: MouseEvent | KeyboardEvent) {
     let x = 0;

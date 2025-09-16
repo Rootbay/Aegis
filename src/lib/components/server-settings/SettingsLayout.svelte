@@ -41,93 +41,69 @@
   };
 
   type SidebarItem = SidebarLinkItem | SidebarSeparator;
-
-  export let title: string;
-  export let sidebarItems: SidebarItem[];
-  export let allSettings: any[];
-  export let categoryHeadings: { [key: string]: string };
-  export let currentData: any;
-  export let initialActiveTab: string | undefined;
-
   type EventHandler<T> = T extends void ? (() => void) | undefined : ((detail: T) => void) | undefined;
 
-  export let onclose: EventHandler<Events['close']> = undefined;
-  export let onupdate_setting: EventHandler<Events['update_setting']> = undefined;
-  export let onadd_role: EventHandler<Events['add_role']> = undefined;
-  export let onupdate_role: EventHandler<Events['update_role']> = undefined;
-  export let ondelete_role: EventHandler<Events['delete_role']> = undefined;
-  export let onupdate_server: EventHandler<Events['update_server']> = undefined;
-  export let ondelete_server: EventHandler<Events['delete_server']> = undefined;
-  export let ontoggle_permission: EventHandler<Events['toggle_permission']> = undefined;
-  export let onadd_channel: EventHandler<Events['add_channel']> = undefined;
-  export let onupdate_channel: EventHandler<Events['update_channel']> = undefined;
-  export let ondelete_channel: EventHandler<Events['delete_channel']> = undefined;
-  export let onbutton_click: EventHandler<Events['button_click']> = undefined;
+  let {
+    title,
+    sidebarItems,
+    allSettings,
+    categoryHeadings,
+    currentData,
+    initialActiveTab,
+    onclose,
+    onupdate_setting,
+    onadd_role,
+    onupdate_role,
+    ondelete_role,
+    onupdate_server,
+    ondelete_server,
+    ontoggle_permission,
+    onadd_channel,
+    onupdate_channel,
+    ondelete_channel,
+    onbutton_click
+  }: {
+    title: string;
+    sidebarItems: SidebarItem[];
+    allSettings: any[];
+    categoryHeadings: { [key: string]: string };
+    currentData: any;
+    initialActiveTab?: string;
+    onclose?: EventHandler<Events['close']>;
+    onupdate_setting?: EventHandler<Events['update_setting']>;
+    onadd_role?: EventHandler<Events['add_role']>;
+    onupdate_role?: EventHandler<Events['update_role']>;
+    ondelete_role?: EventHandler<Events['delete_role']>;
+    onupdate_server?: EventHandler<Events['update_server']>;
+    ondelete_server?: EventHandler<Events['delete_server']>;
+    ontoggle_permission?: EventHandler<Events['toggle_permission']>;
+    onadd_channel?: EventHandler<Events['add_channel']>;
+    onupdate_channel?: EventHandler<Events['update_channel']>;
+    ondelete_channel?: EventHandler<Events['delete_channel']>;
+    onbutton_click?: EventHandler<Events['button_click']>;
+  } = $props();
 
-  let searchQuery = '';
-  let pageContents: { [key: string]: string } = {};
+  let filteredSidebarItems = $derived(
+    sidebarItems.filter(item => {
+      if (isSeparator(item)) {
+        return !searchQuery;
+      }
+      if (!searchQuery) return true;
+      const content = pageContents[item.tab] || '';
+      return (
+        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        content.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    })
+  );
 
-  $: isSearching = searchQuery.length > 0;
+  let pageContents = $state<{ [key: string]: string }>({});
+  let activeTab = $state('');
+  let searchQuery = $state('');
+  let isSearching = $derived(searchQuery.length > 0);
 
+  const serverAwareComponents = new Set(['Overview', 'Moderation', 'DeleteServer', 'Privacy']);
   const isSeparator = (item: SidebarItem): item is SidebarSeparator => item.type === 'separator';
-
-  $: filteredSidebarItems = sidebarItems.filter(item => {
-    if (isSeparator(item)) {
-      return !searchQuery;
-    }
-    if (!searchQuery) return true;
-    const content = pageContents[item.tab] || '';
-    return item.label.toLowerCase().includes(searchQuery.toLowerCase()) || content.toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
-  let activeTab = '';
-
-  $: if (!activeTab) {
-    const firstTabItem = sidebarItems.find((item): item is SidebarLinkItem => !isSeparator(item));
-    if (firstTabItem) {
-      activeTab = firstTabItem.tab;
-    }
-  }
-
-  function closeSettings() {
-    onclose?.();
-  }
-
-  async function fetchPageContent(tab: string) {
-    try {
-      pageContents[tab] = tab;
-    } catch (error) {
-      console.error(`Failed to fetch content for ${tab}:`, error);
-      pageContents[tab] = '';
-    }
-  }
-
-  onMount(() => {
-    const initialize = async () => {
-      if (initialActiveTab && sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)) {
-        activeTab = initialActiveTab;
-      }
-      for (const item of sidebarItems) {
-        if (isSeparator(item)) continue;
-        await fetchPageContent(item.tab);
-      }
-    };
-    void initialize();
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        closeSettings();
-      }
-    };
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('keydown', handleEscape);
-    };
-  });
-
-  $: if (initialActiveTab && sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)) {
-    if (activeTab !== initialActiveTab) activeTab = initialActiveTab;
-  }
 
   const componentMap: { [key: string]: any } = {
     RolesManagement,
@@ -143,7 +119,65 @@
     Privacy
   };
 
-  const serverAwareComponents = new Set(['Overview', 'Moderation', 'DeleteServer', 'Privacy']);
+  $effect(() => {
+    const initialize = async () => {
+      if (
+        initialActiveTab &&
+        sidebarItems.some(i => !isSeparator(i) && i.tab === initialActiveTab)
+      ) {
+        activeTab = initialActiveTab;
+      }
+      for (const item of sidebarItems) {
+        if (isSeparator(item)) continue;
+        await fetchPageContent(item.tab);
+      }
+    };
+    void initialize();
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSettings();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+    };
+  });
+
+  $effect(() => {
+    if (!activeTab) {
+      const firstTabItem = sidebarItems.find(
+        (item): item is SidebarLinkItem => !isSeparator(item)
+      );
+      if (firstTabItem) {
+        activeTab = firstTabItem.tab;
+      }
+    }
+  });
+
+  $effect(() => {
+    if (
+      initialActiveTab &&
+      sidebarItems.some(i => !isSeparator(i) && i.tab === initialActiveTab)
+    ) {
+      if (activeTab !== initialActiveTab) activeTab = initialActiveTab;
+    }
+  });
+
+  function closeSettings() {
+    onclose?.();
+  }
+
+  async function fetchPageContent(tab: string) {
+    try {
+      pageContents[tab] = tab;
+    } catch (error) {
+      console.error(`Failed to fetch content for ${tab}:`, error);
+      pageContents[tab] = '';
+    }
+  }
 
   function handleUpdateServer(serverUpdate: unknown) {
     if (serverUpdate == null) {
@@ -232,7 +266,7 @@
           />
           <button
             class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
-            on:click={() => { searchQuery = ''; }}
+            onclick={() => { searchQuery = ''; }}
           >
             {#if searchQuery}
               <X class="w-4 h-4" />
@@ -253,7 +287,7 @@
                 <button
                   class="w-full flex items-center gap-2 h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer group
                   {activeTab === navItem.tab ? 'bg-zinc-700 hover:bg-zinc-600' : 'hover:bg-zinc-700'}"
-                  on:click={() => (activeTab = navItem.tab)}
+                  onclick={() => (activeTab = navItem.tab)}
                 >
                   <svelte:component
                     this={navItem.icon}
@@ -271,7 +305,7 @@
             <li>
               <button
                 class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md text-red-400 hover:bg-zinc-700 transition-colors duration-200 mb-[2px] cursor-pointer"
-                on:click={() => (activeTab = 'delete_server')}
+                onclick={() => (activeTab = 'delete_server')}
               >
                 Delete Server
               </button>
@@ -292,7 +326,7 @@
     <div class="w-[740px] mx-auto p-[60px_40px_80px]">
     <button
       class="absolute top-0 right-0 text-muted-foreground hover:text-white transition-colors duration-200 p-4 z-50"
-      on:click={closeSettings}
+      onclick={closeSettings}
     >
       <X class="w-6 h-6" />
     </button>
@@ -300,7 +334,7 @@
       {#if activeTab === category}
         <h3 class="text-2xl font-semibold mb-6 text-blue-400">{heading}</h3>
         <div class="space-y-8">
-          {#each allSettings.filter(setting => setting.category === category) as setting (setting.id)}
+          {#each allSettings.filter(setting => setting.category === category) as setting, i (setting.id ?? `${category}-${i}`)}
             <div class="bg-zinc-700 p-5 rounded-lg shadow-md">
               <h4 class="text-xl font-medium mb-2">{setting.title}</h4>
               <p class="text-zinc-300 mb-4">{setting.description}</p>
@@ -310,14 +344,14 @@
                   type="text"
                   class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
                   value={currentData[setting.property]}
-                  on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
+                  onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
                 />
               {:else if setting.type === 'image'}
                 <input
                   type="text"
                   class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
                   value={currentData[setting.property]}
-                  on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
+                  onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
                 />
                 {#if currentData[setting.property]}
                   <img src={currentData[setting.property]} alt="Server Icon" class="mt-4 w-24 h-24 object-cover rounded-full" />
@@ -327,7 +361,7 @@
               {:else if setting.type === 'select'}
                 <select
                   class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
-                  on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
+                  onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
                 >
                   {#each setting.options as option (option.value)}
                     <option value={option.value} selected={currentData[setting.property] === option.value}>
@@ -342,7 +376,7 @@
                       type="checkbox"
                       class="sr-only"
                       checked={currentData[setting.property]}
-                      on:change={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.checked })}
+                      onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.checked })}
                     />
                     <div class="block bg-zinc-600 w-14 h-8 rounded-full"></div>
                     <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
@@ -371,18 +405,19 @@
                   {#if componentMap[setting.component]}
                     {@const dynamicComponent = componentMap[setting.component]}
                     {@const componentProps = getComponentProps(setting.component)}
-                    <svelte:component
-                      this={dynamicComponent}
-                      {...componentProps}
-                      onupdate_setting={onupdate_setting}
-                      onbutton_click={onbutton_click}
-                    />
+                    {#if dynamicComponent}
+                      <dynamicComponent
+                        {...componentProps}
+                        onupdate_setting={onupdate_setting}
+                        onbutton_click={onbutton_click}
+                      ></dynamicComponent>
+                    {/if}
                   {/if}
                 {/if}
               {:else if setting.type === 'button'}
                 <button
                   class="px-4 py-2 rounded-md {setting.buttonType === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-semibold transition-colors duration-200"
-                  on:click={() => onbutton_click?.({ id: setting.id })}
+                  onclick={() => onbutton_click?.({ id: setting.id })}
                 >
                   {setting.buttonLabel}
                 </button>
@@ -402,7 +437,7 @@
         </p>
         <button
           class="px-4 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors duration-200"
-          on:click={() => onbutton_click?.({ id: 'deleteServer' })}
+          onclick={() => onbutton_click?.({ id: 'deleteServer' })}
         >
           Delete Server
         </button>
@@ -447,6 +482,3 @@
     background-color: theme('colors.zinc.600');
   }
 </style>
-
-
-

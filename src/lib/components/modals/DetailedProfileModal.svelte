@@ -9,32 +9,44 @@
   import { Star, CircleCheck, Plus, SendHorizontal, Trash, Ellipsis } from '@lucide/svelte';
   import type { Server } from '$lib/models/Server';
   import type { User } from '$lib/models/User';
-  import { slide } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
-  import { onMount } from 'svelte';
+  import { slide } from 'svelte/transition';
   
-  export let profileUser: User;
-  export let close: () => void = () => {};
-  export let isFriend = false;
-
-  /** @type {'friends' | 'servers' | 'groups'} */
-  let selectedTab = 'friends';
-
-  let showLightbox = false;
-  let lightboxImageUrl = '';
-  let copyFeedback = '';
-  let showUserOptionsMenu = false;
-  let userOptionsMenuX = 0;
-  let userOptionsMenuY = 0;
-
-  let mutualServers: Server[] = [];
-  let loadingMutualServers = false;
-  let mutualFriends: User[] = [];
-  let loadingMutualFriends = false;
   type MutualGroup = { serverId: string; serverName: string; channelId: string; channelName: string };
-  let mutualGroups: MutualGroup[] = [];
-  let loadingMutualGroups = false;
+  type UserOptionsEvent = { action: string };
+
+  type Props = {
+    profileUser: User;
+    close?: () => void;
+    isFriend?: boolean;
+  };
+
+  let { profileUser, close = () => {}, isFriend = false }: Props = $props();
+
+  let selectedTab = $state<'friends' | 'servers' | 'groups'>('friends');
+
+  let showLightbox = $state(false);
+  let lightboxImageUrl = $state('');
+  let copyFeedback = $state('');
+
+  let showUserOptionsMenu = $state(false);
+  let userOptionsMenuX = $state(0);
+  let userOptionsMenuY = $state(0);
+
+  let mutualServers = $state<Server[]>([]);
+  let loadingMutualServers = $state(false);
+
+  let mutualFriends = $state<User[]>([]);
+  let loadingMutualFriends = $state(false);
+
+  let mutualGroups = $state<MutualGroup[]>([]);
+  let loadingMutualGroups = $state(false);
+
+  let showInvitePicker = $state(false);
+  let selectedServerId = $state<string | null>(null);
+
+  let isMyProfile = $derived(profileUser?.id === $userStore.me?.id);
 
   async function computeMutualServers() {
     if (!profileUser?.id) {
@@ -49,7 +61,9 @@
           await serverStore.fetchServerDetails(s.id);
         }
       }
-      mutualServers = ($serverStore.servers || []).filter(s => (s.members || []).some(m => m.id === profileUser.id));
+      mutualServers = ($serverStore.servers || []).filter(s =>
+        (s.members || []).some(m => m.id === profileUser.id)
+      );
     } catch (e) {
       console.error('Failed to compute mutual servers:', e);
     } finally {
@@ -70,10 +84,12 @@
           await serverStore.fetchServerDetails(s.id);
         }
       }
-      const sharedServers = ($serverStore.servers || []).filter(s => (s.members || []).some(m => m.id === profileUser.id));
+      const sharedServers = ($serverStore.servers || []).filter(s =>
+        (s.members || []).some(m => m.id === profileUser.id)
+      );
       const groups: MutualGroup[] = [];
       for (const s of sharedServers) {
-        for (const ch of (s.channels || [])) {
+        for (const ch of s.channels || []) {
           if (ch.private) {
             groups.push({ serverId: s.id, serverName: s.name, channelId: ch.id, channelName: ch.name });
           }
@@ -87,17 +103,6 @@
       loadingMutualGroups = false;
     }
   }
-
-  onMount(() => {
-    computeMutualServers();
-    computeMutualFriends();
-    computeMutualGroups();
-  });
-
-  $: _serversTrigger = $serverStore.servers;
-  $: if (profileUser?.id && _serversTrigger) computeMutualServers();
-  $: if (profileUser?.id) computeMutualFriends();
-  $: if (profileUser?.id && _serversTrigger) computeMutualGroups();
 
   async function computeMutualFriends() {
     const meId = $userStore.me?.id;
@@ -125,7 +130,21 @@
     }
   }
 
-  $: isMyProfile = profileUser?.id === $userStore.me?.id;
+  $effect(() => {
+    if (profileUser?.id) {
+      computeMutualServers();
+      computeMutualFriends();
+      computeMutualGroups();
+    }
+  });
+
+  $effect(() => {
+    void $serverStore.servers;
+    if (profileUser?.id) {
+      computeMutualServers();
+      computeMutualGroups();
+    }
+  });
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -137,9 +156,7 @@
     if (navigator.clipboard && profileUser?.publicKey) {
       navigator.clipboard.writeText(profileUser.publicKey).then(() => {
         copyFeedback = 'Copied!';
-        setTimeout(() => {
-          copyFeedback = '';
-        }, 2000);
+        setTimeout(() => (copyFeedback = ''), 2000);
       });
     }
   }
@@ -175,9 +192,10 @@
       const meId = $userStore.me?.id;
       if (!meId || !profileUser?.id) return;
       const friendships: any[] = await invoke('get_friendships', { currentUserId: meId });
-      const fs = friendships.find((f: any) =>
-        (f.user_a_id === meId && f.user_b_id === profileUser.id) ||
-        (f.user_b_id === meId && f.user_a_id === profileUser.id)
+      const fs = friendships.find(
+        (f: any) =>
+          (f.user_a_id === meId && f.user_b_id === profileUser.id) ||
+          (f.user_b_id === meId && f.user_a_id === profileUser.id)
       );
       if (!fs) {
         toasts.addToast('Friendship not found.', 'error');
@@ -209,7 +227,7 @@
     showUserOptionsMenu = true;
   }
 
-  async function handleUserOptionAction(event: CustomEvent) {
+  async function handleUserOptionAction(event: CustomEvent<UserOptionsEvent>) {
     const action = event.detail.action as string;
     try {
       switch (action) {
@@ -256,8 +274,6 @@
     }
   }
 
-  let showInvitePicker = false;
-  let selectedServerId: string | null = null;
   function openInvitePicker() {
     const firstServer = $serverStore.servers?.[0];
     selectedServerId = firstServer ? firstServer.id : null;
@@ -360,7 +376,14 @@
               <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data={profileUser?.publicKey || ''}" alt="Your QR Code" />
             </div>
             <div class="public-key-section">
-              <h3>Your Public Key {#if copyFeedback}<span class="copy-feedback" transition:slide>{copyFeedback}</span>{/if}</h3>
+              <h3>
+                Your Public Key
+                {#if copyFeedback}
+                  <span class="copy-feedback" transition:slide>
+                    {copyFeedback}
+                  </span>
+                {/if}
+              </h3>
               <button class="key-display" onclick={copyPublicKey} title="Copy public key">
                 {profileUser?.publicKey || ''}
               </button>

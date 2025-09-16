@@ -2,10 +2,10 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { X, Search, Smile } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { lastVisitedServerId } from '$lib/data/stores/navigationStore';
 
-  let searchQuery = '';
-  let pageContents: { [key: string]: string } = {};
+  let searchQuery = $state('');
+  let pageContents = $state<{ [key: string]: string }>({});
 
   const gotoResolved = (href: string) => {
     (goto as unknown as (target: string) => void)(href);
@@ -43,7 +43,7 @@
     }
   }
 
-  onMount(() => {
+  $effect(() => {
     (async () => {
       for (const item of allSettingsItems) {
         await fetchPageContent(item.href);
@@ -61,29 +61,38 @@
     };
   });
 
-  $: filteredUserSettingsItems = userSettingsItems.filter(item => {
-    if (!searchQuery) return true;
-    const content = pageContents[item.href] || '';
-    return item.label.toLowerCase().includes(searchQuery.toLowerCase()) || content.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  let filteredUserSettingsItems = $derived(
+    userSettingsItems.filter(item => {
+      if (!searchQuery) return true;
+      const content = pageContents[item.href] || '';
+      return (
+        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        content.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    })
+  );
 
-  $: filteredAppSettingsItems = appSettingsItems.filter(item => {
-    if (!searchQuery) return true;
-    const content = pageContents[item.href] || '';
-    return item.label.toLowerCase().includes(searchQuery.toLowerCase()) || content.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  let filteredAppSettingsItems = $derived(
+    appSettingsItems.filter(item => {
+      if (!searchQuery) return true;
+      const content = pageContents[item.href] || '';
+      return (
+        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        content.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    })
+  );
 
-  $: isSearching = searchQuery.length > 0;
-
-  import { lastVisitedServerId } from '$lib/data/stores/navigationStore';
+  let isSearching = $derived(searchQuery.length > 0);
 
   function closeSettings() {
     let path = '/';
-    lastVisitedServerId.subscribe(id => {
+    const unsubscribe = lastVisitedServerId.subscribe(id => {
       if (id) {
         path = `/channels/${id}`;
       }
-    })();
+    });
+    unsubscribe();
     gotoResolved(path);
   }
 </script>

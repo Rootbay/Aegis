@@ -3,17 +3,28 @@
   import { v4 as uuidv4 } from 'uuid';
   import { Plus, Pencil, Trash, X, Check, Eye } from '@lucide/svelte';
 
-  export let roles: Role[] = [];
-  export let onadd_role: ((role: Role) => void) | undefined = undefined;
-  export let onupdate_role: ((role: Role) => void) | undefined = undefined;
-  export let ondelete_role: ((roleId: string) => void) | undefined = undefined;
+  type Props = {
+    roles?: Role[];
+    onadd_role?: (role: Role) => void;
+    onupdate_role?: (role: Role) => void;
+    ondelete_role?: (roleId: string) => void;
+    ontoggle_permission?: (args: { roleId: string; permission: keyof Role['permissions'] }) => void;
+  };
 
-  let newRoleName = '';
-  let editingRole: Role | null = null;
-  let editingRoleName = '';
-  let editingRoleColor = '#000000';
-  let editingRoleHoist = false;
-  let editingRoleMentionable = false;
+  let {
+    roles = [],
+    onadd_role,
+    onupdate_role,
+    ondelete_role,
+    ontoggle_permission
+  }: Props = $props();
+
+  let newRoleName = $state('');
+  let editingRole = $state<Role | null>(null);
+  let editingRoleName = $state('');
+  let editingRoleColor = $state('#000000');
+  let editingRoleHoist = $state(false);
+  let editingRoleMentionable = $state(false);
 
   const permissionCategories = {
     'General Permissions': [
@@ -116,6 +127,10 @@
     if (editingRole) {
       editingRole.permissions[permissionKey] = !editingRole.permissions[permissionKey];
       editingRole = { ...editingRole };
+      ontoggle_permission?.({
+        roleId: editingRole.id,
+        permission: permissionKey as keyof Role['permissions']
+      });
     }
   }
 </script>
@@ -230,6 +245,3 @@
     {/if}
   </div>
 </div>
-
-
-

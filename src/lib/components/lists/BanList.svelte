@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { User } from '$lib/models/User';
 
-  export let bannedUsers: User[] = [];
+  type Props = {
+    bannedUsers?: User[];
+  };
+
+  let { bannedUsers = [] }: Props = $props();
 </script>
 
 <div class="space-y-4">

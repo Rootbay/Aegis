@@ -1,60 +1,57 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
-    import { invoke } from '@tauri-apps/api/core';
-    import { get } from 'svelte/store';
-    import { userStore } from '$lib/data/stores/userStore';
-    import { toasts } from '$lib/data/stores/ToastStore';
-    import FriendRequestModal from './modals/FriendRequestModal.svelte';
+  import { invoke } from '@tauri-apps/api/core';
+  import { userStore } from '$lib/data/stores/userStore';
+  import { toasts } from '$lib/data/stores/ToastStore';
+  import FriendRequestModal from './modals/FriendRequestModal.svelte';
 
-    let friendships: any[] = [];
-    let showFriendRequestModal = false;
-    $: currentUser = $userStore.me;
+  let friendships = $state<any[]>([]);
+  let showFriendRequestModal = $state(false);
 
-    async function loadFriendships() {
-        const currentUser = get(userStore).me;
-        if (currentUser && currentUser.id) {
-            try {
-                friendships = await invoke('get_friendships', { currentUserId: currentUser.id });
-            } catch (error) {
-                console.error('Error loading friendships:', error);
-                toasts.showErrorToast(`Error loading friendships: ${error}`);
-            }
-        }
+  let currentUser = $derived($userStore.me);
+
+  async function loadFriendships() {
+    if (currentUser && currentUser.id) {
+      try {
+        friendships = await invoke('get_friendships', { currentUserId: currentUser.id });
+      } catch (error) {
+        console.error('Error loading friendships:', error);
+        toasts.showErrorToast(`Error loading friendships: ${error}`);
+      }
     }
+  }
 
-    async function acceptFriendRequest(friendshipId: string) {
-        try {
-            await invoke('accept_friend_request', { friendshipId: friendshipId });
-            loadFriendships();
-        } catch (error) {
-            toasts.showErrorToast(`Error accepting friend request: ${error}`);
-        }
+  async function acceptFriendRequest(friendshipId: string) {
+    try {
+      await invoke('accept_friend_request', { friendshipId });
+      loadFriendships();
+    } catch (error) {
+      toasts.showErrorToast(`Error accepting friend request: ${error}`);
     }
+  }
 
-    async function removeFriendship(friendshipId: string) {
-        try {
-            await invoke('remove_friendship', { friendshipId: friendshipId });
-            loadFriendships();
-        } catch (error) {
-            toasts.showErrorToast(`Error removing friendship: ${error}`);
-        }
+  async function removeFriendship(friendshipId: string) {
+    try {
+      await invoke('remove_friendship', { friendshipId });
+      loadFriendships();
+    } catch (error) {
+      toasts.showErrorToast(`Error removing friendship: ${error}`);
     }
+  }
 
-    async function blockUser(targetUserId: string) {
-        const currentUser = get(userStore).me;
-        if (currentUser && currentUser.id) {
-            try {
-                await invoke('block_user', { currentUserId: currentUser.id, targetUserId: targetUserId });
-                loadFriendships();
-            } catch (error) {
-                toasts.showErrorToast(`Error blocking user: ${error}`);
-            }
-        }
-    }
-
-    onMount(() => {
+  async function blockUser(targetUserId: string) {
+    if (currentUser && currentUser.id) {
+      try {
+        await invoke('block_user', { currentUserId: currentUser.id, targetUserId });
         loadFriendships();
-    });
+      } catch (error) {
+        toasts.showErrorToast(`Error blocking user: ${error}`);
+      }
+    }
+  }
+
+  $effect(() => {
+    loadFriendships();
+  });
 </script>
 
 <div class="p-4">

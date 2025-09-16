@@ -3,16 +3,23 @@
   import { v4 as uuidv4 } from 'uuid';
   import { Hash, Volume2, Plus, Pencil, Trash, X, Check } from '@lucide/svelte';
 
-  export let channels: Channel[] = [];
-  export let onadd_channel: ((channel: Channel) => void) | undefined = undefined;
-  export let onupdate_channel: ((channel: Channel) => void) | undefined = undefined;
-  export let ondelete_channel: ((channelId: string) => void) | undefined = undefined;
+  let {
+    channels = [],
+    onadd_channel,
+    onupdate_channel,
+    ondelete_channel
+  }: {
+    channels?: Channel[];
+    onadd_channel?: (channel: Channel) => void;
+    onupdate_channel?: (channel: Channel) => void;
+    ondelete_channel?: (channelId: string) => void;
+  } = $props();
 
-  let newChannelName = '';
-  let newChannelType: 'text' | 'voice' = 'text';
-  let editingChannel: Channel | null = null;
-  let editingChannelName = '';
-  let editingChannelType: 'text' | 'voice' = 'text';
+  let newChannelName = $state('');
+  let newChannelType = $state<'text' | 'voice'>('text');
+  let editingChannel = $state<Channel | null>(null);
+  let editingChannelName = $state('');
+  let editingChannelType = $state<'text' | 'voice'>('text');
 
   function addChannel() {
     if (newChannelName.trim()) {
@@ -128,5 +135,3 @@
     {/each}
   </div>
 </div>
-
-

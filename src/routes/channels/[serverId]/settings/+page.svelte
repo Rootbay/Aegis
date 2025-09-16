@@ -7,23 +7,21 @@
   import type { Server } from '$lib/models/Server';
   import type { Channel } from '$lib/models/Channel';
   import type { Role } from '$lib/models/Role';
-  import { onDestroy } from 'svelte';
   import { Ban, Boxes, Hash, LayoutPanelTop, MessageSquare, Puzzle, ScrollText, Shield, ShieldCheck, Smile, Sticker, UserCog, Users } from '@lucide/svelte';
 
-  let server: (Server & { channels?: Channel[] }) | null = null;
-  let serverId: string | null = null;
+  let serverId = $derived($page.params.serverId ?? null);
+  let server = $derived(
+    serverId ? $serverStore.servers.find(s => s.id === serverId) ?? null : null
+  );
 
   const gotoResolved = (path: string) => {
     (goto as unknown as (target: string) => void)(path);
   };
 
-  $: {
-    const params = $page.params;
-    serverId = params.serverId ?? null;
-    server = serverId ? $serverStore.servers.find(s => s.id === serverId) ?? null : null;
+  $effect(() => {
     console.log('Server ID from params:', serverId);
     console.log('Found server:', server);
-  }
+  });
 
   type SidebarEntry =
     | { label: string; icon: Component; tab: string; type?: undefined }
@@ -49,12 +47,20 @@
     { label: 'Audit Log', icon: ScrollText, tab: 'audit_log' },
   ];
 
-  $: allSettings = [
+  let allSettings = $derived([
     { id: 'serverName', category: 'overview', title: 'Server Name', description: 'Change the name of your server.', type: 'text', property: 'name' },
     { id: 'serverIcon', category: 'overview', title: 'Server Icon', description: 'Change the icon of your server.', type: 'image', property: 'iconUrl' },
     { id: 'serverDescription', category: 'overview', title: 'Server Description', type: 'text', property: 'description' },
     { id: 'serverId', category: 'overview', title: 'Server ID', description: 'The unique ID of this server.', type: 'static', property: 'id' },
-    { id: 'defaultChannel', category: 'overview', title: 'Default Channel', description: 'The channel new members see first.', type: 'select', property: 'default_channel_id', options: server?.channels?.map(c => ({ label: c.name, value: c.id })) || [] },
+    {
+      id: 'defaultChannel',
+      category: 'overview',
+      title: 'Default Channel',
+      description: 'The channel new members see first.',
+      type: 'select',
+      property: 'default_channel_id',
+      options: server?.channels?.map(c => ({ label: c.name, value: c.id })) || []
+    },
     { label: 'Invite Permissions', category: 'overview', title: 'Invite Permissions', description: 'Allow members to invite others.', type: 'toggle', property: 'allow_invites' },
 
     { id: 'roleManagement', category: 'roles', title: 'Manage Roles', description: 'Create, edit, or delete roles and manage their permissions.', type: 'custom_component', component: 'RolesManagement' },
@@ -70,7 +76,7 @@
     { id: 'memberList', category: 'members', title: 'View Members', description: 'View and manage server members.', type: 'custom_component', component: 'MemberList' },
     { id: 'banList', category: 'bans', title: 'View Bans', description: 'View and manage banned users.', type: 'custom_component', component: 'BanList' },
     { id: 'auditLog', category: 'audit_log', title: 'Audit Log', description: 'View recent server changes.', type: 'static', property: 'audit_log_placeholder' },
-  ];
+  ]);
   
   const categoryHeadings = {
     overview: 'Server Overview',
@@ -198,10 +204,6 @@
       }
     }
   }
-
-  onDestroy(() => {
-    // Cleanup
-  });
 </script>
 
 {#if server}

@@ -3,22 +3,37 @@
   import { userStore } from '$lib/data/stores/userStore';
   import { SendHorizontal, EllipsisVertical } from '@lucide/svelte';
 
-  export let profileUser = {
-    id: '2',
-    name: 'Alice',
-    bio: 'Cryptography enthusiast & secure messenger user.',
-    pfpUrl: 'https://i.pravatar.cc/150?u=alice',
-    bannerUrl: 'https://picsum.photos/id/1015/600/200',
-    isOnline: true,
-    publicKey: '0xabc123def456ghi789jkl012mno345pqr678stu9'
+  type Props = {
+    profileUser: {
+      id: string;
+      name: string;
+      bio: string;
+      pfpUrl: string;
+      bannerUrl: string;
+      isOnline: boolean;
+      publicKey: string;
+    };
+    isFriend?: boolean;
+    close?: () => void;
   };
 
-  export let isFriend = false;
-  export let close = () => {};
+  let {
+    profileUser = {
+      id: '2',
+      name: 'Alice',
+      bio: 'Cryptography enthusiast & secure messenger user.',
+      pfpUrl: 'https://i.pravatar.cc/150?u=alice',
+      bannerUrl: 'https://picsum.photos/id/1015/600/200',
+      isOnline: true,
+      publicKey: '0xabc123def456ghi789jkl012mno345pqr678stu9'
+    },
+    isFriend = false,
+    close = () => {}
+  }: Props = $props();
 
-  let copyFeedback = '';
+  let copyFeedback = $state('');
 
-  $: isMyProfile = profileUser.id === $userStore.me?.id;
+  let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -50,12 +65,15 @@
   function addFriend() {
     console.log(`Adding ${profileUser.name} as a friend.`);
   }
+
   function sendMessage() {
     console.log(`Sending a message to ${profileUser.name}.`);
   }
+
   function showMoreOptions() {
     console.log(`Showing more options for ${profileUser.name}.`);
   }
+
   function editProfile() {
     console.log('Editing my profile.');
   }
