@@ -96,7 +96,7 @@
 			console.warn('Falling back to friend.id when removing friendship', friend);
 		}
 		try {
-			await invoke('remove_friendship', { friendshipId });
+			await invoke('remove_friendship', { friendship_id: friendshipId });
 			friendStore.removeFriend(friend.id);
 			console.log('Friend removed:', friend);
 		} catch (error) {

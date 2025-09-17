@@ -1,6 +1,6 @@
 use libp2p::futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tauri::{Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, Mutex};
@@ -12,6 +12,8 @@ use bs58;
 use e2ee;
 use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
 use tokio::sync::mpsc::Sender as TokioSender;
+
+const MAX_OUTBOX_MESSAGES: usize = 256;
 
 pub async fn initialize_app_state<R: Runtime>(
     app: tauri::AppHandle<R>,
@@ -30,7 +32,7 @@ pub async fn initialize_app_state<R: Runtime>(
     let (net_tx, mut net_rx) = mpsc::channel::<Vec<u8>>(100);
     let (file_tx, mut file_rx) = mpsc::channel::<aegis_shared_types::FileTransferCommand>(16);
     let (event_tx, mut event_rx) = mpsc::channel::<AepMessage>(100);
-    let outbox: Arc<Mutex<Vec<Vec<u8>>>> = Arc::new(Mutex::new(Vec::new()));
+    let outbox: Arc<Mutex<VecDeque<Vec<u8>>>> = Arc::new(Mutex::new(VecDeque::new()));
 
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     if !app_data_dir.exists() {
@@ -144,6 +146,7 @@ pub async fn initialize_app_state<R: Runtime>(
     {
         let db_pool_rotate = db_pool.clone();
         let my_id_rotate = identity.peer_id().to_base58();
+        let identity_rotate = identity.clone();
         let net_tx_rotate = new_state.network_tx.clone();
         tokio::spawn(async move {
             use std::collections::HashMap as Map;
@@ -154,7 +157,7 @@ pub async fn initialize_app_state<R: Runtime>(
             struct Pending {
                 server_id: String,
                 channel_id: Option<String>,
-                epoch: u64,
+                _epoch: u64,
                 next_ts: i64,
                 retries_left: u8,
             }
@@ -172,11 +175,10 @@ pub async fn initialize_app_state<R: Runtime>(
                     }
                     if let Err(e) = broadcast_group_key_update(
                         &db_pool_rotate,
-                        &my_id_rotate,
+                        identity_rotate.clone(),
                         &net_tx_rotate,
                         &p.server_id,
                         &p.channel_id,
-                        p.epoch,
                     )
                     .await
                     {
@@ -203,7 +205,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                 let epoch = now as u64;
                                 if let Err(e) = rotate_and_broadcast_group_key(
                                     &db_pool_rotate,
-                                    &my_id_rotate,
+                                    identity_rotate.clone(),
                                     &net_tx_rotate,
                                     &s.id,
                                     &Some(ch.id.clone()),
@@ -217,7 +219,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                     pending.push(Pending {
                                         server_id: s.id.clone(),
                                         channel_id: Some(ch.id),
-                                        epoch,
+                                        _epoch: epoch,
                                         next_ts: now + retry_interval_secs,
                                         retries_left: 3,
                                     });
@@ -249,7 +251,11 @@ pub async fn initialize_app_state<R: Runtime>(
                                 eprintln!("Failed to send data over network: {}", e);
                             }
                         } else {
-                            outbox_task.lock().await.push(data);
+                            let mut queue = outbox_task.lock().await;
+                            queue.push_back(data);
+                            if queue.len() > MAX_OUTBOX_MESSAGES {
+                                queue.pop_front();
+                            }
                         }
                     }
                 }
@@ -356,7 +362,21 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         }
                                                     }
                                                 }
-                                                AepMessage::GroupKeyUpdate { server_id, channel_id, epoch, slots, signature: _ } => {
+                                                AepMessage::GroupKeyUpdate { issuer_id, server_id, channel_id, epoch, slots, signature } => {
+                                                    let ok_sig = (|| {
+                                                        let user_opt = futures::executor::block_on(aep::user_service::get_user(&db_pool_clone, &issuer_id)).ok()?;
+                                                        let user = user_opt?;
+                                                        let pk_b58 = user.public_key?;
+                                                        let bytes = bs58::decode(pk_b58).into_vec().ok()?;
+                                                        let public_key = libp2p::identity::PublicKey::from_protobuf_encoding(&bytes).ok()?;
+                                                        let payload = bincode::serialize(&(issuer_id.clone(), &server_id, &channel_id, epoch, &slots)).ok()?;
+                                                        let sig = signature.as_ref()?;
+                                                        Some(public_key.verify(&payload, sig))
+                                                    })().unwrap_or(false);
+                                                    if !ok_sig {
+                                                        eprintln!("Invalid signature on group key update from {issuer_id}");
+                                                        continue;
+                                                    }
                                                     let my_id = state_clone_for_aep.identity.peer_id().to_base58();
                                                     if let Some(slot) = slots.into_iter().find(|s| s.recipient == my_id) {
                                                         let arc = e2ee::init_global_manager();
@@ -458,19 +478,29 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Not authorized".into()));
                                                     } else {
                                                         let key = format!("{}:{}", sender_id, filename);
+                                                        let safe_name = aegis_shared_types::sanitize_filename(&filename);
+                                                        if size > aegis_shared_types::MAX_FILE_SIZE_BYTES {
+                                                            let mut swarm = shared_swarm_task.lock().await;
+                                                            let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("File too large".into()));
+                                                            continue;
+                                                        }
                                                         let mut inc = state_clone_for_aep.incoming_files.lock().await;
                                                         inc.insert(key.clone(), aegis_shared_types::IncomingFile {
                                                             name: filename.clone(),
+                                                            safe_name: safe_name.clone(),
                                                             size,
                                                             received_chunks: std::collections::HashMap::new(),
                                                             key: vec![],
                                                             nonce: vec![],
                                                             sender_id: sender_id.clone(),
                                                             accepted: false,
+                                                            buffered_bytes: 0,
                                                         });
+                                                        drop(inc);
                                                         let _ = app_for_emit.emit("file-transfer-request", serde_json::json!({
                                                             "sender_id": sender_id,
                                                             "filename": filename,
+                                                            "safe_filename": safe_name,
                                                             "size": size
                                                         }));
                                                         let mut swarm = shared_swarm_task.lock().await;
@@ -480,11 +510,44 @@ pub async fn initialize_app_state<R: Runtime>(
                                                 network::FileTransferRequest::Chunk { filename, index, data } => {
                                                     let key = format!("{}:{}", sender_id, filename);
                                                     let mut inc = state_clone_for_aep.incoming_files.lock().await;
-                                                    if let Some(file) = inc.get_mut(&key) {
+                                                    if let Some(mut file) = inc.remove(&key) {
+                                                        let chunk_len = data.len() as u64;
+                                                        let new_total = file.buffered_bytes.saturating_add(chunk_len);
+                                                        let inflight_limit = aegis_shared_types::MAX_INFLIGHT_FILE_BYTES.min(file.size);
+                                                        let mut error_reason: Option<(&str, bool)> = None;
+                                                        if new_total > file.size {
+                                                            error_reason = Some(("Size mismatch", false));
+                                                        } else if new_total > inflight_limit {
+                                                            error_reason = Some(("Transfer too large", false));
+                                                        } else if !file.accepted {
+                                                            let unapproved_limit = aegis_shared_types::MAX_UNAPPROVED_BUFFER_BYTES.min(inflight_limit);
+                                                            if new_total > unapproved_limit {
+                                                                error_reason = Some(("Pending approval", true));
+                                                            }
+                                                        }
+                                                        if let Some((reason, notify)) = error_reason {
+                                                            let original_name = file.name.clone();
+                                                            let safe_name = file.safe_name.clone();
+                                                            drop(inc);
+                                                            if notify {
+                                                                let _ = app_for_emit.emit("file-transfer-denied", serde_json::json!({
+                                                                    "sender_id": sender_id,
+                                                                    "filename": original_name,
+                                                                    "safe_filename": safe_name
+                                                                }));
+                                                            }
+                                                            let mut swarm = shared_swarm_task.lock().await;
+                                                            let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error(reason.into()));
+                                                            continue;
+                                                        }
+                                                        file.buffered_bytes = new_total;
                                                         file.received_chunks.insert(index, data);
+                                                        inc.insert(key, file);
+                                                        drop(inc);
                                                         let mut swarm = shared_swarm_task.lock().await;
                                                         let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Ack);
                                                     } else {
+                                                        drop(inc);
                                                         let mut swarm = shared_swarm_task.lock().await;
                                                         let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Unknown transfer".into()));
                                                     }
@@ -493,21 +556,28 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     let key = format!("{}:{}", sender_id, filename);
                                                     let mut inc = state_clone_for_aep.incoming_files.lock().await;
                                                     if let Some(file) = inc.remove(&key) {
+                                                        drop(inc);
                                                         if file.accepted {
                                                             if let Ok(dir) = app_for_emit.path().app_data_dir() {
-                                                                let path = dir.join(&filename);
-                                                                if let Ok(mut f) = std::fs::File::create(&path) {
+                                                                let output_path = dir.join(&file.safe_name);
+                                                                if let Ok(mut f) = std::fs::File::create(&output_path) {
+                                                                    use std::io::Write;
                                                                     let mut idx = 0u64;
                                                                     while let Some(chunk) = file.received_chunks.get(&idx) {
-                                                                        use std::io::Write;
                                                                         let _ = f.write_all(chunk);
                                                                         idx += 1;
                                                                     }
+                                                                    if file.buffered_bytes != file.size {
+                                                                        eprintln!("Received {} bytes for {} but expected {}", file.buffered_bytes, file.safe_name, file.size);
+                                                                    }
                                                                     let _ = app_for_emit.emit("file-received", serde_json::json!({
                                                                         "sender_id": sender_id,
-                                                                        "filename": filename,
-                                                                        "path": path.to_string_lossy().to_string()
+                                                                        "filename": file.name.clone(),
+                                                                        "safe_filename": file.safe_name.clone(),
+                                                                        "path": output_path.to_string_lossy().to_string()
                                                                     }));
+                                                                } else {
+                                                                    eprintln!("Failed to create file for received transfer {}", file.safe_name);
                                                                 }
                                                             }
                                                             let mut swarm = shared_swarm_task.lock().await;
@@ -515,12 +585,14 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         } else {
                                                             let _ = app_for_emit.emit("file-transfer-denied", serde_json::json!({
                                                                 "sender_id": sender_id,
-                                                                "filename": filename
+                                                                "filename": file.name.clone(),
+                                                                "safe_filename": file.safe_name
                                                             }));
                                                             let mut swarm = shared_swarm_task.lock().await;
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Denied".into()));
                                                         }
                                                     } else {
+                                                        drop(inc);
                                                         let mut swarm = shared_swarm_task.lock().await;
                                                         let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Unknown transfer".into()));
                                                     }
@@ -562,23 +634,30 @@ pub async fn initialize_app_state<R: Runtime>(
 
 async fn broadcast_group_key_update(
     db_pool: &sqlx::Pool<sqlx::Sqlite>,
-    my_id: &str,
+    identity: crypto::identity::Identity,
     net_tx: &TokioSender<Vec<u8>>,
     server_id: &str,
     channel_id: &Option<String>,
-    epoch: u64,
 ) -> Result<(), String> {
+    let (epoch, key_bytes) = {
+        let arc = e2ee::init_global_manager();
+        let mgr = arc.lock();
+        mgr.get_group_key(server_id, channel_id)
+            .ok_or_else(|| "Missing group key for broadcast".to_string())?
+    };
+    let issuer_id = identity.peer_id().to_base58();
+
     let members = aep::database::get_server_members(db_pool, server_id)
         .await
         .map_err(|e| e.to_string())?;
     let mut slots: Vec<aegis_protocol::EncryptedDmSlot> = Vec::new();
     for m in members {
-        if m.id == my_id {
+        if m.id == issuer_id {
             continue;
         }
         let arc = e2ee::init_global_manager();
         let mut mgr = arc.lock();
-        if let Ok(pkt) = mgr.encrypt_for(&m.id, &vec![0u8; 32]) {
+        if let Ok(pkt) = mgr.encrypt_for(&m.id, &key_bytes) {
             slots.push(aegis_protocol::EncryptedDmSlot {
                 recipient: m.id,
                 init: pkt.init,
@@ -587,12 +666,21 @@ async fn broadcast_group_key_update(
             });
         }
     }
+
+    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots))
+        .map_err(|e| e.to_string())?;
+    let signature = identity
+        .keypair()
+        .sign(&payload)
+        .map_err(|e| e.to_string())?;
+
     let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        issuer_id,
         server_id: server_id.to_string(),
         channel_id: channel_id.clone(),
         epoch,
         slots,
-        signature: None,
+        signature: Some(signature),
     };
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
     net_tx.send(bytes).await.map_err(|e| e.to_string())
@@ -600,7 +688,7 @@ async fn broadcast_group_key_update(
 
 async fn rotate_and_broadcast_group_key(
     db_pool: &sqlx::Pool<sqlx::Sqlite>,
-    my_id: &str,
+    identity: crypto::identity::Identity,
     net_tx: &TokioSender<Vec<u8>>,
     server_id: &str,
     channel_id: &Option<String>,
@@ -611,13 +699,14 @@ async fn rotate_and_broadcast_group_key(
         let mut mgr = arc.lock();
         mgr.generate_and_set_group_key(server_id, channel_id, epoch)
     };
+    let issuer_id = identity.peer_id().to_base58();
 
     let members = aep::database::get_server_members(db_pool, server_id)
         .await
         .map_err(|e| e.to_string())?;
     let mut slots: Vec<aegis_protocol::EncryptedDmSlot> = Vec::new();
     for m in members {
-        if m.id == my_id {
+        if m.id == issuer_id {
             continue;
         }
         let arc = e2ee::init_global_manager();
@@ -631,13 +720,26 @@ async fn rotate_and_broadcast_group_key(
             });
         }
     }
+
+    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots))
+        .map_err(|e| e.to_string())?;
+    let signature = identity
+        .keypair()
+        .sign(&payload)
+        .map_err(|e| e.to_string())?;
+
     let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        issuer_id,
         server_id: server_id.to_string(),
         channel_id: channel_id.clone(),
         epoch,
         slots,
-        signature: None,
+        signature: Some(signature),
     };
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
     net_tx.send(bytes).await.map_err(|e| e.to_string())
 }
+
+
+
+

@@ -443,6 +443,11 @@ impl Manager {
         let _ = self.save_all();
     }
 
+    pub fn get_group_key(&self, server_id: &str, channel_id: &Option<String>) -> Option<(u64, Vec<u8>)> {
+        let id = Self::group_id(server_id, channel_id);
+        self.group_keys.get(&id).map(|entry| (entry.epoch, entry.key.clone()))
+    }
+
     pub fn generate_and_set_group_key(&mut self, server_id: &str, channel_id: &Option<String>, epoch: u64) -> Vec<u8> {
         let mut key = [0u8; 32];
         SystemRandom::new().fill(&mut key).unwrap();

@@ -46,6 +46,11 @@
   let hideMutedChannels = $state(false);
   let textChannelsContainer: HTMLElement | undefined = $state();
   let textChannelsHeight = $state('0px');
+
+  function updateTextChannelsHeight() {
+    if (!textChannelsContainer) return;
+    textChannelsHeight = `${textChannelsContainer.scrollHeight}px`;
+  }
   let mutedChannelIds = $state<Set<string>>(new Set());
 
   let isResizing = $state(false);
@@ -122,7 +127,7 @@
     mutedChannelIds = loadMutedChannels();
 
     if (textChannelsContainer) {
-      textChannelsHeight = `${textChannelsContainer.scrollHeight}px`;
+      updateTextChannelsHeight();
     }
 
     return () => {
@@ -188,7 +193,7 @@
   async function handleLeaveServer() {
     if (confirm(`Are you sure you want to leave the server "${server.name}"?`)) {
       try {
-        await invoke('leave_server', { serverId: server.id });
+        await invoke('leave_server', { server_id: server.id });
         serverStore.removeServer(server.id);
         serverStore.setActiveServer(null);
         gotoResolved('/friends?tab=All');
@@ -230,7 +235,7 @@
 
   async function handleDeleteChannel(channelId: string) {
     try {
-      await invoke('delete_channel', { channelId: channelId });
+      await invoke('delete_channel', { channel_id: channelId });
       const current = server.channels || [];
       const updated = current.filter((c: Channel) => c.id !== channelId);
       let nextChannelId: string | null = null;
@@ -438,14 +443,27 @@
       case 'invite_people':
         handleInvitePeople();
         break;
-      case 'hide_muted_channels':
+      case 'hide_muted_channels': {
+        const key = 'serverSidebar.hideMuted';
+        let next = !hideMutedChannels;
         try {
-          const key = 'serverSidebar.hideMuted';
-          const current = localStorage.getItem(key) === 'true';
-          localStorage.setItem(key, (!current).toString());
-          toasts.addToast(`${!current ? 'Hiding' : 'Showing'} muted channels (local).`, 'info');
-        } catch (e) { console.error(e) }
+          const storedValue = localStorage.getItem(key);
+          if (storedValue !== null) {
+            next = storedValue !== 'true';
+          }
+          localStorage.setItem(key, next.toString());
+        } catch (e) {
+          console.error(e);
+        }
+        hideMutedChannels = next;
+        toasts.addToast(`${next ? 'Hiding' : 'Showing'} muted channels (local).`, 'info');
+        if (textChannelsCollapsed) {
+          textChannelsHeight = '0px';
+        } else {
+          updateTextChannelsHeight();
+        }
         break;
+      }
       default:
         console.debug('Unhandled server background action', action);
     }
@@ -466,6 +484,14 @@
     event?.stopPropagation();
     gotoResolved(`/channels/${server.id}/settings?tab=channels`);
   }
+
+  $effect(() => {
+    const visibleChannels = (server?.channels ?? []).filter((c: Channel) => c.channel_type === 'text' && (!hideMutedChannels || !mutedChannelIds.has(c.id)));
+    void visibleChannels;
+    if (!textChannelsCollapsed) {
+      queueMicrotask(() => updateTextChannelsHeight());
+    }
+  });
 </script>
 
 <div class="bg-muted/50 flex flex-col relative" style="width: {sidebarWidth}px;" oncontextmenu={(e) => handleServerBackgroundContextMenu(e)} role="region" aria-label="Server sidebar">
@@ -523,7 +549,7 @@
             void e;
           }
             if (!textChannelsCollapsed && textChannelsContainer) {
-              textChannelsHeight = `${textChannelsContainer.scrollHeight}px`;
+              updateTextChannelsHeight();
             } else {
               textChannelsHeight = '0px';
             }

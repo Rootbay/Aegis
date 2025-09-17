@@ -13,11 +13,15 @@ pub async fn send_friend_request(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".to_string());
+    }
 
     let now = Utc::now();
     let friendship = Friendship {
         id: Uuid::new_v4().to_string(),
-        user_a_id: current_user_id.clone(),
+        user_a_id: my_id.clone(),
         user_b_id: target_user_id.clone(),
         status: FriendshipStatus::Pending.to_string(),
         created_at: now,
@@ -29,7 +33,7 @@ pub async fn send_friend_request(
         .map_err(|e| e.to_string())?;
 
     let friend_request_data = aegis_protocol::FriendRequestData {
-        sender_id: current_user_id.clone(),
+        sender_id: my_id.clone(),
         target_id: target_user_id.clone(),
     };
     let friend_request_bytes =
@@ -41,7 +45,7 @@ pub async fn send_friend_request(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::FriendRequest {
-        sender_id: current_user_id,
+        sender_id: my_id,
         target_id: target_user_id,
         signature: Some(signature),
     };
@@ -112,15 +116,18 @@ pub async fn block_user(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".to_string());
+    }
 
     let now = Utc::now();
-    let friendship_option =
-        database::get_friendship(&state.db_pool, &current_user_id, &target_user_id)
-            .await
-            .map_err(|e| e.to_string())?;
+    let friendship_option = database::get_friendship(&state.db_pool, &my_id, &target_user_id)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if let Some(friendship) = friendship_option {
-        let new_status = if friendship.user_a_id == current_user_id {
+        let new_status = if friendship.user_a_id == my_id {
             FriendshipStatus::BlockedByA
         } else {
             FriendshipStatus::BlockedByB
@@ -131,7 +138,7 @@ pub async fn block_user(
     } else {
         let friendship = Friendship {
             id: Uuid::new_v4().to_string(),
-            user_a_id: current_user_id.clone(),
+            user_a_id: my_id.clone(),
             user_b_id: target_user_id.clone(),
             status: FriendshipStatus::BlockedByA.to_string(),
             created_at: now,
@@ -143,7 +150,7 @@ pub async fn block_user(
     }
 
     let block_user_data = aegis_protocol::BlockUserData {
-        blocker_id: current_user_id.clone(),
+        blocker_id: my_id.clone(),
         blocked_id: target_user_id.clone(),
     };
     let block_user_bytes = bincode::serialize(&block_user_data).map_err(|e| e.to_string())?;
@@ -154,7 +161,7 @@ pub async fn block_user(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::BlockUser {
-        blocker_id: current_user_id,
+        blocker_id: my_id,
         blocked_id: target_user_id,
         signature: Some(signature),
     };
@@ -263,7 +270,11 @@ pub async fn get_friendships(
 ) -> Result<Vec<database::Friendship>, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
-    database::get_all_friendships_for_user(&state.db_pool, &current_user_id)
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".into());
+    }
+    database::get_all_friendships_for_user(&state.db_pool, &my_id)
         .await
         .map_err(|e| e.to_string())
 }

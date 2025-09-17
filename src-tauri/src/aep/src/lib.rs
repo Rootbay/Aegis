@@ -1,6 +1,6 @@
 
 use sqlx::{Pool, Sqlite};
-use aegis_shared_types::{AppState, IncomingFile};
+use aegis_shared_types::{AppState, IncomingFile, MAX_FILE_SIZE_BYTES, MAX_INFLIGHT_FILE_BYTES, MAX_UNAPPROVED_BUFFER_BYTES, sanitize_filename};
 use aegis_protocol::{AepMessage, ChatMessageData, PeerDiscoveryData, PresenceUpdateData, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
@@ -9,7 +9,6 @@ use bs58;
 use std::convert::TryInto;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::path::Path;
 use std::sync::{Once, OnceLock};
 
 pub mod database;
@@ -188,22 +187,51 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
         AepMessage::FileTransferRequest { sender_id, recipient_id: _, file_name, file_size, encrypted_key, nonce } => {
             let map_key = format!("{}:{}", sender_id, file_name);
             let mut incoming_files = state.incoming_files.lock().await;
+            if file_size > MAX_FILE_SIZE_BYTES {
+                eprintln!("Rejecting file {} from {}: exceeds maximum size", file_name, sender_id);
+                return Ok(());
+            }
+            let safe_name = sanitize_filename(&file_name);
             let incoming_file = IncomingFile {
                 name: file_name.clone(),
+                safe_name: safe_name.clone(),
                 size: file_size,
                 received_chunks: std::collections::HashMap::new(),
                 key: encrypted_key,
                 nonce,
                 sender_id: sender_id.clone(),
                 accepted: false,
+                buffered_bytes: 0,
             };
             incoming_files.insert(map_key, incoming_file);
-            println!("Started receiving file {} from {}", file_name, sender_id);
+            println!("Started receiving file {} from {}", safe_name, sender_id);
         }
         AepMessage::FileTransferChunk { sender_id, recipient_id: _, file_name, chunk_index, data } => {
             let map_key = format!("{}:{}", sender_id, file_name);
             let mut incoming_files = state.incoming_files.lock().await;
             if let Some(incoming_file) = incoming_files.get_mut(&map_key) {
+                let chunk_len = data.len() as u64;
+                let new_total = incoming_file.buffered_bytes.saturating_add(chunk_len);
+                if new_total > incoming_file.size {
+                    incoming_files.remove(&map_key);
+                    eprintln!("Dropping transfer {} from {}: exceeded advertised size", file_name, sender_id);
+                    return Ok(());
+                }
+                let inflight_limit = MAX_INFLIGHT_FILE_BYTES.min(incoming_file.size);
+                if new_total > inflight_limit {
+                    incoming_files.remove(&map_key);
+                    eprintln!("Dropping transfer {} from {}: exceeds inflight buffer limit", file_name, sender_id);
+                    return Ok(());
+                }
+                if !incoming_file.accepted {
+                    let unapproved_limit = MAX_UNAPPROVED_BUFFER_BYTES.min(inflight_limit);
+                    if new_total > unapproved_limit {
+                        incoming_files.remove(&map_key);
+                        eprintln!("Dropping transfer {} from {}: awaiting approval", file_name, sender_id);
+                        return Ok(());
+                    }
+                }
+                incoming_file.buffered_bytes = new_total;
                 incoming_file.received_chunks.insert(chunk_index, data);
             } else {
                 eprintln!("Received chunk {} for unknown transfer {} from {}", chunk_index, file_name, sender_id);
@@ -273,13 +301,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                     ))
                 })?;
 
-                let sanitized_name = Path::new(&file_name)
-                    .file_name()
-                    .ok_or_else(|| {
-                        AegisError::InvalidInput("File name contained invalid path components".into())
-                    })?
-                    .to_owned();
-                let final_path = target_dir.join(sanitized_name);
+                let final_path = target_dir.join(&incoming_file.safe_name);
                 let mut outfile = File::create(&final_path).map_err(|e| {
                     AegisError::Internal(format!(
                         "Failed to create file {}: {}",
@@ -296,7 +318,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 })?;
                 println!(
                     "Saved received file {} from {} to {}",
-                    file_name,
+                    incoming_file.safe_name,
                     sender_id,
                     final_path.display()
                 );

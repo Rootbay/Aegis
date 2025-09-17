@@ -11,6 +11,8 @@ pub async fn create_server(
 ) -> Result<database::Server, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let owner_id = state.identity.peer_id().to_base58();
+    server.owner_id = owner_id.clone();
 
     database::insert_server(&state.db_pool, &server)
         .await
@@ -68,15 +70,19 @@ pub async fn join_server(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+    if user_id != my_id {
+        return Err("Caller identity mismatch".into());
+    }
 
-    println!("User {} attempting to join server {}", user_id, server_id);
-    database::add_server_member(&state.db_pool, &server_id, &user_id)
+    println!("User {} attempting to join server {}", my_id, server_id);
+    database::add_server_member(&state.db_pool, &server_id, &my_id)
         .await
         .map_err(|e| e.to_string())?;
 
     let join_server_data = aegis_protocol::JoinServerData {
         server_id: server_id.clone(),
-        user_id: user_id.clone(),
+        user_id: my_id.clone(),
     };
     let join_server_bytes = bincode::serialize(&join_server_data).map_err(|e| e.to_string())?;
     let signature = state
@@ -87,13 +93,27 @@ pub async fn join_server(
 
     let aep_message = AepMessage::JoinServer {
         server_id,
-        user_id,
+        user_id: my_id,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
     state
         .network_tx
         .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn leave_server(
+    server_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+
+    database::remove_server_member(&state.db_pool, &server_id, &my_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -189,6 +209,13 @@ pub async fn send_server_invite(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    if server.owner_id != my_id {
+        return Err("Only server owners can send invites".into());
+    }
 
     database::add_server_member(&state.db_pool, &server_id, &user_id)
         .await

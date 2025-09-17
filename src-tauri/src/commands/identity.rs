@@ -6,8 +6,22 @@ use libp2p::identity::{ed25519, Keypair};
 use std::fs;
 use std::io::{Read, Write};
 use tauri::{Manager, Runtime, State};
+use serde::Serialize;
 
 use crate::commands::state::{with_state, AppStateContainer};
+
+#[derive(Serialize)]
+pub struct GeneratedIdentityResponse {
+    pub verifying_key: Vec<u8>,
+}
+
+#[tauri::command]
+pub fn generate_identity() -> GeneratedIdentityResponse {
+    let identity = Identity::generate();
+    GeneratedIdentityResponse {
+        verifying_key: identity.public_key_protobuf_bytes(),
+    }
+}
 
 #[tauri::command]
 pub fn is_identity_created<R: Runtime>(app: tauri::AppHandle<R>) -> bool {

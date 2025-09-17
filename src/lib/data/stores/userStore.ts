@@ -90,7 +90,7 @@ function createUserStore(): UserStore {
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes('decrypt identity') || message.includes('aead::Error')) {
           try {
-            await invoke('rekey_identity', { oldPassword: DEFAULT_IDENTITY_PASSWORD, newPassword: password });
+            await invoke('rekey_identity', { old_password: DEFAULT_IDENTITY_PASSWORD, new_password: password });
             await invoke('initialize_app', { password });
             return;
           } catch (rekeyError) {
@@ -145,7 +145,7 @@ function createUserStore(): UserStore {
     const updatedUser = { ...currentUser, online: newStatus };
 
     try {
-      await invoke('send_presence_update', { isOnline: newStatus });
+      await invoke('send_presence_update', { is_online: newStatus });
       await invoke('update_user_profile', { user: toBackendUser(updatedUser) });
       update((state) => ({ ...state, me: updatedUser }));
       userCache.set(updatedUser.id, updatedUser);

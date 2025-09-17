@@ -336,6 +336,14 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
     Ok(())
 }
 
+pub async fn delete_message(pool: &Pool<Sqlite>, message_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM messages WHERE id = ?", message_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+
 pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i64, offset: i64) -> Result<Vec<Message>, sqlx::Error> {
     #[derive(FromRow)]
     struct MessageRaw {
@@ -375,6 +383,14 @@ pub async fn add_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &s
         .await?;
     Ok(())
 }
+
+pub async fn remove_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM server_members WHERE server_id = ? AND user_id = ?", server_id, user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 
 pub async fn get_server_members(pool: &Pool<Sqlite>, server_id: &str) -> Result<Vec<User>, sqlx::Error> {
     let members = sqlx::query_as!(User,

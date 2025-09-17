@@ -31,7 +31,9 @@
   import { UserRoundPlus } from '@lucide/svelte';
   import ServerManagementModal from '$lib/components/modals/ServerManagementModal.svelte';
   import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
+  import ProfileModal from '$lib/components/modals/ProfileModal.svelte';
   import { ChatView } from '$features/chat';
+  type ProfileModalSource = User & { pfpUrl?: string; bannerUrl?: string; isOnline?: boolean };
 
   let { children } = $props();
 
@@ -224,22 +226,75 @@
     modalProps = {};
   }
 
+  function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function withProfileDefaults(user: User): ProfileModalSource {
+    const source = user as ProfileModalSource;
+    return {
+      ...user,
+      bio: source.bio ?? '',
+      pfpUrl: source.pfpUrl ?? user.avatar,
+      bannerUrl: source.bannerUrl ?? '',
+      isOnline: source.isOnline ?? user.online ?? false,
+      publicKey: source.publicKey ?? '',
+    };
+  }
+
+  function computeUserCardPosition(clickX: number, clickY: number) {
+    const CARD_WIDTH = 300;
+    const CARD_HEIGHT = 410;
+    const MARGIN = 16;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : CARD_WIDTH + MARGIN * 2;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : CARD_HEIGHT + MARGIN * 2;
+
+    const safeX = Number.isFinite(clickX) ? clickX : viewportWidth - MARGIN;
+    const safeY = Number.isFinite(clickY) ? clickY : viewportHeight - MARGIN;
+
+    const x = clamp(safeX - CARD_WIDTH / 2, MARGIN, Math.max(MARGIN, viewportWidth - CARD_WIDTH - MARGIN));
+
+    let y = safeY - CARD_HEIGHT - MARGIN;
+    const maxY = Math.max(MARGIN, viewportHeight - CARD_HEIGHT - MARGIN);
+    if (y < MARGIN) {
+      y = clamp(safeY + MARGIN, MARGIN, maxY);
+    } else {
+      y = Math.min(y, maxY);
+    }
+
+    return { x, y };
+  }
+
   function openUserCardModal(user: User, x: number, y: number, isServerMemberContext: boolean) {
+    const normalizedUser = withProfileDefaults(user);
+    const position = computeUserCardPosition(x, y);
     openModal('userCard', {
-      profileUser: user,
-      x: windowWidth - 260 - 305,
-      y: y,
-      isServerMemberContext: isServerMemberContext
+      profileUser: normalizedUser,
+      x: position.x,
+      y: position.y,
+      isServerMemberContext
     });
+  }
+
+  function toProfileModalUser(user: User) {
+    const normalizedUser = withProfileDefaults(user);
+    return {
+      id: normalizedUser.id,
+      name: normalizedUser.name ?? 'Unknown User',
+      bio: normalizedUser.bio,
+      pfpUrl: normalizedUser.pfpUrl,
+      bannerUrl: normalizedUser.bannerUrl,
+      isOnline: normalizedUser.isOnline,
+      publicKey: normalizedUser.publicKey,
+    };
   }
 
   function openDetailedProfileModal(user: User) {
     openModal('detailedProfile', {
-      profileUser: user,
+      profileUser: toProfileModalUser(user),
       isFriend: $friendStore.friends.some(f => f.id === user.id)
     });
   }
-
   const pageState = {
     get friends() { return $friendStore.friends },
     get allUsers() { return allUsers },
@@ -283,7 +338,6 @@
     }
   });
 
-  let windowWidth = $state(0);
 </script>
 
 <div class="flex h-screen bg-base-100 text-foreground">
@@ -292,7 +346,7 @@
     <InitialSetup />
   {:else}
     {#if !isAnySettingsPage}
-      <Sidebar onProfileClick={(x: number, y: number) => openUserCardModal(currentUser!, x, y, false)} onCreateJoinServerClick={() => openModal('serverManagement')} />
+      <Sidebar onProfileClick={(x: number, y: number) => { if (currentUser) openUserCardModal(currentUser, x, y, false); }} onCreateJoinServerClick={() => openModal('serverManagement')} />
     {/if}
     {#if !isAnySettingsPage}
       {#if $serverStore.activeServerId}
@@ -360,7 +414,9 @@
   <UserCardModal {...modalProps} close={closeModal} openDetailedProfileModal={openDetailedProfileModal} />
 {/if}
 
-
+{#if activeModal === 'detailedProfile'}
+  <ProfileModal {...modalProps} close={closeModal} />
+{/if}
 
 
 

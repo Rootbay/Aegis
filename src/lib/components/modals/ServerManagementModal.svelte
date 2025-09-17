@@ -62,7 +62,7 @@
     }
 
     try {
-      await invoke('send_server_invite', { serverId: trimmedServerId, userId: $userStore.me.id });
+      await invoke('send_server_invite', { server_id: trimmedServerId, user_id: $userStore.me.id });
       console.log('Joined server:', trimmedServerId);
       joinServerId = '';
       closeModal();

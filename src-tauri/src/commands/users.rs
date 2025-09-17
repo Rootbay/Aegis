@@ -23,6 +23,10 @@ pub async fn update_user_profile(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+    if user.id != my_id {
+        return Err("Caller identity mismatch".into());
+    }
 
     user.public_key = Some(bs58::encode(state.identity.public_key_protobuf_bytes()).into_string());
     user_service::insert_user(&state.db_pool, &user)

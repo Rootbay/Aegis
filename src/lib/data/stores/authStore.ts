@@ -318,7 +318,7 @@ const loginWithRecovery = async ({ phrase, newPassword, totpCode }: RecoveryLogi
     const phraseKey = await derivePasswordKey(normalizedPhrase);
     const currentPassword = await decryptWithSecret(phraseKey, persisted.recoveryEnvelope);
 
-    await invoke('rekey_identity', { oldPassword: currentPassword, newPassword });
+    await invoke('rekey_identity', { old_password: currentPassword, new_password: newPassword });
     await userStore.initialize(newPassword, { username: persisted.username });
 
     const passwordHash = await hashString(newPassword);

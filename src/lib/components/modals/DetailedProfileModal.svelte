@@ -111,8 +111,8 @@
     if (!meId || !otherId) return;
     loadingMutualFriends = true;
     try {
-      const myFriendships: any[] = await invoke('get_friendships', { currentUserId: meId });
-      const otherFriendships: any[] = await invoke('get_friendships', { currentUserId: otherId });
+      const myFriendships: any[] = await invoke('get_friendships', { current_user_id: meId });
+      const otherFriendships: any[] = await invoke('get_friendships', { current_user_id: otherId });
       const myFriendIds = new Set(
         (myFriendships || []).map((f: any) => (f.user_a_id === meId ? f.user_b_id : f.user_a_id))
       );
@@ -179,7 +179,7 @@
   async function addFriend() {
     if (!profileUser?.id || !$userStore.me?.id) return;
     try {
-      await invoke('send_friend_request', { currentUserId: $userStore.me.id, targetUserId: profileUser.id });
+      await invoke('send_friend_request', { current_user_id: $userStore.me.id, target_user_id: profileUser.id });
       toasts.addToast('Friend request sent!', 'success');
     } catch (error: any) {
       console.error('Failed to send friend request:', error);
@@ -191,7 +191,7 @@
     try {
       const meId = $userStore.me?.id;
       if (!meId || !profileUser?.id) return;
-      const friendships: any[] = await invoke('get_friendships', { currentUserId: meId });
+      const friendships: any[] = await invoke('get_friendships', { current_user_id: meId });
       const fs = friendships.find(
         (f: any) =>
           (f.user_a_id === meId && f.user_b_id === profileUser.id) ||
@@ -240,7 +240,7 @@
         case 'block': {
           const meId = $userStore.me?.id;
           if (meId && profileUser?.id) {
-            await invoke('block_user', { currentUserId: meId, targetUserId: profileUser.id });
+            await invoke('block_user', { current_user_id: meId, target_user_id: profileUser.id });
             toasts.addToast('User blocked.', 'success');
           }
           break;
@@ -283,7 +283,7 @@
   async function sendServerInvite() {
     if (!selectedServerId || !profileUser?.id) return;
     try {
-      await invoke('send_server_invite', { serverId: selectedServerId, userId: profileUser.id });
+      await invoke('send_server_invite', { server_id: selectedServerId, user_id: profileUser.id });
       toasts.addToast('Invite sent.', 'success');
     } catch (e: any) {
       console.error('Failed to send server invite:', e);

@@ -130,7 +130,7 @@
       return null;
     }
     try {
-      const friendships: FriendshipRecord[] = await invoke('get_friendships', { currentUserId: meId });
+      const friendships: FriendshipRecord[] = await invoke('get_friendships', { current_user_id: meId });
       const match = friendships.find(f => f.id === friend.friendshipId) || friendships.find(
         f =>
           (f.user_a_id === meId && f.user_b_id === targetId) ||
@@ -183,7 +183,7 @@
     try {
       const friendship = await ensureFriendship();
       if (!friendship) return;
-      await invoke('accept_friend_request', { friendshipId: friendship.id });
+      await invoke('accept_friend_request', { friendship_id: friendship.id });
       toasts.addToast('Friend request accepted.', 'success');
       await refreshFriends();
     } catch (error) {
@@ -200,7 +200,7 @@
     try {
       const friendship = await ensureFriendship();
       if (!friendship) return;
-      await invoke('remove_friendship', { friendshipId: friendship.id });
+      await invoke('remove_friendship', { friendship_id: friendship.id });
       toasts.addToast('Friend request declined.', 'info');
       await refreshFriends();
     } catch (error) {
@@ -217,7 +217,7 @@
     try {
       const friendship = await ensureFriendship();
       if (!friendship) return;
-      await invoke('remove_friendship', { friendshipId: friendship.id });
+      await invoke('remove_friendship', { friendship_id: friendship.id });
       toasts.addToast('Friend removed.', 'info');
       await refreshFriends();
     } catch (error) {
@@ -238,7 +238,7 @@
     }
     actionInProgress = 'block';
     try {
-      await invoke('block_user', { currentUserId: meId, targetUserId: targetId });
+      await invoke('block_user', { current_user_id: meId, target_user_id: targetId });
       toasts.addToast('User blocked.', 'success');
       await refreshFriends();
     } catch (error) {
@@ -265,7 +265,7 @@
         toasts.addToast('This user has blocked you.', 'error');
         return;
       }
-      await invoke('unblock_user', { friendshipId: friendship.id });
+      await invoke('unblock_user', { friendship_id: friendship.id });
       toasts.addToast('User unblocked.', 'success');
       await refreshFriends();
     } catch (error) {

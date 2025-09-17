@@ -2,29 +2,35 @@ use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
 use aegis_protocol::EncryptedDmSlot;
 use aep::database;
+use aegis_shared_types::AppState;
 use e2ee;
+use serde::Deserialize;
 use tauri::State;
 
-#[tauri::command]
-pub async fn send_message(
+#[derive(Debug, Clone, Deserialize)]
+pub struct AttachmentDescriptor {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub content_type: Option<String>,
+    pub size: u64,
+}
+
+async fn persist_and_broadcast_message(
+    state: AppState,
     message: String,
     channel_id: Option<String>,
     server_id: Option<String>,
-    state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
-
     let peer_id = state.identity.peer_id().to_base58();
 
-    // Insert locally so the chat UI works offline and messages appear immediately
-    let chat_id_local = if let Some(c) = channel_id.clone() {
-        c
-    } else if let Some(s) = server_id.clone() {
-        s
+    let chat_id_local = if let Some(ref c) = channel_id {
+        c.clone()
+    } else if let Some(ref s) = server_id {
+        s.clone()
     } else {
         peer_id.clone()
     };
+
     let new_local_message = database::Message {
         id: uuid::Uuid::new_v4().to_string(),
         chat_id: chat_id_local,
@@ -66,6 +72,39 @@ pub async fn send_message(
 }
 
 #[tauri::command]
+pub async fn send_message(
+    message: String,
+    channel_id: Option<String>,
+    server_id: Option<String>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+
+    persist_and_broadcast_message(state, message, channel_id, server_id).await
+}
+
+#[tauri::command]
+pub async fn send_message_with_attachments(
+    message: String,
+    attachments: Vec<AttachmentDescriptor>,
+    channel_id: Option<String>,
+    server_id: Option<String>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    if !attachments.is_empty() {
+        let attachment_count = attachments.len();
+        let sample: Vec<String> = attachments.iter().take(3).map(|a| a.name.clone()).collect();
+        eprintln!("send_message_with_attachments invoked with {attachment_count} attachment(s); deferring to basic message pipeline. Samples: {:?}", sample);
+    }
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+
+    persist_and_broadcast_message(state, message, channel_id, server_id).await
+}
+
+
+#[tauri::command]
 pub async fn get_messages(
     chat_id: String,
     limit: i64,
@@ -78,6 +117,20 @@ pub async fn get_messages(
         .await
         .map_err(|e| e.to_string())
 }
+#[tauri::command]
+pub async fn delete_message(
+    chat_id: String,
+    message_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let _ = chat_id;
+    database::delete_message(&state.db_pool, &message_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 
 #[tauri::command]
 pub async fn send_encrypted_dm(
@@ -184,17 +237,24 @@ pub async fn rotate_group_key(
         });
     }
 
+    let issuer_id = state.identity.peer_id().to_base58();
+    let payload = bincode::serialize(&(issuer_id.clone(), &server_id, &channel_id, epoch, &slots))
+        .map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&payload)
+        .map_err(|e| e.to_string())?;
+
     let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        issuer_id,
         server_id,
         channel_id,
         epoch,
         slots,
-        signature: None,
+        signature: Some(signature),
     };
     let bytes = bincode::serialize(&aep_msg).map_err(|e| e.to_string())?;
-    // Optionally sign entire packet
-    // Not strictly necessary for trusted owner distribution in P2P, but consistent with others
-    // Note: We cannot set signature inline since enum variant consumed; sign serialized bytes instead (transport integrity)
     state
         .network_tx
         .send(bytes)
@@ -252,3 +312,36 @@ pub async fn send_encrypted_group_message(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn add_reaction(
+    chat_id: String,
+    message_id: String,
+    emoji: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    if state.as_ref().is_none() {
+        return Err("State not initialized".to_string());
+    }
+    drop(state);
+    let _ = (chat_id, message_id, emoji);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn remove_reaction(
+    chat_id: String,
+    message_id: String,
+    emoji: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    if state.as_ref().is_none() {
+        return Err("State not initialized".to_string());
+    }
+    drop(state);
+    let _ = (chat_id, message_id, emoji);
+    Ok(())
+}
+

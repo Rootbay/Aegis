@@ -98,7 +98,7 @@ function createServerStore(): ServerStore {
       return serverCache.get(serverId) || null;
     }
     try {
-      const server = await invoke<BackendServer | null>('get_server_details', { serverId });
+      const server = await invoke<BackendServer | null>('get_server_details', { serverId, server_id: serverId });
       if (server) {
         const mapped = mapServer(server);
         serverCache.set(serverId, mapped);
@@ -116,7 +116,7 @@ function createServerStore(): ServerStore {
     try {
       const currentUser = get(userStore).me;
       if (currentUser) {
-        const fetchedServers = await invoke<BackendServer[]>('get_servers', { currentUserId: currentUser.id });
+        const fetchedServers = await invoke<BackendServer[]>('get_servers', { currentUserId: currentUser.id, current_user_id: currentUser.id });
         const mapped = fetchedServers.map(mapServer);
         mapped.forEach(server => serverCache.set(server.id, server));
         update(s => ({ ...s, servers: mapped, loading: false }));
@@ -184,8 +184,8 @@ function createServerStore(): ServerStore {
     }
     update(s => ({ ...s, loading: true }));
     try {
-      const channels = await invoke<Channel[]>('get_channels_for_server', { serverId });
-      const membersBackend = await invoke<BackendUser[]>('get_members_for_server', { serverId });
+      const channels = await invoke<Channel[]>('get_channels_for_server', { serverId, server_id: serverId });
+      const membersBackend = await invoke<BackendUser[]>('get_members_for_server', { serverId, server_id: serverId });
       const members: User[] = membersBackend.map(fromBackendUser);
 
       update(s => {
@@ -259,3 +259,4 @@ function createServerStore(): ServerStore {
 }
 
 export const serverStore = createServerStore();
+

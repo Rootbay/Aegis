@@ -1,4 +1,4 @@
-﻿import { writable, get, derived, type Readable } from 'svelte/store';
+import { writable, get, derived, type Readable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import type { Message } from '$lib/models/Message';
 import type { ChatMessage } from '$lib/models/AepMessage';
@@ -68,7 +68,7 @@ function createChatStore(): ChatStore {
       });
       loadingMessages.set(true);
       try {
-        const fetched: BackendMessage[] = await invoke('get_messages', { chatId: messageChatId, limit: PAGE_LIMIT, offset: 0 });
+        const fetched: BackendMessage[] = await invoke('get_messages', { chatId: messageChatId, chat_id: messageChatId, limit: PAGE_LIMIT, offset: 0 });
         const mapped = fetched.map((m: BackendMessage) => ({
           id: m.id,
           chatId: m.chat_id ?? m.chatId ?? messageChatId,
@@ -101,7 +101,7 @@ function createChatStore(): ChatStore {
     loadingMessages.set(true);
     try {
       const current = get(messagesByChatIdStore).get(targetChatId) || [];
-      const fetched: BackendMessage[] = await invoke('get_messages', { chatId: targetChatId, limit: PAGE_LIMIT, offset: current.length });
+      const fetched: BackendMessage[] = await invoke('get_messages', { chatId: targetChatId, chat_id: targetChatId, limit: PAGE_LIMIT, offset: current.length });
       const mapped = fetched.map((m: BackendMessage) => ({
         id: m.id,
         chatId: m.chat_id ?? m.chatId ?? targetChatId,
@@ -168,7 +168,9 @@ function createChatStore(): ChatStore {
       await invoke('send_message', {
         message: content,
         channelId: type === 'server' ? channelId : null,
+        channel_id: type === 'server' ? channelId : null,
         serverId: type === 'server' ? chatId : null,
+        server_id: type === 'server' ? chatId : null,
       });
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -212,7 +214,9 @@ function createChatStore(): ChatStore {
         message: content,
         attachments: attachments.map(a => ({ name: a.name, type: a.type, size: a.size })),
         channelId: type === 'server' ? channelId : null,
+        channel_id: type === 'server' ? channelId : null,
         serverId: type === 'server' ? chatId : null,
+        server_id: type === 'server' ? chatId : null,
       });
     } catch (error) {
       console.error('Failed to send message with attachments:', error);
@@ -231,7 +235,7 @@ function createChatStore(): ChatStore {
       return new Map(map);
     });
     try {
-      await invoke('delete_message', { chatId: targetChatId, messageId });
+      await invoke('delete_message', { chatId: targetChatId, chat_id: targetChatId, messageId, message_id: messageId });
     } catch (e) {
       console.error('Failed to delete message:', e);
     }
@@ -295,7 +299,7 @@ function createChatStore(): ChatStore {
       return new Map(map);
     });
     try {
-      await invoke('add_reaction', { chatId: targetChatId, messageId, emoji });
+      await invoke('add_reaction', { chatId: targetChatId, chat_id: targetChatId, messageId, message_id: messageId, emoji });
     } catch (e) {
       console.debug('add_reaction not available or failed', e);
     }
@@ -322,7 +326,7 @@ function createChatStore(): ChatStore {
       return new Map(map);
     });
     try {
-      await invoke('remove_reaction', { chatId: targetChatId, messageId, emoji });
+      await invoke('remove_reaction', { chatId: targetChatId, chat_id: targetChatId, messageId, message_id: messageId, emoji });
     } catch (e) {
       console.debug('remove_reaction not available or failed', e);
     }
@@ -354,5 +358,7 @@ export const hasMoreByChatId = chatStore.hasMoreByChatId;
 export const activeChannelId = chatStore.activeChannelId;
 export const activeChatId = chatStore.activeChatId;
 export const activeChatType = chatStore.activeChatType;
+
+
 
 

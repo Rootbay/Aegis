@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { toasts } from '$lib/data/stores/ToastStore';
+  import { userStore } from '$lib/data/stores/userStore';
   import { Plus, Scan } from '@lucide/svelte';
   import QRCodeScanner from '$lib/components/modals/QRCodeScanner.svelte';
 
@@ -15,9 +16,18 @@
       return;
     }
 
+    const currentUser = $userStore.me;
+    if (!currentUser?.id) {
+      toasts.addToast('You must be signed in to send requests.', 'error');
+      return;
+    }
+
     isSending = true;
     try {
-      await invoke('send_friend_request', { friendId: friendIdToAdd.trim() });
+      await invoke('send_friend_request', {
+        current_user_id: currentUser.id,
+        target_user_id: friendIdToAdd.trim(),
+      });
       toasts.addToast('Friend request sent!', 'success');
       friendIdToAdd = '';
     } catch (error) {

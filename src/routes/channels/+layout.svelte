@@ -32,9 +32,9 @@
   async function fetchServerData(id: string) {
     loading = true;
     try {
-      const fetchedServer = await invoke("get_server_details", { serverId: id });
-      const fetchedChannels = await invoke("get_channels_for_server", { serverId: id }) as any[];
-      const fetchedMembers = await invoke("get_members_for_server", { serverId: id }) as any[];
+      const fetchedServer = await invoke("get_server_details", { serverId: id, server_id: id });
+      const fetchedChannels = await invoke("get_channels_for_server", { serverId: id, server_id: id }) as any[];
+      const fetchedMembers = await invoke("get_members_for_server", { serverId: id, server_id: id }) as any[];
       server = fetchedServer ? { ...fetchedServer, channels: fetchedChannels, members: fetchedMembers } : null;
       channels = fetchedChannels;
       members = fetchedMembers;
@@ -74,3 +74,5 @@
     <p class="text-muted-foreground text-center mt-8">Server not found or an error occurred.</p>
   {/if}
 </div>
+
+

@@ -23,7 +23,7 @@
   async function fetchChannels(id: string) {
     loading = true;
     try {
-      const fetchedChannels = await invoke<Channel[]>('get_channels_for_server', { serverId: id });
+      const fetchedChannels = await invoke<Channel[]>('get_channels_for_server', { serverId: id, server_id: id });
       channels = fetchedChannels
         .filter((channel) => channel.channel_type === 'text')
         .map((channel) => ({
@@ -57,3 +57,4 @@
     </p>
   {/if}
 </div>
+

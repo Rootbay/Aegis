@@ -173,7 +173,7 @@ function createFriendStore(): FriendStore {
         return;
       }
 
-      const friendships = await invokeFn<FriendshipBackend[]>('get_friendships', { currentUserId: currentUser.id });
+      const friendships = await invokeFn<FriendshipBackend[]>('get_friendships', { current_user_id: currentUser.id });
       const friends = (
         await Promise.all(friendships.map((fs) => mapFriendshipToFriend(fs, currentUser.id)))
       ).filter((friend): friend is Friend => friend !== null);

@@ -25,7 +25,7 @@
     }
     try {
       const serverIdToJoin = inviteLink;
-      await invoke('join_server', { serverId: serverIdToJoin, userId: $userStore.me.id });
+      await invoke('join_server', { server_id: serverIdToJoin, user_id: $userStore.me.id });
 
       const newServer: Server = {
         id: serverIdToJoin,
