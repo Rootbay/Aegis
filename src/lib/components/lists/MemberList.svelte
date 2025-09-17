@@ -1,12 +1,9 @@
 <script lang="ts">
   import type { User } from '$lib/models/User';
 
-  type Props = {
-    members?: User[];
-    openUserCardModal: (user: User, x: number, y: number, flag: boolean) => void;
-  };
+  type OpenUserCardModal = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
 
-  let { members = [], openUserCardModal }: Props = $props();
+  let { members = [], openUserCardModal }: { members?: User[]; openUserCardModal: OpenUserCardModal } = $props();
 
   function openMemberCard(member: User, event: MouseEvent | KeyboardEvent) {
     let x = 0;
@@ -32,10 +29,10 @@
     {#if members.length > 0}
       <ul class="space-y-2">
         {#each members as member (member.id)}
-          <div 
+          <div
             role="button"
             tabindex="0"
-            class="w-full flex items-center justify-between p-2 rounded-md bg-zinc-700 hover:bg-zinc-600/50 transition-colors" 
+            class="w-full flex items-center justify-between p-2 rounded-md bg-zinc-700 hover:bg-zinc-600/50 transition-colors"
             onclick={(e) => openMemberCard(member, e)}
             onkeydown={(e) => { if (e.key === 'Enter') { openMemberCard(member, e); } }}
           >
@@ -49,3 +46,4 @@
     {/if}
   </div>
 </div>
+

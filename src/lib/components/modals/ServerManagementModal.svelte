@@ -5,17 +5,21 @@
   import { userStore } from '$lib/data/stores/userStore';
   import type { Server } from '$lib/models/Server';
 
+  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+
+  type ServerManagementModalProps = {
+    show?: boolean;
+    onclose?: () => void;
+    onserverCreated?: UnaryHandler<Server>;
+    onserverJoined?: UnaryHandler<string>;
+  };
+
   let {
-    show = false,
+    show = $bindable(false),
     onclose,
     onserverCreated,
     onserverJoined
-  }: {
-    show: $bindable<boolean>;
-    onclose?: () => void;
-    onserverCreated?: (server: Server) => void;
-    onserverJoined?: (serverId: string) => void;
-  } = $props();
+  }: ServerManagementModalProps = $props();
 
   let newServerName = $state('');
   let joinServerId = $state('');
@@ -117,3 +121,5 @@
     </div>
   </div>
 {/if}
+
+

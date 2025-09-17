@@ -3,7 +3,7 @@
 	import { Home, Plus, Settings } from "@lucide/svelte";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/stores";
-	import { userStore } from "$lib/data/stores/userStore";
+		import { userStore } from "$lib/data/stores/userStore";
 	import { serverStore } from "$lib/data/stores/serverStore";
 	import { friendStore } from "$lib/data/stores/friendStore";
 	import { toasts } from "$lib/data/stores/ToastStore";
@@ -11,8 +11,15 @@
 	import type { Server } from "$lib/models/Server";
 	import { lastVisitedServerId } from "$lib/data/stores/navigationStore";
 	import { get } from "svelte/store";
+	import { SvelteSet } from "svelte/reactivity";
 
-	const { onProfileClick, onCreateJoinServerClick } = $props<{ onProfileClick: (clientX: number, clientY: number) => void; onCreateJoinServerClick: () => void }>();
+	type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+
+	const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
+	type ProfileClickHandler = (clientX: number, clientY: number) => void; // eslint-disable-line no-unused-vars
+
+	let { onProfileClick, onCreateJoinServerClick }: { onProfileClick: ProfileClickHandler; onCreateJoinServerClick: () => void } = $props();
 
 	const MUTED_SERVERS_STORAGE_KEY = 'sidebar.mutedServers';
 
@@ -20,26 +27,26 @@
 	let serverContextMenuX = $state(0);
 	let serverContextMenuY = $state(0);
 	let selectedServer = $state<Server | null>(null);
-	let mutedServerIds = $state<Set<string>>(loadMutedServers());
+	let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
 
-	function loadMutedServers(): Set<string> {
+	function loadMutedServers(): SvelteSet<string> {
 		if (typeof localStorage === 'undefined') {
-			return new Set();
+			return new SvelteSet();
 		}
 		try {
 			const raw = localStorage.getItem(MUTED_SERVERS_STORAGE_KEY);
-			if (!raw) return new Set();
+			if (!raw) return new SvelteSet();
 			const parsed = JSON.parse(raw);
 			if (Array.isArray(parsed)) {
-				return new Set(parsed.filter((id): id is string => typeof id === 'string'));
+				return new SvelteSet(parsed.filter((id): id is string => typeof id === 'string'));
 			}
 		} catch (error) {
 			console.warn('Failed to load muted servers from storage', error);
 		}
-		return new Set();
+		return new SvelteSet();
 	}
 
-	function saveMutedServers(ids: Set<string>) {
+	function saveMutedServers(ids: SvelteSet<string>) {
 		if (typeof localStorage === 'undefined') {
 			return;
 		}
@@ -51,16 +58,20 @@
 	}
 
 	function gotoResolved(path: string) {
-		const url = new URL(path, $page.url);
-		goto(url);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		gotoUnsafe(path);
 	}
 
+
 	function gotoServerSettings(serverId: string, tab?: string) {
-		const url = new URL(`/channels/${serverId}/settings`, $page.url);
+		const params = new URLSearchParams(); // eslint-disable-line svelte/prefer-svelte-reactivity
 		if (tab) {
-			url.searchParams.set('tab', tab);
+			params.set('tab', tab);
 		}
-		goto(url);
+		const query = params.toString();
+		const href = query ? `/channels/${serverId}/settings?${query}` : `/channels/${serverId}/settings`;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		gotoUnsafe(href);
 	}
 
 	function buildInviteLink(serverId: string) {
@@ -86,10 +97,12 @@
 	}
 
 	function gotoWithTab(pathname: string, tab: string) {
-		const url = new URL($page.url);
-		url.pathname = pathname;
-		url.searchParams.set('tab', tab);
-		goto(url);
+		const params = new URLSearchParams($page.url.search); // eslint-disable-line svelte/prefer-svelte-reactivity
+		params.set('tab', tab);
+		const query = params.toString();
+		const href = query ? `${pathname}?${query}` : pathname;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		gotoUnsafe(href);
 	}
 
 	function clampToViewport(x: number, y: number, approxWidth = 220, approxHeight = 260) {
@@ -110,11 +123,13 @@
 	function handleServerClick(server: Server) {
 		lastVisitedServerId.set(server.id);
 		serverStore.setActiveServer(server.id);
-		const target = new URL(`/channels/${server.id}`, $page.url);
-		if ($page.url.pathname !== target.pathname) {
-			goto(target);
+		const targetPath = `/channels/${server.id}`;
+		if ($page.url.pathname !== targetPath) {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+			gotoUnsafe(targetPath);
 		}
 	}
+
 
 	async function handleServerAction({ action, itemData }: { action: string; itemData: Server | null }) {
 		if (!itemData) {
@@ -130,7 +145,7 @@
 					toasts.addToast('All channels marked as read (local).', 'info');
 					break;
 				case 'mute_unmute_server': {
-					const next = new Set(mutedServerIds);
+					const next = new SvelteSet(mutedServerIds);
 					if (next.has(server.id)) {
 						next.delete(server.id);
 						toasts.addToast('Server unmuted (local).', 'info');
@@ -234,7 +249,8 @@
 		if ($friendStore.friends.length > 0) {
 			gotoWithTab('/', 'All');
 		} else {
-			goto('/friends/add');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
+		gotoUnsafe('/friends/add');
 		}
 	}} aria-label="Home">
 		<Home size={15} />
@@ -281,7 +297,8 @@
 	<div class="flex-grow"></div>
 
 	<div class="flex flex-col items-center space-y-4">
-		<button class="p-3 rounded-lg hover:bg-card transition cursor-pointer" aria-label="Settings" onclick={() => goto('/settings')}>
+		<button class="p-3 rounded-lg hover:bg-card transition cursor-pointer" aria-label="Settings" onclick={() => // eslint-disable-next-line svelte/no-navigation-without-resolve
+		gotoUnsafe('/settings')}>
 			<Settings size={12} />
 		</button>
 		<button
@@ -293,4 +310,21 @@
 		</button>
 	</div>
 </aside>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

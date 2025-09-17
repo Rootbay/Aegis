@@ -10,7 +10,7 @@
   let { onclose, allUsers }: Props = $props();
 
   let searchTerm = $state('');
-  let selectedUserIds = $state(new SvelteSet<string>());
+  let selectedUserIds = new SvelteSet<string>();
 
   let filteredUsers = $derived(
     allUsers.filter(user =>
@@ -32,8 +32,7 @@
     } else {
       selectedUserIds.add(userId);
     }
-    selectedUserIds = new SvelteSet(selectedUserIds);
-  }
+}
 
   function createGroup() {
     const selectedUsers = allUsers.filter(user => selectedUserIds.has(user.id));
@@ -112,3 +111,4 @@
     </button>
   </div>
 </div>
+

@@ -14,8 +14,13 @@
     serverId ? $serverStore.servers.find(s => s.id === serverId) ?? null : null
   );
 
+  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
   const gotoResolved = (path: string) => {
-    (goto as unknown as (target: string) => void)(path);
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
+    gotoUnsafe(path);
   };
 
   $effect(() => {

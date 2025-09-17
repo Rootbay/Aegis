@@ -3,23 +3,32 @@
   import type { Server } from '$lib/models/Server';
   import { userStore } from '$lib/data/stores/userStore';
 
-  let {
-    x = 0,
-    y = 0,
-    show = false,
-    server = null,
-    onaction,
-    onclose
-  }: {
+  type ServerContextMenuAction = {
+    action: string;
+    itemData: Server | null;
+  };
+
+  type ServerContextMenuHandler = (detail: ServerContextMenuAction) => void; // eslint-disable-line no-unused-vars
+
+  type ServerContextMenuProps = {
     x?: number;
     y?: number;
     show?: boolean;
     server?: Server | null;
-    onaction?: (detail: { action: string; itemData: any }) => void;
+    onaction?: ServerContextMenuHandler;
     onclose?: () => void;
-  } = $props();
+  };
 
-  let menuItems = $derived([
+  let {
+    x = 0,
+    y = 0,
+    show = $bindable(false),
+    server = null,
+    onaction,
+    onclose
+  }: ServerContextMenuProps = $props();
+
+  const menuItems = $derived([
     { label: 'Mark As Read', action: 'mark_as_read', data: server },
     { label: 'Mute/Unmute Server', action: 'mute_unmute_server', data: server },
     { label: 'Notification Settings', action: 'notification_settings', data: server },
@@ -45,17 +54,17 @@
       : [{ label: 'Leave Server', action: 'leave_server', isDestructive: true, data: server }]),
   ]);
 
-  function handleAction(detail: { action: string; itemData: any }) {
+  function handleAction(detail: ServerContextMenuAction) {
     onaction?.(detail);
   }
 </script>
 
-
 <BaseContextMenu
   {x}
   {y}
-  {show}
+  bind:show={show}
   menuItems={menuItems}
   onclose={onclose}
   onaction={handleAction}
 />
+

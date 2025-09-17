@@ -1,19 +1,24 @@
 <script lang="ts">
+  type SizeHandler = (size: number) => void; // eslint-disable-line no-unused-vars
+  type ZoomHandler = (zoom: number) => void; // eslint-disable-line no-unused-vars
+
+  type MagnifierContextMenuProps = {
+    x?: number;
+    y?: number;
+    show?: boolean;
+    onsetMagnifierSize?: SizeHandler;
+    onsetMagnifierZoom?: ZoomHandler;
+    onclose?: () => void;
+  };
+
   let {
     x = 0,
     y = 0,
-    show = false,
+    show = $bindable(false),
     onsetMagnifierSize,
     onsetMagnifierZoom,
     onclose
-  }: {
-    x?: number;
-    y?: number;
-    show: $bindable<boolean>;
-    onsetMagnifierSize?: (size: number) => void;
-    onsetMagnifierZoom?: (zoom: number) => void;
-    onclose?: () => void;
-  } = $props();
+  }: MagnifierContextMenuProps = $props();
 
   function handleClickOutside() {
     show = false;

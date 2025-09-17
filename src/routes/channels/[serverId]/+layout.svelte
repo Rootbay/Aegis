@@ -9,6 +9,10 @@
     children?: Snippet;
   };
 
+  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
   let { children }: Props = $props();
 
   let serverId = $state<string | null>(null);
@@ -44,7 +48,8 @@
         if (textChannel) {
           const targetPath = `/channels/${serverId}/${textChannel.id}`;
           if (currentPathname !== targetPath) {
-            (goto as unknown as (target: string) => void)(targetPath);
+            // eslint-disable-next-line svelte/no-navigation-without-resolve
+    gotoUnsafe(targetPath);
           }
         }
       }

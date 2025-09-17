@@ -6,23 +6,22 @@
   import Privacy from '../server-settings/Privacy.svelte';
   import Roles from '../server-settings/Roles.svelte';
   import UserManagement from '../server-settings/UserManagement.svelte';
-  import DeleteServer from '../server-settings/DeleteServer.svelte';
 
-  type Props = {
+  type UnaryHandler<T> = (value: T) => void;
+
+  type ServerSettingsModalProps = {
     show?: boolean;
     server: Server | null;
     onClose: () => void;
-    onupdateServer?: (server: Server) => void;
-    ondeleteServer?: (server: Server) => void;
+    onupdateServer?: UnaryHandler<Server>;
   };
 
   let {
-    show = false,
+    show = $bindable(false),
     server,
     onClose,
-    onupdateServer,
-    ondeleteServer
-  }: Props = $props();
+    onupdateServer
+  }: ServerSettingsModalProps = $props();
 
   let activeTab = $state<'overview' | 'moderation' | 'privacy' | 'roles' | 'user_management' | 'delete'>('overview');
 
@@ -66,8 +65,6 @@
           <Roles />
         {:else if activeTab === 'user_management'}
           <UserManagement />
-        {:else if activeTab === 'delete'}
-          <DeleteServer server={server!} ondeleteServer={ondeleteServer} />
         {/if}
       </main>
     </div>

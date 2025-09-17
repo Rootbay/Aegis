@@ -8,6 +8,10 @@ if (!webCrypto) {
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+type BufferLike = {
+  from(input: string, encoding: string): { toString(encoding: string): string };
+};
+
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const BASE32_LOOKUP: Record<string, number> = {};
 for (let i = 0; i < BASE32_ALPHABET.length; i += 1) {
@@ -18,7 +22,7 @@ function getBtoa() {
   if (typeof btoa === 'function') {
     return btoa;
   }
-  const bufferCtor = (globalThis as { Buffer?: any }).Buffer;
+  const bufferCtor = (globalThis as { Buffer?: BufferLike }).Buffer;
   if (bufferCtor) {
     return (str: string) => bufferCtor.from(str, 'binary').toString('base64');
   }
@@ -29,7 +33,7 @@ function getAtob() {
   if (typeof atob === 'function') {
     return atob;
   }
-  const bufferCtor = (globalThis as { Buffer?: any }).Buffer;
+  const bufferCtor = (globalThis as { Buffer?: BufferLike }).Buffer;
   if (bufferCtor) {
     return (str: string) => bufferCtor.from(str, 'base64').toString('binary');
   }

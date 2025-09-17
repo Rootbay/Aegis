@@ -1,16 +1,18 @@
 <script lang="ts" generics="T">
-  interface ContextMenuItem {
+  type ContextMenuItem<TData> = {
     label?: string;
     action?: string;
     isDestructive?: boolean;
     isSeparator?: boolean;
-    data?: T | null;
-  }
+    data?: TData | null;
+  };
+
+  type ContextMenuHandler<TData> = (payload: { action: string; itemData: TData | null }) => void; // eslint-disable-line no-unused-vars
 
   let {
     x = 0,
     y = 0,
-    show = false,
+    show = $bindable(false),
     menuItems = [],
     onaction,
     onclose
@@ -18,8 +20,8 @@
     x?: number;
     y?: number;
     show?: boolean;
-    menuItems?: ContextMenuItem[];
-    onaction?: (payload: { action: string; itemData: T | null }) => void;
+    menuItems?: ContextMenuItem<T>[];
+    onaction?: ContextMenuHandler<T>;
     onclose?: () => void;
   } = $props();
 

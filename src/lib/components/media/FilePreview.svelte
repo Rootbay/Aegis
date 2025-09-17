@@ -1,75 +1,40 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-
   import { X, File as FileIcon } from '@lucide/svelte';
-
   import { onDestroy } from 'svelte';
 
+  type FileRemoveHandler = (file: File) => void; // eslint-disable-line no-unused-vars
 
-
-  const { file, onRemove = () => {} } = $props<{
-
-    file: File;
-
-    onRemove?: (file: File) => void;
-
-  }>();
-
-
+  let { file, onRemove = () => {} }: { file: File; onRemove?: FileRemoveHandler } = $props();
 
   let imagePreviewUrl = $state<string | null>(null);
-
   let previousPreviewUrl: string | null = null;
 
-
-
   function updatePreview(source: File) {
-
     if (previousPreviewUrl) {
-
       URL.revokeObjectURL(previousPreviewUrl);
-
       previousPreviewUrl = null;
-
     }
-
-
 
     if (source.type.startsWith('image/')) {
-
       const url = URL.createObjectURL(source);
-
       imagePreviewUrl = url;
-
       previousPreviewUrl = url;
-
     } else {
-
       imagePreviewUrl = null;
-
     }
-
   }
-
-
 
   $effect(() => {
     updatePreview(file);
   });
 
-
-
   onDestroy(() => {
-
     if (previousPreviewUrl) {
-
       URL.revokeObjectURL(previousPreviewUrl);
-
     }
-
   });
-
 </script>
 
 <div class="relative group bg-zinc-700 p-2 rounded-md flex items-center space-x-2">
@@ -92,5 +57,4 @@
     <X size={10} class="text-white" />
   </button>
 </div>
-
 

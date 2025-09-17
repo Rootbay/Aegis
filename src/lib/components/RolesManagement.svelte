@@ -3,12 +3,14 @@
   import { v4 as uuidv4 } from 'uuid';
   import { Plus, Pencil, Trash, X, Check, Eye } from '@lucide/svelte';
 
-  type Props = {
+  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+
+  type RolesManagementProps = {
     roles?: Role[];
-    onadd_role?: (role: Role) => void;
-    onupdate_role?: (role: Role) => void;
-    ondelete_role?: (roleId: string) => void;
-    ontoggle_permission?: (args: { roleId: string; permission: keyof Role['permissions'] }) => void;
+    onadd_role?: UnaryHandler<Role>;
+    onupdate_role?: UnaryHandler<Role>;
+    ondelete_role?: UnaryHandler<string>;
+    ontoggle_permission?: UnaryHandler<{ roleId: string; permission: keyof Role['permissions'] }>;
   };
 
   let {
@@ -17,7 +19,7 @@
     onupdate_role,
     ondelete_role,
     ontoggle_permission
-  }: Props = $props();
+  }: RolesManagementProps = $props();
 
   let newRoleName = $state('');
   let editingRole = $state<Role | null>(null);
@@ -48,7 +50,7 @@
     ],
   };
 
-  const allPermissions: { [key: string]: string } = {
+  const allPermissions: Record<string, string> = {
     'manage_channels': 'Manage Channels',
     'manage_roles': 'Manage Roles',
     'kick_members': 'Kick Members',

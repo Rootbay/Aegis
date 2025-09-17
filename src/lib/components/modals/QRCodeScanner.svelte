@@ -2,8 +2,10 @@
   import { Html5Qrcode } from 'html5-qrcode';
   import { X } from '@lucide/svelte';
 
+  type ScanSuccessHandler = (value: string) => void; // eslint-disable-line no-unused-vars
+
   type Props = {
-    onscanSuccess?: (value: string) => void;
+    onscanSuccess?: ScanSuccessHandler;
     onclose?: () => void;
   };
 
@@ -73,3 +75,4 @@
     <p class="text-muted-foreground text-center mt-4">Point your camera at a friend's QR code to add them.</p>
   </div>
 </div>
+

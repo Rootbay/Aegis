@@ -3,17 +3,21 @@
   import MagnifierContextMenu from '$lib/components/context-menus/MagnifierContextMenu.svelte';
   import { onMount, onDestroy } from 'svelte';
 
+  type SaveHandler = (url: string) => void; // eslint-disable-line no-unused-vars
+
+  type ImageLightboxProps = {
+    imageUrl?: string;
+    show?: boolean;
+    onClose?: () => void;
+    onsave?: SaveHandler;
+  };
+
   let {
     imageUrl = '',
-    show = false,
+    show = $bindable(false),
     onClose = () => {},
     onsave
-  }: {
-    imageUrl?: string;
-    show: $bindable<boolean>;
-    onClose?: () => void;
-    onsave?: (url: string) => void;
-  } = $props();
+  }: ImageLightboxProps = $props();
 
   let imageZoomLevel = $state(1);
   let magnifierZoom = $state(2);
@@ -26,8 +30,8 @@
   let showContextMenu = $state(false);
   let contextMenuX = $state(0);
   let contextMenuY = $state(0);
-  let imageElement = $state<HTMLImageElement>();
-  let parentDivElement = $state<HTMLDivElement>();
+  let imageElement = $state<HTMLImageElement | null>(null);
+  let parentDivElement = $state<HTMLDivElement | null>(null);
 
   function closeLightbox() {
     show = false;
@@ -62,8 +66,15 @@
 
   function handleImageMouseMove(event: MouseEvent) {
     const image = event.currentTarget as HTMLImageElement;
+    const parentElement = parentDivElement;
+
+    if (!parentElement) {
+      showMagnifier = false;
+      return;
+    }
+
     const imageRect = image.getBoundingClientRect();
-    const parentRect = parentDivElement.getBoundingClientRect();
+    const parentRect = parentElement.getBoundingClientRect();
 
     imageMouseX = event.clientX - imageRect.left;
     imageMouseY = event.clientY - imageRect.top;
@@ -78,6 +89,7 @@
   }
 
   function handleContextMenu(event: MouseEvent) {
+    event.preventDefault();
     showContextMenu = true;
     contextMenuX = event.clientX;
     contextMenuY = event.clientY;
@@ -157,7 +169,7 @@
         <X size={12} />
       </button>
     </div>
-    <div bind:this={parentDivElement} class="relative flex items-center justify-center" role="presentation" tabindex="-1" oncontextmenu={(e) => { e.preventDefault(); handleContextMenu(e); }}>
+    <div bind:this={parentDivElement} class="relative flex items-center justify-center" role="presentation" tabindex="-1" oncontextmenu={handleContextMenu}>
       <img
         bind:this={imageElement}
         src={imageUrl}
@@ -178,20 +190,21 @@
             left: {magnifierX - magnifierSize / 2}px;
             top: {magnifierY - magnifierSize / 2}px;
             background-image: url({imageUrl});
-            background-size: {(imageElement.width * imageZoomLevel) * magnifierZoom}px {(imageElement.height * imageZoomLevel) * magnifierZoom}px;
+            background-size: {(imageElement?.width ?? 0) * imageZoomLevel * magnifierZoom}px {(imageElement?.height ?? 0) * imageZoomLevel * magnifierZoom}px;
             background-position: {(magnifierSize / 2) - (imageMouseX * magnifierZoom * imageZoomLevel)}px {(magnifierSize / 2) - (imageMouseY * magnifierZoom * imageZoomLevel)}px;
-          ">
-        </div>
-          
+          "
+        ></div>
+
       {/if}
     </div>
     <MagnifierContextMenu
       x={contextMenuX}
       y={contextMenuY}
-      show={showContextMenu}
+      bind:show={showContextMenu}
       onsetMagnifierSize={handleSetMagnifierSize}
       onsetMagnifierZoom={handleSetMagnifierZoom}
       onclose={() => (showContextMenu = false)}
     />
   </div>
 {/if}
+

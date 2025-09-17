@@ -8,17 +8,15 @@
   import EmptyStateMessage from '$lib/components/ui/EmptyStateMessage.svelte';
   import type { Friend } from '$lib/models/Friend';
 
-  const props = $props<{ clazz?: string; friends: Friend[] }>();
-  let { clazz = '', friends } = props;
+  let { clazz = '', friends }: { clazz?: string; friends: Friend[] } = $props();
 
   const { activeTab } = getContext<FriendsLayoutContext>(FRIENDS_LAYOUT_DATA_CONTEXT_KEY);
 
   type FriendsListHeader = { kind: 'header'; status: string; count: number };
   type FriendsListItem = Friend | FriendsListHeader;
 
-  let filteredFriends = $state<Friend[]>([]);
-  $effect(() => {
-    filteredFriends = friends.filter((friend: Friend) => {
+  const filteredFriends = $derived.by(() =>
+    friends.filter((friend: Friend) => {
       switch (activeTab) {
         case 'All':
           return friend.status !== 'Blocked' && friend.status !== 'Pending';
@@ -31,11 +29,10 @@
         default:
           return true;
       }
-    });
-  });
+    })
+  );
 
-  let listItems = $state<FriendsListItem[]>([]);
-  $effect(() => {
+  const listItems = $derived.by(() => {
     const items: FriendsListItem[] = [];
     const groups: Record<string, Friend[]> = {
       Online: [],
@@ -57,7 +54,7 @@
       }
     }
 
-    listItems = items;
+    return items;
   });
 
   function isHeader(item: FriendsListItem): item is FriendsListHeader {
@@ -84,3 +81,7 @@
     {/if}
   </div>
 </div>
+
+
+
+

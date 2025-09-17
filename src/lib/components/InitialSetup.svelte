@@ -255,7 +255,7 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
             <h2 class="text-lg font-semibold flex items-center gap-2"><Save size={18} /> Save your recovery phrase</h2>
             <p class="text-sm text-zinc-400">Write these 12 words down in order. They are the only way to rebuild your account if you forget your password.</p>
             <div class="grid grid-cols-3 gap-2 text-sm font-mono">
-              {#each $authStore.onboarding.recoveryPhrase as word, index}
+              {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
                 <div class="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200">
                   <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
                 </div>
@@ -270,7 +270,7 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
             <h2 class="text-lg font-semibold flex items-center gap-2"><Save size={18} /> Verify two random words</h2>
             <p class="text-sm text-zinc-400">Enter the requested words to prove you saved the phrase correctly.</p>
             <div class="space-y-3">
-              {#each $authStore.onboarding.confirmationIndices as index}
+              {#each $authStore.onboarding.confirmationIndices as index (index)}
                 <div>
                   <label for={`word-${index}`} class="text-xs uppercase tracking-wide text-zinc-500 mb-1 block">Word #{index + 1}</label>
                   <input id={`word-${index}`}

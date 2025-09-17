@@ -4,21 +4,28 @@
   import { onMount, onDestroy } from 'svelte';
   import type { Channel } from '$lib/models/Channel';
 
-  const props = $props<{
+  type ChannelContextMenuDetail = {
+    action: string;
+    channelId: string;
+  };
+
+  type ChannelContextMenuHandler = (detail: ChannelContextMenuDetail) => void; // eslint-disable-line no-unused-vars
+
+  type ChannelContextMenuProps = {
     x: number;
     y: number;
     channel: Channel;
-    onaction?: (detail: { action: string; channelId: string }) => void;
+    onaction?: ChannelContextMenuHandler;
     onclose?: () => void;
-  }>();
+  };
 
-  let { x, y, channel, onaction, onclose } = props;
+  let { x, y, channel, onaction, onclose }: ChannelContextMenuProps = $props();
 
   function handleAction(action: string) {
     onaction?.({ action, channelId: channel.id });
   }
 
-  let contextMenuElement: HTMLElement;
+  let contextMenuElement: HTMLElement | null = null;
 
   function handleClickOutside(event: MouseEvent) {
     if (contextMenuElement && !contextMenuElement.contains(event.target as Node)) {
@@ -50,7 +57,6 @@
     window.removeEventListener('keydown', handleKeydown);
   });
 </script>
-
 
 <div
   class="absolute z-50 bg-card border border-zinc-700 rounded-md shadow-lg py-1 w-48 text-sm"
@@ -91,9 +97,3 @@
     <button class="w-full text-left px-4 py-2 hover:bg-zinc-600" onclick={() => handleAction('copy_channel_id')}>Copy Channel ID</button>
   {/if}
 </div>
-
-
-
-
-
-

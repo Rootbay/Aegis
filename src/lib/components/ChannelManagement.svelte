@@ -3,17 +3,21 @@
   import { v4 as uuidv4 } from 'uuid';
   import { Hash, Volume2, Plus, Pencil, Trash, X, Check } from '@lucide/svelte';
 
+  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+
+  type ChannelManagementProps = {
+    channels?: Channel[];
+    onadd_channel?: UnaryHandler<Channel>;
+    onupdate_channel?: UnaryHandler<Channel>;
+    ondelete_channel?: UnaryHandler<string>;
+  };
+
   let {
     channels = [],
     onadd_channel,
     onupdate_channel,
     ondelete_channel
-  }: {
-    channels?: Channel[];
-    onadd_channel?: (channel: Channel) => void;
-    onupdate_channel?: (channel: Channel) => void;
-    ondelete_channel?: (channelId: string) => void;
-  } = $props();
+  }: ChannelManagementProps = $props();
 
   let newChannelName = $state('');
   let newChannelType = $state<'text' | 'voice'>('text');

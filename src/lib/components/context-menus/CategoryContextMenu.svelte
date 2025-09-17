@@ -1,21 +1,24 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
 
-  let {
-    x,
-    y,
-    categoryId,
-    onaction,
-    onclose
-  }: {
+  type CategoryContextMenuDetail = {
+    action: string;
+    categoryId: string;
+  };
+
+  type CategoryContextMenuHandler = (detail: CategoryContextMenuDetail) => void; // eslint-disable-line no-unused-vars
+
+  type CategoryContextMenuProps = {
     x: number;
     y: number;
     categoryId: string;
-    onaction?: (detail: { action: string; categoryId: string }) => void;
+    onaction?: CategoryContextMenuHandler;
     onclose?: () => void;
-  } = $props();
+  };
 
-  let contextMenuElement: HTMLElement;
+  let { x, y, categoryId, onaction, onclose }: CategoryContextMenuProps = $props();
+
+  let contextMenuElement: HTMLElement | null = null;
 
   function handleAction(action: string) {
     onaction?.({ action, categoryId });
@@ -28,10 +31,12 @@
   }
 
   onMount(() => {
-    setTimeout(() => {
+    const register = () => {
       window.addEventListener('click', handleClickOutside);
       window.addEventListener('contextmenu', handleClickOutside);
-    }, 0);
+    };
+    const id = requestAnimationFrame(register);
+    return () => cancelAnimationFrame(id);
   });
 
   onDestroy(() => {
@@ -56,3 +61,4 @@
   <div class="border-t border-zinc-700 my-1"></div>
   <button class="w-full text-left px-3 py-2 hover:bg-zinc-700" onclick={() => handleAction('copy_id')}>Copy Category ID</button>
 </div>
+

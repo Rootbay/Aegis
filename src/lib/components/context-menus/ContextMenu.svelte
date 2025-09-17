@@ -5,58 +5,51 @@
   import type { Friend } from '$lib/models/Friend';
   import type { User } from '$lib/models/User';
 
-  type ContextMenuItem = {
-    label?: string;
-    action?: string;
-    isDestructive?: boolean;
-    isSeparator?: boolean;
-    data: Friend | User | null;
+  type ContextMenuDetail = {
+    action: string;
+    itemData: Friend | User | null;
   };
 
-  const props = $props<{
+  type ContextMenuHandler = (detail: ContextMenuDetail) => void; // eslint-disable-line no-unused-vars
+
+  type ContextMenuProps = {
     x?: number;
     y?: number;
     show?: boolean;
     friend?: Friend | User | null;
-    onaction?: (detail: { action: string; itemData: Friend | User | null }) => void;
+    onaction?: ContextMenuHandler;
     onclose?: () => void;
-  }>();
+  };
 
   let {
     x = 0,
     y = 0,
-    show = false,
+    show = $bindable(false),
     friend = null,
     onaction,
     onclose
-  } = props;
+  }: ContextMenuProps = $props();
 
-  let menuItems = $state<ContextMenuItem[]>([]);
+  const menuItems = $derived([
+    { label: 'View Profile', action: 'view_profile', data: friend },
+    { label: 'Remove Friend', action: 'remove_friend', data: friend },
+    { isSeparator: true, data: friend },
+    { label: 'Block', action: 'block_user', isDestructive: true, data: friend },
+    { label: 'Mute', action: 'mute_user', data: friend },
+    { label: 'Report User', action: 'report_user', isDestructive: true, data: friend },
+  ]);
 
-  $effect(() => {
-    menuItems = [
-      { label: 'View Profile', action: 'view_profile', data: friend },
-      { label: 'Remove Friend', action: 'remove_friend', data: friend },
-      { isSeparator: true, data: friend },
-      { label: 'Block', action: 'block_user', isDestructive: true, data: friend },
-      { label: 'Mute', action: 'mute_user', data: friend },
-      { label: 'Report User', action: 'report_user', isDestructive: true, data: friend },
-    ];
-  });
-
-  function handleAction(detail: { action: string; itemData: Friend | User | null }) {
-    detail.itemData = friend;
-    onaction?.(detail);
+  function handleAction(detail: ContextMenuDetail) {
+    onaction?.({ ...detail, itemData: friend });
   }
 </script>
 
 <BaseContextMenu
   {x}
   {y}
-  {show}
-  {menuItems}
+  bind:show={show}
+  menuItems={menuItems}
   onclose={onclose}
   onaction={handleAction}
 />
-
 

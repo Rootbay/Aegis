@@ -1,6 +1,5 @@
 <script lang="ts">
   import { X, Smile, Search } from '@lucide/svelte';
-  import { onMount } from 'svelte';
   import type { Component } from 'svelte';
   import RolesManagement from '$lib/components/RolesManagement.svelte';
   import ChannelManagement from '$lib/components/ChannelManagement.svelte';
@@ -40,7 +39,7 @@
   };
 
   type SidebarItem = SidebarLinkItem | SidebarSeparator;
-  type EventHandler<T> = T extends void ? (() => void) | undefined : ((detail: T) => void) | undefined;
+  type EventHandler<T> = T extends void ? (() => void) | undefined : ((detail: T) => void) | undefined; // eslint-disable-line no-unused-vars
 
   let {
     title,
@@ -224,13 +223,6 @@
     ondelete_server(detail as any);
   }
 
-  function handleTogglePermission(detail: unknown) {
-    if (detail == null) {
-      return;
-    }
-    ontoggle_permission?.(detail as any);
-  }
-
   function getComponentProps(componentName: string) {
     const props: Record<string, unknown> = {};
     if (!componentName) {
@@ -388,7 +380,7 @@
                     onadd_role={onadd_role}
                     onupdate_role={onupdate_role}
                     ondelete_role={ondelete_role}
-                    on:toggle_permission={(event) => handleTogglePermission(event.detail)}
+                    ontoggle_permission={ontoggle_permission}
                   />
                 {:else if setting.component === 'ChannelManagement'}
                   <ChannelManagement
@@ -482,3 +474,6 @@
     background-color: theme('colors.zinc.600');
   }
 </style>
+
+
+

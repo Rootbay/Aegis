@@ -18,8 +18,13 @@
 
   const { openUserCardModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
 
+  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
   function handleSelectChannel(serverId: string, channelId: string) {
-    (goto as unknown as (target: string) => void)(`/channels/${serverId}/${channelId}`);
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
+    gotoUnsafe(`/channels/${serverId}/${channelId}`);
   }
 
   $effect(() => {

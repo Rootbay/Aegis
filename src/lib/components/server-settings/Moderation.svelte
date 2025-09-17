@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Server } from '$lib/models/Server';
 
+  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+
   type Props = {
     server: Server;
-    onupdateServer?: (server: Server) => void;
+    onupdateServer?: UnaryHandler<Server>;
   };
 
   let { server, onupdateServer }: Props = $props();
@@ -48,3 +50,4 @@
     Save Changes
   </button>
 </div>
+

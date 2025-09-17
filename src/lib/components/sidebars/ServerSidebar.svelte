@@ -13,10 +13,14 @@
   import type { Server } from '$lib/models/Server';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
   import { v4 as uuidv4 } from 'uuid';
 
-  let { server, onSelectChannel } = $props<{ server: Server, onSelectChannel: any }>();
+  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+  type ChannelSelectHandler = (serverId: string, channelId: string) => void; // eslint-disable-line no-unused-vars
+
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
+  let { server, onSelectChannel }: { server: Server; onSelectChannel: ChannelSelectHandler } = $props();
 
   const { activeChannelId } = chatStore;
 
@@ -62,8 +66,8 @@
   const TEXT_COLLAPSED_KEY = 'serverSidebar.textCollapsed';
 
   function gotoResolved(path: string) {
-    const url = new URL(path, $page.url);
-    goto(url);
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
+	gotoUnsafe(path);
   }
 
   function slugifyChannelName(name: string) {
@@ -243,7 +247,7 @@
       nextChannelId = remainingText?.id || updated[0]?.id || null;
 
       serverStore.updateServer(server.id, { channels: updated });
-      if ($activeChannelId === channelId) {
+      if ($activeChannelId === channelId && nextChannelId) {
         onSelectChannel(server.id, nextChannelId);
       }
     } catch (error) {

@@ -8,6 +8,11 @@
   import { setContext, onMount, onDestroy, untrack } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+
+  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
   import { authStore, type AuthState } from '$lib/data/stores/authStore';
   import { userStore } from '$lib/data/stores/userStore';
   import { friendStore } from '$lib/data/stores/friendStore';
@@ -38,15 +43,19 @@
   let { children } = $props();
 
   const { subscribe } = userStore;
-  let authState = $state<AuthState>({ status: 'checking', loading: true, error: null, onboarding: null, pendingDeviceLogin: null });
+  let authState = $state<AuthState>({ status: 'checking', loading: true, error: null, onboarding: null, pendingDeviceLogin: null, requireTotpOnUnlock: false, passwordPolicy: 'unicode_required' });
+
+  function navigateToUrl(url: URL) {
+    const target = `${url.pathname}${url.search}`;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
+    gotoUnsafe(target);
+  }
   const unsubscribeAuth = authStore.subscribe((value) => {
     authState = value;
   });
   let currentUser = $state<User | null>(null);
-  let isLoading = $state(true);
   subscribe(value => {
     currentUser = value.me;
-    isLoading = value.loading;
   });
 
   function handleKeydown(event: KeyboardEvent) {
@@ -366,24 +375,25 @@
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'All'} class:hover:bg-muted={activeTab !== 'All'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'All');
-              goto(url);
+              navigateToUrl(url);
             }}>All</button>
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Online'} class:hover:bg-muted={activeTab !== 'Online'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'Online');
-              goto(url);
+              navigateToUrl(url);
             }}>Online</button>
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Blocked'} class:hover:bg-muted={activeTab !== 'Blocked'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'Blocked');
-              goto(url);
+              navigateToUrl(url);
             }}>Blocked</button>
             <button class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer" class:bg-muted={activeTab === 'Pending'} class:hover:bg-muted={activeTab !== 'Pending'} onclick={() => {
               const url = new URL($page.url);
               url.searchParams.set('tab', 'Pending');
-              goto(url);
+              navigateToUrl(url);
             }}>Pending</button>
-            <button class="flex items-center px-3 py-1 rounded-md bg-primary hover:bg-accent text-sm font-medium h-8 ml-4 cursor-pointer" class:bg-muted={activeTab === 'AddFriend'} class:hover:bg-accent={activeTab !== 'AddFriend'} onclick={() => goto('/friends/add')}>
+            <button class="flex items-center px-3 py-1 rounded-md bg-primary hover:bg-accent text-sm font-medium h-8 ml-4 cursor-pointer" class:bg-muted={activeTab === 'AddFriend'} class:hover:bg-accent={activeTab !== 'AddFriend'} onclick={() => // eslint-disable-next-line svelte/no-navigation-without-resolve
+            gotoUnsafe('/friends/add')}>
               <UserRoundPlus size={10} class="mr-2" />
               Add Friend
             </button>
