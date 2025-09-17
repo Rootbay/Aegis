@@ -89,8 +89,15 @@ function createUserStore(): UserStore {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message.includes('decrypt identity') || message.includes('aead::Error')) {
-          await invoke('rekey_identity', { oldPassword: DEFAULT_IDENTITY_PASSWORD, newPassword: password });
-          await invoke('initialize_app', { password });
+          try {
+            await invoke('rekey_identity', { oldPassword: DEFAULT_IDENTITY_PASSWORD, newPassword: password });
+            await invoke('initialize_app', { password });
+            return;
+          } catch (rekeyError) {
+            console.info('Generating a fresh identity after failed rekey attempt.', rekeyError);
+            await invoke('reset_identity', { password });
+            await invoke('initialize_app', { password });
+          }
         } else {
           throw error;
         }

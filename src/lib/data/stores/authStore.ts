@@ -22,12 +22,14 @@ import { toasts } from './ToastStore';
 
 type AuthStatus = 'checking' | 'needs_setup' | 'setup_in_progress' | 'locked' | 'authenticated';
 
+type PasswordPolicy = 'unicode_required' | 'legacy_allowed';
+
 type AuthPersistence = {
   username?: string;
   passwordHash?: string;
   passwordEnvelope?: SecretEnvelope | null;
   recoveryEnvelope?: SecretEnvelope | null;
-  recoveryHash?: string;
+  recoveryHash?: string | null;
   totpSecret?: string;
   requireTotpOnUnlock?: boolean;
   createdAt?: string;
@@ -50,6 +52,7 @@ type AuthState = {
   onboarding: OnboardingState | null;
   pendingDeviceLogin: DeviceHandshakePayload | null;
   requireTotpOnUnlock: boolean;
+  passwordPolicy: PasswordPolicy;
 };
 
 const persistence = persistentStore<AuthPersistence>('auth-state', {});
@@ -61,22 +64,25 @@ const initialState: AuthState = {
   onboarding: null,
   pendingDeviceLogin: null,
   requireTotpOnUnlock: false,
+  passwordPolicy: 'unicode_required',
 };
 
 const { subscribe, update } = writable<AuthState>(initialState);
 
 const MIN_PASSWORD_LENGTH = 8;
 
-const validatePassword = (password: string): string | null => {
+const validatePassword = (password: string, requireUnicode = true): string | null => {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
   }
-  const hasUnicode = [...password].some((char) => {
-    const codePoint = char.codePointAt(0);
-    return typeof codePoint === 'number' && codePoint > 0x7f;
-  });
-  if (!hasUnicode) {
-    return 'Password must include at least one non-ASCII (Unicode) character.';
+  if (requireUnicode) {
+    const hasUnicode = [...password].some((char) => {
+      const codePoint = char.codePointAt(0);
+      return typeof codePoint === 'number' && codePoint > 0x7f;
+    });
+    if (!hasUnicode) {
+      return 'Password must include at least one non-ASCII (Unicode) character.';
+    }
   }
   return null;
 };
@@ -92,7 +98,14 @@ const bootstrap = async () => {
       persisted.recoveryHash
     );
     if (!identityExists || !hasCredentials) {
-      update((state) => ({ ...state, status: 'needs_setup', loading: false, requireTotpOnUnlock: false }));
+      const passwordPolicy: PasswordPolicy = identityExists ? 'legacy_allowed' : 'unicode_required';
+      update((state) => ({
+        ...state,
+        status: 'needs_setup',
+        loading: false,
+        requireTotpOnUnlock: false,
+        passwordPolicy,
+      }));
       return;
     }
     update((state) => ({
@@ -100,6 +113,7 @@ const bootstrap = async () => {
       status: 'locked',
       loading: false,
       requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
+      passwordPolicy: 'unicode_required',
     }));
   } catch (error) {
     console.error('Failed to bootstrap authentication:', error);
@@ -126,17 +140,19 @@ const beginOnboarding = (username: string) => {
 };
 
 const saveOnboardingPassword = (password: string) => {
-  const error = validatePassword(password);
+  const state = get({ subscribe });
+  const requireUnicode = state.passwordPolicy !== 'legacy_allowed';
+  const error = validatePassword(password, requireUnicode);
   if (error) {
     throw new Error(error);
   }
-  update((state) => {
-    if (!state.onboarding) {
+  update((current) => {
+    if (!current.onboarding) {
       throw new Error('No onboarding session found.');
     }
     return {
-      ...state,
-      onboarding: { ...state.onboarding, password },
+      ...current,
+      onboarding: { ...current.onboarding, password },
     };
   });
 };
@@ -156,7 +172,8 @@ const completeOnboarding = async ({ confirmations, totpCode }: CompleteOnboardin
   if (!onboarding || !onboarding.password) {
     throw new Error('No onboarding session found.');
   }
-  const passwordError = validatePassword(onboarding.password);
+  const requireUnicode = current.passwordPolicy !== 'legacy_allowed';
+  const passwordError = validatePassword(onboarding.password, requireUnicode);
   if (passwordError) {
     throw new Error(passwordError);
   }
@@ -205,6 +222,7 @@ const completeOnboarding = async ({ confirmations, totpCode }: CompleteOnboardin
       error: null,
       onboarding: null,
       requireTotpOnUnlock: false,
+      passwordPolicy: 'unicode_required',
     }));
     toasts.addToast('Security setup complete. Welcome to Aegis.', 'success');
   } catch (error) {
@@ -269,7 +287,9 @@ interface RecoveryLoginOptions {
 }
 
 const loginWithRecovery = async ({ phrase, newPassword, totpCode }: RecoveryLoginOptions) => {
-  const passwordError = validatePassword(newPassword);
+  const currentState = get({ subscribe });
+  const requireUnicode = currentState.passwordPolicy !== 'legacy_allowed';
+  const passwordError = validatePassword(newPassword, requireUnicode);
   if (passwordError) {
     throw new Error(passwordError);
   }
@@ -325,6 +345,7 @@ const loginWithRecovery = async ({ phrase, newPassword, totpCode }: RecoveryLogi
       loading: false,
       error: null,
       requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
+      passwordPolicy: 'unicode_required',
     }));
     toasts.addToast('Password reset successfully.', 'success');
   } catch (error) {
@@ -359,6 +380,11 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
 
     const passwordHash = await hashString(password);
     const passwordEnvelope = await encryptWithSecret(totpSecret, password);
+    const persisted = get(persistence);
+    const totpRequirement =
+      typeof requireTotpOnUnlock === 'boolean'
+        ? requireTotpOnUnlock
+        : persisted.requireTotpOnUnlock ?? false;
 
     await userStore.initialize(password, { username });
 
@@ -369,12 +395,19 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
       recoveryEnvelope: recoveryEnvelope ?? null,
       recoveryHash: recoveryHash ?? null,
       totpSecret,
-      requireTotpOnUnlock: get(persistence).requireTotpOnUnlock ?? false,
-      createdAt: get(persistence).createdAt ?? new Date().toISOString(),
+      requireTotpOnUnlock: totpRequirement,
+      createdAt: persisted.createdAt ?? new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     });
 
-    update((state) => ({ ...state, status: 'authenticated', loading: false, error: null, pendingDeviceLogin: null }));
+    update((state) => ({
+      ...state,
+      status: 'authenticated',
+      loading: false,
+      error: null,
+      pendingDeviceLogin: null,
+      requireTotpOnUnlock: totpRequirement,
+    }));
     toasts.addToast('Device approved and authenticated.', 'success');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Device login failed.';
@@ -430,6 +463,11 @@ const setRequireTotpOnUnlock = (value: boolean) => {
   update((state) => ({ ...state, requireTotpOnUnlock: value }));
 };
 
+const resetForTests = () => {
+  persistence.set({});
+  update(() => ({ ...initialState }));
+};
+
 const logout = () => {
   userStore.reset();
   update((state) => ({
@@ -462,8 +500,9 @@ export const authStore = {
   logout,
   clearError,
   getPersistence: () => get(persistence),
+  __resetForTests: resetForTests,
 };
 
 export { authPersistenceStore };
 
-export type { AuthState, AuthPersistence };
+export type { AuthState, AuthPersistence, PasswordPolicy };

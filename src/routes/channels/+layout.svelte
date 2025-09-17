@@ -14,6 +14,7 @@
   let channels = $state<any[]>([]);
   let members = $state<any[]>([]);
   let loading = $state(true);
+  let { children } = $props();
 
   const { openUserCardModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
 
@@ -64,7 +65,7 @@
       <ServerSidebar {server} onSelectChannel={handleSelectChannel} />
     {/if}
     <main class="flex-grow flex flex-col bg-muted">
-      <slot />
+      {@render children()}
     </main>
     {#if !$page.url.pathname.includes('/settings')}
       <MemberSidebar {members} {openUserCardModal} />

@@ -1,11 +1,13 @@
-<script>
+<script lang="ts">
   import BaseContextMenu from './BaseContextMenu.svelte';
 
-  export let x = 0;
-  export let y = 0;
-  export let show = false;
-  export let onaction = undefined;
-  export let onclose = undefined;
+  let { 
+    x = 0, 
+    y = 0, 
+    show = false, 
+    onaction = undefined, 
+    onclose = undefined 
+  } = $props();
 
   const menuItems = [
     { label: 'Invite to Server', action: 'invite_to_server' },

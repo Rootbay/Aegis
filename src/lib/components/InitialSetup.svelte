@@ -31,6 +31,8 @@
 
   const requireTotpOnUnlock = $derived($authPersistenceStore.requireTotpOnUnlock ?? false);
 
+const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed');
+
   function sanitizeCode(value: string): string {
     return value.replace(/[^0-9]/g, '').slice(0, 6);
   }
@@ -39,12 +41,14 @@
     if (value.length < 8) {
       return 'Password must be at least 8 characters long.';
     }
-    const hasUnicode = [...value].some((char) => {
-      const point = char.codePointAt(0);
-      return typeof point === 'number' && point > 0x7f;
-    });
-    if (!hasUnicode) {
-      return 'Password must include at least one non-ASCII character.';
+    if (unicodeRequired) {
+      const hasUnicode = [...value].some((char) => {
+        const point = char.codePointAt(0);
+        return typeof point === 'number' && point > 0x7f;
+      });
+      if (!hasUnicode) {
+        return 'Password must include at least one non-ASCII character.';
+      }
     }
     return null;
   }
@@ -197,12 +201,6 @@
 </script>
 
 <div class="min-h-screen w-full bg-zinc-950 text-zinc-100 flex items-center justify-center px-6 py-10 relative">
-  {#if isLoading}
-    <div class="absolute inset-0 bg-zinc-900/80 backdrop-blur-sm flex items-center justify-center z-30">
-      <div class="animate-spin rounded-full h-16 w-16 border-4 border-zinc-700 border-t-primary"></div>
-    </div>
-  {/if}
-
   {#if showScanner}
     <div class="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/90">
       <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl shadow-xl p-6 w-full max-w-lg">
@@ -296,7 +294,11 @@
         {:else if onboardingStep === 'password'}
           <form class="space-y-4" onsubmit={handleSavePassword}>
             <h2 class="text-lg font-semibold flex items-center gap-2"><KeySquare size={18} /> Create your unlock password</h2>
-            <p class="text-sm text-zinc-400">Minimum 8 characters and must include at least one non-ASCII character (for example “é”, “你”, or “✓”).</p>
+            {#if unicodeRequired}
+              <p class="text-sm text-zinc-400">Minimum 8 characters and must include at least one non-ASCII character (for example “é”, “你”, or “✓”).</p>
+            {:else}
+              <p class="text-sm text-zinc-400">Minimum 8 characters. Unicode characters are optional while you upgrade an existing identity.</p>
+            {/if}
             <div class="space-y-2">
               <label for="password" class="text-xs uppercase tracking-wide text-zinc-500 mb-1 block">Password</label>
               <input id="password"

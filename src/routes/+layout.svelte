@@ -23,6 +23,7 @@
   import type { User } from '$lib/models/User';
   import type { Chat } from '$lib/models/Chat';
   import InitialSetup from '$lib/components/InitialSetup.svelte';
+  import LoadingOverlay from '$lib/components/LoadingOverlay.svelte';
   import Sidebar from '$lib/components/sidebars/Sidebar.svelte';
   import ServerSidebar from '$lib/components/sidebars/ServerSidebar.svelte';
   import MemberSidebar from '$lib/components/sidebars/MemberSidebar.svelte';
@@ -286,6 +287,7 @@
 </script>
 
 <div class="flex h-screen bg-base-100 text-foreground">
+  <LoadingOverlay show={authState.loading} />
   {#if authState.status !== 'authenticated' || !currentUser}
     <InitialSetup />
   {:else}
