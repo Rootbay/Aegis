@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { invoke } from '@tauri-apps/api/core';
-  import { toasts } from '$lib/data/stores/ToastStore';
+  import { toasts } from '$lib/stores/ToastStore';
   import { ChatView } from '$features/chat';
   import type { Channel } from '$lib/models/Channel';
   import type { ChannelChat } from '$lib/models/Chat';

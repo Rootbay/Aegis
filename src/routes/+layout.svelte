@@ -9,15 +9,15 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
 
-  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (value: string | URL) => void;
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
-  import { authStore, type AuthState } from '$lib/data/stores/authStore';
-  import { userStore } from '$lib/data/stores/userStore';
-  import { friendStore } from '$lib/data/stores/friendStore';
-  import { serverStore } from '$lib/data/stores/serverStore';
-  import { chatStore, messagesByChatId, activeChannelId, activeChatId, activeChatType } from '$lib/data/stores/chatStore';
+  import { authStore, type AuthState } from '$lib/stores/authStore';
+  import { userStore } from '$lib/stores/userStore';
+  import { friendStore } from '$lib/stores/friendStore';
+  import { serverStore } from '$lib/stores/serverStore';
+  import { chatStore, messagesByChatId, activeChannelId, activeChatId, activeChatType } from '$lib/stores/chatStore';
   import { CREATE_GROUP_CONTEXT_KEY, FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from '$lib/data/contextKeys';
   import type { FriendsLayoutContext } from '$lib/data/contextTypes';
   import { getListen } from '$services/tauri';
@@ -27,7 +27,7 @@
   import type { Message } from '$lib/models/Message';
   import type { User } from '$lib/models/User';
   import type { Chat } from '$lib/models/Chat';
-  import InitialSetup from '$lib/components/InitialSetup.svelte';
+  import InitialSetup from '$lib/components/auth/InitialSetup.svelte';
   import LoadingOverlay from '$lib/components/LoadingOverlay.svelte';
   import Sidebar from '$lib/components/sidebars/Sidebar.svelte';
   import ServerSidebar from '$lib/components/sidebars/ServerSidebar.svelte';

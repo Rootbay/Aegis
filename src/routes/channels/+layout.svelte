@@ -3,7 +3,7 @@
   import MemberSidebar from "$lib/components/sidebars/MemberSidebar.svelte";
   import { page } from "$app/stores";
   import { invoke } from "@tauri-apps/api/core";
-  import { toasts } from "$lib/data/stores/ToastStore";
+  import { toasts } from "$lib/stores/ToastStore";
   import { goto } from '$app/navigation';
   import { setContext, getContext } from "svelte";
   import { SERVER_LAYOUT_DATA_CONTEXT_KEY, CREATE_GROUP_CONTEXT_KEY } from "$lib/data/contextKeys";

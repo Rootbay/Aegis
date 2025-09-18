@@ -1,8 +1,8 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { X, ArrowLeft, Upload } from '@lucide/svelte';
-  import { serverStore } from '$lib/data/stores/serverStore';
-  import { userStore } from '$lib/data/stores/userStore';
+  import { serverStore } from '$lib/stores/serverStore';
+  import { userStore } from '$lib/stores/userStore';
   import type { Server } from '$lib/models/Server';
 
   type Props = {

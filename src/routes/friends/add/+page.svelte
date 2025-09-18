@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { toasts } from '$lib/data/stores/ToastStore';
-  import { userStore } from '$lib/data/stores/userStore';
+  import { toasts } from '$lib/stores/ToastStore';
+  import { userStore } from '$lib/stores/userStore';
   import { Plus, Scan } from '@lucide/svelte';
   import QRCodeScanner from '$lib/components/modals/QRCodeScanner.svelte';
 

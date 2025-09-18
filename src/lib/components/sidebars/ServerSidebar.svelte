@@ -5,16 +5,58 @@
   import ServerBackgroundContextMenu from '$lib/components/context-menus/ServerBackgroundContextMenu.svelte';
   import CategoryContextMenu from '$lib/components/context-menus/CategoryContextMenu.svelte';
   import ChannelContextMenu from '$lib/components/context-menus/ChannelContextMenu.svelte';
-  import { serverStore } from '$lib/data/stores/serverStore';
-  import { chatStore } from '$lib/data/stores/chatStore';
-  import { toasts } from '$lib/data/stores/ToastStore';
+  import { serverStore } from '$lib/stores/serverStore';
+  import { chatStore } from '$lib/stores/chatStore';
+  import { toasts } from '$lib/stores/ToastStore';
   import type { Channel } from '$lib/models/Channel';
-  import { Bell, Plus, Settings, ChevronDown, Hash, X, CircleX } from '@lucide/svelte';
+  import {
+    Bell,
+    Plus,
+    Settings,
+    ChevronDown,
+    Hash,
+    X,
+    CircleX,
+    Mic,
+    Info
+  } from "@lucide/svelte"
   import type { Server } from '$lib/models/Server';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { v4 as uuidv4 } from 'uuid';
-
+  import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator
+  } from "$lib/components/ui/dropdown-menu"
+  import { Button } from "$lib/components/ui/button"
+  import {
+    Collapsible,
+    CollapsibleTrigger,
+    CollapsibleContent
+  } from "$lib/components/ui/collapsible"
+  import { ScrollArea } from "$lib/components/ui/scroll-area"
+  import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter
+  } from "$lib/components/ui/dialog"
+  import { Label } from "$lib/components/ui/label"
+  import { Input } from "$lib/components/ui/input"
+  import { Switch } from "$lib/components/ui/switch"
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger
+  } from "$lib/components/ui/tooltip"
+  import { Separator } from "$lib/components/ui/separator"
+  
   type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (serverId: string, channelId: string) => void; // eslint-disable-line no-unused-vars
 
@@ -67,7 +109,7 @@
 
   function gotoResolved(path: string) {
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-	gotoUnsafe(path);
+	  gotoUnsafe(path);
   }
 
   function slugifyChannelName(name: string) {
@@ -498,78 +540,73 @@
   });
 </script>
 
-<div class="bg-muted/50 flex flex-col relative" style="width: {sidebarWidth}px;" oncontextmenu={(e) => handleServerBackgroundContextMenu(e)} role="region" aria-label="Server sidebar">
+<div
+  class="bg-muted/50 flex flex-col relative"
+  style="width: {sidebarWidth}px;"
+  oncontextmenu={(e) => handleServerBackgroundContextMenu(e)}
+  role="region"
+  aria-label="Server sidebar"
+>
   {#if server}
-    <header class="relative h-[55px] border-b border-border/50 shadow-sm {showDropdown ? 'bg-base-400/50' : 'hover:bg-base-400/50'}" bind:this={dropdownElement}>
-      <button
-        class="w-full h-full flex items-center justify-between font-bold text-lg truncate transition-colors cursor-pointer pr-8"
-        onclick={toggleDropdown}
-      >
-        <div class="flex items-center font-bold text-lg truncate px-4 py-2">
-          {server.name}
-        </div>
-        <ChevronDown size={10} class="mr-6" />
-      </button>
+    <header class="relative h-[55px] border-b border-border/50 shadow-sm">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            class="w-full h-full flex items-center justify-between font-bold text-lg truncate px-4 py-2 pr-8 hover:bg-base-400/50"
+          >
+            <span class="truncate">{server.name}</span>
+            <ChevronDown size={10} class="mr-2" />
+          </Button>
+        </DropdownMenuTrigger>
 
-      {#if showDropdown}
-        <div class="absolute top-full left-1/2 -translate-x-1/2 w-[218px] bg-muted border border-border rounded-md shadow-lg z-10 mt-1 p-2 transition-all duration-300 ease-in-out origin-top {showDropdown ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0 pointer-events-none'}">
-          <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleServerSettingsClick}>
-            <Settings size={10} class="mr-2" /> Server Settings
-          </button>
-          <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleInvitePeople}>
-            <Plus size={10} class="mr-2" /> Invite People
-          </button>
-          <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleCreateChannelClick}>
-            <Plus size={10} class="mr-2" /> Create Channel
-          </button>
-          <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleCreateCategory}>
-            <Plus size={10} class="mr-2" /> Create Category
-          </button>
-          <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleCreateEvent}>
-            <Plus size={10} class="mr-2" /> Create Event
-          </button>
-          <div class="border-t border-border/50 my-1"></div>
-          <button class="w-full text-left p-2 text-sm hover:bg-base-400/50 flex items-center cursor-pointer rounded-md" onclick={handleNotificationSettings}>
-            <Bell size={10} class="mr-2" /> Notification Settings
-          </button>
-          <div class="border-t border-border/50 my-1"></div>
-          <button class="w-full text-left p-2 text-sm text-destructive hover:bg-red-500/20 flex items-center cursor-pointer rounded-md" onclick={handleLeaveServer}>
-            <CircleX size={10} class="mr-2" /> Leave Server
-          </button>
-        </div>
-        {/if}
+        <DropdownMenuContent align="center" class="w-[218px]">
+          <DropdownMenuItem onselect={handleServerSettingsClick}>
+            <Settings size={12} class="mr-2" /> Server Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onselect={handleInvitePeople}>
+            <Plus size={12} class="mr-2" /> Invite People
+          </DropdownMenuItem>
+          <DropdownMenuItem onselect={handleCreateChannelClick}>
+            <Plus size={12} class="mr-2" /> Create Channel
+          </DropdownMenuItem>
+          <DropdownMenuItem onselect={handleCreateCategory}>
+            <Plus size={12} class="mr-2" /> Create Category
+          </DropdownMenuItem>
+          <DropdownMenuItem onselect={handleCreateEvent}>
+            <Plus size={12} class="mr-2" /> Create Event
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem onselect={handleNotificationSettings}>
+            <Bell size={12} class="mr-2" /> Notification Settings
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            class="text-destructive focus:text-destructive"
+            onselect={handleLeaveServer}
+          >
+            <CircleX size={12} class="mr-2" /> Leave Server
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
-    <div role="button" tabindex="0" class="flex-grow overflow-y-auto px-2">
-      <div class="flex justify-between items-center py-1 mt-4">
-        <div
-          role="button"
-          tabindex="0"
-          class="flex items-center cursor-pointer group"
-          onclick={() => {
-          textChannelsCollapsed = !textChannelsCollapsed;
-          try {
-            localStorage.setItem(TEXT_COLLAPSED_KEY, textChannelsCollapsed.toString());
-          } catch (e) {
-            void e;
-          }
-            if (!textChannelsCollapsed && textChannelsContainer) {
-              updateTextChannelsHeight();
-            } else {
-              textChannelsHeight = '0px';
-            }
-          }}
-          onkeydown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              (e.currentTarget as HTMLElement).click();
-            }
-          }}
-          oncontextmenu={(e) => handleCategoryContextMenu(e, 'text-channels')}
-        >
-          <div class="flex items-center">
+
+    <ScrollArea class="flex-grow px-2">
+      <Collapsible open={!textChannelsCollapsed} onOpenChange={(e) => {
+        textChannelsCollapsed = !e.detail
+        if (e.detail) updateTextChannelsHeight()
+        else textChannelsHeight = "0px"
+      }}>
+        <div class="flex justify-between items-center py-1 mt-4">
+          <CollapsibleTrigger class="flex items-center group cursor-pointer">
             <h3
               class="text-sm font-semibold text-muted-foreground uppercase group-hover:text-foreground select-none"
               class:text-foreground={showCategoryContextMenu && contextMenuCategoryId === 'text-channels'}
+              oncontextmenu={(e) => handleCategoryContextMenu(e, 'text-channels')}
             >
               Text Channels
             </h3>
@@ -577,53 +614,67 @@
               size={10}
               class="ml-1 transition-transform duration-200 {textChannelsCollapsed ? 'rotate-[-90deg]' : ''}"
             />
-          </div>
+          </CollapsibleTrigger>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Create Channel"
+            onclick={handleCreateChannelClick}
+          >
+            <Plus size={12} />
+          </Button>
         </div>
-        <button class="text-muted-foreground hover:text-foreground cursor-pointer" onclick={handleCreateChannelClick} aria-label="Create Channel">
-          <Plus size={10} class="mr-2" />
-        </button>
-      </div>
-      
-      <div
-        class="overflow-hidden transition-all duration-300 ease-in-out"
-        style="max-height: {textChannelsCollapsed ? '0' : textChannelsHeight};"
-        bind:this={textChannelsContainer}
-      >
-        {#if server && server.channels && server.channels.length > 0}
-          {#each server.channels.filter((c: Channel) => c.channel_type === 'text' && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
-            <div
-              role="button"
-              tabindex="0"
-              class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
-              {$activeChannelId === channel.id ? 'bg-primary/80 text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-              onclick={() => onSelectChannel(server.id, channel.id)}
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onSelectChannel(server.id, channel.id); } }}
-              oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-            >
-              <div class="flex items-center truncate">
-                <Hash size={10} class="mr-1" />
-                <span class="truncate select-none ml-2">{channel.name}</span>
+
+        <CollapsibleContent>
+          {#if server && server.channels && server.channels.length > 0}
+            {#each server.channels.filter((c: Channel) => c.channel_type === 'text' && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+              <div
+                role="button"
+                tabindex="0"
+                class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
+                {$activeChannelId === channel.id ? 'bg-primary/80 text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                onclick={() => onSelectChannel(server.id, channel.id)}
+                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onSelectChannel(server.id, channel.id); } }}
+                oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+              >
+                <div class="flex items-center truncate">
+                  <Hash size={10} class="mr-1" />
+                  <span class="truncate select-none ml-2">{channel.name}</span>
+                </div>
+                <div class="ml-auto flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="text-muted-foreground hover:text-foreground"
+                    aria-label="Invite to channel"
+                    onclick={(event) => handleInviteToChannelClick(channel, event)}
+                  >
+                    <Plus size={10} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="text-muted-foreground hover:text-foreground"
+                    aria-label="Channel settings"
+                    onclick={(event) => handleChannelSettingsClick(channel, event)}
+                  >
+                    <Settings size={10} />
+                  </Button>
+                </div>
               </div>
-              <div class="ml-auto flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                <button type="button" class="text-muted-foreground hover:text-foreground p-1 cursor-pointer" onclick={(event) => handleInviteToChannelClick(channel, event)} aria-label="Invite to channel">
-                  <Plus size={10} />
-                </button>
-                <button type="button" class="text-muted-foreground hover:text-foreground p-1 cursor-pointer" onclick={(event) => handleChannelSettingsClick(channel, event)} aria-label="Channel settings">
-                  <Settings size={10} />
-                </button>
-              </div>
-            </div>
-          {/each}
-        {:else}
-          <p class="text-xs text-muted-foreground px-2 py-1">No text channels yet.</p>
-        {/if}
-      </div>
-    </div>
+            {/each}
+          {:else}
+            <p class="text-xs text-muted-foreground px-2 py-1">No text channels yet.</p>
+          {/if}
+        </CollapsibleContent>
+      </Collapsible>
+    </ScrollArea>
   {:else}
-    <div role="button" tabindex="0" class="flex-grow overflow-y-auto" oncontextmenu={(e) => handleServerBackgroundContextMenu(e)}>
+    <ScrollArea class="flex-grow">
       <p class="text-xs text-muted-foreground px-2 py-1">No server selected.</p>
-    </div>
+    </ScrollArea>
   {/if}
+
   <button
     class="absolute top-0 right-0 w-2 h-full cursor-ew-resize"
     onmousedown={startResize}
@@ -631,93 +682,144 @@
   ></button>
 </div>
 
-  {#if showServerBackgroundContextMenu}
-    <ServerBackgroundContextMenu
-      x={serverBackgroundContextMenuX}
-      y={serverBackgroundContextMenuY}
-      onaction={handleServerBackgroundAction}
-      onclose={() => showServerBackgroundContextMenu = false}
-    />
-  {/if}
+{#if showServerBackgroundContextMenu}
+  <ServerBackgroundContextMenu
+    x={serverBackgroundContextMenuX}
+    y={serverBackgroundContextMenuY}
+    onaction={handleServerBackgroundAction}
+    onclose={() => showServerBackgroundContextMenu = false}
+  />
+{/if}
 
-  {#if showCategoryContextMenu}
-    <CategoryContextMenu
-      x={contextMenuX}
-      y={contextMenuY}
-      categoryId={contextMenuCategoryId}
-      onaction={handleCategoryAction}
-      onclose={() => showCategoryContextMenu = false}
-    />
-  {/if}
+{#if showCategoryContextMenu}
+  <CategoryContextMenu
+    x={contextMenuX}
+    y={contextMenuY}
+    categoryId={contextMenuCategoryId}
+    onaction={handleCategoryAction}
+    onclose={() => showCategoryContextMenu = false}
+  />
+{/if}
 
-  {#if showChannelContextMenu && selectedChannelForContextMenu}
-    <ChannelContextMenu
-      x={channelContextMenuX}
-      y={channelContextMenuY}
-      channel={selectedChannelForContextMenu}
-      onaction={handleChannelAction}
-      onclose={() => { showChannelContextMenu = false; selectedChannelForContextMenu = null; }}
-    />
-  {/if}
+{#if showChannelContextMenu && selectedChannelForContextMenu}
+  <ChannelContextMenu
+    x={channelContextMenuX}
+    y={channelContextMenuY}
+    channel={selectedChannelForContextMenu}
+    onaction={handleChannelAction}
+    onclose={() => { showChannelContextMenu = false; selectedChannelForContextMenu = null; }}
+  />
+{/if}
 
-{#if showCreateChannelModal}
-  <div role="button" tabindex="0" class="fixed inset-0 flex items-center justify-center z-50" style="background-color: rgba(0, 0, 0, 0.5);" onclick={() => showCreateChannelModal = false}
-      onkeydown={(e) => {
-        if (e.key === 'Enter') {
-          showCreateChannelModal = false;
-        }
-      }}
-    >
-    <div class="bg-card p-6 rounded-lg shadow-lg w-11/12 max-w-md">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">Create New Channel</h2>
-        <button onclick={() => showCreateChannelModal = false} class="text-muted-foreground hover:text-foreground cursor-pointer">
-          <X size={12} />
-        </button>
-      </div>
-      <input
-        type="text"
-        placeholder="channel-name"
-        class="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring mb-4"
-        bind:value={newChannelName}
-        onkeydown={(e) => { if (e.key === 'Enter') { createChannel(); } }}
-      />
+<Dialog open={showCreateChannelModal} onOpenChange={(e) => (showCreateChannelModal = e.detail)}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Create Channel</DialogTitle>
+      <DialogDescription>
+        Create a text or voice channel with a name, optional topic, and privacy.
+      </DialogDescription>
+    </DialogHeader>
 
-      <div class="mb-4">
-        <span class="block text-sm font-medium text-muted-foreground mb-2">Channel Type</span>
-        <div class="flex space-x-4">
-          <label for="channelTypeText" class="inline-flex items-center cursor-pointer">
-            <input type="radio" id="channelTypeText" name="channelType" value="text" bind:group={newChannelType} class="form-radio text-highlight-100 bg-muted border-border" />
-            <span class="ml-2 text-muted-foreground">Text</span>
-          </label>
-          <label for="channelTypeVoice" class="inline-flex items-center cursor-pointer">
-            <input type="radio" id="channelTypeVoice" name="channelType" value="voice" bind:group={newChannelType} class="form-radio text-highlight-100 bg-muted border-border" />
-            <span class="ml-2 text-muted-foreground">Voice</span>
-          </label>
+    <div class="space-y-6">
+      <div>
+        <Label class="text-xs font-semibold uppercase text-muted-foreground mb-2">
+          Channel Type
+        </Label>
+        <div class="grid grid-cols-2 gap-3">
+          <Button
+            type="button"
+            variant={newChannelType === "text" ? "secondary" : "outline"}
+            class="flex items-center gap-3 text-left"
+            onclick={() => (newChannelType = "text")}
+          >
+            <Hash size={16} />
+            <div>
+              <div class="text-sm font-medium">Text</div>
+              <div class="text-xs text-muted-foreground">Chat with messages, images, links</div>
+            </div>
+          </Button>
+          <Button
+            type="button"
+            variant={newChannelType === "voice" ? "secondary" : "outline"}
+            class="flex items-center gap-3 text-left"
+            onclick={() => (newChannelType = "voice")}
+          >
+            <Mic size={16} />
+            <div>
+              <div class="text-sm font-medium">Voice</div>
+              <div class="text-xs text-muted-foreground">Talk, video, and share screen</div>
+            </div>
+          </Button>
         </div>
       </div>
 
-      <div class="mb-4">
-        <label class="inline-flex items-center cursor-pointer">
-          <input type="checkbox" bind:checked={newChannelPrivate} class="form-checkbox text-highlight-100 bg-muted border-border rounded" />
-          <span class="ml-2 text-muted-foreground">Private Channel</span>
-        </label>
+      <div>
+        <Label for="channel-name" class="text-xs font-semibold uppercase text-muted-foreground mb-2">
+          Channel Name
+        </Label>
+        <div class="flex items-center bg-muted border border-border rounded-md px-3 focus-within:ring-2 focus-within:ring-ring">
+          {#if newChannelType === 'text'}
+            <span class="text-muted-foreground mr-2">#</span>
+          {/if}
+          <Input
+            id="channel-name"
+            placeholder={newChannelType === 'text' ? 'new-channel' : 'New Voice Channel'}
+            class="flex-1 border-0 bg-transparent px-0 py-2 text-sm focus-visible:ring-0"
+            bind:value={newChannelName}
+            autofocus
+            onkeydown={(e) => { if (e.key === 'Enter') createChannel() }}
+          />
+        </div>
       </div>
 
-      <button
-        class="w-full bg-primary text-foreground rounded-md px-4 py-2 flex items-center justify-center hover:bg-accent disabled:bg-highlight-300 disabled:cursor-not-allowed cursor-pointer"
-        onclick={createChannel}
-        disabled={!newChannelName.trim()}
-      >
-        <Plus size={10} class="mr-2" /> Create Channel
-      </button>
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-col">
+          <span class="text-sm font-medium flex items-center gap-1">
+            Private Channel
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="text-muted-foreground hover:text-foreground"
+                    aria-label="More info about private channels"
+                  >
+                    <Info size={14} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="start" class="max-w-xs text-xs leading-snug">
+                  When enabled, only selected members and roles will be able to see and join this channel.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </span>
+          <span class="text-xs text-muted-foreground">
+            Restrict access to specific members or roles
+          </span>
+        </div>
+        <Switch bind:checked={newChannelPrivate} id="priv" aria-label="Private Channel" />
+      </div>
+
+      {#if newChannelType === 'text'}
+        <div>
+          <Label for="channel-topic" class="text-xs font-semibold uppercase text-muted-foreground mb-2">
+            Topic
+          </Label>
+          <Input
+            id="channel-topic"
+            placeholder="What’s this channel about?"
+            class="w-full"
+          />
+        </div>
+      {/if}
     </div>
-  </div>
-{/if}
 
-
-
-
-
-
-
+    <DialogFooter>
+      <Button variant="ghost" onclick={() => (showCreateChannelModal = false)}>Cancel</Button>
+      <Button onclick={createChannel} disabled={!newChannelName.trim()}>
+        <Plus size={14} class="mr-2" /> Create Channel
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>

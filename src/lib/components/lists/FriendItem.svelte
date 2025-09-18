@@ -3,10 +3,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { chatStore } from '$lib/data/stores/chatStore';
-  import { friendStore } from '$lib/data/stores/friendStore';
-  import { toasts } from '$lib/data/stores/ToastStore';
-  import { userStore } from '$lib/data/stores/userStore';
+  import { chatStore } from '$lib/stores/chatStore';
+  import { friendStore } from '$lib/stores/friendStore';
+  import { toasts } from '$lib/stores/ToastStore';
+  import { userStore } from '$lib/stores/userStore';
   import { CircleCheck, MessageCircle, Ban, UserMinus, Unlock, X } from '@lucide/svelte';
   import type { Friend } from '$lib/models/Friend';
 

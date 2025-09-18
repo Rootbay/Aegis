@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { toasts } from '$lib/data/stores/ToastStore';
+  import { toasts } from '$lib/stores/ToastStore';
   import Toast from '$lib/components/ui/Toast.svelte';
 </script>
 

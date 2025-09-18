@@ -1,4 +1,4 @@
-import { persistentStore } from '$stores/persistentStore';
+import { persistentStore } from '$lib/stores/persistentStore';
 import type { User } from '../../models/User';
 
 export interface Channel {

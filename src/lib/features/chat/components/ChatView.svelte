@@ -9,11 +9,11 @@
   import BaseContextMenu from '$lib/components/context-menus/BaseContextMenu.svelte';
   import VirtualList from '@humanspeak/svelte-virtual-list';
 
-  import { userStore } from '$lib/data/stores/userStore';
-  import { friendStore } from '$lib/data/stores/friendStore';
-  import { chatStore, messagesByChatId, hasMoreByChatId } from '$lib/data/stores/chatStore';
+  import { userStore } from '$lib/stores/userStore';
+  import { friendStore } from '$lib/stores/friendStore';
+  import { chatStore, messagesByChatId, hasMoreByChatId } from '$lib/stores/chatStore';
   import { getContext, onMount, onDestroy } from 'svelte';
-  import { toasts } from '$lib/data/stores/ToastStore';
+  import { toasts } from '$lib/stores/ToastStore';
 
   import { CREATE_GROUP_CONTEXT_KEY } from '$lib/data/contextKeys';
   import type { CreateGroupContext } from '$lib/data/contextTypes';

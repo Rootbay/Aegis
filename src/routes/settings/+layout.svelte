@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { X, Search, Smile } from '@lucide/svelte';
-  import { lastVisitedServerId } from '$lib/data/stores/navigationStore';
+  import { lastVisitedServerId } from '$lib/stores/navigationStore';
   import { get } from 'svelte/store';
 
   type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars

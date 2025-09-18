@@ -1,6 +1,6 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
-  import { userStore } from '$lib/data/stores/userStore';
+  import { userStore } from '$lib/stores/userStore';
   import { SendHorizontal, EllipsisVertical } from '@lucide/svelte';
 
   type Props = {

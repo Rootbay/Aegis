@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import type { Component } from 'svelte';
-  import { serverStore } from '$lib/data/stores/serverStore';
+  import { serverStore } from '$lib/stores/serverStore';
   import type { Server } from '$lib/models/Server';
   import type { Channel } from '$lib/models/Channel';
   import type { Role } from '$lib/models/Role';

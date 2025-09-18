@@ -2,7 +2,7 @@
   import { Plus, CirclePlus, X } from '@lucide/svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { v4 as uuidv4 } from 'uuid';
-  import { userStore } from '$lib/data/stores/userStore';
+  import { userStore } from '$lib/stores/userStore';
   import type { Server } from '$lib/models/Server';
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars

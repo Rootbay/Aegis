@@ -1,8 +1,8 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { invoke } from '@tauri-apps/api/core';
-  import { userStore } from '$lib/data/stores/userStore';
-  import { toasts } from '$lib/data/stores/ToastStore';
+  import { userStore } from '$lib/stores/userStore';
+  import { toasts } from '$lib/stores/ToastStore';
   import FriendRequestModal from './modals/FriendRequestModal.svelte';
 
   let friendships = $state<any[]>([]);

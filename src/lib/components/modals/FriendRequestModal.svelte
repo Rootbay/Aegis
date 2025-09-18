@@ -1,8 +1,13 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { userStore } from '$lib/data/stores/userStore';
-  import { toasts } from '$lib/data/stores/ToastStore';
-
+  import { userStore } from '$lib/stores/userStore';
+  import { toasts } from '$lib/stores/ToastStore';
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Label } from "$lib/components/ui/label/index.js";
+  import { Alert, AlertDescription, AlertTitle } from "$lib/components/ui/alert/index.js";
+  
   type Props = {
     onRequestSent: () => void;
     onClose: () => void;
@@ -13,7 +18,8 @@
   let targetUserId = $state('');
   let errorMessage = $state('');
   let successMessage = $state('');
-
+  let open = $state(true);
+  
   async function sendRequest() {
     errorMessage = '';
     successMessage = '';
@@ -45,49 +51,57 @@
     }
   }
 
+  $effect(() => {
+    if (!open) closeModal();
+  });
+
   function closeModal() {
     onClose();
   }
 </script>
 
-<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-gray-800 p-6 rounded-lg shadow-lg w-96">
-        <h2 class="text-xl font-bold mb-4">Send Friend Request</h2>
+<Dialog.Root bind:open={open}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-50 bg-black/50" />
+    <Dialog.Content
+      class="fixed z-[51] w-96 max-w-[92vw] rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg focus:outline-none"
+      style="left:50%; top:50%; transform:translate(-50%,-50%);"
+    >
+      <Dialog.Title class="text-xl font-bold mb-4">Send Friend Request</Dialog.Title>
 
-        <div class="mb-4">
-            <label for="targetUserId" class="block text-sm font-medium text-gray-300 mb-1"
-                >Target User ID:</label
-            >
-            <input
-                type="text"
-                id="targetUserId"
-                bind:value={targetUserId}
-                class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white"
-                placeholder="Enter user ID"
-            />
-        </div>
+      <div class="mb-4">
+        <Label for="targetUserId" class="mb-1 block text-sm">Target User ID:</Label>
+        <Input
+          id="targetUserId"
+          type="text"
+          placeholder="Enter user ID"
+          bind:value={targetUserId}
+        />
+      </div>
 
-        {#if errorMessage}
-            <p class="text-red-500 text-sm mb-4">{errorMessage}</p>
-        {/if}
+      {#if errorMessage}
+        <Alert variant="destructive" class="mb-4">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      {/if}
 
-        {#if successMessage}
-            <p class="text-green-500 text-sm mb-4">{successMessage}</p>
-        {/if}
+      {#if successMessage}
+        <Alert class="mb-4">
+          <AlertTitle>Success</AlertTitle>
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
+      {/if}
 
-        <div class="flex justify-end space-x-2">
-            <button
-                class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
-                onclick={closeModal}
-            >
-                Cancel
-            </button>
-            <button
-                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-                onclick={sendRequest}
-            >
-                Send Request
-            </button>
-        </div>
-    </div>
-</div>
+      <div class="mt-6 flex justify-end gap-2">
+        <Button variant="secondary" onclick={() => (open = false)}>Cancel</Button>
+        <Button onclick={sendRequest}>Send Request</Button>
+      </div>
+
+      <Dialog.Close class="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none">
+        <span class="sr-only">Close</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </Dialog.Close>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>

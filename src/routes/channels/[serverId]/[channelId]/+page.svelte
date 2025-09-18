@@ -2,8 +2,8 @@
 
 <script lang="ts">
   import { ChatView } from '$features/chat';
-  import { chatStore, activeChatId, activeChatType, activeChannelId, messagesByChatId } from '$lib/data/stores/chatStore';
-  import { serverStore } from '$lib/data/stores/serverStore';
+  import { chatStore, activeChatId, activeChatType, activeChannelId, messagesByChatId } from '$lib/stores/chatStore';
+  import { serverStore } from '$lib/stores/serverStore';
   import { page } from '$app/stores';
   import type { ChannelChat } from '$lib/models/Chat';
   import type { Message } from '$lib/models/Message';

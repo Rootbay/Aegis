@@ -1,8 +1,8 @@
 <script lang="ts">
   import QRCode from 'qrcode';
   import { Lock, QrCode, ShieldCheck, KeyRound, Save, Scan, KeySquare } from '@lucide/svelte';
-  import { authStore, authPersistenceStore } from '$lib/data/stores/authStore';
-  import RecoveryQrScanner from './auth/RecoveryQrScanner.svelte';
+  import { authStore, authPersistenceStore } from '$lib/stores/authStore';
+  import RecoveryQrScanner from './RecoveryQrScanner.svelte';
 
   type OnboardingStep = 'username' | 'phrase' | 'confirm' | 'password' | 'totp';
 

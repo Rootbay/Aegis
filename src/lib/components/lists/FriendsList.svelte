@@ -4,7 +4,7 @@
   import { getContext } from 'svelte';
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from '$lib/data/contextKeys';
   import type { FriendsLayoutContext } from '$lib/data/contextTypes';
-  import FriendItem from '../FriendItem.svelte';
+  import FriendItem from '$lib/components/lists/FriendItem.svelte';
   import EmptyStateMessage from '$lib/components/ui/EmptyStateMessage.svelte';
   import type { Friend } from '$lib/models/Friend';
 

@@ -14,14 +14,14 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-vi.mock('$lib/data/stores/userStore', () => ({
+vi.mock('$lib/stores/userStore', () => ({
   userStore: {
     initialize: initializeMock,
     reset: vi.fn(),
   },
 }));
 
-vi.mock('$lib/data/stores/ToastStore', () => ({
+vi.mock('$lib/stores/ToastStore', () => ({
   toasts: {
     addToast: addToastMock,
   },
@@ -78,7 +78,7 @@ describe('authStore device handshake', () => {
   });
 
   it('persists credentials from an approved device handshake', async () => {
-    const { authStore, authPersistenceStore } = await import('$lib/data/stores/authStore');
+    const { authStore, authPersistenceStore } = await import('$lib/stores/authStore');
     authStore.__resetForTests?.();
 
     mockHandshake = {
@@ -118,7 +118,7 @@ describe('authStore device handshake', () => {
   });
 
   it('falls back to existing unlock 2FA preference when handshake omits the flag', async () => {
-    const { authStore, authPersistenceStore } = await import('$lib/data/stores/authStore');
+    const { authStore, authPersistenceStore } = await import('$lib/stores/authStore');
     authStore.__resetForTests?.();
 
     mockHandshake = {
@@ -141,7 +141,7 @@ describe('authStore device handshake', () => {
   });
 
   it('allows legacy ASCII unlock passwords during identity migration', async () => {
-    const { authStore } = await import('$lib/data/stores/authStore');
+    const { authStore } = await import('$lib/stores/authStore');
     authStore.__resetForTests?.();
 
     invokeMock.mockImplementation(async (command: string) => {

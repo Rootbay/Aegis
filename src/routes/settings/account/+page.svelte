@@ -1,7 +1,7 @@
 <script lang="ts">
   import QRCode from 'qrcode';
-  import { userStore } from '$lib/data/stores/userStore';
-  import { authStore, authPersistenceStore } from '$lib/data/stores/authStore';
+  import { userStore } from '$lib/stores/userStore';
+  import { authStore, authPersistenceStore } from '$lib/stores/authStore';
   import { KeyRound, QrCode, ShieldCheck } from '@lucide/svelte';
 
   let displayName = $state('');
