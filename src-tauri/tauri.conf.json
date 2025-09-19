@@ -21,7 +21,8 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": ["main-capability"]
     },
     "trayIcon": {
       "iconPath": "icons/icon.png",
@@ -32,16 +33,5 @@
     "active": true,
     "targets": ["app", "deb", "msi"],
     "icon": ["icons/icon.ico", "icons/icon.icns", "icons/icon.png"]
-  },
-  "plugins": {
-    "core": {
-      "permissions": [
-        "core:default",
-        "core:webview:default",
-        "core:webview:allow-internal-toggle-devtools",
-        "store:default",
-        "store:allow-load"
-      ]
-    }
   }
 }
