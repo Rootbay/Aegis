@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use sqlx::{Pool, Sqlite};
@@ -50,55 +49,18 @@ pub struct AppState {
 #[derive(Clone)]
 pub struct IncomingFile {
     pub name: String,
-    pub safe_name: String,
     pub size: u64,
     pub received_chunks: HashMap<u64, Vec<u8>>,
     pub key: Vec<u8>,
     pub nonce: Vec<u8>,
     pub sender_id: String,
     pub accepted: bool,
-    pub buffered_bytes: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileTransferCommand {
     Send { recipient_peer_id: String, path: String },
 }
-
-pub fn sanitize_filename(input: &str) -> String {
-    let candidate = Path::new(input)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("file");
-
-    let mut sanitized = String::with_capacity(candidate.len());
-    for ch in candidate.chars() {
-        if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ' | '(' | ')') {
-            sanitized.push(ch);
-        } else {
-            sanitized.push('_');
-        }
-    }
-
-    while sanitized.starts_with('.') || sanitized.starts_with('_') {
-        sanitized.remove(0);
-        if sanitized.is_empty() {
-            break;
-        }
-    }
-
-    sanitized.truncate(128);
-
-    if sanitized.is_empty() || sanitized.chars().all(|c| c == '_' || c == '.') {
-        format!("file-{}", chrono::Utc::now().timestamp())
-    } else {
-        sanitized
-    }
-}
-
-pub const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
-pub const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
-pub const MAX_UNAPPROVED_BUFFER_BYTES: u64 = 8_388_608; // 8 MiB
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileAclPolicy {

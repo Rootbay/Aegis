@@ -3,8 +3,8 @@
   import { invoke } from '@tauri-apps/api/core';
   import { toasts } from '$lib/stores/ToastStore';
   import { ChatView } from '$features/chat';
-  import type { Channel } from '$lib/models/Channel';
-  import type { ChannelChat } from '$lib/models/Chat';
+  import type { Channel } from '$lib/features/channels/models/Channel';
+  import type { ChannelChat } from '$lib/features/chat/models/Chat';
 
   let serverId = $state<string | null>(null);
   let channels = $state<ChannelChat[]>([]);

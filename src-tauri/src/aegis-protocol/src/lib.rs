@@ -26,7 +26,6 @@ pub enum AepMessage {
     },
     // Group-key distribution: each slot is an individually E2EE-encrypted blob for a member
     GroupKeyUpdate {
-        issuer_id: String,
         server_id: String,
         channel_id: Option<String>,
         epoch: u64,

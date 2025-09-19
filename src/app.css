@@ -115,16 +115,28 @@
   --animate-spin-reverse: spin-reverse 1.8s linear infinite;
 
   @keyframes spin {
-    from { transform: rotate(0deg) }
-    to { transform: rotate(360deg) }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
   @keyframes spin-reverse {
-    from { transform: rotate(360deg) }
-    to { transform: rotate(0deg) }
+    from {
+      transform: rotate(360deg);
+    }
+    to {
+      transform: rotate(0deg);
+    }
   }
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
-  body { @apply bg-background text-foreground; }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

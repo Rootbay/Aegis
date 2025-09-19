@@ -1,7 +1,7 @@
-import { writable } from 'svelte/store';
-import { v4 as uuidv4 } from 'uuid';
+import { writable } from "svelte/store";
+import { v4 as uuidv4 } from "uuid";
 
-export type ToastType = 'success' | 'error' | 'info' | 'warning';
+export type ToastType = "success" | "error" | "info" | "warning";
 
 export interface Toast {
   id: string;
@@ -31,7 +31,7 @@ function createToastStore() {
     const key = `${type}:${message}`;
     const last = lastToastAt[key] || 0;
     if (now - last < DEDUPE_WINDOW_MS) {
-      return '';
+      return "";
     }
     lastToastAt[key] = now;
 
@@ -71,7 +71,7 @@ function createToastStore() {
   }
 
   function showErrorToast(message: string, duration?: number) {
-    addToast(message, 'error', duration);
+    addToast(message, "error", duration);
   }
 
   return { subscribe, addToast, removeToast, showErrorToast };

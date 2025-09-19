@@ -10,7 +10,7 @@ const html5QrcodeSourceMapFix = () => {
     if (req.url?.startsWith("/node_modules/src/")) {
       const redirected = req.url.replace(
         "/node_modules/src/",
-        "/node_modules/html5-qrcode/src/"
+        "/node_modules/html5-qrcode/src/",
       );
       const filePath = join(root, redirected.replace(/^\//, ""));
       if (existsSync(filePath)) {
@@ -27,7 +27,7 @@ const html5QrcodeSourceMapFix = () => {
     },
     configurePreviewServer(server) {
       server.middlewares.use(buildMiddleware(server.config.root));
-    }
+    },
   };
 };
 
@@ -39,16 +39,16 @@ export default defineConfig(async () => ({
 
   resolve: {
     alias: {
-      sveltejs: resolve("node_modules/@sveltejs")
-    }
+      sveltejs: resolve("node_modules/@sveltejs"),
+    },
   },
 
   optimizeDeps: {
-    exclude: ['@mdi/js', '@lucide/svelte'],
+    exclude: ["@mdi/js", "@lucide/svelte"],
   },
 
   ssr: {
-    noExternal: ['@mdi/js', '@lucide/svelte'],
+    noExternal: ["@mdi/js", "@lucide/svelte"],
   },
 
   clearScreen: false,
@@ -66,5 +66,5 @@ export default defineConfig(async () => ({
     watch: {
       ignored: ["**/src-tauri/**"],
     },
-  }
+  },
 }));

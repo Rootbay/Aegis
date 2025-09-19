@@ -9,12 +9,12 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter({
-      fallback: 'index.html'
+      fallback: "index.html",
     }),
     alias: {
-      $features: 'src/lib/features',
-      $services: 'src/lib/services',
-      $stores: 'src/lib/stores',
+      $features: "src/lib/features",
+      $services: "src/lib/services",
+      $stores: "src/lib/stores",
     },
   },
 };

@@ -1,8 +1,8 @@
-import { writable, type Readable, get } from 'svelte/store';
-import { invoke } from '@tauri-apps/api/core';
-import type { User } from '$lib/models/User';
-import { toasts } from './ToastStore';
-import { userCache } from '$lib/utils/cache';
+import { writable, type Readable, get } from "svelte/store";
+import { invoke } from "@tauri-apps/api/core";
+import type { User } from "$lib/features/auth/models/User";
+import { toasts } from "$lib/stores/ToastStore";
+import { userCache } from "$lib/utils/cache";
 
 type BackendUser = {
   id: string;
@@ -33,10 +33,13 @@ interface UserStore extends Readable<UserStoreState> {
   reset: () => void;
 }
 
-const DEFAULT_IDENTITY_PASSWORD = 'aegis-default-password';
+const DEFAULT_IDENTITY_PASSWORD = "aegis-default-password";
 
 function createUserStore(): UserStore {
-  const { subscribe, set, update } = writable<UserStoreState>({ me: null, loading: false });
+  const { subscribe, set, update } = writable<UserStoreState>({
+    me: null,
+    loading: false,
+  });
 
   const toBackendUser = (u: User) => ({
     id: u.id,
@@ -50,7 +53,10 @@ function createUserStore(): UserStore {
 
   const fromBackendUser = (u: BackendUser): User => {
     const fallbackName = u.username ?? u.name;
-    const name = fallbackName && fallbackName.trim().length > 0 ? fallbackName : `User-${u.id.slice(0, 4)}`;
+    const name =
+      fallbackName && fallbackName.trim().length > 0
+        ? fallbackName
+        : `User-${u.id.slice(0, 4)}`;
     return {
       id: u.id,
       name,
@@ -67,7 +73,7 @@ function createUserStore(): UserStore {
       return userCache.get(id) || null;
     }
     try {
-      const backendUser: BackendUser | null = await invoke('get_user', { id });
+      const backendUser: BackendUser | null = await invoke("get_user", { id });
       if (backendUser) {
         const mapped = fromBackendUser(backendUser);
         userCache.set(id, mapped);
@@ -80,23 +86,35 @@ function createUserStore(): UserStore {
     }
   };
 
-  const initialize = async (password: string, options?: InitializeOptions): Promise<User> => {
+  const initialize = async (
+    password: string,
+    options?: InitializeOptions,
+  ): Promise<User> => {
     update((state) => ({ ...state, loading: true }));
 
     const ensureInitialized = async () => {
       try {
-        await invoke('initialize_app', { password });
+        await invoke("initialize_app", { password });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (message.includes('decrypt identity') || message.includes('aead::Error')) {
+        if (
+          message.includes("decrypt identity") ||
+          message.includes("aead::Error")
+        ) {
           try {
-            await invoke('rekey_identity', { old_password: DEFAULT_IDENTITY_PASSWORD, new_password: password });
-            await invoke('initialize_app', { password });
+            await invoke("rekey_identity", {
+              old_password: DEFAULT_IDENTITY_PASSWORD,
+              new_password: password,
+            });
+            await invoke("initialize_app", { password });
             return;
           } catch (rekeyError) {
-            console.info('Generating a fresh identity after failed rekey attempt.', rekeyError);
-            await invoke('reset_identity', { password });
-            await invoke('initialize_app', { password });
+            console.info(
+              "Generating a fresh identity after failed rekey attempt.",
+              rekeyError,
+            );
+            await invoke("reset_identity", { password });
+            await invoke("initialize_app", { password });
           }
         } else {
           throw error;
@@ -106,31 +124,33 @@ function createUserStore(): UserStore {
 
     try {
       await ensureInitialized();
-      const peerId = await invoke<string>('get_peer_id');
+      const peerId = await invoke<string>("get_peer_id");
       let existingUser = await getUser(peerId);
 
       if (!existingUser && options?.username) {
-        const publicKey = await invoke<string>('get_public_key');
+        const publicKey = await invoke<string>("get_public_key");
         existingUser = {
           id: peerId,
           name: options.username,
           avatar: `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${peerId}`,
           online: true,
           publicKey,
-          bio: 'Ready for secure comms.',
-          tag: '#0000',
+          bio: "Ready for secure comms.",
+          tag: "#0000",
         };
-        await invoke('update_user_profile', { user: toBackendUser(existingUser) });
+        await invoke("update_user_profile", {
+          user: toBackendUser(existingUser),
+        });
       } else if (!existingUser) {
-        throw new Error('User profile is missing. Complete onboarding first.');
+        throw new Error("User profile is missing. Complete onboarding first.");
       }
 
       set({ me: existingUser, loading: false });
       userCache.set(existingUser.id, existingUser);
       return existingUser;
     } catch (error) {
-      console.error('Failed to initialize user:', error);
-      toasts.addToast('Failed to load user profile.', 'error');
+      console.error("Failed to initialize user:", error);
+      toasts.addToast("Failed to load user profile.", "error");
       set({ me: null, loading: false });
       throw error;
     }
@@ -145,26 +165,32 @@ function createUserStore(): UserStore {
     const updatedUser = { ...currentUser, online: newStatus };
 
     try {
-      await invoke('send_presence_update', { is_online: newStatus });
-      await invoke('update_user_profile', { user: toBackendUser(updatedUser) });
+      await invoke("send_presence_update", { is_online: newStatus });
+      await invoke("update_user_profile", { user: toBackendUser(updatedUser) });
       update((state) => ({ ...state, me: updatedUser }));
       userCache.set(updatedUser.id, updatedUser);
-      toasts.addToast(`You are now ${newStatus ? 'Online' : 'Offline'}`, 'success');
+      toasts.addToast(
+        `You are now ${newStatus ? "Online" : "Offline"}`,
+        "success",
+      );
     } catch (error) {
-      console.error('Failed to toggle online status:', error);
-      toasts.addToast(`Failed to set status to ${newStatus ? 'Online' : 'Offline'}`, 'error');
+      console.error("Failed to toggle online status:", error);
+      toasts.addToast(
+        `Failed to set status to ${newStatus ? "Online" : "Offline"}`,
+        "error",
+      );
     }
   };
 
   const updateProfile = async (updatedUser: User) => {
     try {
-      await invoke('update_user_profile', { user: toBackendUser(updatedUser) });
+      await invoke("update_user_profile", { user: toBackendUser(updatedUser) });
       update((state) => ({ ...state, me: updatedUser }));
       userCache.set(updatedUser.id, updatedUser);
-      toasts.addToast('Profile updated successfully!', 'success');
+      toasts.addToast("Profile updated successfully!", "success");
     } catch (error) {
-      console.error('Failed to update user profile:', error);
-      toasts.addToast('Failed to update profile.', 'error');
+      console.error("Failed to update user profile:", error);
+      toasts.addToast("Failed to update profile.", "error");
       throw error;
     }
   };

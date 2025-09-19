@@ -1,7 +1,7 @@
 <script lang="ts">
   import { userStore } from '$lib/stores/userStore';
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
-  import type { User } from '$lib/models/User';
+  import type { User } from '$lib/features/auth/models/User';
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import { Card, CardHeader, CardContent, CardFooter, CardTitle } from "$lib/components/ui/card/index.js";
   import * as Avatar from "$lib/components/ui/avatar/index.js";

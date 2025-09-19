@@ -1,6 +1,6 @@
-import { LRUCache } from 'lru-cache';
-import type { User } from '$lib/models/User';
-import type { Server } from '$lib/models/Server';
+import { LRUCache } from "lru-cache";
+import type { User } from "$lib/features/auth/models/User";
+import type { Server } from "$lib/features/servers/models/Server";
 
 const options = {
   max: 500,

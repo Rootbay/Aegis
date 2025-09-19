@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { User } from '$lib/models/User';
+  import type { User } from '$lib/features/auth/models/User';
 
   type OpenUserCardModal = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
 

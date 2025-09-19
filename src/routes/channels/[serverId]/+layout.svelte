@@ -1,7 +1,7 @@
 <script lang="ts">
   import { lastVisitedServerId } from '$lib/stores/navigationStore';
   import { page } from '$app/stores';
-  import { serverStore } from '$lib/stores/serverStore';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
   import { goto } from '$app/navigation';
   import type { Snippet } from 'svelte';
 

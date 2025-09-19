@@ -30,16 +30,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "app",
-      "deb",
-      "msi"
-    ],
-    "icon": [
-      "icons/icon.ico",
-      "icons/icon.icns",
-      "icons/icon.png"
-    ]
+    "targets": ["app", "deb", "msi"],
+    "icon": ["icons/icon.ico", "icons/icon.icns", "icons/icon.png"]
   },
   "plugins": {
     "core": {

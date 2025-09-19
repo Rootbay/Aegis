@@ -10,15 +10,15 @@ We have a [Code of Conduct](./CODE_OF_CONDUCT.md) that we expect all contributor
 
 There are many ways to contribute to Aegis, and we appreciate all of them. Here are a few ideas to get you started:
 
-*   **Reporting Bugs:** If you find a bug, please open an issue in our [issue tracker](https://github.com/your-username/aegis/issues). Please include as much detail as possible, including steps to reproduce the bug, your operating system, and the version of Aegis you're using.
-*   **Suggesting Features:** If you have an idea for a new feature, please open an issue in our [issue tracker](https://github.com/your-username/aegis/issues). We'd love to hear your ideas!
-*   **Submitting Code:** If you'd like to contribute code, please follow these steps:
-    1.  Fork the repository.
-    2.  Create a new branch for your feature or bug fix.
-    3.  Make your changes.
-    4.  Write tests for your changes.
-    5.  Ensure all tests pass.
-    6.  Submit a pull request.
+- **Reporting Bugs:** If you find a bug, please open an issue in our [issue tracker](https://github.com/your-username/aegis/issues). Please include as much detail as possible, including steps to reproduce the bug, your operating system, and the version of Aegis you're using.
+- **Suggesting Features:** If you have an idea for a new feature, please open an issue in our [issue tracker](https://github.com/your-username/aegis/issues). We'd love to hear your ideas!
+- **Submitting Code:** If you'd like to contribute code, please follow these steps:
+  1.  Fork the repository.
+  2.  Create a new branch for your feature or bug fix.
+  3.  Make your changes.
+  4.  Write tests for your changes.
+  5.  Ensure all tests pass.
+  6.  Submit a pull request.
 
 ## Development Setup
 

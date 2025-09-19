@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import type { Server } from '$lib/models/Server';
+  import type { Server } from '$lib/features/servers/models/Server';
   import { userStore } from '$lib/stores/userStore';
   import {
     ContextMenu,

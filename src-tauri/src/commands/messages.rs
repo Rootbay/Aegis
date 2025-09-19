@@ -1,8 +1,8 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
 use aegis_protocol::EncryptedDmSlot;
-use aep::database;
 use aegis_shared_types::AppState;
+use aep::database;
 use e2ee;
 use serde::Deserialize;
 use tauri::State;
@@ -103,7 +103,6 @@ pub async fn send_message_with_attachments(
     persist_and_broadcast_message(state, message, channel_id, server_id).await
 }
 
-
 #[tauri::command]
 pub async fn get_messages(
     chat_id: String,
@@ -130,7 +129,6 @@ pub async fn delete_message(
         .await
         .map_err(|e| e.to_string())
 }
-
 
 #[tauri::command]
 pub async fn send_encrypted_dm(
@@ -247,7 +245,6 @@ pub async fn rotate_group_key(
         .map_err(|e| e.to_string())?;
 
     let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate {
-        issuer_id,
         server_id,
         channel_id,
         epoch,
@@ -344,4 +341,3 @@ pub async fn remove_reaction(
     let _ = (chat_id, message_id, emoji);
     Ok(())
 }
-

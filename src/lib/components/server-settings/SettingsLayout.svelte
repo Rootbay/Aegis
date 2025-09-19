@@ -3,7 +3,7 @@
   import type { Component } from 'svelte';
   import RolesManagement from '$lib/components/RolesManagement.svelte';
   import ChannelManagement from '$lib/components/ChannelManagement.svelte';
-  import WebhookManagement from '$lib/components/WebhookManagement.svelte';
+  import WebhookManagement from '$lib/features/servers/components/WebhookManagement.svelte';
   import MemberList from '$lib/components/lists/MemberList.svelte';
   import BanList from '$lib/components/lists/BanList.svelte';
   import Overview from '$lib/components/server-settings/Overview.svelte';
@@ -474,6 +474,7 @@
     background-color: theme('colors.zinc.600');
   }
 </style>
+
 
 
 

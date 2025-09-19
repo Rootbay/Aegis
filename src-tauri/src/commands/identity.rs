@@ -3,10 +3,10 @@ use bs58;
 use chacha20poly1305::XNonce;
 use crypto::identity::Identity;
 use libp2p::identity::{ed25519, Keypair};
+use serde::Serialize;
 use std::fs;
 use std::io::{Read, Write};
 use tauri::{Manager, Runtime, State};
-use serde::Serialize;
 
 use crate::commands::state::{with_state, AppStateContainer};
 

@@ -8,16 +8,16 @@ import Label from "./context-menu-label.svelte";
 const Root = ContextMenuPrimitive.Root;
 
 export {
-	Content,
-	Item,
-	Root as ContextMenu,
-	Content as ContextMenuContent,
-	Item as ContextMenuItem,
-	Trigger as ContextMenuTrigger,
-	Separator as ContextMenuSeparator,
-	Label as ContextMenuLabel,
-	Root,
-	Separator,
-	Label,
-	Trigger,
+  Content,
+  Item,
+  Root as ContextMenu,
+  Content as ContextMenuContent,
+  Item as ContextMenuItem,
+  Trigger as ContextMenuTrigger,
+  Separator as ContextMenuSeparator,
+  Label as ContextMenuLabel,
+  Root,
+  Separator,
+  Label,
+  Trigger,
 };

@@ -4,11 +4,11 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/stores";
 	import { userStore } from "$lib/stores/userStore";
-	import { serverStore } from "$lib/stores/serverStore";
-	import { friendStore } from "$lib/stores/friendStore";
+	import { serverStore } from "$lib/features/servers/stores/serverStore";
+	import { friendStore } from "$lib/features/friends/stores/friendStore";
 	import { toasts } from "$lib/stores/ToastStore";
 	import ServerContextMenu from "$lib/components/context-menus/ServerContextMenu.svelte";
-	import type { Server } from "$lib/models/Server";
+	import type { Server } from "$lib/features/servers/models/Server";
 	import { lastVisitedServerId } from "$lib/stores/navigationStore";
 	import { get } from "svelte/store";
 	import { SvelteSet } from "svelte/reactivity";
@@ -23,9 +23,9 @@
 	type ProfileClickHandler = (clientX: number, clientY: number) => void;
 
 	let { onProfileClick, onCreateJoinServerClick }: { onProfileClick: ProfileClickHandler; onCreateJoinServerClick: () => void } = $props();
+	const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
 	let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
 
-	const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
 	const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
 	function loadMutedServers(): SvelteSet<string> {

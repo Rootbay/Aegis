@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Ban, Flag, MicOff, Pencil, Phone, SendHorizontal, Video, VolumeOff, X } from '@lucide/svelte';
-  import type { Friend } from '$lib/models/Friend';
-  import type { User } from '$lib/models/User';
+  import type { Friend } from '$lib/features/friends/models/Friend';
+  import type { User } from '$lib/features/auth/models/User';
 
   type Props = {
     user: Friend | User;

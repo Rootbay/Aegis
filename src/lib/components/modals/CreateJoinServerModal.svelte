@@ -1,9 +1,9 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { X, ArrowLeft, Upload } from '@lucide/svelte';
-  import { serverStore } from '$lib/stores/serverStore';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
   import { userStore } from '$lib/stores/userStore';
-  import type { Server } from '$lib/models/Server';
+  import type { Server } from '$lib/features/servers/models/Server';
 
   type Props = {
     onclose: () => void;

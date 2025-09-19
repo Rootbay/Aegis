@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { v4 as uuidv4 } from 'uuid';
   import { userStore } from '$lib/stores/userStore';
-  import type { Server } from '$lib/models/Server';
+  import type { Server } from '$lib/features/servers/models/Server';
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 

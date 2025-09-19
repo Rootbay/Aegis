@@ -3,10 +3,10 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import type { Component } from 'svelte';
-  import { serverStore } from '$lib/stores/serverStore';
-  import type { Server } from '$lib/models/Server';
-  import type { Channel } from '$lib/models/Channel';
-  import type { Role } from '$lib/models/Role';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
+  import type { Server } from '$lib/features/servers/models/Server';
+  import type { Channel } from '$lib/features/channels/models/Channel';
+  import type { Role } from '$lib/features/servers/models/Role';
   import { Ban, Boxes, Hash, LayoutPanelTop, MessageSquare, Puzzle, ScrollText, Shield, ShieldCheck, Smile, Sticker, UserCog, Users } from '@lucide/svelte';
 
   let serverId = $derived($page.params.serverId ?? null);
@@ -14,12 +14,11 @@
     serverId ? $serverStore.servers.find(s => s.id === serverId) ?? null : null
   );
 
-  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (value: string | URL) => void;
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
   const gotoResolved = (path: string) => {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve
     gotoUnsafe(path);
   };
 

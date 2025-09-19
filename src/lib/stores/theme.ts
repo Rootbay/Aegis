@@ -1,3 +1,3 @@
-import { persistentStore } from './persistentStore';
+import { persistentStore } from "./persistentStore";
 
-export const theme = persistentStore<'light' | 'dark'>('theme', 'light');
+export const theme = persistentStore<"light" | "dark">("theme", "light");

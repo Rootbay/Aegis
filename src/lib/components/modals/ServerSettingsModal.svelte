@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Server } from '$lib/models/Server';
+  import type { Server } from '$lib/features/servers/models/Server';
 
   import Overview from '../server-settings/Overview.svelte';
   import Moderation from '../server-settings/Moderation.svelte';

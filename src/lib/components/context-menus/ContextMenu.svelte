@@ -2,8 +2,8 @@
 
 <script lang="ts">
   import BaseContextMenu from './BaseContextMenu.svelte';
-  import type { Friend } from '$lib/models/Friend';
-  import type { User } from '$lib/models/User';
+  import type { Friend } from '$lib/features/friends/models/Friend';
+  import type { User } from '$lib/features/auth/models/User';
 
   type ContextMenuDetail = {
     action: string;

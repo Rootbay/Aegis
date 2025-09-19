@@ -1,1 +1,1 @@
-import '@testing-library/svelte/vitest';
+import "@testing-library/svelte/vitest";

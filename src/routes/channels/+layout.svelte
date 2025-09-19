@@ -6,8 +6,8 @@
   import { toasts } from "$lib/stores/ToastStore";
   import { goto } from '$app/navigation';
   import { setContext, getContext } from "svelte";
-  import { SERVER_LAYOUT_DATA_CONTEXT_KEY, CREATE_GROUP_CONTEXT_KEY } from "$lib/data/contextKeys";
-  import type { CreateGroupContext } from '$lib/data/contextTypes';
+  import { SERVER_LAYOUT_DATA_CONTEXT_KEY, CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
+  import type { CreateGroupContext } from '$lib/contextTypes';
 
   let serverId = $state<string | null>(null);
   let server = $state<any>(null);

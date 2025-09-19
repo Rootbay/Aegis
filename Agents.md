@@ -1,18 +1,12 @@
 \# Project Overview
 
-
-
 This repository represent:
 
 A \*\*desktop application\*\* built with \*\*Tauri v2\*\*, \*\*Svelte 5\*\*, \*\*TypeScript\*\*, \*\*TailwindCSS v4\*\*, \*\*shadcn-svelte\*\*, and \*\*lucide\*\* for icons.
 
 \*\*Bun\*\* is used as the runtime, package manager, and task runner across all projects.
 
-
-
 \# Setup / Build \& Run
-
-
 
 Install dependencies:
 
@@ -22,19 +16,13 @@ bun install
 
 ```
 
-
-
 Development:
 
 \*\*Desktop App (Tauri v2)\*\*: `bun tauri dev`
 
-
-
 Production Build:
 
 \*\*Desktop App (Tauri v2)\*\*: `bun tauri build`
-
-
 
 Type-check the project:
 
@@ -44,11 +32,7 @@ bun tsc --noEmit
 
 ```
 
-
-
 \# File-scoped Checks
-
-
 
 Type-check a single file:
 
@@ -58,8 +42,6 @@ bun tsc --noEmit <file>
 
 ```
 
-
-
 Run ESLint on a single file:
 
 ```bash
@@ -67,8 +49,6 @@ Run ESLint on a single file:
 bun eslint --fix <file>
 
 ```
-
-
 
 Format a file with Prettier:
 
@@ -78,8 +58,6 @@ bun prettier --write <file>
 
 ```
 
-
-
 Run a specific test file:
 
 ```bash
@@ -88,11 +66,7 @@ bun test <path/to/file.test.ts>
 
 ```
 
-
-
 \# Code Style \& Conventions
-
-
 
 \*\*Language\*\*: TypeScript in strict mode.
 
@@ -116,11 +90,7 @@ Components: PascalCase (e.g. `MyButton.svelte`).
 
 Utilities, stores: camelCase or kebab-case as appropriate.
 
-
-
 \# Project Structure
-
-
 
 `src/` – main application code (Svelte + TypeScript).
 
@@ -134,19 +104,11 @@ Utilities, stores: camelCase or kebab-case as appropriate.
 
 `tests/` – unit/integration tests.
 
-
-
 \# Testing Guidelines
-
-
 
 Use \*\*Vitest\*\* (or compatible runner with Bun).
 
-
-
 Add unit tests for new logic.
-
-
 
 Run tests before committing:
 
@@ -168,11 +130,7 @@ Run tests before committing:
 
   ```
 
-
-
 \# Do’s \& Don’ts
-
-
 
 \## Do:
 
@@ -184,8 +142,6 @@ Run tests before committing:
 
 \- Use lucide icons consistently.
 
-
-
 \## Don’t:
 
 \- Don’t use `any` unless unavoidable (add `TODO` if used).
@@ -194,11 +150,7 @@ Run tests before committing:
 
 \- Don’t add dependencies without reviewing size and compatibility.
 
-
-
 \# Security
-
-
 
 \- Exclude `.env` and secrets from version control.
 
@@ -206,11 +158,7 @@ Run tests before committing:
 
 \- Never expose private APIs or keys in client-side code.
 
-
-
 \# External References
-
-
 
 General project docs: see `README.md` and/or `docs`.
 
@@ -223,4 +171,3 @@ TailwindCSS v4 docs: \[https://tailwindcss.com/docs/v4](https://tailwindcss.com/
 shadcn-svelte docs: \[https://shadcn-svelte.com](https://shadcn-svelte.com)
 
 lucide icons: \[https://lucide.dev](https://lucide.dev)
-

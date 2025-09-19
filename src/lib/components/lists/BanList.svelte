@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { User } from '$lib/models/User';
+  import type { User } from '$lib/features/auth/models/User';
 
   type Props = {
     bannedUsers?: User[];

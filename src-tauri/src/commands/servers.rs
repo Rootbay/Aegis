@@ -125,13 +125,19 @@ pub async fn create_channel(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
 
-    database::insert_channel(&state.db_pool, &channel)
+    let server = database::get_server_by_id(&state.db_pool, &channel.server_id)
         .await
         .map_err(|e| e.to_string())?;
 
+    if server.owner_id != my_id {
+        return Err("Only server owners can create channels.".into());
+    }
+
+    let channel_payload = channel.clone();
     let create_channel_data = aegis_protocol::CreateChannelData {
-        channel: channel.clone(),
+        channel: channel_payload.clone(),
     };
     let create_channel_bytes =
         bincode::serialize(&create_channel_data).map_err(|e| e.to_string())?;
@@ -142,13 +148,17 @@ pub async fn create_channel(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::CreateChannel {
-        channel,
+        channel: channel_payload,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
     state
         .network_tx
         .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::insert_channel(&state.db_pool, &channel)
         .await
         .map_err(|e| e.to_string())
 }
@@ -253,13 +263,22 @@ pub async fn delete_channel(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
 
-    database::delete_channel(&state.db_pool, &channel_id)
+    let channel = database::get_channel_by_id(&state.db_pool, &channel_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let server = database::get_server_by_id(&state.db_pool, &channel.server_id)
         .await
         .map_err(|e| e.to_string())?;
 
+    if server.owner_id != my_id {
+        return Err("Only server owners can delete channels.".into());
+    }
+
+    let payload_channel_id = channel_id.clone();
     let delete_channel_data = aegis_protocol::DeleteChannelData {
-        channel_id: channel_id.clone(),
+        channel_id: payload_channel_id.clone(),
     };
     let delete_channel_bytes =
         bincode::serialize(&delete_channel_data).map_err(|e| e.to_string())?;
@@ -270,13 +289,17 @@ pub async fn delete_channel(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::DeleteChannel {
-        channel_id,
+        channel_id: payload_channel_id,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
     state
         .network_tx
         .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::delete_channel(&state.db_pool, &channel_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -288,15 +311,22 @@ pub async fn delete_server(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
 
-    database::delete_server(&state.db_pool, &server_id)
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())?;
 
+    if server.owner_id != my_id {
+        return Err("Only server owners can delete the server.".into());
+    }
+
+    let payload_server_id = server_id.clone();
     let delete_server_data = aegis_protocol::DeleteServerData {
-        server_id: server_id.clone(),
+        server_id: payload_server_id.clone(),
     };
-    let delete_server_bytes = bincode::serialize(&delete_server_data).map_err(|e| e.to_string())?;
+    let delete_server_bytes =
+        bincode::serialize(&delete_server_data).map_err(|e| e.to_string())?;
     let signature = state
         .identity
         .keypair()
@@ -304,13 +334,17 @@ pub async fn delete_server(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::DeleteServer {
-        server_id,
+        server_id: payload_server_id,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
     state
         .network_tx
         .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::delete_server(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
 }

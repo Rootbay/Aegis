@@ -1,7 +1,13 @@
-import { browser } from '$app/environment';
+import { browser } from "$app/environment";
 
-export type InvokeFn = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-export type ListenFn = <T>(event: string, handler: (payload: T) => void) => Promise<() => void>;
+export type InvokeFn = <T>(
+  cmd: string,
+  args?: Record<string, unknown>,
+) => Promise<T>;
+export type ListenFn = <T>(
+  event: string,
+  handler: (payload: T) => void,
+) => Promise<() => void>;
 
 declare global {
   interface Window {
@@ -30,10 +36,13 @@ export async function getInvoke(): Promise<InvokeFn | null> {
 }
 
 export async function getListen(): Promise<ListenFn | null> {
-  if (browser && window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+  if (
+    browser &&
+    window.__TAURI__ &&
+    window.__TAURI__.event &&
+    window.__TAURI__.event.listen
+  ) {
     return window.__TAURI__.event.listen as ListenFn;
   }
   return null;
 }
-
-

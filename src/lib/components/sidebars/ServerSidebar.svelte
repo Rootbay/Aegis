@@ -5,10 +5,10 @@
   import ServerBackgroundContextMenu from '$lib/components/context-menus/ServerBackgroundContextMenu.svelte';
   import CategoryContextMenu from '$lib/components/context-menus/CategoryContextMenu.svelte';
   import ChannelContextMenu from '$lib/components/context-menus/ChannelContextMenu.svelte';
-  import { serverStore } from '$lib/stores/serverStore';
-  import { chatStore } from '$lib/stores/chatStore';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
+  import { chatStore } from '$lib/features/chat/stores/chatStore';
   import { toasts } from '$lib/stores/ToastStore';
-  import type { Channel } from '$lib/models/Channel';
+  import type { Channel } from '$lib/features/channels/models/Channel';
   import {
     Bell,
     Plus,
@@ -20,7 +20,7 @@
     Mic,
     Info
   } from "@lucide/svelte"
-  import type { Server } from '$lib/models/Server';
+  import type { Server } from '$lib/features/servers/models/Server';
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { v4 as uuidv4 } from 'uuid';

@@ -1,6 +1,7 @@
 use libp2p::futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
 use std::collections::{HashMap, VecDeque};
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, Mutex};
@@ -14,6 +15,9 @@ use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
 use tokio::sync::mpsc::Sender as TokioSender;
 
 const MAX_OUTBOX_MESSAGES: usize = 256;
+const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
+const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
+const MAX_UNAPPROVED_BUFFER_BYTES: u64 = 8_388_608; // 8 MiB
 
 pub async fn initialize_app_state<R: Runtime>(
     app: tauri::AppHandle<R>,
@@ -299,7 +303,7 @@ pub async fn initialize_app_state<R: Runtime>(
                         SwarmEvent::NewListenAddr { .. } => {
                         }
                         SwarmEvent::Behaviour(ComposedEvent::Gossipsub(g_event)) => {
-                            if let libp2p::gossipsub::GossipsubEvent::Message { message, .. } = g_event {
+                            if let libp2p::gossipsub::GossipsubEvent::Message { propagation_source, message, .. } = g_event {
                                 if message.topic == topic_task.hash() {
                                     match bincode::deserialize::<AepMessage>(&message.data) {
                                         Ok(aep_message) => {
@@ -362,7 +366,8 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         }
                                                     }
                                                 }
-                                                AepMessage::GroupKeyUpdate { issuer_id, server_id, channel_id, epoch, slots, signature } => {
+                                                AepMessage::GroupKeyUpdate { server_id, channel_id, epoch, slots, signature } => {
+                                                    let issuer_id = propagation_source.to_base58();
                                                     let ok_sig = (|| {
                                                         let user_opt = futures::executor::block_on(aep::user_service::get_user(&db_pool_clone, &issuer_id)).ok()?;
                                                         let user = user_opt?;
@@ -386,7 +391,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             Ok(key_bytes) => {
                                                                 mgr.set_group_key(&server_id, &channel_id, epoch, &key_bytes);
                                                             }
-                                                            Err(e) => eprintln!("Failed to decrypt group key: {e}")
+                                                            Err(e) => eprintln!("Failed to decrypt group key for {}: {}", my_id, e),
                                                         }
                                                     }
                                                 }
@@ -478,8 +483,8 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Not authorized".into()));
                                                     } else {
                                                         let key = format!("{}:{}", sender_id, filename);
-                                                        let safe_name = aegis_shared_types::sanitize_filename(&filename);
-                                                        if size > aegis_shared_types::MAX_FILE_SIZE_BYTES {
+                                                        let safe_name = sanitize_filename(&filename);
+                                                        if size > MAX_FILE_SIZE_BYTES {
                                                             let mut swarm = shared_swarm_task.lock().await;
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("File too large".into()));
                                                             continue;
@@ -487,14 +492,12 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         let mut inc = state_clone_for_aep.incoming_files.lock().await;
                                                         inc.insert(key.clone(), aegis_shared_types::IncomingFile {
                                                             name: filename.clone(),
-                                                            safe_name: safe_name.clone(),
                                                             size,
                                                             received_chunks: std::collections::HashMap::new(),
                                                             key: vec![],
                                                             nonce: vec![],
                                                             sender_id: sender_id.clone(),
                                                             accepted: false,
-                                                            buffered_bytes: 0,
                                                         });
                                                         drop(inc);
                                                         let _ = app_for_emit.emit("file-transfer-request", serde_json::json!({
@@ -512,22 +515,25 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     let mut inc = state_clone_for_aep.incoming_files.lock().await;
                                                     if let Some(mut file) = inc.remove(&key) {
                                                         let chunk_len = data.len() as u64;
-                                                        let new_total = file.buffered_bytes.saturating_add(chunk_len);
-                                                        let inflight_limit = aegis_shared_types::MAX_INFLIGHT_FILE_BYTES.min(file.size);
+                                                        let replaced_bytes = file.received_chunks.get(&index).map(|chunk| chunk.len() as u64).unwrap_or(0);
+                    let current_total: u64 = file.received_chunks.values().map(|chunk| chunk.len() as u64).sum();
+                    let adjusted_total = current_total.saturating_sub(replaced_bytes);
+                    let new_total = adjusted_total.saturating_add(chunk_len);
+                                                        let inflight_limit = MAX_INFLIGHT_FILE_BYTES.min(file.size);
                                                         let mut error_reason: Option<(&str, bool)> = None;
                                                         if new_total > file.size {
                                                             error_reason = Some(("Size mismatch", false));
                                                         } else if new_total > inflight_limit {
                                                             error_reason = Some(("Transfer too large", false));
                                                         } else if !file.accepted {
-                                                            let unapproved_limit = aegis_shared_types::MAX_UNAPPROVED_BUFFER_BYTES.min(inflight_limit);
+                                                            let unapproved_limit = MAX_UNAPPROVED_BUFFER_BYTES.min(inflight_limit);
                                                             if new_total > unapproved_limit {
                                                                 error_reason = Some(("Pending approval", true));
                                                             }
                                                         }
                                                         if let Some((reason, notify)) = error_reason {
                                                             let original_name = file.name.clone();
-                                                            let safe_name = file.safe_name.clone();
+                                                            let safe_name = sanitize_filename(&file.name);
                                                             drop(inc);
                                                             if notify {
                                                                 let _ = app_for_emit.emit("file-transfer-denied", serde_json::json!({
@@ -540,7 +546,6 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error(reason.into()));
                                                             continue;
                                                         }
-                                                        file.buffered_bytes = new_total;
                                                         file.received_chunks.insert(index, data);
                                                         inc.insert(key, file);
                                                         drop(inc);
@@ -557,9 +562,10 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     let mut inc = state_clone_for_aep.incoming_files.lock().await;
                                                     if let Some(file) = inc.remove(&key) {
                                                         drop(inc);
+                                                        let safe_name = sanitize_filename(&file.name);
                                                         if file.accepted {
                                                             if let Ok(dir) = app_for_emit.path().app_data_dir() {
-                                                                let output_path = dir.join(&file.safe_name);
+                                                                let output_path = dir.join(&safe_name);
                                                                 if let Ok(mut f) = std::fs::File::create(&output_path) {
                                                                     use std::io::Write;
                                                                     let mut idx = 0u64;
@@ -567,17 +573,22 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                         let _ = f.write_all(chunk);
                                                                         idx += 1;
                                                                     }
-                                                                    if file.buffered_bytes != file.size {
-                                                                        eprintln!("Received {} bytes for {} but expected {}", file.buffered_bytes, file.safe_name, file.size);
+                                                                    let total_bytes: u64 = file
+                                                                        .received_chunks
+                                                                        .values()
+                                                                        .map(|chunk| chunk.len() as u64)
+                                                                        .sum();
+                                                                    if total_bytes != file.size {
+                                                                        eprintln!("Received {} bytes for {} but expected {}", total_bytes, safe_name, file.size);
                                                                     }
                                                                     let _ = app_for_emit.emit("file-received", serde_json::json!({
                                                                         "sender_id": sender_id,
                                                                         "filename": file.name.clone(),
-                                                                        "safe_filename": file.safe_name.clone(),
+                                                                        "safe_filename": safe_name.clone(),
                                                                         "path": output_path.to_string_lossy().to_string()
                                                                     }));
                                                                 } else {
-                                                                    eprintln!("Failed to create file for received transfer {}", file.safe_name);
+                                                                    eprintln!("Failed to create file for received transfer {}", safe_name);
                                                                 }
                                                             }
                                                             let mut swarm = shared_swarm_task.lock().await;
@@ -586,7 +597,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             let _ = app_for_emit.emit("file-transfer-denied", serde_json::json!({
                                                                 "sender_id": sender_id,
                                                                 "filename": file.name.clone(),
-                                                                "safe_filename": file.safe_name
+                                                                "safe_filename": safe_name
                                                             }));
                                                             let mut swarm = shared_swarm_task.lock().await;
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Denied".into()));
@@ -632,6 +643,37 @@ pub async fn initialize_app_state<R: Runtime>(
     Ok(())
 }
 
+fn sanitize_filename(input: &str) -> String {
+    let candidate = Path::new(input)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("file");
+
+    let mut sanitized = String::with_capacity(candidate.len());
+    for ch in candidate.chars() {
+        if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ' | '(' | ')') {
+            sanitized.push(ch);
+        } else {
+            sanitized.push('_');
+        }
+    }
+
+    while sanitized.starts_with('.') || sanitized.starts_with('_') {
+        sanitized.remove(0);
+        if sanitized.is_empty() {
+            break;
+        }
+    }
+
+    sanitized.truncate(128);
+
+    if sanitized.is_empty() || sanitized.chars().all(|c| c == '_' || c == '.') {
+        format!("file-{}", chrono::Utc::now().timestamp())
+    } else {
+        sanitized
+    }
+}
+
 async fn broadcast_group_key_update(
     db_pool: &sqlx::Pool<sqlx::Sqlite>,
     identity: crypto::identity::Identity,
@@ -675,7 +717,6 @@ async fn broadcast_group_key_update(
         .map_err(|e| e.to_string())?;
 
     let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
-        issuer_id,
         server_id: server_id.to_string(),
         channel_id: channel_id.clone(),
         epoch,
@@ -729,7 +770,6 @@ async fn rotate_and_broadcast_group_key(
         .map_err(|e| e.to_string())?;
 
     let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
-        issuer_id,
         server_id: server_id.to_string(),
         channel_id: channel_id.clone(),
         epoch,
@@ -739,7 +779,3 @@ async fn rotate_and_broadcast_group_key(
     let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
     net_tx.send(bytes).await.map_err(|e| e.to_string())
 }
-
-
-
-

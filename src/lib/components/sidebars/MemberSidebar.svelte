@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Users } from '@lucide/svelte';
-  import type { User } from '$lib/models/User';
-  import type { Role } from '$lib/models/Role';
-  import { serverStore } from '$lib/stores/serverStore';
+  import type { User } from '$lib/features/auth/models/User';
+  import type { Role } from '$lib/features/servers/models/Role';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Button } from "$lib/components/ui/button";
   import { Separator } from "$lib/components/ui/separator";
@@ -239,7 +239,7 @@
                     <Avatar class="member-entry-avatar">
                       <AvatarImage src={member.avatar} alt={member.name} />
                       <AvatarFallback>
-                        {member.name.slice(0, 2).toUpperCase()}
+                        {(member.name || '?').slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     {#if member.online}

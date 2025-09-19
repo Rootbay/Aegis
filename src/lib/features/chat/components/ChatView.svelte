@@ -10,17 +10,17 @@
   import VirtualList from '@humanspeak/svelte-virtual-list';
 
   import { userStore } from '$lib/stores/userStore';
-  import { friendStore } from '$lib/stores/friendStore';
-  import { chatStore, messagesByChatId, hasMoreByChatId } from '$lib/stores/chatStore';
+  import { friendStore } from '$lib/features/friends/stores/friendStore';
+  import { chatStore, messagesByChatId, hasMoreByChatId } from '$lib/features/chat/stores/chatStore';
   import { getContext, onMount, onDestroy } from 'svelte';
   import { toasts } from '$lib/stores/ToastStore';
 
-  import { CREATE_GROUP_CONTEXT_KEY } from '$lib/data/contextKeys';
-  import type { CreateGroupContext } from '$lib/data/contextTypes';
-  import type { User } from '$lib/models/User';
-  import type { Friend } from '$lib/models/Friend';
-  import type { Chat } from '$lib/models/Chat';
-  import type { Message } from '$lib/models/Message';
+  import { CREATE_GROUP_CONTEXT_KEY } from '$lib/contextKeys';
+  import type { CreateGroupContext } from '$lib/contextTypes';
+  import type { User } from '$lib/features/auth/models/User';
+  import type { Friend } from '$lib/features/friends/models/Friend';
+  import type { Chat } from '$lib/features/chat/models/Chat';
+  import type { Message } from '$lib/features/chat/models/Message';
 
   let { chat } = $props<{ chat: Chat | null }>();
 

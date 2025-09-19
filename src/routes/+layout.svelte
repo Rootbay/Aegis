@@ -13,21 +13,21 @@
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
-  import { authStore, type AuthState } from '$lib/stores/authStore';
+  import { authStore, type AuthState } from '$lib/features/auth/stores/authStore';
   import { userStore } from '$lib/stores/userStore';
-  import { friendStore } from '$lib/stores/friendStore';
-  import { serverStore } from '$lib/stores/serverStore';
-  import { chatStore, messagesByChatId, activeChannelId, activeChatId, activeChatType } from '$lib/stores/chatStore';
-  import { CREATE_GROUP_CONTEXT_KEY, FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from '$lib/data/contextKeys';
-  import type { FriendsLayoutContext } from '$lib/data/contextTypes';
+  import { friendStore } from '$lib/features/friends/stores/friendStore';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
+  import { chatStore, messagesByChatId, activeChannelId, activeChatId, activeChatType } from '$lib/features/chat/stores/chatStore';
+  import { CREATE_GROUP_CONTEXT_KEY, FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from '$lib/contextKeys';
+  import type { FriendsLayoutContext } from '$lib/contextTypes';
   import { getListen } from '$services/tauri';
-  import type { AepMessage } from '$lib/models/AepMessage';
-  import type { Friend } from '$lib/models/Friend';
-  import type { Server } from '$lib/models/Server';
-  import type { Message } from '$lib/models/Message';
-  import type { User } from '$lib/models/User';
-  import type { Chat } from '$lib/models/Chat';
-  import InitialSetup from '$lib/components/auth/InitialSetup.svelte';
+  import type { AepMessage } from '$lib/features/chat/models/AepMessage';
+  import type { Friend } from '$lib/features/friends/models/Friend';
+  import type { Server } from '$lib/features/servers/models/Server';
+  import type { Message } from '$lib/features/chat/models/Message';
+  import type { User } from '$lib/features/auth/models/User';
+  import type { Chat } from '$lib/features/chat/models/Chat';
+  import InitialSetup from '$lib/features/auth/components/auth/InitialSetup.svelte';
   import LoadingOverlay from '$lib/components/LoadingOverlay.svelte';
   import Sidebar from '$lib/components/sidebars/Sidebar.svelte';
   import ServerSidebar from '$lib/components/sidebars/ServerSidebar.svelte';

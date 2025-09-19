@@ -2,8 +2,8 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
-	import type { Friend } from '$lib/models/Friend';
-	import { friendStore } from '$lib/stores/friendStore';
+	import type { Friend } from '$lib/features/friends/models/Friend';
+	import { friendStore } from '$lib/features/friends/stores/friendStore';
 	import { Plus, X } from '@lucide/svelte';
 	import { Button } from "$lib/components/ui/button";
 	import { Input } from "$lib/components/ui/input";

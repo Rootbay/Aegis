@@ -3,12 +3,12 @@
   import UserOptionsMenu from '$lib/components/context-menus/UserOptionsMenu.svelte';
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
   import { userStore } from '$lib/stores/userStore';
-  import { serverStore } from '$lib/stores/serverStore';
-  import { chatStore } from '$lib/stores/chatStore';
+  import { serverStore } from '$lib/features/servers/stores/serverStore';
+  import { chatStore } from '$lib/features/chat/stores/chatStore';
   import { toasts } from '$lib/stores/ToastStore';
   import { Star, CircleCheck, Plus, SendHorizontal, Trash, Ellipsis } from '@lucide/svelte';
-  import type { Server } from '$lib/models/Server';
-  import type { User } from '$lib/models/User';
+  import type { Server } from '$lib/features/servers/models/Server';
+  import type { User } from '$lib/features/auth/models/User';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { slide } from 'svelte/transition';

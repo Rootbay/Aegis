@@ -225,19 +225,24 @@ pub async fn remove_friendship(
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
 
     let friendship = database::get_friendship_by_id(&state.db_pool, &friendship_id)
         .await
         .map_err(|e| e.to_string())?;
 
     if let Some(friendship) = friendship {
-        database::delete_friendship(&state.db_pool, &friendship.id)
-            .await
-            .map_err(|e| e.to_string())?;
+        let (remover_id, removed_id) = if friendship.user_a_id == my_id {
+            (friendship.user_a_id.clone(), friendship.user_b_id.clone())
+        } else if friendship.user_b_id == my_id {
+            (friendship.user_b_id.clone(), friendship.user_a_id.clone())
+        } else {
+            return Err("Caller identity mismatch".into());
+        };
 
         let remove_friendship_data = aegis_protocol::RemoveFriendshipData {
-            remover_id: friendship.user_a_id.clone(),
-            removed_id: friendship.user_b_id.clone(),
+            remover_id: remover_id.clone(),
+            removed_id: removed_id.clone(),
         };
         let remove_friendship_bytes =
             bincode::serialize(&remove_friendship_data).map_err(|e| e.to_string())?;
@@ -248,14 +253,18 @@ pub async fn remove_friendship(
             .map_err(|e| e.to_string())?;
 
         let aep_message = AepMessage::RemoveFriendship {
-            remover_id: friendship.user_a_id,
-            removed_id: friendship.user_b_id,
+            remover_id,
+            removed_id,
             signature: Some(signature),
         };
         let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
         state
             .network_tx
             .send(serialized_message)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        database::delete_friendship(&state.db_pool, &friendship.id)
             .await
             .map_err(|e| e.to_string())
     } else {

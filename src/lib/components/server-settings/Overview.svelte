@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Server } from '$lib/models/Server';
+  import type { Server } from '$lib/features/servers/models/Server';
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 

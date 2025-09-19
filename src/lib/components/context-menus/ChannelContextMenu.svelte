@@ -2,7 +2,7 @@
 
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import type { Channel } from '$lib/models/Channel';
+  import type { Channel } from '$lib/features/channels/models/Channel';
 
   type ChannelContextMenuDetail = {
     action: string;
