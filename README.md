@@ -1,5 +1,9 @@
 # Aegis Messenger
 
+## ⚠️ Project Status ⚠️
+
+This project is in **early development** and is **far from production ready**. Features may be incomplete, and breaking changes are expected.
+
 > A secure, off-grid messenger built with Tauri v2, Svelte 5, TypeScript, and bun.
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/user/repo/build.yml?branch=main&style=for-the-badge)](https://github.com/user/repo/actions)
