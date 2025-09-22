@@ -34,6 +34,7 @@
   let recoveryPassword = $state('');
   let recoveryPasswordConfirm = $state('');
   let recoveryError = $state<string | null>(null);
+  let pendingRecoveryError = $state<string | null>(null);
 
   let deviceTotp = $state('');
   let showScanner = $state(false);
@@ -284,8 +285,31 @@
     localError = 'Camera error: unable to start QR scanner.';
   }
 
+  async function finalizeSecurityQuestionRecovery() {
+    pendingRecoveryError = null;
+    try {
+      await authStore.completeSecurityQuestionRecovery();
+      securityQuestionAnswers = {};
+      recoveryPassword = '';
+      recoveryPasswordConfirm = '';
+      recoveryTotp = '';
+      showRecoveryForm = false;
+    } catch (error) {
+      pendingRecoveryError = error instanceof Error
+        ? error.message
+        : 'Unable to finalize recovery.';
+    }
+  }
+
   const isLoading = $derived($authStore.loading);
   const status = $derived($authStore.status);
+  const pendingRecovery = $derived($authStore.pendingRecoveryRotation);
+
+  $effect(() => {
+    if (status !== 'recovery_ack_required') {
+      pendingRecoveryError = null;
+    }
+  });
 </script>
 
 <div class="min-h-screen w-full bg-zinc-950 text-zinc-100 flex items-center justify-center px-6 py-10 relative">
@@ -308,6 +332,59 @@
       <DialogFooter>
         <Button variant="ghost" size="sm" onclick={() => (showScanner = false)}>
           Close
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+
+  <Dialog
+    open={status === 'recovery_ack_required' && !!pendingRecovery}
+    onOpenChange={() => undefined}
+  >
+    <DialogContent class="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
+          <Save size={18} /> Confirm your new recovery phrase
+        </DialogTitle>
+        <DialogDescription>
+          We generated a new recovery phrase for you. Store it securely before finishing your password reset.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="space-y-4">
+        <Alert class="border-yellow-500/30 bg-yellow-500/10 text-yellow-100">
+          <AlertTitle class="flex items-center gap-2 text-yellow-100">
+            <TriangleAlert size={16} class="text-yellow-300" />
+            Save these words now
+          </AlertTitle>
+          <AlertDescription class="text-yellow-100/80">
+            Your previous recovery phrase is no longer valid. Write this one down before you continue.
+          </AlertDescription>
+        </Alert>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
+          {#each pendingRecovery?.newRecoveryPhrase ?? [] as word, index (index)}
+            <div class="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200">
+              <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
+            </div>
+          {/each}
+        </div>
+
+        {#if pendingRecoveryError}
+          <Alert variant="destructive">
+            <AlertTitle>Unable to finalize recovery</AlertTitle>
+            <AlertDescription>{pendingRecoveryError}</AlertDescription>
+          </Alert>
+        {/if}
+      </div>
+
+      <DialogFooter>
+        <Button
+          class="w-full"
+          onclick={finalizeSecurityQuestionRecovery}
+          disabled={isLoading}
+        >
+          I have stored my new recovery phrase
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -771,7 +848,7 @@
           class="w-full"
           type="submit"
           variant="outline"
-          disabled={isLoading}
+          disabled={isLoading || status === 'recovery_ack_required'}
         >
           Reset password with security questions
         </Button>

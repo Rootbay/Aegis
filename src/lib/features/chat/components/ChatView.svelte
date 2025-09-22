@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { Hash, Phone, Video, Search, EllipsisVertical, X, Link, Mic, SendHorizontal, Users } from '@lucide/svelte';
+  import { Link, Mic, SendHorizontal, Users } from '@lucide/svelte';
   import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
   import FilePreview from '$lib/components/media/FilePreview.svelte';
   import DownloadProgress from '$lib/components/ui/DownloadProgress.svelte';
@@ -12,8 +12,10 @@
   import { userStore } from '$lib/stores/userStore';
   import { friendStore } from '$lib/features/friends/stores/friendStore';
   import { chatStore, messagesByChatId, hasMoreByChatId } from '$lib/features/chat/stores/chatStore';
-  import { getContext, onMount, onDestroy } from 'svelte';
+  import { getContext, onMount } from 'svelte';
   import { toasts } from '$lib/stores/ToastStore';
+  import { chatSearchStore } from '$lib/features/chat/stores/chatSearchStore';
+  import { get, derived } from 'svelte/store';
 
   import { CREATE_GROUP_CONTEXT_KEY } from '$lib/contextKeys';
   import type { CreateGroupContext } from '$lib/contextTypes';
@@ -46,9 +48,6 @@
   let fileInput: HTMLInputElement | null = $state(null);
   let textareaRef: HTMLTextAreaElement | null = $state(null);
   let viewportEl: HTMLElement | null = null;
-  let searchOpen = $state(false);
-  let searchQuery = $state('');
-  let activeMatchIndex = $state(0);
   let showMsgMenu = $state(false);
   let msgMenuX = $state(0);
   let msgMenuY = $state(0);
@@ -94,12 +93,15 @@
       viewportEl.addEventListener('scroll', onScroll, { passive: true } as any);
       onScroll();
     }
+    const unregisterSearchHandlers = chatSearchStore.registerHandlers({
+      jumpToMatch,
+      clearSearch,
+    });
     return () => {
       if (viewportEl) viewportEl.removeEventListener('scroll', onScroll as any);
+      unregisterSearchHandlers();
+      chatSearchStore.reset();
     };
-  });
-
-  onDestroy(() => {
   });
 
   let prevCount = $state(0);
@@ -111,6 +113,7 @@
       isAtBottom = true;
       prevCount = 0;
       prevChatId = id;
+      chatSearchStore.reset();
     }
   });
 
@@ -130,38 +133,53 @@
   });
 
   const myId = $userStore.me?.id;
-  let searchMatches = $state<number[]>([]);
+  const chatSearchQueryStore = derived(chatSearchStore, (state) => state.query);
+
+  function arraysEqualNumbers(a: number[], b: number[]) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
 
   $effect(() => {
-    if (!searchQuery) {
-      searchMatches = [];
+    const query = $chatSearchQueryStore.trim();
+    const messages = currentChatMessages || [];
+    const { matches: currentMatches } = get(chatSearchStore);
+
+    if (!chat?.id || !query) {
+      if (currentMatches.length) {
+        chatSearchStore.setMatches([]);
+      }
       return;
     }
-    const q = searchQuery.toLowerCase();
-    searchMatches = (currentChatMessages || [])
-      .map((m, idx) => ({ idx, hit: (m.content || '').toLowerCase().includes(q) }))
-      .filter(({ hit }) => hit)
-      .map(({ idx }) => idx);
-  });
 
-  $effect(() => {
-    if (activeMatchIndex >= searchMatches.length) activeMatchIndex = Math.max(0, searchMatches.length - 1);
+    const lower = query.toLowerCase();
+    const matches = messages
+      .map((m, idx) => ({ idx, content: (m.content || '').toLowerCase() }))
+      .filter(({ content }) => content.includes(lower))
+      .map(({ idx }) => idx);
+
+    if (!arraysEqualNumbers(matches, currentMatches)) {
+      chatSearchStore.setMatches(matches);
+    }
   });
 
   function jumpToMatch(next = true) {
-    if (!searchMatches.length) return;
-    const count = searchMatches.length;
-    activeMatchIndex = (activeMatchIndex + (next ? 1 : -1) + count) % count;
-    const msgIndex = searchMatches[activeMatchIndex];
+    const { matches, activeMatchIndex } = get(chatSearchStore);
+    if (!matches.length) return;
+    const count = matches.length;
+    const nextIndex = (activeMatchIndex + (next ? 1 : -1) + count) % count;
+    chatSearchStore.setActiveMatchIndex(nextIndex);
+    const msgIndex = matches[nextIndex];
     if (listRef && typeof listRef.scroll === 'function') {
       listRef.scroll({ index: msgIndex, align: 'center', smoothScroll: true });
     }
   }
 
   function clearSearch() {
-    searchQuery = '';
-    activeMatchIndex = 0;
-    searchOpen = false;
+    chatSearchStore.reset();
   }
 
   function highlightText(text: string, query: string): { text: string; match: boolean }[] {
@@ -363,41 +381,6 @@
 
 <div class="flex-grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
-    <header class="flex items-center p-3 border-b border-zinc-700/50 shadow-sm justify-between h-[55px]">
-      <div class="flex items-center">
-        {#if chat.type === 'dm'}
-          <button class="w-10 h-10 rounded-full mr-4 cursor-pointer relative" onclick={(e) => openUserCardModal(chat.friend, e.clientX, e.clientY, false)} aria-label="View profile picture">
-            <img src={chat.friend.avatar} alt={chat.friend.name} class="w-full h-full object-cover rounded-full" />
-            <div class="absolute bottom-0 right-0 w-3 h-3 {chat.friend.online ? 'bg-green-500' : 'bg-red-500'} rounded-full border-2 border-zinc-800"></div>
-          </button>
-          <div>
-            <button class="font-bold cursor-pointer hover:underline" onclick={(e) => openUserCardModal(chat.friend, e.clientX, e.clientY, false)}>{chat.friend.name}</button>
-            <p class="text-xs text-muted-foreground">{chat.friend.online ? 'Online' : 'Offline'}</p>
-          </div>
-        {:else if chat.type === 'channel'}
-          <Hash size={10} class="mr-2 text-zinc-600" />
-          <h2 class="font-bold text-lg">{chat.name}</h2>
-        {/if}
-      </div>
-      <div class="flex items-center space-x-4">
-        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="Start voice call"><Phone size={12} /></button>
-        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="Start video call"><Video size={12} /></button>
-        {#if searchOpen}
-          <div class="flex items-center bg-zinc-700/70 rounded px-2 py-1 gap-1">
-            <input type="text" class="bg-transparent focus:outline-none text-sm w-40 chat-search-input" placeholder="Search in chat" bind:value={searchQuery} />
-            <span class="text-xs text-muted-foreground">{searchMatches.length ? `${activeMatchIndex + 1}/${searchMatches.length}` : '0/0'}</span>
-            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={() => jumpToMatch(false)} aria-label="Previous match">↑</button>
-            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={() => jumpToMatch(true)} aria-label="Next match">↓</button>
-            <button class="text-zinc-300 hover:text-white cursor-pointer" onclick={clearSearch} aria-label="Close search"><EllipsisVertical size="0" class="hidden" />
-              <X size={12} /></button>
-          </div>
-        {:else}
-          <button class="text-muted-foreground hover:text-white cursor-pointer" onclick={() => { searchOpen = true; setTimeout(() => (document.querySelector('.chat-search-input') as HTMLInputElement)?.focus(), 0); }} aria-label="Open search"><Search size={12} /></button>
-        {/if}
-        <button class="text-muted-foreground hover:text-white cursor-pointer" aria-label="More options"><EllipsisVertical size={12} /></button>
-      </div>
-    </header>
-
     <div class="flex-grow min-h-0 relative">
       <VirtualList
         items={currentChatMessages}
@@ -436,8 +419,8 @@
                     oncontextmenu={(e) => handleMessageContextMenu(e, msg)}
                     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleMessageContextMenu(e as any as MouseEvent, msg); } }}
                   >
-                    {#if searchQuery}
-                      {#each highlightText(msg.content, searchQuery) as part, i (i)}
+                    {#if $chatSearchStore.query}
+                      {#each highlightText(msg.content, $chatSearchStore.query) as part, i (i)}
                         {#if part.match}
                           <mark class="bg-yellow-500/60 text-white">{part.text}</mark>
                         {:else}
@@ -583,6 +566,13 @@
   />
 {/if}
   
+
+
+
+
+
+
+
 
 
 

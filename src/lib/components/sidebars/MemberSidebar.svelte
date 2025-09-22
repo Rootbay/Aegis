@@ -3,15 +3,21 @@
   import type { User } from '$lib/features/auth/models/User';
   import type { Role } from '$lib/features/servers/models/Role';
   import { serverStore } from '$lib/features/servers/stores/serverStore';
-  import { ScrollArea } from "$lib/components/ui/scroll-area";
-  import { Button } from "$lib/components/ui/button";
-  import { Separator } from "$lib/components/ui/separator";
-  import {
-    Avatar,
-    AvatarImage,
-    AvatarFallback
-  } from "$lib/components/ui/avatar";
+  import { ScrollArea } from '$lib/components/ui/scroll-area';
+  import { Separator } from '$lib/components/ui/separator';
+  import { Avatar, AvatarImage, AvatarFallback } from '$lib/components/ui/avatar';
   import * as Popover from '$lib/components/ui/popover/index.js';
+  import {
+    Sidebar,
+    SidebarHeader,
+    SidebarContent,
+    SidebarGroup,
+    SidebarGroupLabel,
+    SidebarGroupContent,
+    SidebarMenu,
+    SidebarMenuItem,
+    SidebarMenuButton
+  } from '$lib/components/ui/sidebar';
   import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
 
   type MemberWithRoles = User & Record<string, unknown>;
@@ -30,12 +36,14 @@
   let {
     members = [],
     isSettingsPage = false,
-    openUserCardModal,
+    openUserCardModal = () => {},
+    openDetailedProfileModal = () => {},
     roles: providedRoles = []
   }: {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
-    openUserCardModal: Function;
+    openUserCardModal?: (user: User, x: number, y: number, isServerMemberContext: boolean) => void;
+    openDetailedProfileModal?: (user: User) => void;
     roles?: Role[];
   } = $props();
 
@@ -98,8 +106,8 @@
     }
 
     const groups = new Map<string, MemberGroup>();
-    const roleById = new Map(roleList.map(role => [role.id, role]));
-    const roleByName = new Map(roleList.map(role => [role.name.toLowerCase(), role]));
+    const roleById = new Map(roleList.map((role) => [role.id, role]));
+    const roleByName = new Map(roleList.map((role) => [role.name.toLowerCase(), role]));
     const orderByGroupId = new Map<string, number>();
     roleList.forEach((role, index) => {
       orderByGroupId.set(`role:${role.id}`, index);
@@ -112,10 +120,7 @@
       return groups.get(key)!;
     };
 
-    const fallbackGroup = ensureGroup(
-      FALLBACK_GROUP_ID,
-      FALLBACK_GROUP_LABEL
-    );
+    const fallbackGroup = ensureGroup(FALLBACK_GROUP_ID, FALLBACK_GROUP_LABEL);
 
     for (const member of memberList) {
       const roleIdentifiers = extractMemberRoleValues(member);
@@ -147,7 +152,7 @@
       (targetGroup ?? fallbackGroup).members.push(member as MemberWithRoles);
     }
 
-    const result = Array.from(groups.values()).filter(group => group.members.length > 0);
+    const result = Array.from(groups.values()).filter((group) => group.members.length > 0);
 
     result.sort((a, b) => {
       const hoistA = a.hoist ? 1 : 0;
@@ -187,207 +192,85 @@
   }
 </script>
 
-<aside class="member-sidebar">
+<Sidebar
+  class="hidden lg:flex"
+  data-settings-page={isSettingsPage}
+  aria-label={isSettingsPage ? 'Member settings' : 'Server members'}
+>
   {#if isSettingsPage}
-    <div class="member-sidebar-header">
-      <h2 class="member-sidebar-title">Settings</h2>
-    </div>
-    <Separator />
-    <div class="member-sidebar-settings">
+    <SidebarHeader>
+      <h2 class="text-lg font-semibold text-foreground">Settings</h2>
+    </SidebarHeader>
+    <Separator class="opacity-50" />
+    <SidebarContent class="p-4 text-sm text-muted-foreground">
       <p>Settings content goes here.</p>
-    </div>
+    </SidebarContent>
   {:else}
-    <div class="member-sidebar-header">
-      <h2 class="member-sidebar-title">Members</h2>
-    </div>
-    <Separator />
-    <ScrollArea class="member-sidebar-scroll-area">
-      {#if members.length === 0}
-        <div class="member-sidebar-empty-state">
-          <Users size={20} aria-hidden="true" />
-          <p>No members in this chat.</p>
-        </div>
-      {:else}
-        <div class="member-sidebar-group-list">
-          {#each groupedMembers as group (group.id)}
-            <section class="member-group">
-              <header class="member-group-header">
-                <div class="member-group-label">
-                  {#if group.color}
-                    <span
-                      class="member-group-bullet"
-                      style={`background-color: ${group.color}`}
-                      aria-hidden="true"
-                    ></span>
-                  {/if}
-                  <span class="member-group-name">{group.label}</span>
-                </div>
-                <span class="member-group-count">{group.members.length}</span>
-              </header>
-              {#each group.members as member (member.id)}
-                <Popover.Root>
-                  <Popover.Trigger>
-                    <Button
-                      variant="ghost"
-                      class="w-full justify-start h-auto px-2 py-1.5 text-left"
-                    >
-                      <div class="relative mr-2">
-                        <Avatar class="w-8 h-8">
-                          <AvatarImage src={member.avatar} alt={member.name} />
-                          <AvatarFallback>
-                            {(member.name || '?').slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        {#if member.online}
-                          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-primary rounded-full border-2 border-muted"></span>
-                        {/if}
-                      </div>
-                      <span class="text-foreground truncate">{member.name}</span>
-                    </Button>
-                  </Popover.Trigger>
-                  <Popover.Content class="w-auto p-0 border-none">
-                    <UserCardModal 
-                      profileUser={member} 
-                      {openDetailedProfileModal} 
-                      isServerMemberContext={true}
-                    />
-                  </Popover.Content>
-                </Popover.Root>
-              {/each}
-            </section>
-          {/each}
-        </div>
-      {/if}
-    </ScrollArea>
+    <SidebarContent class="flex">
+      <ScrollArea class="h-full w-full">
+        {#if members.length === 0}
+          <div class="flex flex-col items-center gap-3 px-6 py-8 text-center text-sm text-muted-foreground">
+            <Users class="size-5" aria-hidden="true" />
+            <p>No members in this chat.</p>
+          </div>
+        {:else}
+          <div class="space-y-5 px-2 py-4">
+            {#each groupedMembers as group (group.id)}
+              <SidebarGroup class="space-y-2">
+                <SidebarGroupLabel>
+                  <div class="flex min-w-0 items-center gap-2">
+                    {#if group.color}
+                      <span
+                        class="h-2 w-2 shrink-0 rounded-full border border-border"
+                        style={`background-color: ${group.color}`}
+                        aria-hidden="true"
+                      ></span>
+                    {/if}
+                    <span class="truncate text-foreground">{group.label}</span>
+                  </div>
+                  <span class="text-xs font-semibold text-muted-foreground">{group.members.length}</span>
+                </SidebarGroupLabel>
+                <SidebarGroupContent class="space-y-1">
+                  <SidebarMenu class="space-y-1">
+                    {#each group.members as member (member.id)}
+                      <SidebarMenuItem>
+                        <Popover.Root>
+                          <Popover.Trigger>
+                            <SidebarMenuButton
+                              class="flex items-center gap-3"
+                              on:dblclick={(event) => openUserCardModal(member, event.clientX, event.clientY, true)}
+                            >
+                              <div class="relative">
+                                <Avatar class="size-8">
+                                  <AvatarImage src={member.avatar} alt={member.name} />
+                                  <AvatarFallback>
+                                    {(member.name || '?').slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                {#if member.online}
+                                  <span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"></span>
+                                {/if}
+                              </div>
+                              <span class="truncate text-sm font-medium text-foreground">{member.name}</span>
+                            </SidebarMenuButton>
+                          </Popover.Trigger>
+                          <Popover.Content class="w-auto border-none p-0">
+                            <UserCardModal
+                              profileUser={member}
+                              {openDetailedProfileModal}
+                              isServerMemberContext={true}
+                            />
+                          </Popover.Content>
+                        </Popover.Root>
+                      </SidebarMenuItem>
+                    {/each}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            {/each}
+          </div>
+        {/if}
+      </ScrollArea>
+    </SidebarContent>
   {/if}
-</aside>
-
-<style>
-  .member-sidebar {
-    display: none;
-    width: 260px;
-    flex-shrink: 0;
-    min-height: 0;
-    background-color: var(--muted);
-    border-left: 1px solid var(--border);
-    color: var(--muted-foreground);
-    flex-direction: column;
-  }
-
-  .member-sidebar-header {
-    align-items: center;
-    color: var(--foreground);
-    display: flex;
-    height: 55px;
-    padding: 1rem;
-  }
-
-  .member-sidebar-title {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin: 0;
-  }
-
-  .member-sidebar-settings {
-    color: var(--muted-foreground);
-    flex: 1;
-    padding: 1rem;
-  }
-
-  .member-sidebar-settings p {
-    margin: 0;
-  }
-
-  .member-sidebar-empty-state {
-    align-items: center;
-    color: var(--muted-foreground);
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1.5rem;
-    text-align: center;
-  }
-
-  .member-sidebar-empty-state p {
-    font-size: 0.875rem;
-    margin: 0;
-  }
-
-  .member-sidebar-group-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .member-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .member-group-header {
-    align-items: center;
-    color: var(--muted-foreground);
-    display: flex;
-    font-size: 0.75rem;
-    font-weight: 600;
-    justify-content: space-between;
-    letter-spacing: 0.05em;
-    padding: 0 0.5rem;
-    text-transform: uppercase;
-  }
-
-  .member-group-label {
-    align-items: center;
-    display: flex;
-    gap: 0.5rem;
-    min-width: 0;
-  }
-
-  .member-group-bullet {
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    display: inline-flex;
-    height: 0.5rem;
-    width: 0.5rem;
-  }
-
-  .member-group-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .member-group-count {
-    color: var(--muted-foreground);
-  }
-
-  .member-entry-avatar-wrapper {
-    margin-right: 0.25rem;
-    position: relative;
-  }
-
-  .member-entry-presence {
-    background-color: var(--primary);
-    border: 2px solid var(--background);
-    border-radius: 999px;
-    bottom: 0;
-    height: 0.5rem;
-    position: absolute;
-    right: 0;
-    width: 0.5rem;
-  }
-
-  .member-entry-name {
-    color: var(--foreground);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-    @media (min-width: 64rem) {
-    .member-sidebar {
-      display: flex;
-    }
-  }
-</style>
+</Sidebar>

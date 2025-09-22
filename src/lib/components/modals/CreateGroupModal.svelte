@@ -1,6 +1,18 @@
 <script lang="ts">
   import { Search, X } from '@lucide/svelte';
   import { SvelteSet } from 'svelte/reactivity';
+  import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+    DialogClose,
+  } from '$lib/components/ui/dialog';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 
   type Props = {
     onclose: () => void;
@@ -9,6 +21,7 @@
 
   let { onclose, allUsers }: Props = $props();
 
+  let open = $state(true);
   let searchTerm = $state('');
   let selectedUserIds = new SvelteSet<string>();
 
@@ -32,83 +45,104 @@
     } else {
       selectedUserIds.add(userId);
     }
-}
+    selectedUserIds = new SvelteSet<string>(selectedUserIds);
+  }
 
   function createGroup() {
     const selectedUsers = allUsers.filter(user => selectedUserIds.has(user.id));
     console.log('Creating group with users:', selectedUsers);
-    onclose();
+    open = false;
   }
+
+  $effect(() => {
+    if (!open) {
+      onclose();
+    }
+  });
 </script>
 
-<div class="fixed inset-0 flex items-center justify-center z-50">
-  <div class="bg-card p-6 rounded-lg shadow-lg w-full max-w-sm relative">
-    <button class="absolute top-3 right-3 text-muted-foreground hover:text-white cursor-pointer" onclick={onclose}>
-      <X size={15} />
-    </button>
-    <h2 class="text-xl font-bold mb-4 text-white">Create New Group</h2>
+<Dialog bind:open={open}>
+  <DialogContent class="sm:max-w-sm">
+    <DialogHeader class="text-left">
+      <DialogTitle>Create New Group</DialogTitle>
+      <DialogDescription>
+        Select friends to start a new group conversation.
+      </DialogDescription>
+    </DialogHeader>
 
-    <div class="relative mb-4">
-      <input
-        type="text"
-        placeholder="Search users..."
-        bind:value={searchTerm}
-        class="w-full bg-zinc-700 border border-zinc-600 rounded-md pl-12 pr-4 py-2 text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-      />
-      <div class="absolute left-4 inset-y-0 flex items-center">
-        <Search size={12} class="text-muted-foreground" />
+    <div class="space-y-4">
+      <div class="relative">
+        <Input
+          type="text"
+          placeholder="Search users..."
+          bind:value={searchTerm}
+          class="pl-9"
+        />
+        <Search size={14} class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
       </div>
+
+      <ScrollArea class="max-h-60 pr-1">
+        <div class="space-y-4">
+          {#if pinnedFriends.length > 0}
+            <section class="space-y-2">
+              <p class="text-xs font-semibold uppercase text-muted-foreground">Pinned Friends</p>
+              <div class="space-y-1.5">
+                {#each pinnedFriends as user (user.id)}
+                  <label class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.has(user.id)}
+                      onchange={() => toggleUserSelection(user.id)}
+                      class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    />
+                    <img src={user.avatar} alt={user.name} class="h-8 w-8 rounded-full object-cover" />
+                    <span class="text-sm font-medium text-foreground">{user.name}</span>
+                  </label>
+                {/each}
+              </div>
+            </section>
+          {/if}
+
+          {#if otherUsers.length > 0}
+            <section class="space-y-2">
+              <p class="text-xs font-semibold uppercase text-muted-foreground">Other Users</p>
+              <div class="space-y-1.5">
+                {#each otherUsers as user (user.id)}
+                  <label class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.has(user.id)}
+                      onchange={() => toggleUserSelection(user.id)}
+                      class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    />
+                    <img src={user.avatar} alt={user.name} class="h-8 w-8 rounded-full object-cover" />
+                    <span class="text-sm font-medium text-foreground">{user.name}</span>
+                  </label>
+                {/each}
+              </div>
+            </section>
+          {/if}
+
+          {#if filteredUsers.length === 0}
+            <p class="text-center text-sm text-muted-foreground">No users found.</p>
+          {/if}
+        </div>
+      </ScrollArea>
     </div>
 
-    <div class="max-h-60 overflow-y-auto pr-2 space-y-4">
-      {#if pinnedFriends.length > 0}
-        <h3 class="text-sm font-semibold text-muted-foreground uppercase">Pinned Friends</h3>
-        <div class="space-y-2">
-          {#each pinnedFriends as user (user.id)}
-            <label class="flex items-center p-2 rounded-md hover:bg-zinc-700 transition-colors cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedUserIds.has(user.id)}
-                onchange={() => toggleUserSelection(user.id)}
-                class="form-checkbox h-4 w-4 text-cyan-600 rounded border-zinc-500 focus:ring-cyan-500 bg-zinc-900"
-              />
-              <img src={user.avatar} alt={user.name} class="w-8 h-8 rounded-full ml-3 mr-3" />
-              <span class="text-white font-medium">{user.name}</span>
-            </label>
-          {/each}
-        </div>
-      {/if}
-
-      {#if otherUsers.length > 0}
-        <h3 class="text-sm font-semibold text-muted-foreground uppercase">Other Users</h3>
-        <div class="space-y-2">
-          {#each otherUsers as user (user.id)}
-            <label class="flex items-center p-2 rounded-md hover:bg-zinc-700 transition-colors cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedUserIds.has(user.id)}
-                onchange={() => toggleUserSelection(user.id)}
-                class="form-checkbox h-4 w-4 text-cyan-600 rounded border-zinc-500 focus:ring-cyan-500 bg-zinc-900"
-              />
-              <img src={user.avatar} alt={user.name} class="w-8 h-8 rounded-full ml-3 mr-3" />
-              <span class="text-white font-medium">{user.name}</span>
-            </label>
-          {/each}
-        </div>
-      {/if}
-
-      {#if filteredUsers.length === 0}
-        <p class="text-center text-zinc-500">No users found.</p>
-      {/if}
-    </div>
-
-    <button
-        class="w-full bg-cyan-600 text-white py-2 rounded-md hover:bg-cyan-500 transition-colors font-semibold cursor-pointer mt-6"
+    <DialogFooter>
+      <Button
+        class="w-full"
         onclick={createGroup}
         disabled={selectedUserIds.size === 0}
       >
-      Create Group
-    </button>
-  </div>
-</div>
+        Create Group
+      </Button>
+    </DialogFooter>
 
+    <DialogClose class="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none">
+      <span class="sr-only">Close</span>
+      <X class="h-4 w-4" />
+    </DialogClose>
+  </DialogContent>
+</Dialog>

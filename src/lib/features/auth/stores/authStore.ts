@@ -26,6 +26,7 @@ type AuthStatus =
   | "needs_setup"
   | "setup_in_progress"
   | "locked"
+  | "recovery_ack_required"
   | "authenticated"
   | "account_locked";
 
@@ -75,12 +76,19 @@ type OnboardingState = {
   password?: string;
 };
 
+type PendingRecoveryRotation = {
+  newRecoveryPhrase: string[];
+  newPassword: string;
+  initiatedAt: string;
+};
+
 type AuthState = {
   status: AuthStatus;
   loading: boolean;
   error: string | null;
   onboarding: OnboardingState | null;
   pendingDeviceLogin: DeviceHandshakePayload | null;
+  pendingRecoveryRotation: PendingRecoveryRotation | null;
   requireTotpOnUnlock: boolean;
   passwordPolicy: PasswordPolicy;
   failedAttempts: number;
@@ -103,6 +111,7 @@ const initialState: AuthState = {
   error: null,
   onboarding: null,
   pendingDeviceLogin: null,
+  pendingRecoveryRotation: null,
   requireTotpOnUnlock: false,
   passwordPolicy: "unicode_required",
   failedAttempts: 0,
@@ -376,6 +385,7 @@ const completeOnboarding = async ({
       status: "authenticated",
       loading: false,
       error: null,
+      pendingRecoveryRotation: null,
       onboarding: null,
       requireTotpOnUnlock: false,
       passwordPolicy: "unicode_required",
@@ -470,6 +480,7 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
       status: "authenticated",
       loading: false,
       error: null,
+      pendingRecoveryRotation: null,
       accountLocked: false,
       accountLockedUntil: null,
       failedAttempts: 0,
@@ -576,6 +587,7 @@ const loginWithRecovery = async ({
       status: "authenticated",
       loading: false,
       error: null,
+      pendingRecoveryRotation: null,
       requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
       passwordPolicy: "enhanced",
       accountLocked: false,
@@ -600,6 +612,9 @@ const loginWithSecurityQuestions = async ({
   totpCode,
 }: SecurityQuestionRecoveryOptions) => {
   const currentState = get({ subscribe });
+  if (currentState.pendingRecoveryRotation) {
+    throw new Error("Finish storing your new recovery phrase before continuing.");
+  }
   const requireUnicode = currentState.passwordPolicy !== "legacy_allowed";
   const passwordError = validatePassword(newPassword, requireUnicode, true);
   if (passwordError) {
@@ -618,7 +633,7 @@ const loginWithSecurityQuestions = async ({
       if (providedAnswer) {
         const answerHash = await hashString(providedAnswer.trim().toLowerCase());
         if (answerHash === question.answerHash) {
-          correctAnswers++;
+          correctAnswers += 1;
         }
       }
     }
@@ -638,20 +653,63 @@ const loginWithSecurityQuestions = async ({
     }
 
     const newRecoveryPhrase = generateRecoveryPhrase(12);
-    const normalizedPhrase = normalizeRecoveryPhrase(newRecoveryPhrase);
+
+    update((state) => ({
+      ...state,
+      loading: false,
+      error: null,
+      status: "recovery_ack_required",
+      pendingRecoveryRotation: {
+        newRecoveryPhrase,
+        newPassword,
+        initiatedAt: new Date().toISOString(),
+      },
+    }));
+    toasts.addToast(
+      "Write down your new recovery phrase before finalizing recovery.",
+      "info",
+    );
+    return newRecoveryPhrase;
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to recover account with security questions.";
+    console.error("Security question recovery failed:", error);
+    update((state) => ({ ...state, loading: false, error: message }));
+    throw error;
+  }
+};
+
+const completeSecurityQuestionRecovery = async () => {
+  const stateSnapshot = get({ subscribe });
+  const pending = stateSnapshot.pendingRecoveryRotation;
+  if (!pending) {
+    throw new Error("No recovery phrase acknowledgement pending.");
+  }
+
+  update((state) => ({ ...state, loading: true, error: null }));
+  try {
+    const persisted = get(persistence);
+    const username = persisted.username;
+    if (!username) {
+      throw new Error("No identity found to finalize recovery.");
+    }
+
+    const normalizedPhrase = normalizeRecoveryPhrase(pending.newRecoveryPhrase);
     const phraseKey = await derivePasswordKey(normalizedPhrase);
     const recoveryHash = await hashString(normalizedPhrase);
 
-    const passwordHash = await hashString(newPassword);
+    const passwordHash = await hashString(pending.newPassword);
     const passwordEnvelope = persisted.totpSecret
-      ? await encryptWithSecret(persisted.totpSecret, newPassword)
+      ? await encryptWithSecret(persisted.totpSecret, pending.newPassword)
       : null;
-    const recoveryEnvelope = await encryptWithSecret(phraseKey, newPassword);
+    const recoveryEnvelope = await encryptWithSecret(phraseKey, pending.newPassword);
 
-    await userStore.initialize(newPassword, { username: persisted.username });
+    await userStore.initialize(pending.newPassword, { username });
 
     persistence.set({
-      username: persisted.username,
+      username,
       passwordHash,
       passwordEnvelope,
       recoveryEnvelope,
@@ -661,7 +719,8 @@ const loginWithSecurityQuestions = async ({
       trustedDevices: persisted.trustedDevices ?? [],
       securityQuestions: persisted.securityQuestions,
       biometricEnabled: persisted.biometricEnabled ?? false,
-      sessionTimeoutMinutes: persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
+      sessionTimeoutMinutes:
+        persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
       backupCodes: persisted.backupCodes,
       backupCodesUsed: persisted.backupCodesUsed ?? [],
       failedAttempts: 0,
@@ -681,14 +740,18 @@ const loginWithSecurityQuestions = async ({
       accountLocked: false,
       accountLockedUntil: null,
       failedAttempts: 0,
+      pendingRecoveryRotation: null,
     }));
-    toasts.addToast("Account recovered successfully with security questions.", "success");
+    toasts.addToast(
+      "Account recovered successfully. Store your new recovery phrase safely.",
+      "success",
+    );
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
-        : "Unable to recover account with security questions.";
-    console.error("Security question recovery failed:", error);
+        : "Unable to finalize security question recovery.";
+    console.error("Finalizing security question recovery failed:", error);
     update((state) => ({ ...state, loading: false, error: message }));
     throw error;
   }
@@ -750,6 +813,7 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
       status: "authenticated",
       loading: false,
       error: null,
+      pendingRecoveryRotation: null,
       pendingDeviceLogin: null,
       requireTotpOnUnlock: totpRequirement,
     }));
@@ -824,6 +888,7 @@ const logout = () => {
     status: "locked",
     loading: false,
     pendingDeviceLogin: null,
+    pendingRecoveryRotation: null,
     error: null,
   }));
   toasts.addToast("Logged out successfully.", "info");
@@ -920,6 +985,7 @@ export const authStore = {
   calculatePasswordStrength,
   setSessionTimeout,
   loginWithSecurityQuestions,
+  completeSecurityQuestionRecovery,
   configureSecurityQuestions,
   removeTrustedDevice,
   getTrustedDevices: () => get(persistence).trustedDevices ?? [],

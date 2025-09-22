@@ -477,13 +477,6 @@
     left: 0.25rem;
     transition: transform 0.2s ease-in-out;
   }
-  input:checked ~ .dot {
-    transform: translateX(100%);
-    background-color: theme('colors.blue.500');
-  }
-  input:checked ~ .block {
-    background-color: theme('colors.blue.600');
-  }
 
   .custom-scrollbar::-webkit-scrollbar {
     width: 8px;

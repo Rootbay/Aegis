@@ -4,6 +4,19 @@
   import { serverStore } from '$lib/features/servers/stores/serverStore';
   import { userStore } from '$lib/stores/userStore';
   import type { Server } from '$lib/features/servers/models/Server';
+  import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+    DialogClose,
+  } from '$lib/components/ui/dialog';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
+  import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
 
   type Props = {
     onclose: () => void;
@@ -11,20 +24,52 @@
 
   let { onclose }: Props = $props();
 
+  let open = $state(true);
   let inviteLink = $state('');
   let modalView = $state<'main' | 'joinLink' | 'createServer'>('main');
   let serverName = $state('');
   let serverIcon = $state<File | null>(null);
   let serverIconPreview = $state<string | null>(null);
 
+  let trimmedInviteLink = $derived(inviteLink.trim());
+  let trimmedServerName = $derived(serverName.trim());
+
+  const viewCopy = {
+    main: {
+      title: 'Create or Join Server',
+      description: 'Start a new server or browse templates to spin one up quickly.',
+    },
+    joinLink: {
+      title: 'Join a Server',
+      description: 'Enter an invite link to instantly connect with an existing community.',
+    },
+    createServer: {
+      title: 'Create Your Server',
+      description: 'Give your server a name and optional icon before inviting friends.',
+    },
+  } as const;
+
+  const templates = [
+    { id: 'template-1', name: 'Gaming Community' },
+    { id: 'template-2', name: 'Study Group' },
+    { id: 'template-3', name: 'Local Meetup' },
+    { id: 'template-4', name: 'Development Team' },
+    { id: 'template-5', name: 'Family & Friends' },
+    { id: 'template-6', name: 'Project Collaboration' },
+    { id: 'template-7', name: 'Book Club' },
+    { id: 'template-8', name: 'Fitness Group' },
+    { id: 'template-9', name: 'Travel Buddies' },
+    { id: 'template-10', name: 'Art & Design' },
+  ];
+
   async function joinServer() {
-    console.log('Joining server with link:', inviteLink);
-    if (!$userStore.me) {
-      console.error("User not loaded yet, cannot join server.");
+    const serverIdToJoin = trimmedInviteLink;
+    if (!serverIdToJoin || !$userStore.me) {
+      console.error('Cannot join server: missing invite link or user context.');
       return;
     }
+
     try {
-      const serverIdToJoin = inviteLink;
       await invoke('join_server', { server_id: serverIdToJoin, user_id: $userStore.me.id });
 
       const newServer: Server = {
@@ -36,32 +81,34 @@
         owner_id: 'unknown',
         members: [$userStore.me],
         channels: [],
-        roles: []
+        roles: [],
       };
+
       serverStore.addServer(newServer);
       serverStore.setActiveServer(newServer.id);
-      onclose();
+      closeModal();
     } catch (error) {
       console.error('Failed to join server:', error);
     }
   }
 
   async function createNewServer() {
-    if (!$userStore.me) {
-      console.error('User not loaded, cannot create a server.');
+    if (!trimmedServerName || !$userStore.me) {
+      console.error('Cannot create server: missing name or user context.');
       return;
     }
+
     try {
       const newServerId = `server-${Date.now()}`;
 
       const serverForBackend = {
         id: newServerId,
-        name: serverName,
+        name: trimmedServerName,
         owner_id: $userStore.me.id,
         created_at: new Date().toISOString(),
         channels: [],
         members: [],
-        roles: []
+        roles: [],
       };
 
       const createdServer: Server = await invoke('create_server', { server: serverForBackend });
@@ -71,13 +118,12 @@
         iconUrl:
           serverIconPreview ||
           'https://api.dicebear.com/8.x/bottts-neutral/svg?seed=' +
-            encodeURIComponent(createdServer.name)
+            encodeURIComponent(createdServer.name),
       };
 
       serverStore.addServer(newServerForStore);
       serverStore.setActiveServer(newServerForStore.id);
-
-      onclose();
+      closeModal();
     } catch (error) {
       console.error('Failed to create server:', error);
     }
@@ -91,130 +137,125 @@
     }
   }
 
-  const templates = [
-    { id: 'template-1', name: 'Gaming Community' },
-    { id: 'template-2', name: 'Study Group' },
-    { id: 'template-3', name: 'Local Meetup' },
-    { id: 'template-4', name: 'Development Team' },
-    { id: 'template-5', name: 'Family & Friends' },
-    { id: 'template-6', name: 'Project Collaboration' },
-    { id: 'template-7', name: 'Book Club' },
-    { id: 'template-8', name: 'Fitness Group' },
-    { id: 'template-9', name: 'Travel Buddies' },
-    { id: 'template-10', name: 'Art & Design' }
-  ];
+  function closeModal() {
+    open = false;
+  }
+
+  $effect(() => {
+    if (!open) {
+      onclose();
+    }
+  });
 </script>
 
-<div class="fixed inset-0 flex items-center justify-center z-50">
-  <div class="bg-card p-8 rounded-lg shadow-lg w-full max-w-md relative">
-    <button class="absolute top-4 right-4 text-muted-foreground hover:text-white cursor-pointer" onclick={onclose}>
-      <X size={15} />
-    </button>
-    
+<Dialog bind:open={open}>
+  <DialogContent class="sm:max-w-md">
+    <DialogHeader class="text-left">
+      <DialogTitle>{viewCopy[modalView].title}</DialogTitle>
+      <DialogDescription>{viewCopy[modalView].description}</DialogDescription>
+    </DialogHeader>
+
     {#if modalView === 'main'}
-      <h2 class="text-2xl font-bold mb-6 text-white">Create or Join Server</h2>
-      <div class="space-y-4">
-        <div class="space-y-3 max-h-80 overflow-y-auto pr-2">
-          <button
-            class="w-full bg-cyan-600 text-white py-3 rounded-md hover:bg-cyan-500 transition-colors font-semibold cursor-pointer mb-4"
-            onclick={() => modalView = 'createServer'}
-          >
-            Create New Server
-          </button>
-          <h3 class="text-lg font-semibold mb-4 text-white">Server Templates</h3>
-          {#each templates as template (template.id)}
-            <div class="bg-zinc-700 p-4 rounded-md border border-zinc-600 hover:border-cyan-500 transition-colors cursor-pointer">
-              <h4 class="font-semibold text-white">{template.name}</h4>
+      <div class="space-y-6">
+        <Button class="w-full" onclick={() => (modalView = 'createServer')}>
+          Create New Server
+        </Button>
+
+        <div class="space-y-3">
+          <p class="text-xs font-semibold uppercase text-muted-foreground">Server Templates</p>
+          <ScrollArea class="max-h-64 rounded-md border border-border">
+            <div class="space-y-2 p-3">
+              {#each templates as template (template.id)}
+                <button
+                  type="button"
+                  class="w-full rounded-md border border-border bg-card/40 px-4 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <span class="text-sm font-medium text-foreground">{template.name}</span>
+                </button>
+              {/each}
             </div>
-          {/each}
+          </ScrollArea>
         </div>
 
-        <button
-          class="w-full bg-zinc-700 text-white py-3 rounded-md hover:bg-zinc-600 transition-colors font-semibold cursor-pointer mt-4"
+        <Button
+          variant="secondary"
+          class="w-full"
           onclick={() => (modalView = 'joinLink')}
         >
           Join with Link
-        </button>
+        </Button>
       </div>
     {:else if modalView === 'joinLink'}
-      <h2 class="text-2xl font-bold mb-6 text-white">Join a Server</h2>
       <div class="space-y-4">
-        <div>
-          <label for="inviteLink" class="block text-sm font-medium text-zinc-300 mb-2">Enter Invite Link</label>
-          <input
-            type="text"
+        <div class="space-y-2">
+          <Label for="inviteLink">Enter Invite Link</Label>
+          <Input
             id="inviteLink"
+            type="text"
+            placeholder="e.g., https://aegis.com/inv/aegis-community"
             bind:value={inviteLink}
-            placeholder="e.g., aegis.chat/inv/aegis-community"
-            class="w-full bg-zinc-700 border border-zinc-600 rounded-md px-4 py-2 text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
         </div>
-        <div class="text-sm text-muted-foreground space-y-1">
-          <p>Invites should look like</p>
+
+        <div class="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground space-y-1">
+          <p>Invites should look like:</p>
           <p><span class="font-mono">XyZ1aB7c</span></p>
           <p><span class="font-mono">https://aegis.com/inv/XyZ1aB7c</span></p>
           <p><span class="font-mono">https://aegis.com/inv/gaming-community</span></p>
         </div>
       </div>
 
-      <div class="flex justify-between mt-8">
-        <button
-          class="flex items-center text-muted-foreground hover:text-white transition-colors cursor-pointer"
-          onclick={() => (modalView = 'main')}
-        >
-          <ArrowLeft size={12} class="mr-2" />
+      <DialogFooter class="mt-6 flex items-center justify-between">
+        <Button variant="ghost" type="button" class="gap-2" onclick={() => (modalView = 'main')}>
+          <ArrowLeft size={14} />
           Back
-        </button>
-        <button
-          class="bg-cyan-600 text-white py-2 px-4 rounded-md hover:bg-cyan-500 transition-colors font-semibold cursor-pointer"
-          onclick={joinServer}
-          disabled={!inviteLink.trim()}
-        >
+        </Button>
+        <Button type="button" onclick={joinServer} disabled={!trimmedInviteLink}>
           Join
-        </button>
-      </div>
-    {:else if modalView === 'createServer'}
-      <h2 class="text-2xl font-bold mb-6 text-white">Create Your Server</h2>
+        </Button>
+      </DialogFooter>
+    {:else}
       <div class="space-y-6">
-        <div class="flex flex-col items-center">
-          <label for="serverIcon" class="w-24 h-24 rounded-full bg-zinc-700 flex items-center justify-center cursor-pointer hover:bg-zinc-600 border-2 border-dashed border-zinc-500">
+        <div class="flex flex-col items-center gap-3">
+          <label
+            for="serverIcon"
+            class="flex h-24 w-24 cursor-pointer items-center justify-center rounded-full border-2 border-dashed border-border bg-muted/40 transition-colors hover:bg-muted"
+          >
             {#if serverIconPreview}
-              <img src={serverIconPreview} alt="Server Icon Preview" class="w-full h-full rounded-full object-cover">
+              <img src={serverIconPreview} alt="Server Icon Preview" class="h-full w-full rounded-full object-cover" />
             {:else}
-              <Upload size={15} />
+              <Upload size={18} />
             {/if}
           </label>
-          <input type="file" id="serverIcon" class="hidden" accept="image/*" onchange={handleIconUpload}>
-          <span class="text-sm text-muted-foreground mt-2">Upload Icon</span>
+          <input id="serverIcon" type="file" class="hidden" accept="image/*" onchange={handleIconUpload} />
+          <span class="text-xs text-muted-foreground">Upload an optional server icon</span>
         </div>
-        <div>
-          <label for="serverName" class="block text-sm font-medium text-zinc-300 mb-2">Server Name</label>
-          <input
-            type="text"
+
+        <div class="space-y-2">
+          <Label for="serverName">Server Name</Label>
+          <Input
             id="serverName"
-            bind:value={serverName}
+            type="text"
             placeholder="My Awesome Server"
-            class="w-full bg-zinc-700 border border-zinc-600 rounded-md px-4 py-2 text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            bind:value={serverName}
           />
         </div>
       </div>
 
-      <div class="flex justify-between mt-8">
-        <button
-          class="flex items-center text-muted-foreground hover:text-white transition-colors cursor-pointer"
-          onclick={() => (modalView = 'main')}
-        >
-          <ArrowLeft size={12} class="mr-2" />
+      <DialogFooter class="mt-6 flex items-center justify-between">
+        <Button variant="ghost" type="button" class="gap-2" onclick={() => (modalView = 'main')}>
+          <ArrowLeft size={14} />
           Back
-        </button>
-        <button
-          class="bg-cyan-600 text-white py-2 px-4 rounded-md hover:bg-cyan-500 transition-colors font-semibold cursor-pointer"
-          onclick={createNewServer}
-          disabled={!serverName.trim()}
-        >
+        </Button>
+        <Button type="button" onclick={createNewServer} disabled={!trimmedServerName}>
           Create
-        </button>
-      </div>
+        </Button>
+      </DialogFooter>
     {/if}
-  </div>
-</div>
+
+    <DialogClose class="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none">
+      <span class="sr-only">Close</span>
+      <X class="h-4 w-4" />
+    </DialogClose>
+  </DialogContent>
+</Dialog>

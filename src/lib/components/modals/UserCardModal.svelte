@@ -27,7 +27,7 @@
   let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
 
   function handleOpenDetailedProfile() {
-    close?.(); // Close the popover
+    close?.();
     openDetailedProfileModal(profileUser);
   }
 

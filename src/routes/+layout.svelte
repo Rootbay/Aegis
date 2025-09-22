@@ -37,6 +37,8 @@
   import ServerManagementModal from '$lib/components/modals/ServerManagementModal.svelte';
   import ProfileModal from '$lib/components/modals/ProfileModal.svelte';
   import { ChatView } from '$features/chat';
+  import NavigationHeader from '$lib/components/NavigationHeader.svelte';
+
   type ProfileModalSource = User & { pfpUrl?: string; bannerUrl?: string; isOnline?: boolean };
 
   let { children } = $props();
@@ -399,12 +401,22 @@
         </div>
         {@render children()}
       {:else if $serverStore.activeServerId}
-        <div class="flex flex-1">
-          <ChatView chat={currentChat} />
-          <MemberSidebar
-            members={currentChat?.type === "channel" ? currentChat.members : []}
-            {openDetailedProfileModal}
+        <div class="flex flex-1 min-h-0 flex-col">
+          <NavigationHeader
+            chat={currentChat}
+            onOpenDetailedProfile={openDetailedProfileModal}
           />
+
+          <div class="flex flex-1 min-h-0">
+            <div class="flex flex-1 flex-col min-w-0">
+              <ChatView chat={currentChat} />
+            </div>
+
+            <MemberSidebar
+              members={currentChat?.type === "channel" ? currentChat.members : []}
+              onOpenDetailedProfile={openDetailedProfileModal}
+            />
+          </div>
         </div>
       {:else}
         {@render children()}

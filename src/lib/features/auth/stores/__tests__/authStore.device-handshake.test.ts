@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import type { DeviceHandshakePayload } from "$lib/utils/security";
 
+vi.mock("$app/environment", () => ({ browser: true }));
+
 let mockHandshake: DeviceHandshakePayload | null = null;
 
 const hashStringMock = vi.fn<(value: string) => Promise<string>>();

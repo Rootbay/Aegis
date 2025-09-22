@@ -32,6 +32,7 @@
     CollapsibleContent
   } from "$lib/components/ui/collapsible/index.js"
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js"
+  import { Sidebar, SidebarHeader, SidebarContent } from "$lib/components/ui/sidebar"
   import { Dialog, DialogHeader, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "$lib/components/ui/dialog/index.js"
   import { Label } from "$lib/components/ui/label/index.js"
   import { Input } from "$lib/components/ui/input/index.js"
@@ -526,15 +527,16 @@
   });
 </script>
 
-<div
-  class="bg-muted/50 flex flex-col relative"
-  style="width: {sidebarWidth}px;"
+<Sidebar
+  side="left"
+  variant="muted"
+  class="relative flex"
+  style={`width: ${sidebarWidth}px`}
   oncontextmenu={(e) => handleServerBackgroundContextMenu(e)}
-  role="region"
   aria-label="Server sidebar"
 >
   {#if server}
-    <header class="relative h-[55px] border-b border-border/50 shadow-sm">
+    <SidebarHeader class="px-0 shadow-sm">
       <DropdownMenu>
         <DropdownMenuTrigger>
           <Button
@@ -579,86 +581,90 @@
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </header>
+    </SidebarHeader>
 
-    <ScrollArea class="flex-grow px-2">
-      <Collapsible open={!textChannelsCollapsed} onOpenChange={(e) => {
-        textChannelsCollapsed = !e.detail
-        if (e.detail) updateTextChannelsHeight()
-        else textChannelsHeight = "0px"
-      }}>
-        <div class="flex justify-between items-center py-1 mt-4">
-          <CollapsibleTrigger class="flex items-center group cursor-pointer">
-            <h3
-              class="text-sm font-semibold text-muted-foreground uppercase group-hover:text-foreground select-none"
-              class:text-foreground={showCategoryContextMenu && contextMenuCategoryId === 'text-channels'}
-              oncontextmenu={(e) => handleCategoryContextMenu(e, 'text-channels')}
-            >
-              Text Channels
-            </h3>
-            <ChevronDown
-              size={10}
-              class="ml-1 transition-transform duration-200 {textChannelsCollapsed ? 'rotate-[-90deg]' : ''}"
-            />
-          </CollapsibleTrigger>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Create Channel"
-            onclick={handleCreateChannelClick}
-          >
-            <Plus size={12} />
-          </Button>
-        </div>
-
-        <CollapsibleContent>
-          {#if server && server.channels && server.channels.length > 0}
-            {#each server.channels.filter((c: Channel) => c.channel_type === 'text' && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
-              <div
-                role="button"
-                tabindex="0"
-                class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
-                {$activeChannelId === channel.id ? 'bg-primary/80 text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                onclick={() => onSelectChannel(server.id, channel.id)}
-                onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onSelectChannel(server.id, channel.id); } }}
-                oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+    <SidebarContent class="flex">
+      <ScrollArea class="h-full w-full px-2">
+        <Collapsible open={!textChannelsCollapsed} onOpenChange={(e) => {
+          textChannelsCollapsed = !e.detail
+          if (e.detail) updateTextChannelsHeight()
+          else textChannelsHeight = "0px"
+        }}>
+          <div class="flex justify-between items-center py-1 mt-4">
+            <CollapsibleTrigger class="flex items-center group cursor-pointer">
+              <h3
+                class="text-sm font-semibold text-muted-foreground uppercase group-hover:text-foreground select-none"
+                class:text-foreground={showCategoryContextMenu && contextMenuCategoryId === 'text-channels'}
+                oncontextmenu={(e) => handleCategoryContextMenu(e, 'text-channels')}
               >
-                <div class="flex items-center truncate">
-                  <Hash size={10} class="mr-1" />
-                  <span class="truncate select-none ml-2">{channel.name}</span>
+                Text Channels
+              </h3>
+              <ChevronDown
+                size={10}
+                class="ml-1 transition-transform duration-200 {textChannelsCollapsed ? 'rotate-[-90deg]' : ''}"
+              />
+            </CollapsibleTrigger>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Create Channel"
+              onclick={handleCreateChannelClick}
+            >
+              <Plus size={12} />
+            </Button>
+          </div>
+
+          <CollapsibleContent>
+            {#if server && server.channels && server.channels.length > 0}
+              {#each server.channels.filter((c: Channel) => c.channel_type === 'text' && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+                <div
+                  role="button"
+                  tabindex="0"
+                  class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
+                  {$activeChannelId === channel.id ? 'bg-primary/80 text-foreground' : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                  onclick={() => onSelectChannel(server.id, channel.id)}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { onSelectChannel(server.id, channel.id); } }}
+                  oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                >
+                  <div class="flex items-center truncate">
+                    <Hash size={10} class="mr-1" />
+                    <span class="truncate select-none ml-2">{channel.name}</span>
+                  </div>
+                  <div class="ml-auto flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="text-muted-foreground hover:text-foreground"
+                      aria-label="Invite to channel"
+                      onclick={(event) => handleInviteToChannelClick(channel, event)}
+                    >
+                      <Plus size={10} />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="text-muted-foreground hover:text-foreground"
+                      aria-label="Channel settings"
+                      onclick={(event) => handleChannelSettingsClick(channel, event)}
+                    >
+                      <Settings size={10} />
+                    </Button>
+                  </div>
                 </div>
-                <div class="ml-auto flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground"
-                    aria-label="Invite to channel"
-                    onclick={(event) => handleInviteToChannelClick(channel, event)}
-                  >
-                    <Plus size={10} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground"
-                    aria-label="Channel settings"
-                    onclick={(event) => handleChannelSettingsClick(channel, event)}
-                  >
-                    <Settings size={10} />
-                  </Button>
-                </div>
-              </div>
-            {/each}
-          {:else}
-            <p class="text-xs text-muted-foreground px-2 py-1">No text channels yet.</p>
-          {/if}
-        </CollapsibleContent>
-      </Collapsible>
-    </ScrollArea>
+              {/each}
+            {:else}
+              <p class="text-xs text-muted-foreground px-2 py-1">No text channels yet.</p>
+            {/if}
+          </CollapsibleContent>
+        </Collapsible>
+      </ScrollArea>
+    </SidebarContent>
   {:else}
-    <ScrollArea class="flex-grow">
-      <p class="text-xs text-muted-foreground px-2 py-1">No server selected.</p>
-    </ScrollArea>
+    <SidebarContent class="flex">
+      <ScrollArea class="h-full w-full px-2">
+        <p class="text-xs text-muted-foreground px-2 py-1">No server selected.</p>
+      </ScrollArea>
+    </SidebarContent>
   {/if}
 
   <button
@@ -666,7 +672,7 @@
     onmousedown={startResize}
     aria-label="Resize server sidebar"
   ></button>
-</div>
+</Sidebar>
 
 {#if showServerBackgroundContextMenu}
   <ServerBackgroundContextMenu

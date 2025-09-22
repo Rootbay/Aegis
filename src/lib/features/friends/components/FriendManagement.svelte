@@ -76,7 +76,7 @@
                         Status: {friendship.status}
                     </span>
                     <div>
-                                                {#if friendship.status === 'pending' && friendship.user_b_id === currentUser?.id}
+                        {#if friendship.status === 'pending' && friendship.user_b_id === currentUser?.id}
                             <button
                                 class="bg-success hover:bg-green-700 text-foreground font-bold py-1 px-2 rounded mr-2"
                                 onclick={() => acceptFriendRequest(friendship.id)}
