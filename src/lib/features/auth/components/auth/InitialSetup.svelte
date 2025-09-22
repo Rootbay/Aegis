@@ -1,10 +1,20 @@
 <script lang="ts">
   import QRCode from 'qrcode';
-  import { Lock, QrCode, ShieldCheck, KeyRound, Save, Scan, KeySquare } from '@lucide/svelte';
+  import { Eye, EyeOff, Shield, ShieldCheck, TriangleAlert, KeyRound, Save, Scan, KeySquare, QrCode, Lock } from '@lucide/svelte';
   import { authStore, authPersistenceStore } from '$lib/features/auth/stores/authStore';
   import RecoveryQrScanner from './RecoveryQrScanner.svelte';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Alert, AlertTitle, AlertDescription } from '$lib/components/ui/alert/index.js';
+  import { Select, SelectTrigger, SelectContent, SelectItem } from '$lib/components/ui/select/index.js';
+  import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '$lib/components/ui/card/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
+  import { Separator } from '$lib/components/ui/separator/index.js';
+  import { Dialog, DialogHeader, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '$lib/components/ui/dialog/index.js';
+  import { Progress } from '$lib/components/ui/progress/index.js';
+  import { Badge } from '$lib/components/ui/badge/index.js';
 
-  type OnboardingStep = 'username' | 'phrase' | 'confirm' | 'password' | 'totp';
+  type OnboardingStep = 'username' | 'phrase' | 'confirm' | 'password' | 'totp' | 'security_questions' | 'backup_codes';
 
   let username = $state('');
   let onboardingStep = $state<OnboardingStep>('username');
@@ -18,6 +28,7 @@
   let unlockPasswordError = $state<string | null>(null);
   let unlockTotp = $state('');
 
+  let securityQuestionAnswers = $state<Record<string, string>>({});
   let recoveryPhrase = $state('');
   let recoveryTotp = $state('');
   let recoveryPassword = $state('');
@@ -28,10 +39,17 @@
   let showScanner = $state(false);
   let totpQr = $state<string | null>(null);
   let localError = $state<string | null>(null);
+  let passwordStrength = $state({ score: 0, feedback: [] });
+  let showPassword = $state(false);
+  let securityQuestions = $state<Array<{ question: string; answer: string }>>([]);
+  let backupCodes = $state<string[]>([]);
+  let showSecurityQuestions = $state(false);
+  let showBackupCodes = $state(false);
+  let showRecoveryForm = $state(false);
 
   const requireTotpOnUnlock = $derived($authPersistenceStore.requireTotpOnUnlock ?? false);
 
-const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed');
+  const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed');
 
   function sanitizeCode(value: string): string {
     return value.replace(/[^0-9]/g, '').slice(0, 6);
@@ -52,6 +70,14 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
     }
     return null;
   }
+
+  $effect(() => {
+    if (passwordInput) {
+      passwordStrength = authStore.calculatePasswordStrength(passwordInput);
+    } else {
+      passwordStrength = { score: 0, feedback: [] };
+    }
+  });
 
   $effect(() => {
     const onboarding = $authStore.onboarding;
@@ -85,6 +111,21 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
     return onboarding.confirmationIndices.every((index) => (confirmationInputs[index] ?? '').trim().length > 0);
   });
 
+  const securityQuestionsReady = $derived(() => {
+    return securityQuestions.length >= 3 && securityQuestions.every(q => q.question && q.answer.trim().length >= 3);
+  });
+
+  const predefinedQuestions = [
+    "What was your childhood nickname?",
+    "What is your mother's maiden name?",
+    "What was the name of your first pet?",
+    "What city were you born in?",
+    "What was your first school called?",
+    "What is your favorite childhood memory?",
+    "What was the make and model of your first car?",
+    "What is the name of your favorite childhood teacher?"
+  ];
+
   async function handleStartOnboarding(event: Event) {
     event.preventDefault();
     try {
@@ -93,6 +134,24 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
       onboardingStep = 'phrase';
     } catch (error) {
       localError = error instanceof Error ? error.message : 'Unable to start setup.';
+    }
+  }
+
+  async function handleSecurityQuestionRecovery(event: Event) {
+    event.preventDefault();
+    try {
+      await authStore.loginWithSecurityQuestions({
+        answers: securityQuestionAnswers,
+        newPassword: recoveryPassword,
+        totpCode: requireTotpOnUnlock ? recoveryTotp : undefined,
+      });
+      securityQuestionAnswers = {};
+      recoveryPhrase = '';
+      recoveryTotp = '';
+      recoveryPassword = '';
+      recoveryPasswordConfirm = '';
+    } catch (error) {
+      recoveryError = error instanceof Error ? error.message : 'Security question recovery failed.';
     }
   }
 
@@ -120,9 +179,20 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
     }
     try {
       authStore.saveOnboardingPassword(passwordInput);
-      onboardingStep = 'totp';
+      onboardingStep = 'security_questions';
     } catch (error) {
       passwordError = error instanceof Error ? error.message : 'Unable to accept password.';
+    }
+  }
+
+  async function handleSecurityQuestions(event: Event) {
+    event.preventDefault();
+    authStore.clearError();
+    try {
+      await authStore.configureSecurityQuestions(securityQuestions);
+      onboardingStep = 'backup_codes';
+    } catch (error) {
+      localError = error instanceof Error ? error.message : 'Failed to configure security questions.';
     }
   }
 
@@ -131,9 +201,25 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
     if (!$authStore.onboarding) return;
     try {
       await authStore.completeOnboarding({ confirmations: confirmationInputs, totpCode });
+      backupCodes = $authStore.getPersistence()?.backupCodes ?? [];
+      onboardingStep = 'backup_codes';
     } catch {
       // handled by store
     }
+  }
+
+  function addSecurityQuestion() {
+    if (securityQuestions.length < 5) {
+      securityQuestions = [...securityQuestions, { question: '', answer: '' }];
+    }
+  }
+
+  function removeSecurityQuestion(index: number) {
+    securityQuestions = securityQuestions.filter((_, i) => i !== index);
+  }
+
+  function togglePasswordVisibility() {
+    showPassword = !showPassword;
   }
 
   async function handleUnlock(event: Event) {
@@ -160,10 +246,12 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
     }
     try {
       await authStore.loginWithRecovery({
+        answers: securityQuestionAnswers,
         phrase: recoveryPhrase,
         newPassword: recoveryPassword,
         totpCode: requireTotpOnUnlock ? recoveryTotp : undefined,
       });
+      securityQuestionAnswers = {};
       recoveryPhrase = '';
       recoveryTotp = '';
       recoveryPassword = '';
@@ -201,311 +289,597 @@ const unicodeRequired = $derived($authStore.passwordPolicy !== 'legacy_allowed')
 </script>
 
 <div class="min-h-screen w-full bg-zinc-950 text-zinc-100 flex items-center justify-center px-6 py-10 relative">
-  {#if showScanner}
-    <div class="absolute inset-0 z-40 flex items-center justify-center bg-zinc-950/90">
-      <div class="bg-zinc-900/90 border border-zinc-800 rounded-xl shadow-xl p-6 w-full max-w-lg">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold flex items-center gap-2"><Scan size={18} /> Scan Trusted Device</h2>
-          <button class="text-sm text-zinc-300 hover:text-white" onclick={() => (showScanner = false)}>Close</button>
-        </div>
-        <p class="text-sm text-zinc-400 mb-4">Point your camera at the login QR displayed on one of your trusted devices.</p>
-        <RecoveryQrScanner on:result={(event) => handleScan(event.detail)} on:error={handleScannerError} />
-      </div>
-    </div>
-  {/if}
+  <Dialog open={showScanner} onOpenChange={(value) => (showScanner = value)}>
+    <DialogContent class="max-w-lg">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
+          <Scan size={18} /> Scan Trusted Device
+        </DialogTitle>
+        <DialogDescription>
+          Point your camera at the login QR displayed on one of your trusted devices.
+        </DialogDescription>
+      </DialogHeader>
+
+      <RecoveryQrScanner
+        on:result={(event) => handleScan(event.detail)}
+        on:error={handleScannerError}
+      />
+
+      <DialogFooter>
+        <Button variant="ghost" size="sm" onclick={() => (showScanner = false)}>
+          Close
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 
   <div class="w-full max-w-4xl grid gap-8 lg:grid-cols-2">
-    <div class="bg-zinc-900/80 border border-zinc-800 rounded-2xl shadow-2xl p-8 space-y-6">
-      <div class="flex items-center gap-3">
-        <ShieldCheck class="text-primary" size={24} />
-        <div>
-          <h1 class="text-2xl font-semibold">Aegis Authentication</h1>
-          <p class="text-sm text-zinc-400">Offline-first security with recovery phrase, strong password, and optional unlock 2FA.</p>
-        </div>
-      </div>
-
-      {#if localError}
-        <div class="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {localError}
-        </div>
-      {/if}
-
-      {#if status === 'needs_setup' || status === 'setup_in_progress'}
-        {#if onboardingStep === 'username'}
-          <form class="space-y-4" onsubmit={handleStartOnboarding}>
-            <div>
-              <label for="callsign" class="text-sm font-medium text-zinc-200 mb-2 block">Choose your callsign</label>
-              <input id="callsign"
-                type="text"
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm focus:border-primary focus:outline-none"
-                placeholder="e.g. SentinelFox"
-                bind:value={username}
-                minlength={3}
-                required
-                disabled={isLoading}
-              />
-              <p class="mt-2 text-xs text-zinc-500">This username identifies you across Aegis. You can change it later once inside.</p>
-            </div>
-            <button class="w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-50" disabled={isLoading || username.trim().length < 3}>
-              <ShieldCheck size={16} /> Begin secure setup
-            </button>
-          </form>
-        {:else if onboardingStep === 'phrase' && $authStore.onboarding}
-          <div class="space-y-4">
-            <h2 class="text-lg font-semibold flex items-center gap-2"><Save size={18} /> Save your recovery phrase</h2>
-            <p class="text-sm text-zinc-400">Write these 12 words down in order. They are the only way to rebuild your account if you forget your password.</p>
-            <div class="grid grid-cols-3 gap-2 text-sm font-mono">
-              {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
-                <div class="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200">
-                  <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
-                </div>
-              {/each}
-            </div>
-            <button class="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80" onclick={goToConfirmation}>
-              I have stored my recovery phrase
-            </button>
+    <Card>
+      <CardHeader>
+        <div class="flex items-center gap-3">
+          <ShieldCheck class="text-primary" size={24} />
+          <div>
+            <CardTitle>Aegis Authentication</CardTitle>
+            <CardDescription>
+              Offline-first security with recovery phrase, strong password, and optional unlock 2FA.
+            </CardDescription>
           </div>
-        {:else if onboardingStep === 'confirm' && $authStore.onboarding}
-          <form class="space-y-4" onsubmit={goToPasswordStep}>
-            <h2 class="text-lg font-semibold flex items-center gap-2"><Save size={18} /> Verify two random words</h2>
-            <p class="text-sm text-zinc-400">Enter the requested words to prove you saved the phrase correctly.</p>
-            <div class="space-y-3">
-              {#each $authStore.onboarding.confirmationIndices as index (index)}
-                <div>
-                  <label for={`word-${index}`} class="text-xs uppercase tracking-wide text-zinc-500 mb-1 block">Word #{index + 1}</label>
-                  <input id={`word-${index}`}
+        </div>
+      </CardHeader>
+
+      <CardContent class="space-y-6">
+        {#if localError}
+          <Alert variant="destructive">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{localError}</AlertDescription>
+          </Alert>
+        {/if}
+
+        {#if status === 'needs_setup' || status === 'setup_in_progress'}
+          {#if onboardingStep === 'username'}
+            <form class="space-y-4" onsubmit={handleStartOnboarding}>
+              <div class="space-y-2">
+                <Label for="callsign">Choose your callsign</Label>
+                <Input
+                  id="callsign"
+                  type="text"
+                  placeholder="e.g. SentinelFox"
+                  class="h-11"
+                  bind:value={username}
+                  minlength={3}
+                  required
+                  disabled={isLoading}
+                />
+                <p class="text-xs text-muted-foreground">
+                  This username identifies you across Aegis. You can change it later once inside.
+                </p>
+              </div>
+
+              <Button
+                class="w-full"
+                type="submit"
+                disabled={isLoading || username.trim().length < 3}
+              >
+                <ShieldCheck size={16} /> Begin secure setup
+              </Button>
+            </form>
+          {:else if onboardingStep === 'phrase' && $authStore.onboarding}
+            <div class="space-y-4">
+              <h2 class="text-lg font-semibold flex items-center gap-2"><Save size={18} /> Save your recovery phrase</h2>
+              <p class="text-sm text-muted-foreground">Write these 12 words down in order. They are the only way to rebuild your account if you forget your password.</p>
+              <div class="grid grid-cols-3 gap-2 text-sm font-mono">
+                {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
+                  <div class="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200">
+                    <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
+                  </div>
+                {/each}
+              </div>
+              <Button
+                class="w-full"
+                onclick={goToConfirmation}
+              >
+                I have stored my recovery phrase
+              </Button>
+            </div>
+          {:else if onboardingStep === 'confirm' && $authStore.onboarding}
+            <form class="space-y-4" onsubmit={goToPasswordStep}>
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <Save size={18} /> Verify two random words
+              </h2>
+              <p class="text-sm text-muted-foreground">
+                Enter the requested words to prove you saved the phrase correctly.
+              </p>
+
+              <div class="space-y-3">
+                {#each $authStore.onboarding.confirmationIndices as index (index)}
+                  <div class="space-y-2">
+                    <Label for={`word-${index}`}>Word #{index + 1}</Label>
+                    <Input
+                      id={`word-${index}`}
+                      type="text"
+                      class="h-10"
+                      value={confirmationInputs[index] ?? ''}
+                      oninput={(e) => {
+                        const t = e.currentTarget as HTMLInputElement
+                        confirmationInputs = { ...confirmationInputs, [index]: t.value }
+                      }}
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                {/each}
+              </div>
+              <Button
+                class="w-full"
+                type="submit"
+                disabled={!confirmReady || isLoading}
+              >
+                Continue to password setup
+              </Button>
+            </form>
+            {:else if onboardingStep === 'password'}
+            <form class="space-y-4" onsubmit={handleSavePassword}>
+              <h2 class="text-lg font-semibold flex items-center gap-2"><KeySquare size={18} /> Create your unlock password</h2>
+              {#if unicodeRequired}
+                <p class="text-sm text-muted-foreground">Minimum 12 characters with uppercase, lowercase, numbers, and special characters.</p>
+              {:else}
+                <p class="text-sm text-muted-foreground">Minimum 12 characters. Unicode characters are optional while you upgrade an existing identity.</p>
+              {/if}
+
+              {#if passwordInput}
+                <div class="space-y-2">
+                  <div class="flex items-center justify-between text-sm">
+                    <span class="text-muted-foreground">Password strength:</span>
+                    <span class="font-medium" class:text-red-400={passwordStrength.score < 40} class:text-yellow-400={passwordStrength.score >= 40 && passwordStrength.score < 80} class:text-green-400={passwordStrength.score >= 80}>
+                      {passwordStrength.score < 40 ? 'Weak' : passwordStrength.score < 80 ? 'Medium' : 'Strong'}
+                    </span>
+                  </div>
+                  <Progress value={passwordStrength.score} max={100} />
+                  {#if passwordStrength.feedback.length > 0}
+                    <ul class="text-xs text-zinc-500 list-disc list-inside">
+                      {#each passwordStrength.feedback as feedback}
+                        <li>{feedback}</li>
+                      {/each}
+                    </ul>
+                  {/if}
+                </div>
+              {/if}
+
+              <div class="space-y-2">
+                <Label for="password">Password</Label>
+                <div class="relative">
+                  <Input id="password" type={showPassword ? 'text' : 'password'} bind:value={passwordInput} autocomplete="new-password" />
+                  <Button type="button" size="icon" variant="ghost" class="absolute right-2 top-1/2 -translate-y-1/2" onclick={togglePasswordVisibility}>
+                    {#if showPassword}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
+                  </Button>
+                </div>
+              </div>
+              <div class="space-y-2">
+                <Label for="password-confirm">Confirm password</Label>
+                <Input id="password-confirm"
+                  type="password"
+                  class="px-3 py-2"
+                  value={passwordConfirm}
+                  oninput={(e) => { const t = e.currentTarget as HTMLInputElement; passwordConfirm = t.value }}
+                  minlength={12}
+                  required
+                  autocomplete="new-password"
+                />
+              </div>
+              {#if passwordError}
+                <Alert variant="destructive">
+                  <AlertTitle>Password error</AlertTitle>
+                  <AlertDescription>{passwordError}</AlertDescription>
+                </Alert>
+              {/if}
+              <Button
+                class="w-full"
+                type="submit"
+                disabled={isLoading || passwordStrength.score < 60}
+              >
+                Continue to security setup
+              </Button>
+            </form>
+          {:else if onboardingStep === 'security_questions'}
+            <form class="space-y-4" onsubmit={handleSecurityQuestions}>
+              <h2 class="text-lg font-semibold flex items-center gap-2"><Shield size={18} /> Configure security questions</h2>
+              <p class="text-sm text-muted-foreground">Set up 3-5 security questions that only you know the answers to. These can help verify your identity during recovery.</p>
+
+              {#each securityQuestions as question, index}
+                <div class="space-y-3 p-4 border border-zinc-700 rounded-lg">
+                  <div class="flex items-center justify-between">
+                    <Label for={`question-${index}`}>Question {index + 1}</Label>
+                    {#if securityQuestions.length > 3}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        class="text-red-400 hover:text-destructive text-sm"
+                        onclick={() => removeSecurityQuestion(index)}
+                      >
+                        Remove
+                      </Button>
+                    {/if}
+                  </div>
+                  <Select bind:value={question.question}>
+                    <SelectTrigger><SelectValue placeholder="Choose a question..." /></SelectTrigger>
+                    <SelectContent>
+                      {#each predefinedQuestions as q}
+                        <SelectItem value={q}>{q}</SelectItem>
+                      {/each}
+                    </SelectContent>
+                  </Select>
+                  <Input
                     type="text"
-                    class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                    oninput={(event) => {
-                      const target = event.currentTarget as HTMLInputElement;
-                      confirmationInputs = { ...confirmationInputs, [index]: target.value };
-                    }}
-                    value={confirmationInputs[index] ?? ''}
+                    placeholder="Your answer"
+                    bind:value={question.answer}
+                    minlength={3}
                     required
-                    disabled={isLoading}
                   />
                 </div>
               {/each}
-            </div>
-            <button class="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-50" disabled={!confirmReady || isLoading}>
-              Continue to password setup
-            </button>
-          </form>
-        {:else if onboardingStep === 'password'}
-          <form class="space-y-4" onsubmit={handleSavePassword}>
-            <h2 class="text-lg font-semibold flex items-center gap-2"><KeySquare size={18} /> Create your unlock password</h2>
-            {#if unicodeRequired}
-              <p class="text-sm text-zinc-400">Minimum 8 characters and must include at least one non-ASCII character (for example “é”, “你”, or “✓”).</p>
-            {:else}
-              <p class="text-sm text-zinc-400">Minimum 8 characters. Unicode characters are optional while you upgrade an existing identity.</p>
-            {/if}
-            <div class="space-y-2">
-              <label for="password" class="text-xs uppercase tracking-wide text-zinc-500 mb-1 block">Password</label>
-              <input id="password"
-                type="password"
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                bind:value={passwordInput}
-                minlength={8}
-                required
-                autocomplete="new-password"
-              />
-            </div>
-            <div class="space-y-2">
-              <label for="password-confirm" class="text-xs uppercase tracking-wide text-zinc-500 mb-1 block">Confirm password</label>
-              <input id="password-confirm"
-                type="password"
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                bind:value={passwordConfirm}
-                minlength={8}
-                required
-                autocomplete="new-password"
-              />
-            </div>
-            {#if passwordError}
-              <p class="text-sm text-red-300">{passwordError}</p>
-            {/if}
-            <button class="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-50" disabled={isLoading}>
-              Continue to authenticator setup
-            </button>
-          </form>
-        {:else if onboardingStep === 'totp' && $authStore.onboarding}
-          <form class="space-y-4" onsubmit={finishOnboarding}>
-            <h2 class="text-lg font-semibold flex items-center gap-2"><KeyRound size={18} /> Pair your authenticator</h2>
-            <p class="text-sm text-zinc-400">Scan this QR with your authenticator app. Codes are only required for unlock if you enable that option in settings.</p>
-            <div class="flex flex-col lg:flex-row gap-4 items-start">
-              {#if totpQr}
-                <img src={totpQr} alt="Authenticator QR" class="w-40 h-40 rounded-lg border border-zinc-800 bg-white p-2" />
+
+              {#if securityQuestions.length < 5}
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="w-full"
+                  onclick={addSecurityQuestion}
+                >
+                  Add another question
+                </Button>
               {/if}
-              <div class="space-y-2 text-sm">
-                <p class="text-xs uppercase text-zinc-500">Manual setup key</p>
-                <code class="block rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm">{$authStore.onboarding.totpSecret}</code>
+
+              <Button
+                class="w-full"
+                type="submit"
+                disabled={!securityQuestionsReady || isLoading}
+              >
+                Continue to backup codes
+              </Button>
+            </form>
+          {:else if onboardingStep === 'backup_codes' && backupCodes.length > 0}
+            <div class="space-y-4">
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <ShieldCheck size={18} /> Save your backup codes
+              </h2>
+              <p class="text-sm text-muted-foreground">
+                Store these backup codes in a safe place. Each code can be used once to access your account if you lose your password and recovery phrase.
+              </p>
+
+              <Card class="bg-zinc-900 border-zinc-700">
+                <CardContent class="p-4">
+                  <div class="grid grid-cols-2 gap-2">
+                    {#each backupCodes as code}
+                      <Badge variant="secondary" class="justify-center">{code}</Badge>
+                    {/each}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Alert class="border-yellow-500/30">
+                <TriangleAlert class="h-4 w-4 text-yellow-400" />
+                <AlertDescription class="text-yellow-400">
+                  Each code can only be used once. Store them securely offline.
+                </AlertDescription>
+              </Alert>
+
+              <Button class="w-full" onclick={() => (onboardingStep = 'totp')}>
+                I have saved my backup codes
+              </Button>
+            </div>
+          {:else if onboardingStep === 'totp' && $authStore.onboarding}
+            <form class="space-y-4" onsubmit={finishOnboarding}>
+              <h2 class="text-lg font-semibold flex items-center gap-2">
+                <KeyRound size={18} /> Pair your authenticator
+              </h2>
+              <p class="text-sm text-muted-foreground">
+                Scan this QR with your authenticator app. Codes are only required for unlock if you enable that option in settings.
+              </p>
+
+              <div class="flex flex-col lg:flex-row gap-4 items-start">
+                {#if totpQr}
+                  <img
+                    src={totpQr}
+                    alt="Authenticator QR"
+                    class="w-40 h-40 rounded-lg border border-zinc-800 bg-white p-2"
+                  />
+                {/if}
+                <div class="space-y-2 text-sm">
+                  <p class="text-xs uppercase text-zinc-500">Manual setup key</p>
+                  <Input
+                    value={$authStore.onboarding.totpSecret}
+                    readonly
+                    class="font-mono"
+                  />
+                </div>
               </div>
-            </div>
-            <div>
-              <label for="totp-setup" class="text-xs uppercase tracking-wide text-zinc-500 mb-1 block">Authenticator code</label>
-              <input id="totp-setup"
-                type="text"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                value={totpCode}
-                oninput={(event) => { const target = event.currentTarget as HTMLInputElement; totpCode = sanitizeCode(target.value); }}
-                maxlength={6}
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <button class="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-50" disabled={totpCode.length !== 6 || isLoading}>
-              Complete onboarding
-            </button>
-          </form>
-        {/if}
-      {:else}
-        <div class="space-y-6">
-          <div class="space-y-2">
-            <h2 class="text-lg font-semibold flex items-center gap-2"><Lock size={18} /> Unlock your identity</h2>
-            <p class="text-sm text-zinc-400">Enter your password to decrypt your local identity. {#if requireTotpOnUnlock}A 6-digit authenticator code is required because you enabled it in settings.{/if}</p>
-          </div>
-          <form class="space-y-3" onsubmit={handleUnlock}>
-            <div class="space-y-2">
-              <label for="unlock-password" class="text-xs uppercase tracking-wide text-zinc-500">Password</label>
-              <input id="unlock-password"
-                type="password"
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                bind:value={unlockPassword}
-                required
-                autocomplete="current-password"
-              />
-            </div>
-            {#if requireTotpOnUnlock}
+
               <div class="space-y-2">
-                <label for="unlock-totp" class="text-xs uppercase tracking-wide text-zinc-500">Authenticator code</label>
-                <input id="unlock-totp"
+                <Label for="totp-setup">Authenticator code</Label>
+                <Input
+                  id="totp-setup"
                   type="text"
                   inputmode="numeric"
                   pattern="[0-9]*"
-                  class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  value={unlockTotp}
-                  oninput={(event) => { const target = event.currentTarget as HTMLInputElement; unlockTotp = sanitizeCode(target.value); }}
+                  class="w-full"
+                  value={totpCode}
+                  oninput={(e) => {
+                    const t = e.currentTarget as HTMLInputElement
+                    totpCode = sanitizeCode(t.value)
+                  }}
                   maxlength={6}
                   required
+                  disabled={isLoading}
                 />
               </div>
-            {/if}
-            {#if unlockPasswordError}
-              <p class="text-sm text-red-300">{unlockPasswordError}</p>
-            {/if}
-            <button class="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-50" disabled={isLoading || unlockPassword.trim().length === 0 || (requireTotpOnUnlock && unlockTotp.length !== 6)}>
-              Unlock account
-            </button>
-          </form>
 
-          <div class="space-y-2 pt-4 border-t border-zinc-800">
-            <h3 class="text-sm font-semibold text-zinc-300 flex items-center gap-2"><KeyRound size={16} /> Recover with phrase</h3>
-            <p class="text-xs text-zinc-500">Use your 12-word recovery phrase to reset your password. {#if requireTotpOnUnlock}Since unlock 2FA is enabled, we also ask for a 6-digit code.{/if}</p>
-            <form class="space-y-3" onsubmit={handleRecoveryLogin}>
-              <div class="space-y-2">
-                <label for="recovery-phrase" class="text-xs uppercase tracking-wide text-zinc-500">Recovery phrase</label>
-                <textarea id="recovery-phrase"
-                  class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none min-h-[120px]"
-                  placeholder="Enter your 12-word recovery phrase"
-                  bind:value={recoveryPhrase}
-                  required
-                ></textarea>
-              </div>
-              {#if requireTotpOnUnlock}
-                <div class="space-y-2">
-                  <label for="recovery-totp" class="text-xs uppercase tracking-wide text-zinc-500">Authenticator code</label>
-                  <input id="recovery-totp"
-                    type="text"
-                    inputmode="numeric"
-                    pattern="[0-9]*"
-                    class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                    value={recoveryTotp}
-                    oninput={(event) => { const target = event.currentTarget as HTMLInputElement; recoveryTotp = sanitizeCode(target.value); }}
-                    maxlength={6}
-                    required
-                  />
-                </div>
-              {/if}
-              <div class="space-y-2">
-                <label for="recovery-password" class="text-xs uppercase tracking-wide text-zinc-500">New password</label>
-                <input id="recovery-password"
-                  type="password"
-                  class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  bind:value={recoveryPassword}
-                  minlength={8}
-                  required
-                  autocomplete="new-password"
-                />
-              </div>
-              <div class="space-y-2">
-                <label for="recovery-password-confirm" class="text-xs uppercase tracking-wide text-zinc-500">Confirm new password</label>
-                <input id="recovery-password-confirm"
-                  type="password"
-                  class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  bind:value={recoveryPasswordConfirm}
-                  minlength={8}
-                  required
-                  autocomplete="new-password"
-                />
-              </div>
-              {#if recoveryError}
-                <p class="text-sm text-red-300">{recoveryError}</p>
-              {/if}
-              <button class="w-full rounded-lg border border-primary px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50" disabled={isLoading || recoveryPhrase.trim().length === 0 || recoveryPassword.trim().length === 0 || recoveryPasswordConfirm.trim().length === 0 || (requireTotpOnUnlock && recoveryTotp.length !== 6)}>
-                Reset password & unlock
-              </button>
+              <Button
+                class="w-full"
+                type="submit"
+                disabled={totpCode.length !== 6 || isLoading}
+              >
+                Complete onboarding
+              </Button>
             </form>
-          </div>
-        </div>
-      {/if}
-    </div>
-
-    <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl shadow-inner p-8 space-y-6">
-      <h2 class="text-lg font-semibold flex items-center gap-2"><QrCode size={18} /> Trusted device handoff</h2>
-      <p class="text-sm text-zinc-400">Open Aegis on another device, generate a login QR from Settings → Devices, and scan it here. Approval still requires a fresh authenticator code.</p>
-
-      {#if $authStore.pendingDeviceLogin}
-        <div class="rounded-lg border border-primary/40 bg-primary/10 p-4 space-y-3">
-          <p class="text-sm text-primary-foreground/90">Login request from { $authStore.pendingDeviceLogin.username ?? 'trusted device' }.</p>
-          <form class="space-y-3" onsubmit={handleDeviceLogin}>
-            <div>
-              <label for="device-approve-totp" class="text-xs uppercase tracking-wide text-zinc-500">Authenticator code</label>
-              <input id="device-approve-totp"
-                type="text"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                class="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                value={deviceTotp}
-                oninput={(event) => { const target = event.currentTarget as HTMLInputElement; deviceTotp = sanitizeCode(target.value); }}
-                maxlength={6}
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <button class="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-50" disabled={deviceTotp.length !== 6 || isLoading}>
-              Approve login
-            </button>
-          </form>
-        </div>
-      {:else}
-        <div class="rounded-lg border border-zinc-700/60 bg-zinc-900/60 p-4 text-sm text-zinc-400 space-y-3">
-          <p>Ready to link another device? Generate a QR from your authenticated device to hand off credentials securely.</p>
-          <button class="w-full rounded-lg border border-primary/60 px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/10" onclick={() => { authStore.clearError(); showScanner = true; }}>
-            Launch camera scanner
-          </button>
-        </div>
-      {/if}
-
-      <div class="rounded-lg border border-zinc-700/60 bg-zinc-900/60 p-4 text-sm text-zinc-400">
-        <p class="font-semibold text-zinc-200 mb-2">Security checklist</p>
-        <ul class="space-y-2 list-disc list-inside">
-          <li>Keep your recovery phrase offline in a trusted location.</li>
-          <li>Password unlock works offline and never leaves this device.</li>
-          <li>Authenticator codes remain required for device approvals.</li>
-        </ul>
-      </div>
-    </div>
+          {/if}
+        {/if}
+      </CardContent>
+    </Card>
   </div>
+
+  <div class="space-y-6">
+    <div class="space-y-2">
+      <h2 class="text-lg font-semibold flex items-center gap-2">
+        <Lock size={18} /> Unlock your identity
+      </h2>
+      <p class="text-sm text-muted-foreground">
+        Enter your password to decrypt your local identity.
+        {#if requireTotpOnUnlock}
+          A 6-digit authenticator code is required because you enabled it in settings.
+        {/if}
+      </p>
+    </div>
+
+    <form class="space-y-3" onsubmit={handleUnlock}>
+      <div class="space-y-2">
+        <Label for="unlock-password">Password</Label>
+        <Input
+          id="unlock-password"
+          type="password"
+          value={unlockPassword}
+          oninput={(e) => { const t = e.currentTarget as HTMLInputElement; unlockPassword = t.value }}
+          autocomplete="current-password"
+          required
+        />
+      </div>
+
+      {#if requireTotpOnUnlock}
+        <div class="space-y-2">
+          <Label for="unlock-totp">Authenticator code</Label>
+          <Input
+            id="unlock-totp"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            value={unlockTotp}
+            oninput={(event) => {
+              const target = event.currentTarget as HTMLInputElement
+              unlockTotp = sanitizeCode(target.value)
+            }}
+            maxlength={6}
+            required
+          />
+        </div>
+      {/if}
+
+      {#if unlockPasswordError}
+        <p class="text-sm text-destructive">{unlockPasswordError}</p>
+      {/if}
+
+      <Button
+        class="w-full"
+        type="submit"
+        disabled={isLoading || unlockPassword.trim().length === 0 || (requireTotpOnUnlock && unlockTotp.length !== 6)}
+      >
+        Unlock account
+      </Button>
+    </form>
+  </div>
+
+  <div class="space-y-2 pt-4">
+    <Separator />
+
+    {#if !showRecoveryForm}
+      <Button
+        variant="link"
+        class="w-full justify-center text-sm text-muted-foreground"
+        onclick={() => showRecoveryForm = true}
+      >
+        <Shield size={16} class="mr-2" /> Forgot your password? Recover identity
+      </Button>
+    {:else}
+      <h3 class="text-sm font-semibold flex items-center gap-2">
+        <Shield size={16} /> Recover with security questions
+      </h3>
+      <p class="text-xs text-muted-foreground">
+        Answer your configured security questions to reset your password.
+      </p>
+
+      <form class="space-y-3" onsubmit={handleSecurityQuestionRecovery}>
+        <!-- Security questions would be dynamically loaded here -->
+        <div class="space-y-2">
+          <Label>Security questions</Label>
+          <p class="text-xs text-muted-foreground">
+            Answer the security questions you set up during onboarding.
+          </p>
+          <!-- Actual questions from the backend -->
+        </div>
+
+        {#if requireTotpOnUnlock}
+          <div class="space-y-2">
+            <Label for="recovery-totp">Authenticator code</Label>
+            <Input
+              id="recovery-totp"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              value={recoveryTotp}
+              oninput={(event) => {
+                const target = event.currentTarget as HTMLInputElement
+                recoveryTotp = sanitizeCode(target.value)
+              }}
+              maxlength={6}
+              required
+            />
+          </div>
+        {/if}
+
+        <div class="space-y-2">
+          <Label for="recovery-password">New password</Label>
+          <Input
+            id="recovery-password"
+            type="password"
+            value={recoveryPassword}
+            oninput={(e) => { const t = e.currentTarget as HTMLInputElement; recoveryPassword = t.value }}
+            minlength={8}
+            autocomplete="new-password"
+            required
+          />
+        </div>
+
+        <div class="space-y-2">
+          <Label for="recovery-password-confirm">Confirm new password</Label>
+          <Input
+            id="recovery-password-confirm"
+            type="password"
+            value={recoveryPasswordConfirm}
+            oninput={(e) => { const t = e.currentTarget as HTMLInputElement; recoveryPasswordConfirm = t.value }}
+            minlength={8}
+            autocomplete="new-password"
+            required
+          />
+        </div>
+
+        {#if recoveryError}
+          <Alert variant="destructive">
+            <AlertTitle>Recovery failed</AlertTitle>
+            <AlertDescription>{recoveryError}</AlertDescription>
+          </Alert>
+        {/if}
+
+        <Button
+          class="w-full"
+          type="submit"
+          variant="outline"
+          disabled={isLoading}
+        >
+          Reset password with security questions
+        </Button>
+      </form>
+      <Button
+        variant="ghost"
+        class="w-full text-sm text-muted-foreground"
+        onclick={() => showRecoveryForm = false}
+        type="button"
+      >
+        Cancel recovery
+      </Button>
+    {/if}
+  </div>
+
+  {#if status === 'account_locked'}
+    <Alert variant="destructive">
+      <div class="flex items-center gap-2">
+        <Shield size={16} />
+        <AlertTitle>Account Locked</AlertTitle>
+      </div>
+      <AlertDescription>
+        Your account has been locked due to too many failed login attempts.
+        {#if $authStore.accountLockedUntil}
+          It will automatically unlock at {$authStore.accountLockedUntil.toLocaleTimeString()}.
+        {/if}
+      </AlertDescription>
+    </Alert>
+  {/if}
+
+  <Card>
+    <CardHeader>
+      <CardTitle class="flex items-center gap-2">
+        <QrCode size={18} /> Trusted device handoff
+      </CardTitle>
+      <CardDescription>
+        Open Aegis on another device, generate a login QR from Settings → Devices, and scan it here.
+        Approval still requires a fresh authenticator code.
+      </CardDescription>
+    </CardHeader>
+
+    <CardContent class="space-y-6">
+      {#if $authStore.pendingDeviceLogin}
+        <Alert>
+          <AlertTitle>Login request</AlertTitle>
+          <AlertDescription>
+            Login request from { $authStore.pendingDeviceLogin.username ?? 'trusted device' }.
+          </AlertDescription>
+        </Alert>
+
+        <form class="space-y-3" onsubmit={handleDeviceLogin}>
+          <div class="space-y-2">
+            <Label for="device-approve-totp">Authenticator code</Label>
+            <Input
+              id="device-approve-totp"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              value={deviceTotp}
+              oninput={(event) => {
+                const target = event.currentTarget as HTMLInputElement
+                deviceTotp = sanitizeCode(target.value)
+              }}
+              maxlength={6}
+              required
+              disabled={isLoading}
+            />
+          </div>
+
+          <Button
+            class="w-full"
+            type="submit"
+            disabled={deviceTotp.length !== 6 || isLoading}
+          >
+            Approve login
+          </Button>
+        </form>
+      {:else}
+        <Card class="bg-muted">
+          <CardContent class="space-y-3 text-sm text-muted-foreground">
+            <p>
+              Ready to link another device? Generate a QR from your authenticated device
+              to hand off credentials securely.
+            </p>
+            <Button
+              class="w-full"
+              variant="outline"
+              onclick={() => {
+                authStore.clearError()
+                showScanner = true
+              }}
+            >
+              Launch camera scanner
+            </Button>
+          </CardContent>
+        </Card>
+      {/if}
+
+      <Card class="bg-muted">
+        <CardContent class="text-sm text-muted-foreground">
+          <p class="font-semibold text-foreground mb-2">Security checklist</p>
+          <ul class="space-y-2 list-disc list-inside">
+            <li>Keep your recovery phrase offline in a trusted location.</li>
+            <li>Password unlock works offline and never leaves this device.</li>
+            <li>Authenticator codes remain required for device approvals.</li>
+          </ul>
+        </CardContent>
+      </Card>
+    </CardContent>
+  </Card>
 </div>

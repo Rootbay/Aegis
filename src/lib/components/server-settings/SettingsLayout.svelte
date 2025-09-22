@@ -1,8 +1,8 @@
 <script lang="ts">
   import { X, Smile, Search } from '@lucide/svelte';
   import type { Component } from 'svelte';
-  import RolesManagement from '$lib/components/RolesManagement.svelte';
-  import ChannelManagement from '$lib/components/ChannelManagement.svelte';
+  import RolesManagement from '$lib/features/servers/components/RolesManagement.svelte';
+  import ChannelManagement from '$lib/features/channels/components/ChannelManagement.svelte';
   import WebhookManagement from '$lib/features/servers/components/WebhookManagement.svelte';
   import MemberList from '$lib/components/lists/MemberList.svelte';
   import BanList from '$lib/components/lists/BanList.svelte';
@@ -11,7 +11,16 @@
   import UserManagement from '$lib/components/server-settings/UserManagement.svelte';
   import Roles from '$lib/components/server-settings/Roles.svelte';
   import Privacy from '$lib/components/server-settings/Privacy.svelte';
-
+  import { AlertDialog, AlertDialogHeader, AlertDialogContent, AlertDialogCancel, AlertDialogAction, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '$lib/components/ui/alert-dialog/index.js';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Separator } from '$lib/components/ui/separator/index.js';
+  import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
+  import { Select, SelectTrigger, SelectContent, SelectItem } from '$lib/components/ui/select/index.js';
+  import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '$lib/components/ui/card/index.js';
+  import { Avatar, AvatarImage, AvatarFallback } from '$lib/components/ui/avatar/index.js';
+  import { Switch } from '$lib/components/ui/switch/index.js';
+  
   type Events = {
     close: void;
     update_setting: { id: string; property: string; value: any };
@@ -243,60 +252,60 @@
 
 <div class="flex h-full text-white">
   <aside class="w-[36vw] bg-zinc-900 p-4 shadow-lg flex flex-col h-full">
-    <div class="flex-grow overflow-y-scroll custom-scrollbar py-[60px] px-2">
+    <ScrollArea class="flex-grow py-[60px] px-2">
       <div class="w-[238px] ml-auto">
         <div class="relative mb-4">
-          <input
-            type="text"
-            placeholder="Search"
-            class="w-full bg-card text-white px-3 py-[9px] rounded-md focus:outline-none focus:ring-2 focus:ring-zinc-500 border border-zinc-700"
-            bind:value={searchQuery}
-          />
-          <button
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
-            onclick={() => { searchQuery = ''; }}
-          >
+            <Input
+              placeholder="Search"
+              bind:value={searchQuery}
+              class="pr-9"
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+              onclick={() => (searchQuery = '')}
+            >
             {#if searchQuery}
               <X class="w-4 h-4" />
             {:else}
               <Search class="w-4 h-4" />
             {/if}
-          </button>
+          </Button>
         </div>
         <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase" class:hidden={isSearching}>{title}</h2>
         <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase" class:hidden={!isSearching}>Search Result</h2>
-    <ul>
-          {#each filteredSidebarItems as item, index (item.type === 'separator' ? `separator-${index}` : item.tab)}
-            {#if item.type === 'separator'}
-              <div class="h-[1px] my-2 mx-[10px] bg-zinc-700"></div>
+        <ul>
+          {#each filteredSidebarItems as item, index (isSeparator(item) ? `sep-${index}` : item.tab)}
+            {#if isSeparator(item)}
+              <Separator class="my-2 mx-[10px]" />
             {:else}
-              {@const navItem = item as SidebarLinkItem}
+              {@const navItem = item}
+              {@const Icon = navItem.icon}
               <li>
-                <button
-                  class="w-full flex items-center gap-2 h-8 px-[10px] py-[6px] rounded-md transition-colors duration-200 mb-[2px] cursor-pointer group
-                  {activeTab === navItem.tab ? 'bg-zinc-700 hover:bg-zinc-600' : 'hover:bg-zinc-700'}"
+                <Button
+                  variant="ghost"
+                  class={`w-full justify-start h-8 px-[10px] gap-2 ${activeTab === navItem.tab ? 'bg-zinc-700 text-white hover:bg-zinc-600' : ''}`}
                   onclick={() => (activeTab = navItem.tab)}
                 >
-                  <svelte:component
-                    this={navItem.icon}
-                    class={`w-4 h-4 text-muted-foreground group-hover:text-white transition-colors duration-200${activeTab === navItem.tab ? ' text-white' : ''}`}
-                  />
-                  <span class="truncate" class:text-white={activeTab === navItem.tab}>{navItem.label}</span>
-                </button>
+                  <Icon class="w-4 h-4" />
+                  <span class="truncate">{navItem.label}</span>
+                </Button>
               </li>
             {/if}
           {/each}
         </ul>
         {#if !isSearching}
-          <div class="h-[1px] my-2 mx-[10px] bg-zinc-700"></div>
+          <Separator class="my-2 mx-[10px]" />
           <ul>
             <li>
-              <button
-                class="w-full flex items-center h-8 px-[10px] py-[6px] rounded-md text-red-400 hover:bg-zinc-700 transition-colors duration-200 mb-[2px] cursor-pointer"
+              <Button
+                variant="ghost"
+                class="w-full flex items-center h-8 px-[10px] py-[6px] text-red-400 hover:bg-zinc-700 transition-colors duration-200 mb-[2px]"
                 onclick={() => (showDeleteServerConfirm = true)}
               >
                 Delete Server
-              </button>
+              </Button>
             </li>
           </ul>
         {/if}
@@ -307,136 +316,160 @@
           </div>
         {/if}
       </div>
-    </div>
+    </ScrollArea>
   </aside>
 
   <main class="flex-1 w-full overflow-hidden overflow-x-hidden relative">
     <div class="w-[740px] mx-auto p-[60px_40px_80px]">
-    <button
-      class="absolute top-0 right-0 text-muted-foreground hover:text-white transition-colors duration-200 p-4 z-50"
-      onclick={closeSettings}
-    >
-      <X class="w-6 h-6" />
-    </button>
-    {#each Object.entries(categoryHeadings) as [category, heading] (category)}
-      {#if activeTab === category}
-        <h3 class="text-2xl font-semibold mb-6 text-blue-400">{heading}</h3>
-        <div class="space-y-8">
-          {#each allSettings.filter(setting => setting.category === category) as setting, i (setting.id ?? `${category}-${i}`)}
-            <div class="bg-zinc-700 p-5 rounded-lg shadow-md">
-              <h4 class="text-xl font-medium mb-2">{setting.title}</h4>
-              <p class="text-zinc-300 mb-4">{setting.description}</p>
-
-              {#if setting.type === 'text'}
-                <input
-                  type="text"
-                  class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
-                  value={currentData[setting.property]}
-                  onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
-                />
-              {:else if setting.type === 'image'}
-                <input
-                  type="text"
-                  class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
-                  value={currentData[setting.property]}
-                  onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
-                />
-                {#if currentData[setting.property]}
-                  <img src={currentData[setting.property]} alt="Server Icon" class="mt-4 w-24 h-24 object-cover rounded-full" />
-                {/if}
-              {:else if setting.type === 'static'}
-                <p class="text-muted-foreground font-mono bg-card p-2 rounded">{currentData[setting.property]}</p>
-              {:else if setting.type === 'select'}
-                <select
-                  class="w-full p-2 rounded bg-card border border-zinc-600 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50"
-                  onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.value })}
-                >
-                  {#each setting.options as option (option.value)}
-                    <option value={option.value} selected={currentData[setting.property] === option.value}>
-                      {option.label}
-                    </option>
-                  {/each}
-                </select>
-              {:else if setting.type === 'toggle'}
-                <label class="flex items-center cursor-pointer">
-                  <div class="relative">
-                    <input
-                      type="checkbox"
-                      class="sr-only"
-                      checked={currentData[setting.property]}
-                      onchange={(e) => onupdate_setting?.({ id: setting.id, property: setting.property, value: e.currentTarget.checked })}
+      <Button
+        variant="ghost"
+        size="icon"
+        class="absolute top-0 right-0 text-muted-foreground hover:text-white transition-colors duration-200 p-4 z-50"
+        onclick={closeSettings}
+      >
+        <X class="w-6 h-6" />
+      </Button>
+      {#each Object.entries(categoryHeadings) as [category, heading] (category)}
+        {#if activeTab === category}
+          <h3 class="text-2xl font-semibold mb-6 text-blue-400">{heading}</h3>
+          <div class="space-y-8">
+            {#each allSettings.filter(setting => setting.category === category) as setting, i (setting.id ?? `${category}-${i}`)}
+              <Card>
+                <CardHeader>
+                  <CardTitle>{setting.title}</CardTitle>
+                  <CardDescription>{setting.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {#if setting.type === 'text' || setting.type === 'image'}
+                    <Input
+                      type="text"
+                      value={currentData[setting.property]}
+                      onchange={(e) => onupdate_setting?.({
+                          id: setting.id,
+                          property: setting.property,
+                          value: (e.currentTarget as HTMLInputElement).value
+                        })
+                      }
                     />
-                    <div class="block bg-zinc-600 w-14 h-8 rounded-full"></div>
-                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
-                  </div>
-                  <div class="ml-3 text-zinc-300 font-medium">
-                    {setting.title}
-                  </div>
-                </label>
-              {:else if setting.type === 'custom_component'}
-                {#if setting.component === 'RolesManagement'}
-                  <RolesManagement
-                    roles={currentData.roles ?? []}
-                    onadd_role={onadd_role}
-                    onupdate_role={onupdate_role}
-                    ondelete_role={ondelete_role}
-                    ontoggle_permission={ontoggle_permission}
-                  />
-                {:else if setting.component === 'ChannelManagement'}
-                  <ChannelManagement
-                    channels={currentData.channels ?? []}
-                    onadd_channel={onadd_channel}
-                    onupdate_channel={onupdate_channel}
-                    ondelete_channel={ondelete_channel}
-                  />
-                {:else}
-                  {#if componentMap[setting.component]}
-                    {@const dynamicComponent = componentMap[setting.component]}
-                    {@const componentProps = getComponentProps(setting.component)}
-                    {#if dynamicComponent}
-                      <dynamicComponent
-                        {...componentProps}
-                        onupdate_setting={onupdate_setting}
-                        onbutton_click={onbutton_click}
-                      ></dynamicComponent>
+                    {#if setting.type === 'image' && currentData[setting.property]}
+                      <img src={currentData[setting.property]} alt="Server Icon" class="mt-4 w-24 h-24 object-cover rounded-full" />
                     {/if}
+                    {#if currentData[setting.property]}
+                      <Avatar class="mt-4 h-24 w-24">
+                        <AvatarImage src={currentData[setting.property]} alt="Server Icon" />
+                        <AvatarFallback>{(currentData.name ?? 'SV').slice(0,2).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                    {/if}
+                  {:else if setting.type === 'static'}
+                    <p class="text-muted-foreground font-mono bg-card p-2 rounded">{currentData[setting.property]}</p>
+                  {:else if setting.type === 'select'}
+                    <Select
+                      type="single"
+                      value={currentData[setting.property]}
+                      onValueChange={(value: string) =>
+                        onupdate_setting?.({
+                          id: setting.id,
+                          property: setting.property,
+                          value
+                        })
+                      }
+                    >
+                      <SelectTrigger class="w-full">
+                        <SelectValue placeholder="Choose…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {#each setting.options as option (option.value)}
+                          <SelectItem value={option.value}>{option.label}</SelectItem>
+                        {/each}
+                      </SelectContent>
+                    </Select>
+                  {:else if setting.type === 'toggle'}
+                    <Switch
+                      checked={currentData[setting.property]}
+                      onCheckedChange={(val) =>
+                        onupdate_setting?.({
+                          id: setting.id,
+                          property: setting.property,
+                          value: val
+                        })
+                      }
+                    />
+                    <span class="ml-3 text-zinc-300 font-medium">{setting.title}</span>
+                  {:else if setting.type === 'custom_component'}
+                    {#if setting.component === 'RolesManagement'}
+                      <RolesManagement
+                        roles={currentData.roles ?? []}
+                        onadd_role={onadd_role}
+                        onupdate_role={onupdate_role}
+                        ondelete_role={ondelete_role}
+                        ontoggle_permission={ontoggle_permission}
+                      />
+                    {:else if setting.component === 'ChannelManagement'}
+                      <ChannelManagement
+                        channels={currentData.channels ?? []}
+                        onadd_channel={onadd_channel}
+                        onupdate_channel={onupdate_channel}
+                        ondelete_channel={ondelete_channel}
+                      />
+                    {:else}
+                      {#if componentMap[setting.component]}
+                        {@const dynamicComponent = componentMap[setting.component]}
+                        {@const componentProps = getComponentProps(setting.component)}
+                        {#if dynamicComponent}
+                          <dynamicComponent
+                            {...componentProps}
+                            onupdate_setting={onupdate_setting}
+                            onbutton_click={onbutton_click}
+                          ></dynamicComponent>
+                        {/if}
+                      {/if}
+                    {/if}
+                  {:else if setting.type === 'button'}
+                    <Button
+                      variant={setting.buttonType === 'danger' ? 'destructive' : 'default'}
+                      onclick={() => onbutton_click?.({ id: setting.id })}
+                    >
+                      {setting.buttonLabel}
+                    </Button>
                   {/if}
-                {/if}
-              {:else if setting.type === 'button'}
-                <button
-                  class="px-4 py-2 rounded-md {setting.buttonType === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white font-semibold transition-colors duration-200"
-                  onclick={() => onbutton_click?.({ id: setting.id })}
-                >
-                  {setting.buttonLabel}
-                </button>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
-    {/each}
-    <div class="h-[1px] my-2 mx-[10px] bg-zinc-700"></div>
+                </CardContent>
+              </Card>
+            {/each}
+          </div>
+        {/if}
+      {/each}
+      <Separator class="my-2 mx-[10px]" />
     </div>
   </main>
-  {#if showDeleteServerConfirm}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80" role="dialog" aria-modal="true" aria-labelledby="delete-server-dialog-title" onclick={() => (showDeleteServerConfirm = false)}>
-      <div class="w-full max-w-sm rounded-lg border border-border bg-card p-6 text-left shadow-xl" onclick={(event) => event.stopPropagation()}>
-        <h3 id="delete-server-dialog-title" class="text-lg font-semibold text-red-400">Delete server?</h3>
-        <p class="mt-2 text-sm text-muted-foreground">
+  <AlertDialog bind:open={showDeleteServerConfirm}>
+    <AlertDialogContent class="max-w-sm">
+      <AlertDialogHeader>
+        <AlertDialogTitle class="text-red-400">Delete server?</AlertDialogTitle>
+        <AlertDialogDescription>
           This action permanently removes {currentData?.name ?? 'this server'} and all of its data. You cannot undo this.
-        </p>
-        <div class="mt-6 flex justify-end gap-2">
-          <button class="rounded-md bg-muted px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted/80" type="button" onclick={() => (showDeleteServerConfirm = false)}>
-            Cancel
-          </button>
-          <button class="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700" type="button" onclick={() => { showDeleteServerConfirm = false; handleDeleteServer(currentData); }}>
-            Delete Server
-          </button>
-        </div>
-      </div>
-    </div>
-  {/if}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
 
+      <AlertDialogFooter>
+        <AlertDialogCancel
+          onclick={() => (showDeleteServerConfirm = false)}
+          class="rounded-md"
+        >
+          Cancel
+        </AlertDialogCancel>
+
+        <AlertDialogAction
+          onclick={() => {
+            showDeleteServerConfirm = false;
+            handleDeleteServer(currentData);
+          }}
+          class="rounded-md bg-red-600 text-white hover:bg-red-700"
+        >
+          Delete Server
+        </AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
 </div>
 
 <style lang="postcss">
@@ -474,7 +507,3 @@
     background-color: theme('colors.zinc.600');
   }
 </style>
-
-
-
-

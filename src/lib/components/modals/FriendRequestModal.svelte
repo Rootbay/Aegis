@@ -7,7 +7,8 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
   import { Alert, AlertDescription, AlertTitle } from "$lib/components/ui/alert/index.js";
-  
+  import { X } from '@lucide/svelte';
+
   type Props = {
     onRequestSent: () => void;
     onClose: () => void;
@@ -100,7 +101,7 @@
 
       <Dialog.Close class="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none">
         <span class="sr-only">Close</span>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <X class="h-4 w-4"/>
       </Dialog.Close>
     </Dialog.Content>
   </Dialog.Portal>

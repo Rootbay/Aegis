@@ -11,6 +11,8 @@
     AvatarImage,
     AvatarFallback
   } from "$lib/components/ui/avatar";
+  import * as Popover from '$lib/components/ui/popover/index.js';
+  import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
 
   type MemberWithRoles = User & Record<string, unknown>;
 
@@ -223,31 +225,34 @@
                 <span class="member-group-count">{group.members.length}</span>
               </header>
               {#each group.members as member (member.id)}
-                <Button
-                  variant="ghost"
-                  class="member-entry"
-                  onclick={(e) =>
-                    openUserCardModal(
-                      member,
-                      e.clientX,
-                      e.currentTarget.getBoundingClientRect().top,
-                      true
-                    )
-                  }
-                >
-                  <div class="member-entry-avatar-wrapper">
-                    <Avatar class="member-entry-avatar">
-                      <AvatarImage src={member.avatar} alt={member.name} />
-                      <AvatarFallback>
-                        {(member.name || '?').slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    {#if member.online}
-                      <span class="member-entry-presence" aria-hidden="true"></span>
-                    {/if}
-                  </div>
-                  <span class="member-entry-name">{member.name}</span>
-                </Button>
+                <Popover.Root>
+                  <Popover.Trigger>
+                    <Button
+                      variant="ghost"
+                      class="w-full justify-start h-auto px-2 py-1.5 text-left"
+                    >
+                      <div class="relative mr-2">
+                        <Avatar class="w-8 h-8">
+                          <AvatarImage src={member.avatar} alt={member.name} />
+                          <AvatarFallback>
+                            {(member.name || '?').slice(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        {#if member.online}
+                          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-primary rounded-full border-2 border-muted"></span>
+                        {/if}
+                      </div>
+                      <span class="text-foreground truncate">{member.name}</span>
+                    </Button>
+                  </Popover.Trigger>
+                  <Popover.Content class="w-auto p-0 border-none">
+                    <UserCardModal 
+                      profileUser={member} 
+                      {openDetailedProfileModal} 
+                      isServerMemberContext={true}
+                    />
+                  </Popover.Content>
+                </Popover.Root>
               {/each}
             </section>
           {/each}

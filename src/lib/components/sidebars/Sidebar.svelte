@@ -12,17 +12,19 @@
 	import { lastVisitedServerId } from "$lib/stores/navigationStore";
 	import { get } from "svelte/store";
 	import { SvelteSet } from "svelte/reactivity";
-	import { Button } from "$lib/components/ui/button";
-	import { Avatar, AvatarImage, AvatarFallback } from "$lib/components/ui/avatar";
-	import { ScrollArea } from "$lib/components/ui/scroll-area";
-	import { Separator } from "$lib/components/ui/separator";
-	import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "$lib/components/ui/tooltip";
+	import { Button } from "$lib/components/ui/button/index.js";
+	import { Avatar, AvatarImage, AvatarFallback } from "$lib/components/ui/avatar/index.js";
+	import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+	import { Separator } from "$lib/components/ui/separator/index.js";
+	import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "$lib/components/ui/tooltip/index.js";
+  import * as Popover from '$lib/components/ui/popover/index.js';
+  import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
 	import { cn } from "$lib/utils";
+  import type { User } from "$lib/features/auth/models/User";
 
 	type NavigationFn = (value: string | URL) => void;
-	type ProfileClickHandler = (clientX: number, clientY: number) => void;
 
-	let { onProfileClick, onCreateJoinServerClick }: { onProfileClick: ProfileClickHandler; onCreateJoinServerClick: () => void } = $props();
+	let { onCreateJoinServerClick, openDetailedProfileModal }: { onCreateJoinServerClick: () => void; openDetailedProfileModal: (user: User) => void; } = $props();
 	const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
 	let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
 
@@ -301,18 +303,30 @@
 				<TooltipContent side="right">Settings</TooltipContent>
 			</Tooltip>
 
-			<Button
-				variant="outline"
-				size="icon"
-				class="size-10 p-0 rounded-full overflow-hidden"
-				aria-label="Open Profile"
-				onclick={(e) => onProfileClick(e.clientX, e.clientY)}
-			>
-				<Avatar class="size-10">
-					<AvatarImage src={$userStore.me?.avatar} alt="User Avatar" />
-					<AvatarFallback class="text-xs">ME</AvatarFallback>
-				</Avatar>
-			</Button>
+      <Popover.Root>
+        <Popover.Trigger>
+          <Button
+            variant="outline"
+            size="icon"
+            class="size-10 p-0 rounded-full overflow-hidden"
+            aria-label="Open Profile"
+          >
+            <Avatar class="size-10">
+              <AvatarImage src={$userStore.me?.avatar} alt="User Avatar" />
+              <AvatarFallback class="text-xs">ME</AvatarFallback>
+            </Avatar>
+          </Button>
+        </Popover.Trigger>
+        <Popover.Content side="right" class="w-auto p-0 border-none">
+          {#if $userStore.me}
+            <UserCardModal 
+              profileUser={$userStore.me} 
+              {openDetailedProfileModal} 
+              isServerMemberContext={false}
+            />
+          {/if}
+        </Popover.Content>
+      </Popover.Root>
 		</div>
 	</TooltipProvider>
 </aside>

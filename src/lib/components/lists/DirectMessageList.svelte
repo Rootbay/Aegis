@@ -5,10 +5,10 @@
 	import type { Friend } from '$lib/features/friends/models/Friend';
 	import { friendStore } from '$lib/features/friends/stores/friendStore';
 	import { Plus, X } from '@lucide/svelte';
-	import { Button } from "$lib/components/ui/button";
-	import { Input } from "$lib/components/ui/input";
-	import { ScrollArea } from "$lib/components/ui/scroll-area";
-	import { Separator } from "$lib/components/ui/separator";
+	import { Button } from "$lib/components/ui/button/index.js";
+	import { Input } from "$lib/components/ui/input/index.js";
+	import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+	import { Separator } from "$lib/components/ui/separator/index.js";
 	import {
 		ContextMenu,
 		ContextMenuTrigger,

@@ -3,7 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { userStore } from '$lib/stores/userStore';
   import { toasts } from '$lib/stores/ToastStore';
-  import FriendRequestModal from './modals/FriendRequestModal.svelte';
+  import FriendRequestModal from '$lib/components/modals/FriendRequestModal.svelte';
 
   let friendships = $state<any[]>([]);
   let showFriendRequestModal = $state(false);

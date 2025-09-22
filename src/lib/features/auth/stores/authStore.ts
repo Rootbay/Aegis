@@ -1,4 +1,5 @@
 import { writable, type Readable, get } from "svelte/store";
+import { browser } from "$app/environment";
 import { invoke } from "@tauri-apps/api/core";
 import {
   generateRecoveryPhrase,
@@ -25,9 +26,10 @@ type AuthStatus =
   | "needs_setup"
   | "setup_in_progress"
   | "locked"
-  | "authenticated";
+  | "authenticated"
+  | "account_locked";
 
-type PasswordPolicy = "unicode_required" | "legacy_allowed";
+type PasswordPolicy = "unicode_required" | "legacy_allowed" | "enhanced";
 
 type AuthPersistence = {
   username?: string;
@@ -39,6 +41,29 @@ type AuthPersistence = {
   requireTotpOnUnlock?: boolean;
   createdAt?: string;
   lastLoginAt?: string;
+  failedAttempts?: number;
+  lastFailedAttempt?: string;
+  accountLockedUntil?: string | null;
+  sessionTimeoutMinutes?: number;
+  trustedDevices?: TrustedDevice[];
+  securityQuestions?: SecurityQuestion[];
+  biometricEnabled?: boolean;
+  backupCodes?: string[];
+  backupCodesUsed?: string[];
+};
+
+type TrustedDevice = {
+  id: string;
+  name: string;
+  lastUsed: string;
+  userAgent?: string;
+  ipAddress?: string;
+  location?: string;
+};
+
+type SecurityQuestion = {
+  question: string;
+  answerHash: string;
 };
 
 type OnboardingState = {
@@ -58,9 +83,19 @@ type AuthState = {
   pendingDeviceLogin: DeviceHandshakePayload | null;
   requireTotpOnUnlock: boolean;
   passwordPolicy: PasswordPolicy;
+  failedAttempts: number;
+  accountLocked: boolean;
+  accountLockedUntil: Date | null;
+  sessionTimeoutMinutes: number;
+  trustedDevices: TrustedDevice[];
+  securityQuestionsConfigured: boolean;
 };
 
 const persistence = persistentStore<AuthPersistence>("auth-state", {});
+const MIN_PASSWORD_LENGTH = 12;
+const MAX_FAILED_ATTEMPTS = 5;
+const ACCOUNT_LOCKOUT_MINUTES = 15;
+const DEFAULT_SESSION_TIMEOUT = 60;
 
 const initialState: AuthState = {
   status: "checking",
@@ -70,19 +105,44 @@ const initialState: AuthState = {
   pendingDeviceLogin: null,
   requireTotpOnUnlock: false,
   passwordPolicy: "unicode_required",
+  failedAttempts: 0,
+  accountLocked: false,
+  accountLockedUntil: null,
+  sessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT,
+  trustedDevices: [],
+  securityQuestionsConfigured: false,
 };
 
 const { subscribe, update } = writable<AuthState>(initialState);
 
-const MIN_PASSWORD_LENGTH = 8;
-
 const validatePassword = (
   password: string,
-  requireUnicode = true,
+  requireUnicode = false,
+  enhanced = true,
 ): string | null => {
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
   }
+
+  if (enhanced) {
+    const hasLower = /[a-z]/.test(password);
+    const hasUpper = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (!hasLower || !hasUpper || !hasNumber || !hasSpecial) {
+      return "Password must contain uppercase, lowercase, number, and special character.";
+    }
+
+    if (/(.)\1{2,}/.test(password)) {
+      return "Password cannot contain repeated characters.";
+    }
+
+    if (/123|abc|qwerty|password/i.test(password)) {
+      return "Password cannot contain common sequences.";
+    }
+  }
+
   if (requireUnicode) {
     const hasUnicode = [...password].some((char) => {
       const codePoint = char.codePointAt(0);
@@ -92,7 +152,38 @@ const validatePassword = (
       return "Password must include at least one non-ASCII (Unicode) character.";
     }
   }
+
   return null;
+};
+
+const calculatePasswordStrength = (password: string): {
+  score: number;
+  feedback: string[];
+} => {
+  let score = 0;
+  const feedback: string[] = [];
+
+  if (password.length >= 12) score += 20;
+  else if (password.length >= 8) score += 10;
+  else feedback.push("Use at least 12 characters");
+
+  if (/[a-z]/.test(password)) score += 20;
+  else feedback.push("Add lowercase letters");
+
+  if (/[A-Z]/.test(password)) score += 20;
+  else feedback.push("Add uppercase letters");
+
+  if (/[0-9]/.test(password)) score += 20;
+  else feedback.push("Add numbers");
+
+  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score += 20;
+  else feedback.push("Add special characters");
+
+  if (password.length >= 16) score += 10;
+  if (!/(.)\1{2,}/.test(password)) score += 10;
+  else feedback.push("Avoid repeated characters");
+
+  return { score: Math.min(score, 100), feedback };
 };
 
 const bootstrap = async () => {
@@ -105,25 +196,50 @@ const bootstrap = async () => {
         persisted.recoveryEnvelope &&
         persisted.recoveryHash,
     );
+
+    const now = new Date();
+    const lockedUntil = persisted.accountLockedUntil ? new Date(persisted.accountLockedUntil) : null;
+    const isLocked = lockedUntil && now < lockedUntil;
+
+    if (isLocked) {
+      update((state) => ({
+        ...state,
+        status: "account_locked",
+        loading: false,
+        error: `Account locked until ${lockedUntil?.toLocaleTimeString()}. Too many failed login attempts.`,
+        accountLocked: true,
+        accountLockedUntil: lockedUntil,
+      }));
+      return;
+    }
+
     if (!identityExists || !hasCredentials) {
       const passwordPolicy: PasswordPolicy = identityExists
         ? "legacy_allowed"
-        : "unicode_required";
+        : "enhanced";
       update((state) => ({
         ...state,
         status: "needs_setup",
         loading: false,
         requireTotpOnUnlock: false,
         passwordPolicy,
+        accountLocked: false,
+        accountLockedUntil: null,
+        failedAttempts: 0,
       }));
       return;
     }
+
     update((state) => ({
       ...state,
       status: "locked",
       loading: false,
       requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
-      passwordPolicy: "unicode_required",
+      passwordPolicy: "enhanced",
+      accountLocked: false,
+      accountLockedUntil: null,
+      failedAttempts: persisted.failedAttempts ?? 0,
+      sessionTimeoutMinutes: persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
     }));
   } catch (error) {
     console.error("Failed to bootstrap authentication:", error);
@@ -280,12 +396,43 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
   update((state) => ({ ...state, loading: true, error: null }));
   try {
     const persisted = get(persistence);
+    const now = new Date();
+
+    const lockedUntil = persisted.accountLockedUntil ? new Date(persisted.accountLockedUntil) : null;
+    if (lockedUntil && now < lockedUntil) {
+      throw new Error(`Account locked until ${lockedUntil.toLocaleTimeString()}.`);
+    }
+
     if (!persisted.passwordHash) {
       throw new Error("Password has not been configured.");
     }
+
     const hashed = await hashString(password);
-    if (hashed !== persisted.passwordHash) {
+    const correctPassword = hashed === persisted.passwordHash;
+
+    if (!correctPassword) {
+      const newFailedAttempts = (persisted.failedAttempts ?? 0) + 1;
+      const updates: Partial<AuthPersistence> = {
+        failedAttempts: newFailedAttempts,
+        lastFailedAttempt: now.toISOString(),
+      };
+
+      if (newFailedAttempts >= MAX_FAILED_ATTEMPTS) {
+        updates.accountLockedUntil = new Date(now.getTime() + ACCOUNT_LOCKOUT_MINUTES * 60 * 1000).toISOString();
+        throw new Error(`Account locked for ${ACCOUNT_LOCKOUT_MINUTES} minutes due to too many failed attempts.`);
+      }
+
+      persistence.update((value) => ({ ...value, ...updates }));
       throw new Error("Incorrect password.");
+    }
+
+    if (persisted.failedAttempts && persisted.failedAttempts > 0) {
+      persistence.update((value) => ({
+        ...value,
+        failedAttempts: 0,
+        lastFailedAttempt: undefined,
+        accountLockedUntil: null,
+      }));
     }
 
     if (persisted.requireTotpOnUnlock) {
@@ -303,9 +450,19 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
 
     await userStore.initialize(password, { username: persisted.username });
 
+    const deviceInfo = await getDeviceInfo();
+    const trustedDevices = (persisted.trustedDevices ?? []).filter(d => d.id !== deviceInfo.id);
+    trustedDevices.unshift({
+      ...deviceInfo,
+      lastUsed: now.toISOString(),
+    });
+
+    const updatedDevices = trustedDevices.slice(0, 5);
+
     persistence.update((value) => ({
       ...value,
-      lastLoginAt: new Date().toISOString(),
+      lastLoginAt: now.toISOString(),
+      trustedDevices: updatedDevices,
     }));
 
     update((state) => ({
@@ -313,6 +470,9 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
       status: "authenticated",
       loading: false,
       error: null,
+      accountLocked: false,
+      accountLockedUntil: null,
+      failedAttempts: 0,
     }));
     toasts.addToast("Identity unlocked.", "success");
   } catch (error) {
@@ -332,6 +492,12 @@ interface RecoveryLoginOptions {
   totpCode?: string;
 }
 
+interface SecurityQuestionRecoveryOptions {
+  answers: Record<string, string>;
+  newPassword: string;
+  totpCode?: string;
+}
+
 const loginWithRecovery = async ({
   phrase,
   newPassword,
@@ -339,7 +505,7 @@ const loginWithRecovery = async ({
 }: RecoveryLoginOptions) => {
   const currentState = get({ subscribe });
   const requireUnicode = currentState.passwordPolicy !== "legacy_allowed";
-  const passwordError = validatePassword(newPassword, requireUnicode);
+  const passwordError = validatePassword(newPassword, requireUnicode, true);
   if (passwordError) {
     throw new Error(passwordError);
   }
@@ -394,6 +560,13 @@ const loginWithRecovery = async ({
       recoveryHash: phraseHash,
       totpSecret: persisted.totpSecret,
       requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
+      trustedDevices: persisted.trustedDevices ?? [],
+      securityQuestions: persisted.securityQuestions,
+      biometricEnabled: persisted.biometricEnabled ?? false,
+      sessionTimeoutMinutes: persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
+      failedAttempts: 0,
+      lastFailedAttempt: undefined,
+      accountLockedUntil: null,
       createdAt: persisted.createdAt ?? new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     });
@@ -404,7 +577,10 @@ const loginWithRecovery = async ({
       loading: false,
       error: null,
       requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
-      passwordPolicy: "unicode_required",
+      passwordPolicy: "enhanced",
+      accountLocked: false,
+      accountLockedUntil: null,
+      failedAttempts: 0,
     }));
     toasts.addToast("Password reset successfully.", "success");
   } catch (error) {
@@ -413,6 +589,106 @@ const loginWithRecovery = async ({
         ? error.message
         : "Unable to authenticate with recovery phrase.";
     console.error("Recovery login failed:", error);
+    update((state) => ({ ...state, loading: false, error: message }));
+    throw error;
+  }
+};
+
+const loginWithSecurityQuestions = async ({
+  answers,
+  newPassword,
+  totpCode,
+}: SecurityQuestionRecoveryOptions) => {
+  const currentState = get({ subscribe });
+  const requireUnicode = currentState.passwordPolicy !== "legacy_allowed";
+  const passwordError = validatePassword(newPassword, requireUnicode, true);
+  if (passwordError) {
+    throw new Error(passwordError);
+  }
+  update((state) => ({ ...state, loading: true, error: null }));
+  try {
+    const persisted = get(persistence);
+    if (!persisted.securityQuestions || persisted.securityQuestions.length < 3) {
+      throw new Error("Security questions not configured on this device.");
+    }
+
+    let correctAnswers = 0;
+    for (const question of persisted.securityQuestions) {
+      const providedAnswer = answers[question.question];
+      if (providedAnswer) {
+        const answerHash = await hashString(providedAnswer.trim().toLowerCase());
+        if (answerHash === question.answerHash) {
+          correctAnswers++;
+        }
+      }
+    }
+
+    if (correctAnswers < 2) {
+      throw new Error("Insufficient correct answers provided.");
+    }
+
+    if (persisted.requireTotpOnUnlock && persisted.totpSecret) {
+      if (!totpCode) {
+        throw new Error("Authenticator code required.");
+      }
+      const totpValid = await verifyTotp(persisted.totpSecret, totpCode);
+      if (!totpValid) {
+        throw new Error("Invalid authenticator code.");
+      }
+    }
+
+    const newRecoveryPhrase = generateRecoveryPhrase(12);
+    const normalizedPhrase = normalizeRecoveryPhrase(newRecoveryPhrase);
+    const phraseKey = await derivePasswordKey(normalizedPhrase);
+    const recoveryHash = await hashString(normalizedPhrase);
+
+    const passwordHash = await hashString(newPassword);
+    const passwordEnvelope = persisted.totpSecret
+      ? await encryptWithSecret(persisted.totpSecret, newPassword)
+      : null;
+    const recoveryEnvelope = await encryptWithSecret(phraseKey, newPassword);
+
+    await userStore.initialize(newPassword, { username: persisted.username });
+
+    persistence.set({
+      username: persisted.username,
+      passwordHash,
+      passwordEnvelope,
+      recoveryEnvelope,
+      recoveryHash,
+      totpSecret: persisted.totpSecret,
+      requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
+      trustedDevices: persisted.trustedDevices ?? [],
+      securityQuestions: persisted.securityQuestions,
+      biometricEnabled: persisted.biometricEnabled ?? false,
+      sessionTimeoutMinutes: persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
+      backupCodes: persisted.backupCodes,
+      backupCodesUsed: persisted.backupCodesUsed ?? [],
+      failedAttempts: 0,
+      lastFailedAttempt: undefined,
+      accountLockedUntil: null,
+      createdAt: persisted.createdAt ?? new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+    });
+
+    update((state) => ({
+      ...state,
+      status: "authenticated",
+      loading: false,
+      error: null,
+      requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
+      passwordPolicy: "enhanced",
+      accountLocked: false,
+      accountLockedUntil: null,
+      failedAttempts: 0,
+    }));
+    toasts.addToast("Account recovered successfully with security questions.", "success");
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to recover account with security questions.";
+    console.error("Security question recovery failed:", error);
     update((state) => ({ ...state, loading: false, error: message }));
     throw error;
   }
@@ -550,9 +826,75 @@ const logout = () => {
     pendingDeviceLogin: null,
     error: null,
   }));
+  toasts.addToast("Logged out successfully.", "info");
 };
 
 const clearError = () => update((state) => ({ ...state, error: null }));
+
+const getDeviceInfo = async (): Promise<TrustedDevice> => {
+  if (!browser) {
+    return {
+      id: 'unknown',
+      name: 'Unknown Device',
+      lastUsed: new Date().toISOString(),
+    };
+  }
+
+  const userAgent = navigator.userAgent;
+  const deviceId = await hashString(userAgent + navigator.language + screen.width + screen.height);
+
+  return {
+    id: deviceId,
+    name: getDeviceName(userAgent),
+    lastUsed: new Date().toISOString(),
+    userAgent,
+  };
+};
+
+const getDeviceName = (userAgent: string): string => {
+  if (userAgent.includes('Windows')) return 'Windows PC';
+  if (userAgent.includes('Mac')) return 'Mac';
+  if (userAgent.includes('Linux')) return 'Linux PC';
+  if (userAgent.includes('Android')) return 'Android Device';
+  if (userAgent.includes('iPhone')) return 'iPhone';
+  if (userAgent.includes('iPad')) return 'iPad';
+  return 'Unknown Device';
+};
+
+const setSessionTimeout = (minutes: number) => {
+  const validMinutes = Math.max(5, Math.min(minutes, 1440)); // 5 minutes to 24 hours
+  persistence.update((current) => ({
+    ...current,
+    sessionTimeoutMinutes: validMinutes,
+  }));
+  update((state) => ({ ...state, sessionTimeoutMinutes: validMinutes }));
+};
+
+const configureSecurityQuestions = async (questions: SecurityQuestion[]) => {
+  const hashedQuestions = await Promise.all(
+    questions.map(async (q) => ({
+      question: q.question,
+      answerHash: await hashString(q.answerHash),
+    }))
+  );
+
+  persistence.update((current) => ({
+    ...current,
+    securityQuestions: hashedQuestions,
+  }));
+
+  update((state) => ({
+    ...state,
+    securityQuestionsConfigured: true,
+  }));
+};
+
+const removeTrustedDevice = (deviceId: string) => {
+  persistence.update((current) => ({
+    ...current,
+    trustedDevices: (current.trustedDevices ?? []).filter(d => d.id !== deviceId),
+  }));
+};
 
 const authPersistenceStore: Readable<AuthPersistence> = {
   subscribe: persistence.subscribe,
@@ -575,9 +917,15 @@ export const authStore = {
   logout,
   clearError,
   getPersistence: () => get(persistence),
+  calculatePasswordStrength,
+  setSessionTimeout,
+  loginWithSecurityQuestions,
+  configureSecurityQuestions,
+  removeTrustedDevice,
+  getTrustedDevices: () => get(persistence).trustedDevices ?? [],
   __resetForTests: resetForTests,
 };
 
 export { authPersistenceStore };
 
-export type { AuthState, AuthPersistence, PasswordPolicy };
+export type { AuthState, AuthPersistence, PasswordPolicy, TrustedDevice, SecurityQuestion };

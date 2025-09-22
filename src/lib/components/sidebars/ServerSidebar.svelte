@@ -24,41 +24,27 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { v4 as uuidv4 } from 'uuid';
-  import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator
-  } from "$lib/components/ui/dropdown-menu"
-  import { Button } from "$lib/components/ui/button"
+  import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "$lib/components/ui/dropdown-menu/index.js"
+  import { Button } from "$lib/components/ui/button/index.js"
   import {
     Collapsible,
     CollapsibleTrigger,
     CollapsibleContent
-  } from "$lib/components/ui/collapsible"
-  import { ScrollArea } from "$lib/components/ui/scroll-area"
-  import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter
-  } from "$lib/components/ui/dialog"
-  import { Label } from "$lib/components/ui/label"
-  import { Input } from "$lib/components/ui/input"
-  import { Switch } from "$lib/components/ui/switch"
+  } from "$lib/components/ui/collapsible/index.js"
+  import { ScrollArea } from "$lib/components/ui/scroll-area/index.js"
+  import { Dialog, DialogHeader, DialogContent, DialogTitle, DialogDescription, DialogFooter } from "$lib/components/ui/dialog/index.js"
+  import { Label } from "$lib/components/ui/label/index.js"
+  import { Input } from "$lib/components/ui/input/index.js"
+  import { Switch } from "$lib/components/ui/switch/index.js"
   import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger
-  } from "$lib/components/ui/tooltip"
-  import { Separator } from "$lib/components/ui/separator"
+  } from "$lib/components/ui/tooltip/index.js"
   
-  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
-  type ChannelSelectHandler = (serverId: string, channelId: string) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (value: string | URL) => void;
+  type ChannelSelectHandler = (serverId: string, channelId: string) => void;
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -550,7 +536,7 @@
   {#if server}
     <header class="relative h-[55px] border-b border-border/50 shadow-sm">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+        <DropdownMenuTrigger>
           <Button
             variant="ghost"
             class="w-full h-full flex items-center justify-between font-bold text-lg truncate px-4 py-2 pr-8 hover:bg-base-400/50"
@@ -778,7 +764,7 @@
             Private Channel
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
+                <TooltipTrigger>
                   <Button
                     variant="ghost"
                     size="icon"

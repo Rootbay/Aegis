@@ -3,12 +3,24 @@ import { get } from "svelte/store";
 import type { DeviceHandshakePayload } from "$lib/utils/security";
 
 let mockHandshake: DeviceHandshakePayload | null = null;
-let hashStringMock = vi.fn();
-let encryptWithSecretMock = vi.fn();
-let verifyTotpMock = vi.fn();
-const invokeMock = vi.fn();
-const initializeMock = vi.fn();
-const addToastMock = vi.fn();
+
+const hashStringMock = vi.fn<(value: string) => Promise<string>>();
+const encryptWithSecretMock = vi.fn<
+  (
+    secret: string,
+    plain: string,
+  ) => Promise<{ cipherText: string; iv: string; salt: string }>
+>();
+const verifyTotpMock = vi.fn<
+  (secret: string, token: string) => Promise<boolean>
+>();
+const invokeMock = vi.fn<(...args: unknown[]) => unknown>();
+const initializeMock = vi.fn<
+  (password: string, opts: { username: string }) => void
+>();
+const addToastMock = vi.fn<
+  (msg: string, variant: "success" | "error" | "info" | string) => void
+>();
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
@@ -16,14 +28,16 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("$lib/stores/userStore", () => ({
   userStore: {
-    initialize: initializeMock,
+    initialize: (...args: Parameters<typeof initializeMock>) =>
+      initializeMock(...args),
     reset: vi.fn(),
   },
 }));
 
 vi.mock("$lib/stores/ToastStore", () => ({
   toasts: {
-    addToast: addToastMock,
+    addToast: (...args: Parameters<typeof addToastMock>) =>
+      addToastMock(...args),
   },
 }));
 
@@ -41,52 +55,64 @@ vi.mock("$lib/stores/persistentStore", async () => {
   };
 });
 
-vi.mock("$lib/utils/security", () => {
-  hashStringMock = vi.fn(async (value: string) => `hash:${value}`);
-  encryptWithSecretMock = vi.fn(async (secret: string, plain: string) => ({
-    cipherText: `${secret}:${plain}`,
-    iv: "iv",
-    salt: "salt",
-  }));
-  verifyTotpMock = vi.fn(
-    async (_secret: string, token: string) => token === "123456",
-  );
-  return {
-    generateRecoveryPhrase: vi.fn((count: number) =>
-      Array.from({ length: count }, () => "word"),
-    ),
-    pickRecoveryConfirmationIndices: vi.fn(() => [0, 1, 2]),
-    normalizeRecoveryPhrase: (input: string | string[]) =>
-      Array.isArray(input) ? input.join(" ") : input,
-    derivePasswordKey: vi.fn(async () => "phrase-key"),
-    hashString: hashStringMock,
-    generateTotpSecret: vi.fn(() => "TOTPMOCKSECRET"),
-    buildTotpUri: vi.fn(() => "otpauth://mock"),
-    verifyTotp: verifyTotpMock,
-    encryptWithSecret: encryptWithSecretMock,
-    decryptWithSecret: vi.fn(async () => "decrypted"),
-    encodeDeviceHandshake: vi.fn(() => "encoded-handshake"),
-    decodeDeviceHandshake: vi.fn(() => mockHandshake),
-  };
-});
+vi.mock("$lib/utils/security", () => ({
+  generateRecoveryPhrase: (count: number) =>
+    Array.from({ length: count }, () => "word"),
+  pickRecoveryConfirmationIndices: () => [0, 1, 2],
+  normalizeRecoveryPhrase: (input: string | string[]) =>
+    Array.isArray(input) ? input.join(" ") : input,
+  derivePasswordKey: async () => "phrase-key",
+
+  hashString: (...args: Parameters<typeof hashStringMock>) =>
+    hashStringMock(...args),
+  encryptWithSecret: (
+    ...args: Parameters<typeof encryptWithSecretMock>
+  ) => encryptWithSecretMock(...args),
+  verifyTotp: (...args: Parameters<typeof verifyTotpMock>) =>
+    verifyTotpMock(...args),
+
+  decryptWithSecret: async () => "decrypted",
+  generateTotpSecret: () => "TOTPMOCKSECRET",
+  buildTotpUri: () => "otpauth://mock",
+  encodeDeviceHandshake: () => "encoded-handshake",
+  decodeDeviceHandshake: () => mockHandshake,
+}));
+
+type AuthModule = typeof import("$lib/features/auth/stores/authStore");
+
+let authStore: AuthModule["authStore"];
+let authPersistenceStore: AuthModule["authPersistenceStore"];
 
 describe("authStore device handshake", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockHandshake = null;
+
     initializeMock.mockReset();
     addToastMock.mockReset();
-    hashStringMock.mockClear();
-    encryptWithSecretMock.mockClear();
-    verifyTotpMock.mockClear();
+
+    hashStringMock.mockReset();
+    hashStringMock.mockImplementation(async (value: string) => `hash:${value}`);
+
+    encryptWithSecretMock.mockReset();
+    encryptWithSecretMock.mockImplementation(async (secret, plain) => ({
+      cipherText: `${secret}:${plain}`,
+      iv: "iv",
+      salt: "salt",
+    }));
+
+    verifyTotpMock.mockReset();
+    verifyTotpMock.mockImplementation(async (_secret, token) => token === "123456");
+
     invokeMock.mockReset();
-    invokeMock.mockImplementation(() => undefined);
+    invokeMock.mockImplementation(async () => undefined);
+
+    const mod: AuthModule = await import("$lib/features/auth/stores/authStore");
+    authStore = mod.authStore;
+    authPersistenceStore = mod.authPersistenceStore;
+    authStore.__resetForTests?.();
   });
 
-const { authStore, authPersistenceStore } = await import(
-      "$lib/features/auth/stores/authStore"
-    );
-    authStore.__resetForTests?.();
-
+  it("ingests and logs in via device handshake", async () => {
     mockHandshake = {
       version: 1,
       password: "SecurëPass💡",
@@ -116,14 +142,9 @@ const { authStore, authPersistenceStore } = await import(
     expect(state.pendingDeviceLogin).toBeNull();
     expect(state.requireTotpOnUnlock).toBe(true);
 
-    expect(initializeMock).toHaveBeenCalledWith("SecurëPass💡", {
-      username: "casey",
-    });
+    expect(initializeMock).toHaveBeenCalledWith("SecurëPass💡", { username: "casey" });
     expect(hashStringMock).toHaveBeenCalledWith("SecurëPass💡");
-    expect(encryptWithSecretMock).toHaveBeenCalledWith(
-      "SHAREDSECRET",
-      "SecurëPass💡",
-    );
+    expect(encryptWithSecretMock).toHaveBeenCalledWith("SHAREDSECRET", "SecurëPass💡");
     expect(verifyTotpMock).toHaveBeenCalledWith("SHAREDSECRET", "123456");
     expect(addToastMock).toHaveBeenCalledWith(
       "Device approved and authenticated.",
@@ -132,11 +153,6 @@ const { authStore, authPersistenceStore } = await import(
   });
 
   it("falls back to existing unlock 2FA preference when handshake omits the flag", async () => {
-    const { authStore, authPersistenceStore } = await import(
-      "$lib/stores/authStore"
-    );
-    authStore.__resetForTests?.();
-
     mockHandshake = {
       version: 1,
       password: "Another$ecret✓",
@@ -157,13 +173,8 @@ const { authStore, authPersistenceStore } = await import(
   });
 
   it("allows legacy ASCII unlock passwords during identity migration", async () => {
-    const { authStore } = await import("$lib/stores/authStore");
-    authStore.__resetForTests?.();
-
-    invokeMock.mockImplementation(async (command: string) => {
-      if (command === "is_identity_created") {
-        return true;
-      }
+    invokeMock.mockImplementation(async (cmd, _args) => {
+      if (cmd === "is_identity_created") return true;
       return undefined;
     });
 
@@ -174,10 +185,6 @@ const { authStore, authPersistenceStore } = await import(
 
     const state = get(authStore);
     expect(state.passwordPolicy).toBe("legacy_allowed");
-    expect(state.onboarding?.password).toBe("LegacyOnly1");
-  });
-});
-allowed");
     expect(state.onboarding?.password).toBe("LegacyOnly1");
   });
 });

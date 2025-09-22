@@ -20,7 +20,7 @@
   "license": "MIT",
   "dependencies": {
     "@humanspeak/svelte-virtual-list": "^0.3.2",
-    "@lucide/svelte": "^0.544.0",
+    "@lucide/svelte": "^0.515.0",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-opener": "^2.5.0",
     "@tauri-apps/plugin-store": "^2.4.0",
@@ -56,7 +56,7 @@
     "svelte": "^5.39.2",
     "svelte-check": "^4.3.1",
     "tailwind-merge": "^3.3.1",
-    "tailwind-variants": "^3.1.1",
+    "tailwind-variants": "^1.0.0",
     "tailwindcss": "^4.1.13",
     "tw-animate-css": "^1.3.8",
     "typescript": "~5.9.2",

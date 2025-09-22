@@ -5,8 +5,14 @@
   import { X, Search, Smile } from '@lucide/svelte';
   import { lastVisitedServerId } from '$lib/stores/navigationStore';
   import { get } from 'svelte/store';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Separator } from '$lib/components/ui/separator/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
+  import SettingsList from '$lib/features/settings/components/SettingsList.svelte';
+  import SearchResultsList from '$lib/features/settings/components/SearchResultsList.svelte';
 
-  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (value: string | URL) => void;
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -77,7 +83,6 @@
   });
 
   function navigateTo(href: string) {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve
     gotoUnsafe(href);
   }
 
@@ -99,49 +104,38 @@
 
 <div class="flex h-full min-h-0 text-white">
   <aside class="flex min-h-0 w-[36vw] flex-col bg-base-100 p-4 shadow-lg">
-    <div class="custom-scrollbar flex-1 overflow-y-auto py-[60px] px-2">
+    <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-muted py-[60px] px-2">
       <div class="ml-auto w-[238px] space-y-4">
         <div class="relative">
-          <input
-            type="text"
-            placeholder="Search"
-            class="w-full rounded-md border border-border bg-card px-3 py-[9px] text-foreground focus:outline-none focus:ring-2 focus:ring-base-400"
-            bind:value={searchQuery}
-          />
-          <button
-            class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors duration-200 hover:text-foreground"
-            onclick={() => {
-              searchQuery = '';
-            }}
+          <Input placeholder="Search" bind:value={searchQuery} class="pr-10" />
+          <Button
+            variant="ghost"
+            size="icon"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onclick={() => (searchQuery = '')}
             aria-label={searchQuery ? 'Clear search' : 'Search settings'}
-            type="button"
           >
             {#if searchQuery}
-              <X class="h-4 w-4" />
+              <X class="size-4" />
             {:else}
-              <Search class="h-4 w-4" />
+              <Search class="size-4" />
             {/if}
-          </button>
+          </Button>
         </div>
 
         {#if isSearching}
           <div class="space-y-3">
-            <h2 class="px-[10px] text-left text-[12px] font-bold uppercase text-muted-foreground">Search Results</h2>
+            <Label class="px-2 text-xs font-bold uppercase text-muted-foreground">
+              Search Results
+            </Label>
             {#if hasSearchResults}
-              <ul class="space-y-[2px]">
-                {#each filteredSearchResults as item (item.href)}
-                  <li>
-                    <button
-                      class="flex h-9 w-full cursor-pointer items-center justify-between rounded-md px-[10px] py-[6px] text-left text-sm transition-colors duration-200 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                      onclick={() => navigateTo(item.href)}
-                      type="button"
-                    >
-                      <span class="truncate">{item.label}</span>
-                      <span class="ml-3 text-[10px] uppercase text-muted-foreground">{sectionLabels[item.section]}</span>
-                    </button>
-                  </li>
-                {/each}
-              </ul>
+              <SearchResultsList
+                title="Search Results"
+                items={filteredSearchResults}
+                currentPath={$page.url.pathname}
+                sectionLabels={sectionLabels}
+                onNavigate={(href) => navigateTo(href)}
+              />
             {:else}
               <div class="flex flex-col items-center justify-center pt-10 text-muted-foreground">
                 <Smile class="mb-3 h-10 w-10" />
@@ -151,88 +145,46 @@
           </div>
         {:else}
           <div class="space-y-3">
-            <div>
-              <h2 class="px-[10px] text-left text-[12px] font-bold uppercase text-muted-foreground">User Settings</h2>
-              <ul>
-                {#each filteredUserSettingsItems as item (item.href)}
-                  <li>
-                    <button
-                      class="flex h-9 w-full cursor-pointer items-center rounded-md px-[10px] py-[6px] text-left transition-colors duration-200 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                      onclick={() => navigateTo(item.href)}
-                      type="button"
-                    >
-                      {item.label}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
-
-            <div class="mx-[10px] h-px bg-muted"></div>
-
-            <div>
-              <h2 class="px-[10px] text-left text-[12px] font-bold uppercase text-muted-foreground">App Settings</h2>
-              <ul>
-                {#each filteredAppSettingsItems as item (item.href)}
-                  <li>
-                    <button
-                      class="flex h-9 w-full cursor-pointer items-center rounded-md px-[10px] py-[6px] text-left transition-colors duration-200 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                      onclick={() => navigateTo(item.href)}
-                      type="button"
-                    >
-                      {item.label}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
-
-            <div class="mx-[10px] h-px bg-muted"></div>
-
-            <div>
-              <h2 class="px-[10px] text-left text-[12px] font-bold uppercase text-muted-foreground">What's New?</h2>
-              <ul>
-                {#each filteredInfoSettingsItems as item (item.href)}
-                  <li>
-                    <button
-                      class="flex h-9 w-full cursor-pointer items-center rounded-md px-[10px] py-[6px] text-left transition-colors duration-200 {$page.url.pathname.startsWith(item.href) ? 'bg-muted hover:bg-base-400' : 'hover:bg-muted'}"
-                      onclick={() => navigateTo(item.href)}
-                      type="button"
-                    >
-                      {item.label}
-                    </button>
-                  </li>
-                {/each}
-              </ul>
-            </div>
-
-            <div class="mx-[10px] h-px bg-muted"></div>
-
-            <button
-              class="flex h-9 w-full cursor-pointer items-center rounded-md px-[10px] py-[6px] text-left text-destructive transition-colors duration-200 hover:bg-muted"
-              onclick={() => console.log('Log Out clicked')}
-              type="button"
+            <SettingsList
+              title="User Settings"
+              items={filteredUserSettingsItems}
+              currentPath={$page.url.pathname}
+              onNavigate={(href) => navigateTo(href)}
+            />
+            <Separator class="my-2" />
+            <SettingsList
+              title="App Settings"
+              items={filteredAppSettingsItems}
+              currentPath={$page.url.pathname}
+              onNavigate={(href) => navigateTo(href)}
+            />
+            <Separator class="my-2" />
+            <SettingsList
+              title="What's New?"
+              items={filteredInfoSettingsItems}
+              currentPath={$page.url.pathname}
+              onNavigate={(href) => navigateTo(href)}
+            />
+            <Separator class="my-2" />
+            <Button
+              variant="destructive"
+              class="w-full justify-start"
+              onclick={() => console.log("Log Out clicked")}
             >
               Log Out
-            </button>
-
-            <div class="mx-[10px] h-px bg-muted"></div>
-
-            <button
-              class="w-full cursor-pointer px-[10px] text-left text-[12px] font-normal focus:outline-none focus:ring-2 focus:ring-ring focus:ring-opacity-50"
+            </Button>
+            <Separator class="my-2" />
+            <Button
+              variant="ghost"
+              class="w-full flex-col items-start font-mono text-xs"
               onclick={copyAppInfo}
-              onkeydown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  copyAppInfo();
-                }
-              }}
-              aria-label="Copy app info to clipboard"
-              type="button"
             >
-              <p class="my-0 py-0">Tauri: 2</p>
-              <p class="my-0 py-0">Svelte: 5.0.0</p>
-              <p class="my-0 py-0">TypeScript: 5.6.2</p>
-            </button>
+              Tauri: 2
+              <br />
+              Svelte: 5.0.0
+              <br />
+              TypeScript: 5.6.2
+            </Button>
           </div>
         {/if}
       </div>
@@ -240,38 +192,16 @@
   </aside>
   <main class="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
     <div class="relative mx-auto w-full max-w-[740px] p-[60px_40px_80px]">
-      <button
-        class="absolute right-0 top-0 z-50 p-4 text-muted-foreground transition-colors duration-200 hover:text-foreground"
+      <Button
+        variant="ghost"
+        size="icon"
+        class="absolute right-0 top-0 z-50 text-muted-foreground hover:text-foreground"
         onclick={closeSettings}
         aria-label="Close settings"
-        type="button"
       >
-        <X class="h-6 w-6" />
-      </button>
+        <X class="size-6" />
+      </Button>
       {@render children()}
     </div>
   </main>
 </div>
-
-<style lang="postcss">
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: theme('colors.base.300');
-    border-radius: 4px;
-  }
-
-  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: theme('colors.base.300');
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: theme('colors.base.400');
-  }
-</style>

@@ -35,7 +35,6 @@
   import DirectMessageList from '$lib/components/lists/DirectMessageList.svelte';
   import { UserRoundPlus } from '@lucide/svelte';
   import ServerManagementModal from '$lib/components/modals/ServerManagementModal.svelte';
-  import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
   import ProfileModal from '$lib/components/modals/ProfileModal.svelte';
   import { ChatView } from '$features/chat';
   type ProfileModalSource = User & { pfpUrl?: string; bannerUrl?: string; isOnline?: boolean };
@@ -310,7 +309,6 @@
     get currentChat() { return currentChat },
     openModal,
     closeModal,
-    openUserCardModal,
     openDetailedProfileModal,
     messagesByChatId
   };
@@ -403,7 +401,10 @@
       {:else if $serverStore.activeServerId}
         <div class="flex flex-1">
           <ChatView chat={currentChat} />
-          <MemberSidebar members={currentChat?.type === 'channel' ? currentChat.members : []} openUserCardModal={openUserCardModal} />
+          <MemberSidebar
+            members={currentChat?.type === "channel" ? currentChat.members : []}
+            {openDetailedProfileModal}
+          />
         </div>
       {:else}
         {@render children()}
@@ -418,10 +419,6 @@
     onclose={closeModal}
     onserverCreated={(server) => serverStore.addServer(server)}
   />
-{/if}
-
-{#if activeModal === 'userCard'}
-  <UserCardModal {...modalProps} close={closeModal} openDetailedProfileModal={openDetailedProfileModal} />
 {/if}
 
 {#if activeModal === 'detailedProfile'}
