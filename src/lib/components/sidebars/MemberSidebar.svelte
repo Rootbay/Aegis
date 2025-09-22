@@ -3,6 +3,7 @@
   import type { User } from '$lib/features/auth/models/User';
   import type { Role } from '$lib/features/servers/models/Role';
   import { serverStore } from '$lib/features/servers/stores/serverStore';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { ScrollArea } from '$lib/components/ui/scroll-area';
   import { Separator } from '$lib/components/ui/separator';
   import { Avatar, AvatarImage, AvatarFallback } from '$lib/components/ui/avatar';
@@ -21,6 +22,9 @@
   import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
 
   type MemberWithRoles = User & Record<string, unknown>;
+
+  type OpenUserCardModalHandler = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
+  type OpenDetailedProfileHandler = (...args: [User]) => void; // eslint-disable-line no-unused-vars
 
   interface MemberGroup {
     id: string;
@@ -42,8 +46,8 @@
   }: {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
-    openUserCardModal?: (user: User, x: number, y: number, isServerMemberContext: boolean) => void;
-    openDetailedProfileModal?: (user: User) => void;
+    openUserCardModal?: OpenUserCardModalHandler;
+    openDetailedProfileModal?: OpenDetailedProfileHandler;
     roles?: Role[];
   } = $props();
 
@@ -64,7 +68,7 @@
 
   function extractMemberRoleValues(member: MemberWithRoles): string[] {
     const source = member as Record<string, unknown>;
-    const values = new Set<string>();
+    const values = new SvelteSet<string>();
 
     const pushValue = (value: unknown) => {
       if (typeof value === 'string' && value.trim().length > 0) {
@@ -97,7 +101,7 @@
     pushValue(source.primaryRoleId);
     pushValue(source.primary_role_id);
 
-    return Array.from(values);
+    return Array.from(values.values());
   }
 
   function groupMembersByRole(memberList: MemberWithRoles[], roleList: Role[]): MemberGroup[] {
@@ -105,10 +109,16 @@
       return [];
     }
 
-    const groups = new Map<string, MemberGroup>();
-    const roleById = new Map(roleList.map((role) => [role.id, role]));
-    const roleByName = new Map(roleList.map((role) => [role.name.toLowerCase(), role]));
-    const orderByGroupId = new Map<string, number>();
+    const groups = new SvelteMap<string, MemberGroup>();
+    const roleById = new SvelteMap<string, Role>();
+    for (const role of roleList) {
+      roleById.set(role.id, role);
+    }
+    const roleByName = new SvelteMap<string, Role>();
+    for (const role of roleList) {
+      roleByName.set(role.name.toLowerCase(), role);
+    }
+    const orderByGroupId = new SvelteMap<string, number>();
     roleList.forEach((role, index) => {
       orderByGroupId.set(`role:${role.id}`, index);
     });
@@ -238,7 +248,7 @@
                           <Popover.Trigger>
                             <SidebarMenuButton
                               class="flex items-center gap-3"
-                              on:dblclick={(event) => openUserCardModal(member, event.clientX, event.clientY, true)}
+                              ondblclick={(event) => openUserCardModal?.(member, event.clientX, event.clientY, true)}
                             >
                               <div class="relative">
                                 <Avatar class="size-8">

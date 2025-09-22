@@ -1,8 +1,13 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
+  type ContentProps = Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
+    children?: Snippet;
+  };
+
+  let { class: className, children, ...rest }: ContentProps = $props();
 </script>
 
 <div
@@ -10,5 +15,5 @@
   class={cn('flex-1 overflow-hidden', className)}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </div>

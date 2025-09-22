@@ -23,7 +23,8 @@
 
   let open = $state(true);
   let searchTerm = $state('');
-  let selectedUserIds = new SvelteSet<string>();
+  // eslint-disable-next-line svelte/no-unnecessary-state-wrap
+  let selectedUserIds = $state(new SvelteSet<string>());
 
   let filteredUsers = $derived(
     allUsers.filter(user =>
@@ -40,12 +41,13 @@
   );
 
   function toggleUserSelection(userId: string) {
-    if (selectedUserIds.has(userId)) {
-      selectedUserIds.delete(userId);
+    const next = new SvelteSet(selectedUserIds);
+    if (next.has(userId)) {
+      next.delete(userId);
     } else {
-      selectedUserIds.add(userId);
+      next.add(userId);
     }
-    selectedUserIds = new SvelteSet<string>(selectedUserIds);
+    selectedUserIds = next;
   }
 
   function createGroup() {

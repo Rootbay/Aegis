@@ -12,10 +12,6 @@
   import SettingsList from '$lib/features/settings/components/SettingsList.svelte';
   import SearchResultsList from '$lib/features/settings/components/SearchResultsList.svelte';
 
-  type NavigationFn = (value: string | URL) => void;
-
-  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
-
   type SettingsSection = 'user' | 'app' | 'info';
 
   type SettingsItem = {
@@ -62,6 +58,10 @@
     info: "What's New?"
   };
 
+  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
+
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
   const matchesQuery = (item: SettingsItem, query: string) => {
     if (!query) return true;
     if (item.label.toLowerCase().includes(query)) return true;
@@ -83,6 +83,7 @@
   });
 
   function navigateTo(href: string) {
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
     gotoUnsafe(href);
   }
 

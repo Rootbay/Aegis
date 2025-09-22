@@ -22,9 +22,11 @@
     X,
   } from "@lucide/svelte";
 
+  type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
+
   let { chat, onOpenDetailedProfile } = $props<{
     chat: Chat | null;
-    onOpenDetailedProfile: (user: User) => void;
+    onOpenDetailedProfile: OpenProfileHandler;
   }>();
 
   const context = getContext<CreateGroupContext | undefined>(CREATE_GROUP_CONTEXT_KEY);

@@ -175,7 +175,7 @@ describe("authStore device handshake", () => {
   });
 
   it("allows legacy ASCII unlock passwords during identity migration", async () => {
-    invokeMock.mockImplementation(async (cmd, _args) => {
+    invokeMock.mockImplementation(async (cmd) => {
       if (cmd === "is_identity_created") return true;
       return undefined;
     });

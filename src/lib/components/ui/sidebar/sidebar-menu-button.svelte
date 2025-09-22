@@ -1,14 +1,16 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
-  import type { ButtonHTMLAttributes } from 'svelte/elements';
+  import type { Snippet } from 'svelte';
+  import type { HTMLAttributes } from 'svelte/elements';
 
-  type SidebarMenuButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-    active?: boolean;
+  type SidebarMenuButtonProps = Omit<HTMLAttributes<HTMLButtonElement>, 'children'> & {    active?: boolean;
+    children?: Snippet;
   };
 
   let {
     class: className,
     active = false,
+    children,
     ...rest
   }: SidebarMenuButtonProps = $props();
 </script>
@@ -24,5 +26,5 @@
   )}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </button>

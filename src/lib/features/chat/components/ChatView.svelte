@@ -459,8 +459,12 @@
                 {#if msg.attachments && msg.attachments.length > 0}
                   <div class="mt-2 space-y-2">
                     {#each msg.attachments as attachment, i (i)}
-                      {#if attachment.type.startsWith('image/')}
-                        <button onclick={() => openLightbox(attachment.url)} class="max-w-xs rounded-lg overflow-hidden cursor-pointer" oncontextmenu={(e) => handleMessageContextMenu(e, msg)}>
+                      {#if attachment.type.startsWith('image/') && attachment.url}
+                        <button
+                          onclick={() => attachment.url && openLightbox(attachment.url)}
+                          class="max-w-xs rounded-lg overflow-hidden cursor-pointer"
+                          oncontextmenu={(event) => handleMessageContextMenu(event, msg)}
+                        >
                           <img src={attachment.url} alt="attachment" class="max-h-64"/>
                         </button>
                       {:else}

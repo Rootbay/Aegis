@@ -9,6 +9,8 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Pencil } from '@lucide/svelte';
 
+  type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
+
   let {
     profileUser,
     openDetailedProfileModal,
@@ -16,7 +18,7 @@
     close,
   }: {
     profileUser: User;
-    openDetailedProfileModal: (user: User) => void;
+    openDetailedProfileModal: OpenDetailedProfileHandler;
     isServerMemberContext?: boolean;
     close?: () => void;
   } = $props();

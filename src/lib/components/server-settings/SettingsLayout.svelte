@@ -114,6 +114,14 @@
   const serverAwareComponents = new Set(['Overview', 'Moderation', 'Privacy']);
   const isSeparator = (item: SidebarItem): item is SidebarSeparator => item.type === 'separator';
 
+  function getOptionLabel(options: Array<{ value: string; label: string }>, value: unknown): string {
+    if (!Array.isArray(options)) {
+      return '';
+    }
+    const match = options.find((option) => option.value === value);
+    return match?.label ?? '';
+  }
+
   const componentMap: { [key: string]: any } = {
     RolesManagement,
     ChannelManagement,
@@ -375,7 +383,9 @@
                       }
                     >
                       <SelectTrigger class="w-full">
-                        <SelectValue placeholder="Choose…" />
+                        <span data-slot="select-value" class="flex-1 text-left">
+                          {getOptionLabel(setting.options, currentData[setting.property]) || 'Select an option'}
+                        </span>
                       </SelectTrigger>
                       <SelectContent>
                         {#each setting.options as option (option.value)}

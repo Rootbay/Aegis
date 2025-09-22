@@ -1,8 +1,13 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
+  type MenuItemProps = Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
+    children?: Snippet;
+  };
+
+  let { class: className, children, ...rest }: MenuItemProps = $props();
 </script>
 
 <div
@@ -10,5 +15,5 @@
   class={cn('relative', className)}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </div>

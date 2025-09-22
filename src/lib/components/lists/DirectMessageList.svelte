@@ -30,6 +30,8 @@
 		AvatarFallback,
 	} from "$lib/components/ui/avatar";
 
+	type SelectFriendHandler = (...args: [string | null]) => void; // eslint-disable-line no-unused-vars
+
 	let {
 		friends = [],
 		activeFriendId = null,
@@ -38,7 +40,7 @@
 	}: {
 		friends?: Friend[];
 		activeFriendId?: string | null;
-		onSelect: (id: string | null) => void;
+		onSelect: SelectFriendHandler;
 		onCreateGroupClick: () => void;
 	} = $props();
 

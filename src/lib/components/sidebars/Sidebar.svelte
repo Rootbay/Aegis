@@ -2,6 +2,7 @@
 	import { invoke } from "@tauri-apps/api/core";
 	import { Home, Plus, Settings } from "@lucide/svelte";
 	import { goto } from "$app/navigation";
+	import { SvelteURLSearchParams } from "svelte/reactivity";
 	import { page } from "$app/stores";
 	import { userStore } from "$lib/stores/userStore";
 	import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -23,11 +24,12 @@
 	import { cn } from "$lib/utils";
   import type { User } from "$lib/features/auth/models/User";
 
-	type NavigationFn = (value: string | URL) => void;
-
-	let { onCreateJoinServerClick, openDetailedProfileModal }: { onCreateJoinServerClick: () => void; openDetailedProfileModal: (user: User) => void; } = $props();
+	type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
+	let { onCreateJoinServerClick, openDetailedProfileModal }: { onCreateJoinServerClick: () => void; openDetailedProfileModal: OpenProfileHandler; } = $props();
 	const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
 	let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
+
+	type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
 	const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -56,16 +58,17 @@
 	}
 
 	function gotoResolved(path: string) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		gotoUnsafe(path);
 	}
 
 	function gotoServerSettings(serverId: string, tab?: string) {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (tab) params.set("tab", tab);
 
 		const query = params.toString();
 		const href = query ? `/channels/${serverId}/settings?${query}` : `/channels/${serverId}/settings`;
-		gotoUnsafe(href);
+		gotoResolved(href);
 	}
 
 	function buildInviteLink(serverId: string) {
@@ -91,18 +94,18 @@
 	}
 
 	function gotoWithTab(pathname: string, tab: string) {
-		const params = new URLSearchParams($page.url.search);
+		const params = new SvelteURLSearchParams($page.url.search);
 		params.set("tab", tab);
 		const query = params.toString();
 		const href = query ? `${pathname}?${query}` : pathname;
-		gotoUnsafe(href);
+		gotoResolved(href);
 	}
 
 	function handleServerClick(server: Server) {
 		lastVisitedServerId.set(server.id);
 		serverStore.setActiveServer(server.id);
 		const targetPath = `/channels/${server.id}`;
-		if ($page.url.pathname !== targetPath) gotoUnsafe(targetPath);
+		if ($page.url.pathname !== targetPath) gotoResolved(targetPath);
 	}
 
 	async function handleServerAction({ action, server }: { action: string; server: Server }) {
@@ -210,7 +213,7 @@
 <Sidebar
 	side="left"
 	variant="solid"
-	class="w-16 min-w-[64px] items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
+	class="flex flex-col w-16 min-w-[64px] items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
 	aria-label="Server navigation"
 >
 	<TooltipProvider>
@@ -221,13 +224,13 @@
 						size="icon"
 						variant="secondary"
 						aria-label="Home"
-						class="rounded-xl"
+						class="rounded-xl cursor-pointer"
 						onclick={() => {
 							serverStore.setActiveServer(null);
 							if ($friendStore.friends.length > 0) {
 								gotoWithTab("/", "All");
 							} else {
-								gotoUnsafe("/friends/add");
+								gotoResolved("/friends/add");
 							}
 						}}
 					>
@@ -242,7 +245,16 @@
 			<ScrollArea class="h-full w-full">
 				<SidebarMenu class="items-center gap-2 px-2">
 					{#each $serverStore.servers as server (server.id)}
-						<SidebarMenuItem class="flex justify-center">
+						<SidebarMenuItem class="group relative flex w-full justify-center pl-2">
+							<span
+								aria-hidden="true"
+								class={cn(
+									"pointer-events-none absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-full bg-primary transition-all duration-200 ease-out",
+									$serverStore.activeServerId === server.id
+										? "w-1.5 opacity-100"
+										: "w-0 opacity-0 group-hover:w-1 group-hover:opacity-100"
+								)}
+							></span>
 							<ServerContextMenu
 								server={server}
 								muted={mutedServerIds.has(server.id)}
@@ -253,7 +265,7 @@
 									size="icon"
 									variant="outline"
 									class={cn(
-										"size-10 p-0 rounded-full overflow-hidden border-2",
+										"size-10 p-0 rounded-full overflow-hidden border-2 cursor-pointer",
 										$serverStore.activeServerId === server.id ? "border-primary" : "border-border",
 										mutedServerIds.has(server.id) && "opacity-60 grayscale"
 									)}
@@ -286,7 +298,7 @@
 									size="icon"
 									variant="ghost"
 									aria-label="Create or Join Server"
-									class="rounded-xl"
+								class="rounded-xl cursor-pointer"
 									onclick={onCreateJoinServerClick}
 								>
 									<Plus class="size-4" />
@@ -301,16 +313,16 @@
 
 		<Separator class="w-10" />
 
-		<SidebarFooter class="w-full border-0 px-0 pt-0">
+		<SidebarFooter class="w-full border-0 px-0 pt-0 p-0">
 			<div class="flex flex-col items-center gap-3">
 				<Tooltip>
 					<TooltipTrigger>
 						<Button
 							size="icon"
-							variant="ghost"
-							class="rounded-xl"
+						variant="ghost"
+						class="rounded-xl cursor-pointer"
 							aria-label="Settings"
-							onclick={() => gotoUnsafe("/settings")}
+							onclick={() => gotoResolved("/settings")}
 						>
 							<Settings class="size-4" />
 						</Button>
@@ -323,7 +335,7 @@
 						<Button
 							variant="outline"
 							size="icon"
-							class="size-10 p-0 rounded-full overflow-hidden"
+							class="size-10 p-0 rounded-full overflow-hidden cursor-pointer"
 							aria-label="Open Profile"
 						>
 							<Avatar class="size-10">

@@ -1,8 +1,13 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
+  type MenuProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
+    children?: Snippet;
+  };
+
+  let { class: className, children, ...rest }: MenuProps = $props();
 </script>
 
 <nav
@@ -10,5 +15,5 @@
   class={cn('flex flex-col gap-1', className)}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </nav>

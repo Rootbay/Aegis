@@ -1,8 +1,13 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
+  type GroupContentProps = Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
+    children?: Snippet;
+  };
+
+  let { class: className, children, ...rest }: GroupContentProps = $props();
 </script>
 
 <div
@@ -10,5 +15,5 @@
   class={cn('px-2 pb-2', className)}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </div>

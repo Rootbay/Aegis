@@ -5,7 +5,7 @@
   
     let sessionTimeoutMinutes = $state($authPersistenceStore.sessionTimeoutMinutes ?? 60);
     let requireTotpOnUnlock = $state($authPersistenceStore.requireTotpOnUnlock ?? false);
-    let trustedDevices = $state($authStore.getTrustedDevices());
+    let trustedDevices = $state(authStore.getTrustedDevices());
   
     function updateSessionTimeout() {
       authStore.setSessionTimeout(sessionTimeoutMinutes);
@@ -19,7 +19,7 @@
   
     function removeTrustedDevice(deviceId: string) {
       authStore.removeTrustedDevice(deviceId);
-      trustedDevices = $authStore.getTrustedDevices();
+      trustedDevices = authStore.getTrustedDevices();
       toasts.addToast('Trusted device removed.', 'success');
     }
   

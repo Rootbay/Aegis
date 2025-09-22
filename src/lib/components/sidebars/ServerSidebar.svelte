@@ -15,7 +15,6 @@
     Settings,
     ChevronDown,
     Hash,
-    X,
     CircleX,
     Mic,
     Info
@@ -26,6 +25,7 @@
   import { v4 as uuidv4 } from 'uuid';
   import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "$lib/components/ui/dropdown-menu/index.js"
   import { Button } from "$lib/components/ui/button/index.js"
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     Collapsible,
     CollapsibleTrigger,
@@ -44,8 +44,8 @@
     TooltipTrigger
   } from "$lib/components/ui/tooltip/index.js"
   
-  type NavigationFn = (value: string | URL) => void;
-  type ChannelSelectHandler = (serverId: string, channelId: string) => void;
+  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
+  type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -57,9 +57,6 @@
   let newChannelName = $state('');
   let newChannelType = $state<'text' | 'voice'>('text');
   let newChannelPrivate = $state(false);
-
-  let showDropdown = $state(false);
-  let dropdownElement: HTMLElement | undefined = $state();
 
   let showCategoryContextMenu = $state(false);
   let contextMenuX = $state(0);
@@ -77,14 +74,7 @@
 
   let textChannelsCollapsed = $state(false);
   let hideMutedChannels = $state(false);
-  let textChannelsContainer: HTMLElement | undefined = $state();
-  let textChannelsHeight = $state('0px');
-
-  function updateTextChannelsHeight() {
-    if (!textChannelsContainer) return;
-    textChannelsHeight = `${textChannelsContainer.scrollHeight}px`;
-  }
-  let mutedChannelIds = $state<Set<string>>(new Set());
+  let mutedChannelIds = new SvelteSet<string>();
 
   let isResizing = $state(false);
   let rafId: number | null = $state(null);
@@ -96,7 +86,7 @@
 
   function gotoResolved(path: string) {
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-	  gotoUnsafe(path);
+    gotoUnsafe(path);
   }
 
   function slugifyChannelName(name: string) {
@@ -128,19 +118,7 @@
     window.removeEventListener('mouseup', stopResize);
   }
 
-  function toggleDropdown() {
-    showDropdown = !showDropdown;
-  }
-
-  function handleClickOutside(event: MouseEvent) {
-    if (dropdownElement && !dropdownElement.contains(event.target as Node)) {
-      showDropdown = false;
-    }
-  }
-
   onMount(() => {
-    window.addEventListener('click', handleClickOutside);
-
     const handleGlobalKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeAllContextMenus();
     };
@@ -159,9 +137,6 @@
 
     mutedChannelIds = loadMutedChannels();
 
-    if (textChannelsContainer) {
-      updateTextChannelsHeight();
-    }
 
     return () => {
       window.removeEventListener('keydown', handleGlobalKeydown);
@@ -170,13 +145,11 @@
   });
 
   onDestroy(() => {
-    window.removeEventListener('click', handleClickOutside);
     if (rafId) cancelAnimationFrame(rafId);
   });
 
   function handleServerSettingsClick() {
     gotoResolved(`/channels/${server.id}/settings`);
-    showDropdown = false;
   }
 
   function handleInvitePeople() {
@@ -187,27 +160,22 @@
     navigator.clipboard.writeText(link)
       .then(() => toasts.addToast('Invite link copied.', 'success'))
       .catch(() => toasts.addToast('Failed to copy invite link.', 'error'));
-    showDropdown = false;
   }
 
   function handleCreateChannelClick() {
     showCreateChannelModal = true;
-    showDropdown = false;
   }
 
   function handleCreateCategory() {
     toasts.addToast('Create Category not yet implemented.', 'info');
-    showDropdown = false;
   }
 
   function handleCreateEvent() {
     toasts.addToast('Create Event not yet implemented.', 'info');
-    showDropdown = false;
   }
 
   function handleNotificationSettings() {
     gotoResolved('/settings/notifications');
-    showDropdown = false;
   }
 
   function closeAllContextMenus() {
@@ -235,7 +203,6 @@
         toasts.addToast('Failed to leave server. Please try again.', 'error');
       }
     }
-    showDropdown = false;
   }
 
   async function createChannel() {
@@ -331,13 +298,13 @@
   }
 
   const MUTED_CHANNELS_KEY = 'mutedChannels';
-  function loadMutedChannels(): Set<string> {
+  function loadMutedChannels(): SvelteSet<string> {
     try {
       const raw = localStorage.getItem(MUTED_CHANNELS_KEY);
-      if (!raw) return new Set();
-      return new Set(JSON.parse(raw));
+      if (!raw) return new SvelteSet();
+      return new SvelteSet(JSON.parse(raw));
     } catch {
-      return new Set();
+      return new SvelteSet();
     }
   }
   function saveMutedChannels(setVals: Set<string>) {
@@ -432,7 +399,7 @@
             toasts.addToast('Channel muted (local).', 'info');
           }
           saveMutedChannels(muted);
-          mutedChannelIds = new Set(muted);
+          mutedChannelIds = new SvelteSet(muted);
           break;
         }
         case 'hide_names': {
@@ -490,11 +457,6 @@
         }
         hideMutedChannels = next;
         toasts.addToast(`${next ? 'Hiding' : 'Showing'} muted channels (local).`, 'info');
-        if (textChannelsCollapsed) {
-          textChannelsHeight = '0px';
-        } else {
-          updateTextChannelsHeight();
-        }
         break;
       }
       default:
@@ -518,13 +480,6 @@
     gotoResolved(`/channels/${server.id}/settings?tab=channels`);
   }
 
-  $effect(() => {
-    const visibleChannels = (server?.channels ?? []).filter((c: Channel) => c.channel_type === 'text' && (!hideMutedChannels || !mutedChannelIds.has(c.id)));
-    void visibleChannels;
-    if (!textChannelsCollapsed) {
-      queueMicrotask(() => updateTextChannelsHeight());
-    }
-  });
 </script>
 
 <Sidebar
@@ -585,11 +540,12 @@
 
     <SidebarContent class="flex">
       <ScrollArea class="h-full w-full px-2">
-        <Collapsible open={!textChannelsCollapsed} onOpenChange={(e) => {
-          textChannelsCollapsed = !e.detail
-          if (e.detail) updateTextChannelsHeight()
-          else textChannelsHeight = "0px"
-        }}>
+        <Collapsible
+          open={!textChannelsCollapsed}
+          onOpenChange={(value) => {
+            textChannelsCollapsed = !value;
+          }}
+        >
           <div class="flex justify-between items-center py-1 mt-4">
             <CollapsibleTrigger class="flex items-center group cursor-pointer">
               <h3
@@ -703,7 +659,7 @@
   />
 {/if}
 
-<Dialog open={showCreateChannelModal} onOpenChange={(e) => (showCreateChannelModal = e.detail)}>
+<Dialog open={showCreateChannelModal} onOpenChange={(value) => (showCreateChannelModal = value)}>
   <DialogContent>
     <DialogHeader>
       <DialogTitle>Create Channel</DialogTitle>

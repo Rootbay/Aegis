@@ -82,6 +82,17 @@ function base32Encode(bytes: Uint8Array): string {
   return output;
 }
 
+function toArrayBuffer(view: Uint8Array): ArrayBuffer {
+  const { buffer, byteOffset, byteLength } = view;
+  if (buffer instanceof ArrayBuffer) {
+    if (byteOffset === 0 && byteLength === buffer.byteLength) {
+      return buffer;
+    }
+    return buffer.slice(byteOffset, byteOffset + byteLength);
+  }
+  return new Uint8Array(view).buffer;
+}
+
 function base32Decode(value: string): Uint8Array {
   let bits = 0;
   let current = 0;
@@ -212,7 +223,7 @@ export async function generateTotpCode(
   const keyData = base32Decode(cleanSecret);
   const key = await webCrypto.subtle.importKey(
     "raw",
-    keyData,
+    toArrayBuffer(keyData),
     { name: "HMAC", hash: "SHA-1" },
     false,
     ["sign"],
@@ -263,7 +274,7 @@ async function deriveAesKeyFromSecret(
   return webCrypto.subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt,
+      salt: toArrayBuffer(salt),
       iterations: 100_000,
       hash: "SHA-256",
     },

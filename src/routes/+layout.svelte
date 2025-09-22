@@ -6,10 +6,11 @@
   import '../app.css';
   import { theme } from '$lib/stores/theme';
   import { setContext, onMount, onDestroy, untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
 
-  type NavigationFn = (value: string | URL) => void;
+  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -41,10 +42,13 @@
 
   type ProfileModalSource = User & { pfpUrl?: string; bannerUrl?: string; isOnline?: boolean };
 
+  type MemberWithRoles = User & Record<string, unknown>;
+
   let { children } = $props();
 
+  const initialAuthState = get(authStore);
   const { subscribe } = userStore;
-  let authState = $state<AuthState>({ status: 'checking', loading: true, error: null, onboarding: null, pendingDeviceLogin: null, requireTotpOnUnlock: false, passwordPolicy: 'unicode_required' });
+  let authState = $state<AuthState>(initialAuthState);
 
   function navigateToUrl(url: URL) {
     const target = `${url.pathname}${url.search}`;
@@ -311,6 +315,7 @@
     get currentChat() { return currentChat },
     openModal,
     closeModal,
+    openUserCardModal,
     openDetailedProfileModal,
     messagesByChatId
   };
@@ -355,7 +360,7 @@
     <InitialSetup />
   {:else}
     {#if !isAnySettingsPage}
-      <Sidebar onProfileClick={(x: number, y: number) => { if (currentUser) openUserCardModal(currentUser, x, y, false); }} onCreateJoinServerClick={() => openModal('serverManagement')} />
+      <Sidebar onCreateJoinServerClick={() => openModal('serverManagement')} openDetailedProfileModal={openDetailedProfileModal} />
     {/if}
     {#if !isAnySettingsPage}
       {#if $serverStore.activeServerId}
@@ -413,8 +418,8 @@
             </div>
 
             <MemberSidebar
-              members={currentChat?.type === "channel" ? currentChat.members : []}
-              onOpenDetailedProfile={openDetailedProfileModal}
+              members={currentChat?.type === "channel" ? (currentChat.members as MemberWithRoles[]) : []}
+              openDetailedProfileModal={openDetailedProfileModal}
             />
           </div>
         </div>

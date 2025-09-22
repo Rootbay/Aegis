@@ -4,6 +4,17 @@
   import { v4 as uuidv4 } from 'uuid';
   import { userStore } from '$lib/stores/userStore';
   import type { Server } from '$lib/features/servers/models/Server';
+  import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogClose
+  } from '$lib/components/ui/dialog';
+  import { Button } from '$lib/components/ui/button/index.js';
+  import { Input } from '$lib/components/ui/input/index.js';
+  import { Label } from '$lib/components/ui/label/index.js';
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 
@@ -23,14 +34,25 @@
 
   let newServerName = $state('');
   let joinServerId = $state('');
+  let wasOpen = $state(show);
+
+  let trimmedNewServerName = $derived(newServerName.trim());
+  let trimmedJoinServerId = $derived(joinServerId.trim());
 
   function closeModal() {
     show = false;
-    onclose?.();
   }
 
+  $effect(() => {
+    if (!show && wasOpen) {
+      onclose?.();
+    }
+
+    wasOpen = show;
+  });
+
   async function handleCreateServer() {
-    if (!newServerName.trim()) return;
+    if (!trimmedNewServerName) return;
     if (!$userStore.me) {
       console.error('User not loaded, cannot create server.');
       return;
@@ -38,7 +60,7 @@
 
     const newServer: Server = {
       id: uuidv4(),
-      name: newServerName,
+      name: trimmedNewServerName,
       owner_id: $userStore.me.id,
       created_at: new Date().toISOString(),
       channels: [],
@@ -58,68 +80,91 @@
   }
 
   async function handleJoinServer() {
-    const trimmedServerId = joinServerId.trim();
-    if (!trimmedServerId) return;
+    if (!trimmedJoinServerId) return;
     if (!$userStore.me) {
       console.error('User not loaded, cannot join server.');
       return;
     }
 
     try {
-      await invoke('send_server_invite', { server_id: trimmedServerId, user_id: $userStore.me.id });
-      console.log('Joined server:', trimmedServerId);
+      await invoke('send_server_invite', { server_id: trimmedJoinServerId, user_id: $userStore.me.id });
+      console.log('Joined server:', trimmedJoinServerId);
       joinServerId = '';
       closeModal();
-      onserverJoined?.(trimmedServerId);
+      onserverJoined?.(trimmedJoinServerId);
     } catch (error) {
       console.error('Failed to join server:', error);
     }
   }
 </script>
 
-{#if show}
-  <div role="button" tabindex="0" class="fixed inset-0 flex items-center justify-center z-50" style="background-color: rgba(0, 0, 0, 0.5);" onclick={closeModal} onkeydown={(e) => e.key === 'Enter' && closeModal()}>
-    <div role="button" tabindex="0" class="bg-card p-6 rounded-lg shadow-lg w-11/12 max-w-md" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()}>
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">Server Management</h2>
-        <button onclick={closeModal} class="text-muted-foreground hover:text-white">
-          <X size={12} />
-        </button>
-      </div>
+<Dialog bind:open={show}>
+  <DialogContent class="sm:max-w-md">
+    <DialogHeader class="text-left">
+      <DialogTitle>Server Management</DialogTitle>
+      <DialogDescription>
+        Create a new space or join an existing server using its unique ID.
+      </DialogDescription>
+    </DialogHeader>
 
-      <div class="mb-6">
-        <h3 class="text-lg font-semibold mb-2">Create New Server</h3>
-        <input
-          type="text"
-          placeholder="Server Name"
-          class="w-full bg-zinc-700 border border-zinc-600 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 mb-2"
-          bind:value={newServerName}
-        />
-        <button
-          class="w-full bg-cyan-600 text-white rounded-md px-4 py-2 flex items-center justify-center hover:bg-cyan-500"
-          onclick={handleCreateServer}
-        >
-          <Plus size={10} class="mr-2" /> Create Server
-        </button>
-      </div>
+    <div class="space-y-6">
+      <section class="space-y-4 rounded-md border border-border bg-card/60 p-4">
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-foreground">Create New Server</h3>
+          <p class="text-xs text-muted-foreground">Spin up a fresh home for your community.</p>
+        </div>
 
-      <div>
-        <h3 class="text-lg font-semibold mb-2">Join Existing Server</h3>
-        <input
-          type="text"
-          placeholder="Server ID"
-          class="w-full bg-zinc-700 border border-zinc-600 rounded-md px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-cyan-500 mb-2"
-          bind:value={joinServerId}
-        />
-        <button
-          class="w-full bg-green-600 text-white rounded-md px-4 py-2 flex items-center justify-center hover:bg-green-500"
+        <div class="space-y-2">
+          <Label for="server-name">Server name</Label>
+          <Input
+            id="server-name"
+            type="text"
+            placeholder="Server Name"
+            bind:value={newServerName}
+          />
+        </div>
+
+        <Button class="w-full" type="button" disabled={!trimmedNewServerName} onclick={handleCreateServer}>
+          <Plus class="size-4" />
+          Create Server
+        </Button>
+      </section>
+
+      <section class="space-y-4 rounded-md border border-border bg-card/60 p-4">
+        <div class="space-y-1">
+          <h3 class="text-sm font-semibold text-foreground">Join Existing Server</h3>
+          <p class="text-xs text-muted-foreground">Enter a server ID shared with you.</p>
+        </div>
+
+        <div class="space-y-2">
+          <Label for="server-id">Server ID</Label>
+          <Input
+            id="server-id"
+            type="text"
+            placeholder="Server ID"
+            bind:value={joinServerId}
+          />
+        </div>
+
+        <Button
+          class="w-full"
+          variant="secondary"
+          type="button"
+          disabled={!trimmedJoinServerId}
           onclick={handleJoinServer}
         >
-          <CirclePlus size={10} class="mr-2" /> Join Server
-        </button>
-      </div>
+          <CirclePlus class="size-4" />
+          Join Server
+        </Button>
+      </section>
     </div>
-  </div>
-{/if}
 
-
+    <DialogClose
+      class="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus:outline-none"
+      onclick={closeModal}
+    >
+      <span class="sr-only">Close</span>
+      <X class="h-4 w-4" />
+    </DialogClose>
+  </DialogContent>
+</Dialog>

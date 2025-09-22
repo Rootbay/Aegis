@@ -1,16 +1,19 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  type SidebarProps = HTMLAttributes<HTMLElement> & {
+  type SidebarProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
     side?: 'left' | 'right';
     variant?: 'solid' | 'muted';
+    children?: Snippet;
   };
 
   let {
     side = 'right',
     variant = 'solid',
     class: className,
+    children,
     ...rest
   }: SidebarProps = $props();
 </script>
@@ -26,5 +29,5 @@
   )}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </aside>

@@ -8,12 +8,14 @@
     section: string;
   };
 
+  type NavigateHandler = (..._args: [string]) => void; // eslint-disable-line no-unused-vars
+
   let { title, items = [], currentPath, sectionLabels, onNavigate }: {
     title: string;
     items?: SearchResultItem[];
     currentPath: string;
     sectionLabels: Record<string, string>;
-    onNavigate?: (href: string) => void;
+    onNavigate?: NavigateHandler;
   } = $props();
 </script>
 

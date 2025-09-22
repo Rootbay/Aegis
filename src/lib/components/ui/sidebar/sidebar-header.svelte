@@ -1,8 +1,13 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
+  type HeaderProps = Omit<HTMLAttributes<HTMLDivElement>, 'children'> & {
+    children?: Snippet;
+  };
+
+  let { class: className, children, ...rest }: HeaderProps = $props();
 </script>
 
 <div
@@ -10,5 +15,5 @@
   class={cn('flex h-[55px] items-center gap-3 border-b border-border px-4 text-foreground', className)}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </div>

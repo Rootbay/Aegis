@@ -1,8 +1,13 @@
 <script lang="ts">
   import { cn } from '$lib/utils';
+  import type { Snippet } from 'svelte';
   import type { HTMLAttributes } from 'svelte/elements';
 
-  let { class: className, ...rest }: HTMLAttributes<HTMLDivElement> = $props();
+  type GroupLabelProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
+    children?: Snippet;
+  };
+
+  let { class: className, children, ...rest }: GroupLabelProps = $props();
 </script>
 
 <header
@@ -10,5 +15,5 @@
   class={cn('flex items-center justify-between px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground', className)}
   {...rest}
 >
-  <slot />
+  {@render children?.()}
 </header>

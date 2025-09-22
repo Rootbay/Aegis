@@ -7,7 +7,7 @@
   import Roles from '../server-settings/Roles.svelte';
   import UserManagement from '../server-settings/UserManagement.svelte';
 
-  type UnaryHandler<T> = (value: T) => void;
+  type UnaryHandler<T> = (_value: T) => void; // eslint-disable-line no-unused-vars
 
   type ServerSettingsModalProps = {
     show?: boolean;

@@ -17,6 +17,8 @@
     server: Server;
   };
 
+  type ServerContextMenuHandler = (_payload: ServerContextMenuAction) => void; // eslint-disable-line no-unused-vars
+
   type MenuEntry =
     | { type: 'separator'; id: string }
     | { type: 'item'; id: string; label: string; action: string; destructive?: boolean };
@@ -25,7 +27,7 @@
     server: Server;
     muted?: boolean;
     disabled?: boolean;
-    onaction?: (detail: ServerContextMenuAction) => void;
+    onaction?: ServerContextMenuHandler;
     children?: Snippet;
   }
 

@@ -7,11 +7,13 @@
     href: string;
   };
 
+  type NavigateHandler = (..._args: [string]) => void; // eslint-disable-line no-unused-vars
+
   let { title, items = [], currentPath, onNavigate }: {
     title: string;
     items?: SettingsItem[];
     currentPath: string;
-    onNavigate?: (href: string) => void;
+    onNavigate?: NavigateHandler;
   } = $props();
 </script>
 
