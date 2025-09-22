@@ -1,14 +1,17 @@
 # Aegis Messenger
 
+## ⚠️ Project Status ⚠️
+
+This project is in **early development** and is **far from production ready**. Features may be incomplete, and breaking changes are expected.
+
 > A secure, off-grid messenger built with Tauri v2, Svelte 5, TypeScript, and bun.
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/user/repo/build.yml?branch=main&style=for-the-badge)](https://github.com/user/repo/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/xeintdm/aegis/build.yml?branch=main&style=for-the-badge)](https://github.com/xeintdm/aegis/actions)
 [![License](https://img.shields.io/badge/License-MIT%20%2F%20Apache%202.0-blue?style=for-the-badge)](./LICENSE)
-[![Discord](https://img.shields.io/discord/123456789?color=7289DA&label=Join%20Community&logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/your-invite)
+[![Discord](https://img.shields.io/discord/123456789?color=7289DA&label=Join%20Community&logo=discord&logoColor=white&style=for-the-badge)](https://discord.com/users/941268694733041715)
 
 **Aegis is a messenger that works with or without the internet.** It provides fast, private, end-to-end encrypted communication over a global network, but automatically creates a resilient, off-grid Bluetooth and Wi-Fi Direct mesh network with nearby peers when connectivity fails.
 
-![Aegis UI Showcase](https://user-images.githubusercontent.com/your-id/aegis-showcase.gif)
 _(Imagine a sleek animation showing the UI switch from "Online Mode" to "Mesh Mode," with the network visualizer lighting up to show nearby peers)_
 
 ---
@@ -75,7 +78,7 @@ Aegis is a community-driven project. We welcome contributions of all kinds, from
 
 ## 💖 Show Your Support
 
-If you believe in our mission of building a resilient, private, and open communication platform, please consider starring the project on [GitHub](https://github.com/your-username/aegis). It helps us gain visibility and attract more contributors.
+If you believe in our mission of building a resilient, private, and open communication platform, please consider starring the project on [GitHub](https://github.com/xeintdm/aegis). It helps us gain visibility and attract more contributors.
 
 ---
 
@@ -97,13 +100,13 @@ Before you begin, ensure you have the following installed:
   ```bash
   npm install -g bun
   ```
-- **Tauri Prerequisites:** Ensure you have all the necessary development dependencies for Tauri v2 for your specific operating system. Refer to the [Tauri documentation](https://beta.tauri.app/start/prerequisites/) for detailed instructions.
+- **Tauri Prerequisites:** Ensure you have all the necessary development dependencies for Tauri v2 for your specific operating system. Refer to the [Tauri documentation](https://v2.tauri.app/start/prerequisites/) for detailed instructions.
 
 ### Installation
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/aegis.git
+    git clone https://github.com/xeintdm/aegis.git
     cd aegis
     ```
 2.  **Install frontend dependencies:**
