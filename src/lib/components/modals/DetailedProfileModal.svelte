@@ -12,6 +12,7 @@
   import type { User } from "$lib/features/auth/models/User";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import { onDestroy } from "svelte";
   import {
     Dialog,
     DialogContent,
@@ -93,6 +94,7 @@
   let showLightbox = $state(false);
   let lightboxImageUrl = $state("");
   let copyFeedback = $state("");
+  let copyTimeout: ReturnType<typeof setTimeout> | undefined;
 
   let showUserOptionsMenu = $state(false);
   let userOptionsMenuX = $state(0);
@@ -102,9 +104,10 @@
   let loadingMutualFriends = $state(false);
   let loadingMutualGroups = $state(false);
 
-  let showInvitePicker = $state(false);
+  let showInvitePicker = $state(isFriend);
   let selectedServerId = $state<string | undefined>(undefined);
   let servers = $derived<Server[]>($serverStore.servers ?? []);
+  let sendingInvite = $state(false);
 
   async function computeMutualServers() {
     if (!profileUser?.id) {
@@ -223,6 +226,12 @@
     if (profileUser?.id) {
       computeMutualServers();
       computeMutualGroups();
+    }
+  });
+
+  $effect(() => {
+    if (showInvitePicker && !selectedServerId && servers.length > 0) {
+      selectedServerId = servers[0].id;
     }
   });
 
@@ -350,6 +359,28 @@
     }
   }
 
+  async function copyUserId() {
+    if (!profileUser?.id) return;
+    if (!navigator?.clipboard) {
+      toasts.addToast("Clipboard not available in this environment.", "error");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(profileUser.id);
+      copyFeedback = "Copied!";
+      if (copyTimeout) {
+        clearTimeout(copyTimeout);
+      }
+      copyTimeout = setTimeout(() => {
+        copyFeedback = "";
+        copyTimeout = undefined;
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to copy user ID:", error);
+      toasts.addToast("Failed to copy user ID.", "error");
+    }
+  }
+
   function openInvitePicker() {
     const firstServer = $serverStore.servers?.[0];
     selectedServerId = firstServer?.id;
@@ -358,6 +389,7 @@
 
   async function sendServerInvite() {
     if (!selectedServerId || !profileUser?.id) return;
+    sendingInvite = true;
     try {
       await invoke("send_server_invite", {
         server_id: selectedServerId,
@@ -368,11 +400,23 @@
       console.error("Failed to send server invite:", e);
       toasts.addToast(e?.message || "Failed to send server invite.", "error");
     } finally {
+      sendingInvite = false;
       showInvitePicker = false;
+      selectedServerId = undefined;
     }
   }
 
-  function handleInvite() {}
+  async function handleInvite() {
+    if (sendingInvite) return;
+    await sendServerInvite();
+  }
+
+  onDestroy(() => {
+    if (copyTimeout) {
+      clearTimeout(copyTimeout);
+      copyTimeout = undefined;
+    }
+  });
 </script>
 
 <Dialog open onOpenChange={close}>
@@ -380,8 +424,26 @@
     <div class="flex">
       <div class="w-[380px] bg-card flex flex-col">
         <div
-          class="relative h-36 bg-muted bg-cover bg-center"
+          class="relative h-36 bg-muted bg-cover bg-center cursor-pointer"
           style={`background-image:url(${profileUser.bannerUrl || ""})`}
+          role="button"
+          tabindex={profileUser.bannerUrl ? 0 : -1}
+          onclick={(event) => {
+            if (event.target instanceof HTMLElement && event.target.closest("button")) {
+              return;
+            }
+            if (profileUser.bannerUrl) {
+              openLightbox(profileUser.bannerUrl);
+            }
+          }}
+          onkeydown={(event) => {
+            if (!profileUser.bannerUrl) return;
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              openLightbox(profileUser.bannerUrl);
+            }
+          }}
+          aria-label="View banner image"
         >
           <Button
             variant="ghost"
@@ -394,11 +456,18 @@
           <div
             class="absolute top-20 left-6 border-4 border-background rounded-full bg-card"
           >
-            <img
-              src={profileUser.avatar}
-              alt="avatar"
-              class="w-20 h-20 rounded-full object-cover"
-            />
+            <button
+              type="button"
+              class="p-0 m-0 border-none bg-transparent cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
+              onclick={() => profileUser.avatar && openLightbox(profileUser.avatar)}
+              aria-label={`View ${profileUser.name || "user"}'s avatar`}
+            >
+              <img
+                src={profileUser.avatar}
+                alt={profileUser.name || "User avatar"}
+                class="w-20 h-20 rounded-full object-cover"
+              />
+            </button>
             <div
               class="absolute bottom-0 right-0 w-5 h-5 rounded-full border-2 border-white
               {profileUser.online ? 'bg-green-500' : 'bg-zinc-500'}"
@@ -408,7 +477,20 @@
 
         <div class="px-6 py-8">
           <h2 class="text-xl font-bold">{profileUser.name}</h2>
-          <p class="text-sm text-muted-foreground mb-2">{profileUser.tag}</p>
+          <div class="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+            <span>{profileUser.tag || `@${profileUser.name}`}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-6 px-2"
+              onclick={copyUserId}
+            >
+              Copy ID
+            </Button>
+            {#if copyFeedback}
+              <span class="text-xs text-emerald-500">{copyFeedback}</span>
+            {/if}
+          </div>
 
           <div class="flex space-x-1 mb-4">
             <Star class="w-4 h-4 text-yellow-400" />
@@ -417,17 +499,17 @@
 
           <div class="flex gap-2 mb-4">
             {#if isMyProfile}
-              <Button><Plus class="mr-2 h-4 w-4" /> Edit Profile</Button>
+              <Button onclick={editProfile}><Plus class="mr-2 h-4 w-4" /> Edit Profile</Button>
             {:else if isFriend}
-              <Button><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
-              <Button variant="destructive" size="icon"
+              <Button onclick={sendMessage}><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
+              <Button variant="destructive" size="icon" onclick={removeFriend}
                 ><Trash class="h-4 w-4" /></Button
               >
             {:else}
-              <Button><Plus class="mr-2 h-4 w-4" /> Add Friend</Button>
-              <Button><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
+              <Button onclick={addFriend}><Plus class="mr-2 h-4 w-4" /> Add Friend</Button>
+              <Button onclick={sendMessage}><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
             {/if}
-            <Button variant="ghost" size="icon"
+            <Button variant="ghost" size="icon" onclick={handleMoreOptions}
               ><Ellipsis class="h-4 w-4" /></Button
             >
           </div>
@@ -465,7 +547,9 @@
           </TabsList>
 
           <TabsContent value="friends">
-            {#if mutualFriends.length === 0}
+            {#if loadingMutualFriends}
+              <p class="text-sm text-muted-foreground">Loading mutual friends...</p>
+            {:else if mutualFriends.length === 0}
               <p class="text-sm text-muted-foreground">No mutual friends.</p>
             {:else}
               <ScrollArea class="h-64">
@@ -487,7 +571,9 @@
           </TabsContent>
 
           <TabsContent value="servers">
-            {#if mutualServers.length === 0}
+            {#if loadingMutualServers}
+              <p class="text-sm text-muted-foreground">Loading mutual servers...</p>
+            {:else if mutualServers.length === 0}
               <p class="text-sm text-muted-foreground">No mutual servers.</p>
             {:else}
               <ScrollArea class="h-64">
@@ -506,19 +592,21 @@
           </TabsContent>
 
           <TabsContent value="groups">
-            {#if mutualGroups.length === 0}
+            {#if loadingMutualGroups}
+              <p class="text-sm text-muted-foreground">Loading mutual groups...</p>
+            {:else if mutualGroups.length === 0}
               <p class="text-sm text-muted-foreground">No mutual groups.</p>
             {:else}
               <ScrollArea class="h-64">
                 <ul class="space-y-2">
-                  {#each mutualGroups as g (g.channelName)}
+                  {#each mutualGroups as g (g.channelId)}
                     <li class="flex items-center gap-2">
                       <span
                         class="inline-block w-2 h-2 rounded-full bg-zinc-500"
                       ></span>
-                      <span class="text-sm"
-                        >{g.serverName} • #{g.channelName}</span
-                      >
+                      <span class="text-sm">
+                        {g.serverName} - #{g.channelName}
+                      </span>
                       <Badge variant="outline">Group</Badge>
                     </li>
                   {/each}
@@ -528,36 +616,86 @@
           </TabsContent>
         </Tabs>
         <div class="mt-6">
-          <DialogHeader>
-            <DialogTitle>Invite to Server</DialogTitle>
-            <DialogDescription
-              >Select a server to invite {profileUser.name}.</DialogDescription
-            >
-          </DialogHeader>
+          {#if showInvitePicker}
+            <DialogHeader>
+              <DialogTitle>Invite to Server</DialogTitle>
+              <DialogDescription>
+                Select a server to invite {profileUser.name}.
+              </DialogDescription>
+            </DialogHeader>
 
-          {#if servers.length === 0}
-            <p class="text-sm text-muted-foreground">
-              You have no servers to invite from.
-            </p>
+            {#if servers.length === 0}
+              <p class="text-sm text-muted-foreground">
+                You have no servers to invite from.
+              </p>
+            {:else}
+              <Select
+                type="single"
+                bind:value={selectedServerId}
+                disabled={sendingInvite}
+              >
+                <SelectTrigger>Select a server</SelectTrigger>
+                <SelectContent>
+                  {#each servers as s (s.id)}
+                    <SelectItem value={s.id}>{s.name}</SelectItem>
+                  {/each}
+                </SelectContent>
+              </Select>
+            {/if}
+
+            <DialogFooter class="mt-4">
+              <Button
+                variant="ghost"
+                onclick={() => {
+                  showInvitePicker = false;
+                  selectedServerId = undefined;
+                }}
+                disabled={sendingInvite}
+              >
+                Cancel
+              </Button>
+              <Button
+                onclick={handleInvite}
+                disabled={!selectedServerId || sendingInvite}
+              >
+                {sendingInvite ? "Sending..." : "Send Invite"}
+              </Button>
+            </DialogFooter>
           {:else}
-            <Select type="single" bind:value={selectedServerId}>
-              <SelectTrigger>Select a server</SelectTrigger>
-              <SelectContent>
-                {#each servers as s (s.id)}
-                  <SelectItem value={s.id}>{s.name}</SelectItem>
-                {/each}
-              </SelectContent>
-            </Select>
+            <div class="flex items-start justify-between rounded-lg border border-border p-4 bg-muted/40">
+              <div class="pr-4">
+                <h3 class="text-sm font-semibold">Invite to Server</h3>
+                <p class="text-sm text-muted-foreground">
+                  Send {profileUser.name} an invite to one of your servers.
+                </p>
+              </div>
+              <Button onclick={openInvitePicker} disabled={servers.length === 0}>
+                Invite
+              </Button>
+            </div>
           {/if}
-
-          <DialogFooter class="mt-4">
-            <Button variant="ghost" onclick={close}>Cancel</Button>
-            <Button onclick={handleInvite} disabled={!selectedServerId}
-              >Send Invite</Button
-            >
-          </DialogFooter>
         </div>
       </div>
     </div>
   </DialogContent>
 </Dialog>
+{#if showLightbox}
+  <ImageLightbox
+    imageUrl={lightboxImageUrl}
+    show={showLightbox}
+    onClose={() => {
+      showLightbox = false;
+      lightboxImageUrl = "";
+    }}
+  />
+{/if}
+
+{#if showUserOptionsMenu}
+  <UserOptionsMenu
+    x={userOptionsMenuX}
+    y={userOptionsMenuY}
+    show={showUserOptionsMenu}
+    onclose={() => (showUserOptionsMenu = false)}
+    onaction={handleUserOptionAction}
+  />
+{/if}

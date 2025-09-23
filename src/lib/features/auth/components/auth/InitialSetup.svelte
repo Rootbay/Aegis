@@ -1,6 +1,5 @@
 <script lang="ts">
   import QRCode from "qrcode";
-
   import {
     Eye,
     EyeOff,
@@ -12,56 +11,46 @@
     Scan,
     KeySquare,
     QrCode,
-    Lock,
+    Lock
   } from "@lucide/svelte";
-
   import {
     authStore,
     authPersistenceStore,
+    MIN_PASSWORD_LENGTH,
+    validatePassword
   } from "$lib/features/auth/stores/authStore";
-
   import type { SecurityQuestion } from "$lib/features/auth/stores/authStore";
-
   import RecoveryQrScanner from "./RecoveryQrScanner.svelte";
-
   import { Button } from "$lib/components/ui/button/index.js";
-
   import { Input } from "$lib/components/ui/input/index.js";
-
   import {
     Alert,
     AlertTitle,
-    AlertDescription,
+    AlertDescription
   } from "$lib/components/ui/alert/index.js";
-
   import {
     Select,
     SelectTrigger,
     SelectContent,
-    SelectItem,
+    SelectItem
   } from "$lib/components/ui/select/index.js";
-
   import {
     Card,
     CardHeader,
     CardTitle,
     CardDescription,
-    CardContent,
+    CardContent
   } from "$lib/components/ui/card/index.js";
-
   import { Label } from "$lib/components/ui/label/index.js";
-
   import {
     Dialog,
     DialogHeader,
     DialogContent,
     DialogTitle,
     DialogDescription,
-    DialogFooter,
+    DialogFooter
   } from "$lib/components/ui/dialog/index.js";
-
   import { Progress } from "$lib/components/ui/progress/index.js";
-
   import { Badge } from "$lib/components/ui/badge/index.js";
 
   type OnboardingStep =
@@ -74,47 +63,26 @@
     | "backup_codes";
 
   type SecurityQuestionInput = { question: string; answer: string };
-
   let username = $state("");
-
   let onboardingStep = $state<OnboardingStep>("username");
-
   let confirmationInputs = $state<Record<number, string>>({});
-
   let totpCode = $state("");
-
   let passwordInput = $state("");
-
   let passwordConfirm = $state("");
-
   let passwordError = $state<string | null>(null);
-
   let unlockPassword = $state("");
-
   let unlockPasswordError = $state<string | null>(null);
-
   let unlockTotp = $state("");
-
   let securityQuestionAnswers = $state<Record<string, string>>({});
-
   let recoveryPhrase = $state("");
-
   let recoveryTotp = $state("");
-
   let recoveryPassword = $state("");
-
   let recoveryPasswordConfirm = $state("");
-
   let recoveryError = $state<string | null>(null);
-
   let pendingRecoveryError = $state<string | null>(null);
-
   let deviceTotp = $state("");
-
   let showScanner = $state(false);
-
   let totpQr = $state<string | null>(null);
-
   let localError = $state<string | null>(null);
 
   let passwordStrength = $state<{ score: number; feedback: string[] }>({
@@ -123,15 +91,10 @@
   });
 
   let showPassword = $state(false);
-
   let securityQuestions = $state<SecurityQuestionInput[]>([]);
-
   let backupCodes = $state<string[]>([]);
-
   let showRecoveryForm = $state(false);
-
   type SupportView = "unlock" | "recovery" | "handoff";
-
   let activeView = $state<SupportView>("unlock");
 
   const requireTotpOnUnlock = $derived(
@@ -154,8 +117,14 @@
     }, 0),
   );
 
+  const unicodeRequired = $derived(
+    $authStore.passwordPolicy !== "legacy_allowed",
+  );
+
   const recoveryPasswordValidation = $derived(
-    recoveryPassword ? validatePassword(recoveryPassword) : null,
+    recoveryPassword
+      ? validatePassword(recoveryPassword, unicodeRequired, true)
+      : null,
   );
 
   const recoveryFormReady = $derived(
@@ -168,32 +137,8 @@
       (!requireTotpOnUnlock || recoveryTotp.length === 6),
   );
 
-  const unicodeRequired = $derived(
-    $authStore.passwordPolicy !== "legacy_allowed",
-  );
-
   function sanitizeCode(value: string): string {
     return value.replace(/[^0-9]/g, "").slice(0, 6);
-  }
-
-  function validatePassword(value: string): string | null {
-    if (value.length < 8) {
-      return "Password must be at least 8 characters long.";
-    }
-
-    if (unicodeRequired) {
-      const hasUnicode = [...value].some((char) => {
-        const point = char.codePointAt(0);
-
-        return typeof point === "number" && point > 0x7f;
-      });
-
-      if (!hasUnicode) {
-        return "Password must include at least one non-ASCII character.";
-      }
-    }
-
-    return null;
   }
 
   $effect(() => {
@@ -209,27 +154,18 @@
 
     if (onboarding) {
       QRCode.toDataURL(onboarding.totpUri, { scale: 5, margin: 1 })
-
         .then((url) => {
           totpQr = url;
         })
-
         .catch((error) => console.error("Failed to generate TOTP QR:", error));
     } else {
       username = "";
-
       totpQr = null;
-
       confirmationInputs = {};
-
       totpCode = "";
-
       passwordInput = "";
-
       passwordConfirm = "";
-
       passwordError = null;
-
       onboardingStep = "username";
     }
   });
@@ -263,30 +199,20 @@
 
   const predefinedQuestions = [
     "What was your childhood nickname?",
-
     "What is your mother's maiden name?",
-
     "What was the name of your first pet?",
-
     "What city were you born in?",
-
     "What was your first school called?",
-
     "What is your favorite childhood memory?",
-
     "What was the make and model of your first car?",
-
     "What is the name of your favorite childhood teacher?",
   ];
 
   async function handleStartOnboarding(event: Event) {
     event.preventDefault();
-
     try {
       authStore.clearError();
-
       authStore.beginOnboarding(username);
-
       onboardingStep = "phrase";
     } catch (error) {
       localError =
@@ -296,26 +222,22 @@
 
   async function handleSecurityQuestionRecovery(event: Event) {
     event.preventDefault();
-
     recoveryError = null;
-
     authStore.clearError();
-
     const questions = storedSecurityQuestions;
 
     if (questions.length === 0) {
       recoveryError =
         "Security questions are not configured for this identity.";
-
       return;
     }
 
-    const trimmedAnswers = questions.reduce<Record<string, string>>(
+    const normalizedAnswers = questions.reduce<Record<string, string>>(
       (acc, item) => {
         const response = securityQuestionAnswers[item.question];
 
         if (response?.trim()) {
-          acc[item.question] = response.trim();
+          acc[item.question] = response.trim().toLowerCase();
         }
 
         return acc;
@@ -323,44 +245,41 @@
       {},
     );
 
-    if (Object.keys(trimmedAnswers).length < 2) {
+    if (Object.keys(normalizedAnswers).length < 2) {
       recoveryError = "Answer at least two security questions.";
-
       return;
     }
 
     if (!recoveryPassword || !recoveryPasswordConfirm) {
       recoveryError = "Enter and confirm your new password to continue.";
-
       return;
     }
 
     if (recoveryPassword !== recoveryPasswordConfirm) {
       recoveryError = "Passwords must match.";
-
       return;
     }
 
-    const validation = validatePassword(recoveryPassword);
+    const validation = validatePassword(
+      recoveryPassword,
+      unicodeRequired,
+      true,
+    );
 
     if (validation) {
       recoveryError = validation;
-
       return;
     }
 
     if (requireTotpOnUnlock && recoveryTotp.length !== 6) {
       recoveryError = "Authenticator code must be 6 digits.";
-
       return;
     }
 
     try {
       await authStore.loginWithSecurityQuestions({
-        answers: trimmedAnswers,
-
+        answers: normalizedAnswers,
         newPassword: recoveryPassword,
-
         totpCode: requireTotpOnUnlock ? recoveryTotp : undefined,
       });
 
@@ -379,34 +298,28 @@
 
   function goToPasswordStep(event: Event) {
     event.preventDefault();
-
     onboardingStep = "password";
   }
 
   async function handleSavePassword(event: Event) {
     event.preventDefault();
-
     authStore.clearError();
-
     passwordError = null;
 
     if (passwordInput !== passwordConfirm) {
       passwordError = "Passwords do not match.";
-
       return;
     }
 
-    const validation = validatePassword(passwordInput);
+    const validation = validatePassword(passwordInput, unicodeRequired);
 
     if (validation) {
       passwordError = validation;
-
       return;
     }
 
     try {
       authStore.saveOnboardingPassword(passwordInput);
-
       onboardingStep = "security_questions";
     } catch (error) {
       passwordError =
@@ -416,15 +329,16 @@
 
   async function handleSecurityQuestions(event: Event) {
     event.preventDefault();
-
     authStore.clearError();
 
     try {
+      const normalizedQuestions = securityQuestions.map((item) => ({
+        question: item.question.trim(),
+        answerHash: item.answer.trim().toLowerCase(),
+      }));
+
       await authStore.configureSecurityQuestions(
-        securityQuestions.map((item) => ({
-          question: item.question,
-          answerHash: item.answer,
-        })),
+        normalizedQuestions,
       );
 
       onboardingStep = "backup_codes";
@@ -438,7 +352,6 @@
 
   async function finishOnboarding(event: Event) {
     event.preventDefault();
-
     if (!$authStore.onboarding) return;
 
     try {
@@ -448,7 +361,6 @@
       });
 
       backupCodes = authStore.getPersistence()?.backupCodes ?? [];
-
       onboardingStep = "backup_codes";
     } catch {
       // handled by store
@@ -487,40 +399,34 @@
 
   async function handleRecoveryLogin(event: Event) {
     event.preventDefault();
-
     recoveryError = null;
 
     if (recoveryPassword !== recoveryPasswordConfirm) {
       recoveryError = "Passwords do not match.";
-
       return;
     }
 
-    const validation = validatePassword(recoveryPassword);
+    const validation = validatePassword(
+      recoveryPassword,
+      unicodeRequired,
+      true,
+    );
 
     if (validation) {
       recoveryError = validation;
-
       return;
     }
 
     try {
       await authStore.loginWithRecovery({
         phrase: recoveryPhrase,
-
         newPassword: recoveryPassword,
-
         totpCode: requireTotpOnUnlock ? recoveryTotp : undefined,
       });
-
       securityQuestionAnswers = {};
-
       recoveryPhrase = "";
-
       recoveryTotp = "";
-
       recoveryPassword = "";
-
       recoveryPasswordConfirm = "";
     } catch (error) {
       recoveryError =
@@ -530,7 +436,6 @@
 
   async function handleDeviceLogin(event: Event) {
     event.preventDefault();
-
     try {
       await authStore.loginWithDeviceHandshake(deviceTotp);
     } catch {
@@ -541,9 +446,7 @@
   function handleScan(value: string) {
     try {
       authStore.clearError();
-
       authStore.ingestDeviceHandshake(value);
-
       showScanner = false;
     } catch (error) {
       localError =
@@ -557,56 +460,40 @@
 
   function resetRecoveryFormFields() {
     securityQuestionAnswers = {};
-
     recoveryPhrase = "";
-
     recoveryTotp = "";
-
     recoveryPassword = "";
-
     recoveryPasswordConfirm = "";
-
     recoveryError = null;
   }
 
   function switchView(view: SupportView) {
     if (view !== "recovery") {
       resetRecoveryFormFields();
-
       showRecoveryForm = false;
     }
-
     activeView = view;
   }
 
   function openRecoveryForm() {
     resetRecoveryFormFields();
-
     switchView("recovery");
-
     showRecoveryForm = true;
   }
 
   function closeRecoveryForm() {
     resetRecoveryFormFields();
-
     showRecoveryForm = false;
   }
 
   async function finalizeSecurityQuestionRecovery() {
     pendingRecoveryError = null;
-
     try {
       await authStore.completeSecurityQuestionRecovery();
-
       securityQuestionAnswers = {};
-
       recoveryPassword = "";
-
       recoveryPasswordConfirm = "";
-
       recoveryTotp = "";
-
       showRecoveryForm = false;
     } catch (error) {
       pendingRecoveryError =
@@ -615,11 +502,8 @@
   }
 
   const isLoading = $derived($authStore.loading);
-
   const status = $derived($authStore.status);
-
   const pendingRecovery = $derived($authStore.pendingRecoveryRotation);
-
   const inOnboardingFlow = $derived(
     status === "needs_setup" || status === "setup_in_progress",
   );
@@ -630,9 +514,7 @@
 
   $effect(() => {
     if (!showRecoveryForm) return;
-
     const prompts = new Set<string>(recoveryQuestionPrompts);
-
     const filteredEntries = Object.entries(securityQuestionAnswers).filter(
       ([question]) => prompts.has(question),
     );
@@ -946,6 +828,7 @@
                     type={showPassword ? "text" : "password"}
                     bind:value={passwordInput}
                     autocomplete="new-password"
+                    minlength={MIN_PASSWORD_LENGTH}
                   />
 
                   <Button
@@ -974,7 +857,7 @@
                     const t = e.currentTarget as HTMLInputElement;
                     passwordConfirm = t.value;
                   }}
-                  minlength={12}
+                  minlength={MIN_PASSWORD_LENGTH}
                   required
                   autocomplete="new-password"
                 />
@@ -1406,7 +1289,7 @@
                       const t = e.currentTarget as HTMLInputElement;
                       recoveryPassword = t.value;
                     }}
-                    minlength={8}
+                    minlength={MIN_PASSWORD_LENGTH}
                     autocomplete="new-password"
                     required
                   />
@@ -1431,7 +1314,7 @@
                       const t = e.currentTarget as HTMLInputElement;
                       recoveryPasswordConfirm = t.value;
                     }}
-                    minlength={8}
+                    minlength={MIN_PASSWORD_LENGTH}
                     autocomplete="new-password"
                     required
                   />
@@ -1446,7 +1329,6 @@
                 {#if recoveryError}
                   <Alert variant="destructive">
                     <AlertTitle>Recovery failed</AlertTitle>
-
                     <AlertDescription>{recoveryError}</AlertDescription>
                   </Alert>
                 {/if}
@@ -1461,7 +1343,6 @@
                   >
                     Reset password with security questions
                   </Button>
-
                   <Button
                     class="w-full sm:w-auto"
                     variant="ghost"
@@ -1481,7 +1362,6 @@
             <CardTitle class="flex items-center gap-2">
               <QrCode size={18} /> Trusted device handoff
             </CardTitle>
-
             <CardDescription>
               Open Aegis on another device, generate a login QR from Settings →
               Devices, and scan it here. Approval still requires a fresh
@@ -1493,7 +1373,6 @@
             {#if $authStore.pendingDeviceLogin}
               <Alert>
                 <AlertTitle>Login request</AlertTitle>
-
                 <AlertDescription>
                   Login request from {$authStore.pendingDeviceLogin.username ??
                     "trusted device"}.
@@ -1503,7 +1382,6 @@
               <form class="space-y-3" onsubmit={handleDeviceLogin}>
                 <div class="space-y-2">
                   <Label for="device-approve-totp">Authenticator code</Label>
-
                   <Input
                     id="device-approve-totp"
                     type="text"
@@ -1512,7 +1390,6 @@
                     value={deviceTotp}
                     oninput={(event) => {
                       const target = event.currentTarget as HTMLInputElement;
-
                       deviceTotp = sanitizeCode(target.value);
                     }}
                     maxlength={6}
@@ -1542,7 +1419,6 @@
                     variant="outline"
                     onclick={() => {
                       authStore.clearError();
-
                       showScanner = true;
                     }}
                   >

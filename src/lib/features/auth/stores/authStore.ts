@@ -100,7 +100,7 @@ type AuthState = {
 };
 
 const persistence = persistentStore<AuthPersistence>("auth-state", {});
-const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 12;
 const MAX_FAILED_ATTEMPTS = 5;
 const ACCOUNT_LOCKOUT_MINUTES = 15;
 const DEFAULT_SESSION_TIMEOUT = 60;
@@ -1023,6 +1023,7 @@ export const authStore = {
 };
 
 export { authPersistenceStore };
+export { validatePassword };
 
 export type {
   AuthState,
