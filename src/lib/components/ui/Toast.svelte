@@ -1,12 +1,12 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
-  import { X } from '@lucide/svelte';
+  import { onDestroy, onMount } from "svelte";
+  import { X } from "@lucide/svelte";
 
   type Props = {
     message: string;
-    type: 'success' | 'error' | 'info' | 'warning' | 'default';
+    type: "success" | "error" | "info" | "warning" | "default";
     duration?: number;
     onDismiss?: () => void;
   };
@@ -43,57 +43,60 @@
     scheduleDismiss(remaining);
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         clearCurrentTimeout();
         show = false;
         if (onDismiss) setTimeout(onDismiss, 300);
       }
     };
 
-    window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true } as any);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKey, { capture: true } as any);
   });
 
   onDestroy(() => {
     clearCurrentTimeout();
   });
 
-  let bgColor = $state('');
-  let textColor = $state('text-white');
-  let borderLeftColor = $state('');
+  let bgColor = $state("");
+  let textColor = $state("text-white");
+  let borderLeftColor = $state("");
 
   $effect(() => {
     switch (type) {
-      case 'success':
-        bgColor = 'bg-success';
-        borderLeftColor = 'border-l-green-700';
-        textColor = 'text-white';
+      case "success":
+        bgColor = "bg-success";
+        borderLeftColor = "border-l-green-700";
+        textColor = "text-white";
         break;
-      case 'error':
-        bgColor = 'bg-destructive';
-        borderLeftColor = 'border-l-red-700';
-        textColor = 'text-white';
+      case "error":
+        bgColor = "bg-destructive";
+        borderLeftColor = "border-l-red-700";
+        textColor = "text-white";
         break;
-      case 'info':
-        bgColor = 'bg-status-info';
-        borderLeftColor = 'border-l-blue-700';
-        textColor = 'text-white';
+      case "info":
+        bgColor = "bg-status-info";
+        borderLeftColor = "border-l-blue-700";
+        textColor = "text-white";
         break;
-      case 'warning':
-        bgColor = 'bg-status-warning';
-        borderLeftColor = 'border-l-yellow-700';
-        textColor = 'text-gray-900';
+      case "warning":
+        bgColor = "bg-status-warning";
+        borderLeftColor = "border-l-yellow-700";
+        textColor = "text-gray-900";
         break;
       default:
-        bgColor = 'bg-muted';
-        borderLeftColor = 'border-l-gray-900';
-        textColor = 'text-white';
+        bgColor = "bg-muted";
+        borderLeftColor = "border-l-gray-900";
+        textColor = "text-white";
     }
   });
 </script>
 
 <div
-  class="group p-4 mb-3 rounded-lg shadow-lg flex items-center transition-all duration-300 ease-in-out transform {bgColor} {textColor} {show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-full'} border border-solid border-t-0 border-r-0 border-b-0 border-l-4 {borderLeftColor}"
+  class="group p-4 mb-3 rounded-lg shadow-lg flex items-center transition-all duration-300 ease-in-out transform {bgColor} {textColor} {show
+    ? 'opacity-100 translate-y-0'
+    : 'opacity-0 translate-y-full'} border border-solid border-t-0 border-r-0 border-b-0 border-l-4 {borderLeftColor}"
   role="alert"
   onmouseenter={() => {
     hovered = true;
@@ -120,22 +123,28 @@
       }
     }}
   >
-    <X class="w-4 h-4"/>
+    <X class="w-4 h-4" />
   </button>
 
-  <div class="absolute left-0 right-0 bottom-0 h-1 bg-black/20 overflow-hidden rounded-b-lg">
+  <div
+    class="absolute left-0 right-0 bottom-0 h-1 bg-black/20 overflow-hidden rounded-b-lg"
+  >
     <div
       class="h-full bg-white/70"
-      style="animation: toastProgress linear forwards; animation-duration: {duration}ms; animation-play-state: {hovered ? 'paused' : 'running'};"
+      style="animation: toastProgress linear forwards; animation-duration: {duration}ms; animation-play-state: {hovered
+        ? 'paused'
+        : 'running'};"
     ></div>
   </div>
 </div>
 
 <style>
   @keyframes toastProgress {
-    from { width: 100%; }
-    to { width: 0%; }
+    from {
+      width: 100%;
+    }
+    to {
+      width: 0%;
+    }
   }
 </style>
-
-

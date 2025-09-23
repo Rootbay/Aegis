@@ -7,7 +7,10 @@
     data?: TData | null;
   };
 
-  type ContextMenuHandler<TData> = (payload: { action: string; itemData: TData | null }) => void; // eslint-disable-line no-unused-vars
+  type ContextMenuHandler<TData> = (payload: {
+    action: string;
+    itemData: TData | null;
+  }) => void; // eslint-disable-line no-unused-vars
 
   let {
     x = 0,
@@ -15,7 +18,7 @@
     show = $bindable(false),
     menuItems = [],
     onaction,
-    onclose
+    onclose,
   }: {
     x?: number;
     y?: number;
@@ -34,7 +37,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       handleClickOutside();
     }
   }
@@ -82,9 +85,10 @@
           <button
             class="block w-full text-left p-2 text-sm hover:bg-gray-600 cursor-pointer rounded-md"
             class:text-red-400={item.isDestructive}
-            onclick={() => item.action && dispatchAction(item.action, item.data ?? null)}
+            onclick={() =>
+              item.action && dispatchAction(item.action, item.data ?? null)}
           >
-            {item.label || ''}
+            {item.label || ""}
           </button>
         {/if}
       {/each}

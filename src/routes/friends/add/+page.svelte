@@ -1,39 +1,42 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core';
-  import { toasts } from '$lib/stores/ToastStore';
-  import { userStore } from '$lib/stores/userStore';
-  import { Plus, Scan } from '@lucide/svelte';
-  import QRCodeScanner from '$lib/components/modals/QRCodeScanner.svelte';
+  import { invoke } from "@tauri-apps/api/core";
+  import { toasts } from "$lib/stores/ToastStore";
+  import { userStore } from "$lib/stores/userStore";
+  import { Plus, Scan } from "@lucide/svelte";
+  import QRCodeScanner from "$lib/components/modals/QRCodeScanner.svelte";
 
-  let friendIdToAdd = $state('');
+  let friendIdToAdd = $state("");
   let isSending = $state(false);
   let showQrScanner = $state(false);
 
   async function handleAddFriend(event?: SubmitEvent) {
     event?.preventDefault();
     if (!friendIdToAdd.trim()) {
-      toasts.addToast('Please enter a user ID.', 'error');
+      toasts.addToast("Please enter a user ID.", "error");
       return;
     }
 
     const currentUser = $userStore.me;
     if (!currentUser?.id) {
-      toasts.addToast('You must be signed in to send requests.', 'error');
+      toasts.addToast("You must be signed in to send requests.", "error");
       return;
     }
 
     isSending = true;
     try {
-      await invoke('send_friend_request', {
+      await invoke("send_friend_request", {
         current_user_id: currentUser.id,
         target_user_id: friendIdToAdd.trim(),
       });
-      toasts.addToast('Friend request sent!', 'success');
-      friendIdToAdd = '';
+      toasts.addToast("Friend request sent!", "success");
+      friendIdToAdd = "";
     } catch (error) {
-      console.error('Failed to send friend request:', error);
-      const message = error instanceof Error ? error.message : 'Failed to send friend request.';
-      toasts.addToast(message, 'error');
+      console.error("Failed to send friend request:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to send friend request.";
+      toasts.addToast(message, "error");
     } finally {
       isSending = false;
     }
@@ -48,7 +51,10 @@
   <p class="text-muted-foreground mb-4">
     You can add a friend with their Aegis ID. It's case-sensitive!
   </p>
-  <form onsubmit={handleAddFriend} class="flex items-center bg-base-100 p-2 rounded-lg border border-border">
+  <form
+    onsubmit={handleAddFriend}
+    class="flex items-center bg-base-100 p-2 rounded-lg border border-border"
+  >
     <input
       type="search"
       bind:value={friendIdToAdd}
@@ -82,12 +88,12 @@
     <QRCodeScanner
       onclose={() => (showQrScanner = false)}
       onscanSuccess={(value) => {
-        const scanned = value?.trim?.() ?? '';
+        const scanned = value?.trim?.() ?? "";
         if (scanned) {
           friendIdToAdd = scanned;
-          toasts.addToast('Scanned ID added. Ready to send.', 'success');
+          toasts.addToast("Scanned ID added. Ready to send.", "success");
         } else {
-          toasts.addToast('Invalid QR code.', 'error');
+          toasts.addToast("Invalid QR code.", "error");
         }
         showQrScanner = false;
       }}

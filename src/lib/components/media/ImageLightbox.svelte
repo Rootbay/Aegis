@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { ZoomIn, ZoomOut, Download, X } from '@lucide/svelte';
-  import MagnifierContextMenu from '$lib/components/context-menus/MagnifierContextMenu.svelte';
-  import { onMount, onDestroy } from 'svelte';
+  import { ZoomIn, ZoomOut, Download, X } from "@lucide/svelte";
+  import MagnifierContextMenu from "$lib/components/context-menus/MagnifierContextMenu.svelte";
+  import { onMount, onDestroy } from "svelte";
 
   type SaveHandler = (url: string) => void; // eslint-disable-line no-unused-vars
 
@@ -13,10 +13,10 @@
   };
 
   let {
-    imageUrl = '',
+    imageUrl = "",
     show = $bindable(false),
     onClose = () => {},
-    onsave
+    onsave,
   }: ImageLightboxProps = $props();
 
   let imageZoomLevel = $state(1);
@@ -44,9 +44,11 @@
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
 
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
-      link.download = imageUrl.substring(imageUrl.lastIndexOf('/') + 1) || 'downloaded_image.png';
+      link.download =
+        imageUrl.substring(imageUrl.lastIndexOf("/") + 1) ||
+        "downloaded_image.png";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -54,12 +56,12 @@
       URL.revokeObjectURL(url);
       onsave?.(imageUrl);
     } catch (error) {
-      console.error('Error saving image:', error);
+      console.error("Error saving image:", error);
     }
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       closeLightbox();
     }
   }
@@ -122,11 +124,11 @@
   }
 
   onMount(() => {
-    window.addEventListener('keydown', handleKeydown);
+    window.addEventListener("keydown", handleKeydown);
   });
 
   onDestroy(() => {
-    window.removeEventListener('keydown', handleKeydown);
+    window.removeEventListener("keydown", handleKeydown);
   });
 </script>
 
@@ -135,11 +137,15 @@
     class="fixed inset-0 flex items-center justify-center z-[9999]"
     style="background-color: rgba(0, 0, 0, 0.7);"
     onclick={closeLightbox}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') closeLightbox(); }}
+    onkeydown={(e) => {
+      if (e.key === "Enter" || e.key === " ") closeLightbox();
+    }}
     role="button"
     tabindex="0"
   >
-    <div class="absolute top-4 right-4 bg-gray-800 p-2 rounded-lg flex space-x-2">
+    <div
+      class="absolute top-4 right-4 bg-gray-800 p-2 rounded-lg flex space-x-2"
+    >
       <button
         class="text-white hover:text-gray-300 z-10 cursor-pointer"
         onclick={zoomIn}
@@ -169,7 +175,13 @@
         <X size={12} />
       </button>
     </div>
-    <div bind:this={parentDivElement} class="relative flex items-center justify-center" role="presentation" tabindex="-1" oncontextmenu={handleContextMenu}>
+    <div
+      bind:this={parentDivElement}
+      class="relative flex items-center justify-center"
+      role="presentation"
+      tabindex="-1"
+      oncontextmenu={handleContextMenu}
+    >
       <img
         bind:this={imageElement}
         src={imageUrl}
@@ -190,11 +202,16 @@
             left: {magnifierX - magnifierSize / 2}px;
             top: {magnifierY - magnifierSize / 2}px;
             background-image: url({imageUrl});
-            background-size: {(imageElement?.width ?? 0) * imageZoomLevel * magnifierZoom}px {(imageElement?.height ?? 0) * imageZoomLevel * magnifierZoom}px;
-            background-position: {(magnifierSize / 2) - (imageMouseX * magnifierZoom * imageZoomLevel)}px {(magnifierSize / 2) - (imageMouseY * magnifierZoom * imageZoomLevel)}px;
+            background-size: {(imageElement?.width ?? 0) *
+            imageZoomLevel *
+            magnifierZoom}px {(imageElement?.height ?? 0) *
+            imageZoomLevel *
+            magnifierZoom}px;
+            background-position: {magnifierSize / 2 -
+            imageMouseX * magnifierZoom * imageZoomLevel}px {magnifierSize / 2 -
+            imageMouseY * magnifierZoom * imageZoomLevel}px;
           "
         ></div>
-
       {/if}
     </div>
     <MagnifierContextMenu
@@ -207,4 +224,3 @@
     />
   </div>
 {/if}
-

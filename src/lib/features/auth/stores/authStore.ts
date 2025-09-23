@@ -165,7 +165,9 @@ const validatePassword = (
   return null;
 };
 
-const calculatePasswordStrength = (password: string): {
+const calculatePasswordStrength = (
+  password: string,
+): {
   score: number;
   feedback: string[];
 } => {
@@ -207,7 +209,9 @@ const bootstrap = async () => {
     );
 
     const now = new Date();
-    const lockedUntil = persisted.accountLockedUntil ? new Date(persisted.accountLockedUntil) : null;
+    const lockedUntil = persisted.accountLockedUntil
+      ? new Date(persisted.accountLockedUntil)
+      : null;
     const isLocked = lockedUntil && now < lockedUntil;
 
     if (isLocked) {
@@ -248,7 +252,8 @@ const bootstrap = async () => {
       accountLocked: false,
       accountLockedUntil: null,
       failedAttempts: persisted.failedAttempts ?? 0,
-      sessionTimeoutMinutes: persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
+      sessionTimeoutMinutes:
+        persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
     }));
   } catch (error) {
     console.error("Failed to bootstrap authentication:", error);
@@ -408,9 +413,13 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
     const persisted = get(persistence);
     const now = new Date();
 
-    const lockedUntil = persisted.accountLockedUntil ? new Date(persisted.accountLockedUntil) : null;
+    const lockedUntil = persisted.accountLockedUntil
+      ? new Date(persisted.accountLockedUntil)
+      : null;
     if (lockedUntil && now < lockedUntil) {
-      throw new Error(`Account locked until ${lockedUntil.toLocaleTimeString()}.`);
+      throw new Error(
+        `Account locked until ${lockedUntil.toLocaleTimeString()}.`,
+      );
     }
 
     if (!persisted.passwordHash) {
@@ -428,8 +437,12 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
       };
 
       if (newFailedAttempts >= MAX_FAILED_ATTEMPTS) {
-        updates.accountLockedUntil = new Date(now.getTime() + ACCOUNT_LOCKOUT_MINUTES * 60 * 1000).toISOString();
-        throw new Error(`Account locked for ${ACCOUNT_LOCKOUT_MINUTES} minutes due to too many failed attempts.`);
+        updates.accountLockedUntil = new Date(
+          now.getTime() + ACCOUNT_LOCKOUT_MINUTES * 60 * 1000,
+        ).toISOString();
+        throw new Error(
+          `Account locked for ${ACCOUNT_LOCKOUT_MINUTES} minutes due to too many failed attempts.`,
+        );
       }
 
       persistence.update((value) => ({ ...value, ...updates }));
@@ -461,7 +474,9 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
     await userStore.initialize(password, { username: persisted.username });
 
     const deviceInfo = await getDeviceInfo();
-    const trustedDevices = (persisted.trustedDevices ?? []).filter(d => d.id !== deviceInfo.id);
+    const trustedDevices = (persisted.trustedDevices ?? []).filter(
+      (d) => d.id !== deviceInfo.id,
+    );
     trustedDevices.unshift({
       ...deviceInfo,
       lastUsed: now.toISOString(),
@@ -574,7 +589,8 @@ const loginWithRecovery = async ({
       trustedDevices: persisted.trustedDevices ?? [],
       securityQuestions: persisted.securityQuestions,
       biometricEnabled: persisted.biometricEnabled ?? false,
-      sessionTimeoutMinutes: persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
+      sessionTimeoutMinutes:
+        persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
       failedAttempts: 0,
       lastFailedAttempt: undefined,
       accountLockedUntil: null,
@@ -613,7 +629,9 @@ const loginWithSecurityQuestions = async ({
 }: SecurityQuestionRecoveryOptions) => {
   const currentState = get({ subscribe });
   if (currentState.pendingRecoveryRotation) {
-    throw new Error("Finish storing your new recovery phrase before continuing.");
+    throw new Error(
+      "Finish storing your new recovery phrase before continuing.",
+    );
   }
   const requireUnicode = currentState.passwordPolicy !== "legacy_allowed";
   const passwordError = validatePassword(newPassword, requireUnicode, true);
@@ -623,7 +641,10 @@ const loginWithSecurityQuestions = async ({
   update((state) => ({ ...state, loading: true, error: null }));
   try {
     const persisted = get(persistence);
-    if (!persisted.securityQuestions || persisted.securityQuestions.length < 3) {
+    if (
+      !persisted.securityQuestions ||
+      persisted.securityQuestions.length < 3
+    ) {
       throw new Error("Security questions not configured on this device.");
     }
 
@@ -631,7 +652,9 @@ const loginWithSecurityQuestions = async ({
     for (const question of persisted.securityQuestions) {
       const providedAnswer = answers[question.question];
       if (providedAnswer) {
-        const answerHash = await hashString(providedAnswer.trim().toLowerCase());
+        const answerHash = await hashString(
+          providedAnswer.trim().toLowerCase(),
+        );
         if (answerHash === question.answerHash) {
           correctAnswers += 1;
         }
@@ -704,7 +727,10 @@ const completeSecurityQuestionRecovery = async () => {
     const passwordEnvelope = persisted.totpSecret
       ? await encryptWithSecret(persisted.totpSecret, pending.newPassword)
       : null;
-    const recoveryEnvelope = await encryptWithSecret(phraseKey, pending.newPassword);
+    const recoveryEnvelope = await encryptWithSecret(
+      phraseKey,
+      pending.newPassword,
+    );
 
     await userStore.initialize(pending.newPassword, { username });
 
@@ -899,14 +925,16 @@ const clearError = () => update((state) => ({ ...state, error: null }));
 const getDeviceInfo = async (): Promise<TrustedDevice> => {
   if (!browser) {
     return {
-      id: 'unknown',
-      name: 'Unknown Device',
+      id: "unknown",
+      name: "Unknown Device",
       lastUsed: new Date().toISOString(),
     };
   }
 
   const userAgent = navigator.userAgent;
-  const deviceId = await hashString(userAgent + navigator.language + screen.width + screen.height);
+  const deviceId = await hashString(
+    userAgent + navigator.language + screen.width + screen.height,
+  );
 
   return {
     id: deviceId,
@@ -917,13 +945,13 @@ const getDeviceInfo = async (): Promise<TrustedDevice> => {
 };
 
 const getDeviceName = (userAgent: string): string => {
-  if (userAgent.includes('Windows')) return 'Windows PC';
-  if (userAgent.includes('Mac')) return 'Mac';
-  if (userAgent.includes('Linux')) return 'Linux PC';
-  if (userAgent.includes('Android')) return 'Android Device';
-  if (userAgent.includes('iPhone')) return 'iPhone';
-  if (userAgent.includes('iPad')) return 'iPad';
-  return 'Unknown Device';
+  if (userAgent.includes("Windows")) return "Windows PC";
+  if (userAgent.includes("Mac")) return "Mac";
+  if (userAgent.includes("Linux")) return "Linux PC";
+  if (userAgent.includes("Android")) return "Android Device";
+  if (userAgent.includes("iPhone")) return "iPhone";
+  if (userAgent.includes("iPad")) return "iPad";
+  return "Unknown Device";
 };
 
 const setSessionTimeout = (minutes: number) => {
@@ -940,7 +968,7 @@ const configureSecurityQuestions = async (questions: SecurityQuestion[]) => {
     questions.map(async (q) => ({
       question: q.question,
       answerHash: await hashString(q.answerHash),
-    }))
+    })),
   );
 
   persistence.update((current) => ({
@@ -957,7 +985,9 @@ const configureSecurityQuestions = async (questions: SecurityQuestion[]) => {
 const removeTrustedDevice = (deviceId: string) => {
   persistence.update((current) => ({
     ...current,
-    trustedDevices: (current.trustedDevices ?? []).filter(d => d.id !== deviceId),
+    trustedDevices: (current.trustedDevices ?? []).filter(
+      (d) => d.id !== deviceId,
+    ),
   }));
 };
 
@@ -994,4 +1024,10 @@ export const authStore = {
 
 export { authPersistenceStore };
 
-export type { AuthState, AuthPersistence, PasswordPolicy, TrustedDevice, SecurityQuestion };
+export type {
+  AuthState,
+  AuthPersistence,
+  PasswordPolicy,
+  TrustedDevice,
+  SecurityQuestion,
+};

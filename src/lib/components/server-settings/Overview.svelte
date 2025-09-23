@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Server } from '$lib/features/servers/models/Server';
+  import type { Server } from "$lib/features/servers/models/Server";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 
@@ -11,13 +11,13 @@
   let { server, onupdateServer }: Props = $props();
 
   let serverName = $state(server.name);
-  let serverDescription = $state(server.description || '');
+  let serverDescription = $state(server.description || "");
 
   function saveChanges() {
     onupdateServer?.({
       ...server,
       name: serverName,
-      description: serverDescription
+      description: serverDescription,
     });
   }
 </script>
@@ -48,7 +48,10 @@
     </div>
 
     <div class="space-y-2">
-      <label for="serverDescription" class="block text-sm font-medium text-zinc-300">
+      <label
+        for="serverDescription"
+        class="block text-sm font-medium text-zinc-300"
+      >
         Server Description
       </label>
       <textarea
@@ -63,7 +66,7 @@
 
     <div class="pt-4 flex justify-end">
       <button
-        class="inline-flex items-center px-5 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500 
+        class="inline-flex items-center px-5 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500
                focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
         onclick={saveChanges}
       >
@@ -72,4 +75,3 @@
     </div>
   </div>
 </section>
-

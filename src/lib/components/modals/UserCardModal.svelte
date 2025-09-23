@@ -1,13 +1,19 @@
 <script lang="ts">
-  import { userStore } from '$lib/stores/userStore';
-  import ImageLightbox from '$lib/components/media/ImageLightbox.svelte';
-  import type { User } from '$lib/features/auth/models/User';
-  import { Card, CardHeader, CardContent, CardFooter, CardTitle } from "$lib/components/ui/card/index.js";
+  import { userStore } from "$lib/stores/userStore";
+  import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
+  import type { User } from "$lib/features/auth/models/User";
+  import {
+    Card,
+    CardHeader,
+    CardContent,
+    CardFooter,
+    CardTitle,
+  } from "$lib/components/ui/card/index.js";
   import * as Avatar from "$lib/components/ui/avatar/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Pencil } from '@lucide/svelte';
+  import { Pencil } from "@lucide/svelte";
 
   type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -24,7 +30,7 @@
   } = $props();
 
   let showLightbox = $state(false);
-  let lightboxImageUrl = $state('');
+  let lightboxImageUrl = $state("");
 
   let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
 
@@ -34,7 +40,7 @@
   }
 
   function editProfile() {
-    console.log('Editing my profile.');
+    console.log("Editing my profile.");
   }
 
   function openLightbox(imageUrl: string) {
@@ -45,58 +51,62 @@
 
 <Card class="w-[340px] border-none shadow-lg">
   <CardHeader class="relative p-0 flex-shrink-0 h-[100px]">
-    <button
-      class="user-card__banner"
-      style={`background-image: url(${profileUser.bannerUrl || ''})`}
-      class:interactive={!!profileUser.bannerUrl}
+    <Button
+      style={`background-image: url(${profileUser.bannerUrl || ""})`}
       aria-label="View banner image"
-      onclick={() => profileUser.bannerUrl && openLightbox(profileUser.bannerUrl)}
-    ></button>
-    <div class="absolute bottom-0 left-4 right-4 flex items-end justify-between">
+      onclick={() =>
+        profileUser.bannerUrl && openLightbox(profileUser.bannerUrl)}
+    />
+    <div
+      class="absolute bottom-0 left-4 right-4 flex items-end justify-between"
+    >
       <div class="relative border-4 border-card rounded-full bg-card">
-        <button
+        <Button
           class="p-0 border-none bg-none rounded-full cursor-pointer"
           onclick={handleOpenDetailedProfile}
           aria-label="View profile picture"
         >
           <Avatar.Root class="w-20 h-20">
-            <Avatar.Image src={profileUser.pfpUrl} alt={`${profileUser.name}'s profile picture`} />
+            <Avatar.Image
+              src={profileUser.pfpUrl}
+              alt={`${profileUser.name}'s profile picture`}
+            />
             <Avatar.Fallback>
-              {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? '??'}
+              {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? "??"}
             </Avatar.Fallback>
           </Avatar.Root>
-        </button>
+        </Button>
         <span
           class="absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-card"
           class:bg-green-500={profileUser.online}
           class:bg-gray-500={!profileUser.online}
-          title={profileUser.online ? 'Online' : 'Offline'}
+          title={profileUser.online ? "Online" : "Offline"}
         ></span>
       </div>
     </div>
   </CardHeader>
 
-  <CardContent class="pt-12 pb-4 px-4 flex-grow overflow-y-auto">
+  <CardContent class="pt-2 pb-4 px-4 flex-grow overflow-y-auto">
     <CardTitle class="text-xl font-bold">
-      <button class="p-0 border-none bg-transparent text-inherit font-inherit cursor-pointer hover:underline" onclick={handleOpenDetailedProfile}>
-        {profileUser.name || 'Unknown User'}
-      </button>
+      <Button
+        class="p-0 border-none bg-transparent text-inherit font-inherit cursor-pointer hover:underline"
+        onclick={handleOpenDetailedProfile}
+      >
+        {profileUser.name || "Unknown User"}
+      </Button>
     </CardTitle>
 
     <div class="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-      <span>{profileUser.tag || ''}</span>
-      <span aria-hidden="true">&bull;</span>
+      <span>{profileUser.tag || ""}</span>
       <Badge variant="secondary">Aegis Member</Badge>
     </div>
 
     <p class="text-sm mb-4 whitespace-pre-wrap break-word">
-      {profileUser.bio || ''}
+      {profileUser.bio || ""}
     </p>
 
     {#if isServerMemberContext}
-      <Button variant="secondary" class="w-full mt-auto">
-        Add Role
-      </Button>
+      <Button variant="secondary" class="w-full mt-auto">Add Role</Button>
     {/if}
   </CardContent>
 
@@ -117,21 +127,9 @@
 </Card>
 
 {#if showLightbox}
-  <ImageLightbox imageUrl={lightboxImageUrl} show={showLightbox} onClose={() => (showLightbox = false)} />
+  <ImageLightbox
+    imageUrl={lightboxImageUrl}
+    show={showLightbox}
+    onClose={() => (showLightbox = false)}
+  />
 {/if}
-
-<style>
-  .user-card__banner {
-    height: 60px;
-    background-color: var(--accent);
-    background-size: cover;
-    background-position: center;
-    display: block;
-    width: 100%;
-    border: none;
-  }
-
-  .user-card__banner.interactive {
-    cursor: pointer;
-  }
-</style>

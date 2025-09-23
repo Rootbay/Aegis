@@ -1,13 +1,17 @@
 <script lang="ts">
-  import { Users } from '@lucide/svelte';
-  import type { User } from '$lib/features/auth/models/User';
-  import type { Role } from '$lib/features/servers/models/Role';
-  import { serverStore } from '$lib/features/servers/stores/serverStore';
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-  import { ScrollArea } from '$lib/components/ui/scroll-area';
-  import { Separator } from '$lib/components/ui/separator';
-  import { Avatar, AvatarImage, AvatarFallback } from '$lib/components/ui/avatar';
-  import * as Popover from '$lib/components/ui/popover/index.js';
+  import { Users } from "@lucide/svelte";
+  import type { User } from "$lib/features/auth/models/User";
+  import type { Role } from "$lib/features/servers/models/Role";
+  import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import { Separator } from "$lib/components/ui/separator";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar";
+  import * as Popover from "$lib/components/ui/popover/index.js";
   import {
     Sidebar,
     SidebarHeader,
@@ -17,13 +21,15 @@
     SidebarGroupContent,
     SidebarMenu,
     SidebarMenuItem,
-    SidebarMenuButton
-  } from '$lib/components/ui/sidebar';
-  import UserCardModal from '$lib/components/modals/UserCardModal.svelte';
+    SidebarMenuButton,
+  } from "$lib/components/ui/sidebar";
+  import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
 
   type MemberWithRoles = User & Record<string, unknown>;
 
-  type OpenUserCardModalHandler = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
+  type OpenUserCardModalHandler = (
+    ...args: [User, number, number, boolean]
+  ) => void; // eslint-disable-line no-unused-vars
   type OpenDetailedProfileHandler = (...args: [User]) => void; // eslint-disable-line no-unused-vars
 
   interface MemberGroup {
@@ -34,15 +40,15 @@
     members: MemberWithRoles[];
   }
 
-  const FALLBACK_GROUP_ID = 'uncategorized';
-  const FALLBACK_GROUP_LABEL = 'Members';
+  const FALLBACK_GROUP_ID = "uncategorized";
+  const FALLBACK_GROUP_LABEL = "Members";
 
   let {
     members = [],
     isSettingsPage = false,
     openUserCardModal = () => {},
     openDetailedProfileModal = () => {},
-    roles: providedRoles = []
+    roles: providedRoles = [],
   }: {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
@@ -58,10 +64,10 @@
           const activeServerId = $serverStore.activeServerId;
           if (!activeServerId) return [];
           const activeServer = $serverStore.servers.find(
-            (server) => server.id === activeServerId
+            (server) => server.id === activeServerId,
           );
           return (activeServer?.roles ?? []) as Role[];
-        })()
+        })(),
   );
 
   let groupedMembers = $derived(groupMembersByRole(members, resolvedRoles));
@@ -71,7 +77,7 @@
     const values = new SvelteSet<string>();
 
     const pushValue = (value: unknown) => {
-      if (typeof value === 'string' && value.trim().length > 0) {
+      if (typeof value === "string" && value.trim().length > 0) {
         values.add(value);
       }
     };
@@ -104,7 +110,10 @@
     return Array.from(values.values());
   }
 
-  function groupMembersByRole(memberList: MemberWithRoles[], roleList: Role[]): MemberGroup[] {
+  function groupMembersByRole(
+    memberList: MemberWithRoles[],
+    roleList: Role[],
+  ): MemberGroup[] {
     if (!memberList.length) {
       return [];
     }
@@ -123,7 +132,12 @@
       orderByGroupId.set(`role:${role.id}`, index);
     });
 
-    const ensureGroup = (key: string, label: string, color?: string, hoist = false) => {
+    const ensureGroup = (
+      key: string,
+      label: string,
+      color?: string,
+      hoist = false,
+    ) => {
       if (!groups.has(key)) {
         groups.set(key, { id: key, label, color, hoist, members: [] });
       }
@@ -139,7 +153,12 @@
       for (const identifier of roleIdentifiers) {
         const role = roleById.get(identifier);
         if (role) {
-          targetGroup = ensureGroup(`role:${role.id}`, role.name, role.color, role.hoist);
+          targetGroup = ensureGroup(
+            `role:${role.id}`,
+            role.name,
+            role.color,
+            role.hoist,
+          );
           break;
         }
       }
@@ -148,7 +167,12 @@
         for (const identifier of roleIdentifiers) {
           const role = roleByName.get(identifier.toLowerCase());
           if (role) {
-            targetGroup = ensureGroup(`role:${role.id}`, role.name, role.color, role.hoist);
+            targetGroup = ensureGroup(
+              `role:${role.id}`,
+              role.name,
+              role.color,
+              role.hoist,
+            );
             break;
           }
         }
@@ -162,7 +186,9 @@
       (targetGroup ?? fallbackGroup).members.push(member as MemberWithRoles);
     }
 
-    const result = Array.from(groups.values()).filter((group) => group.members.length > 0);
+    const result = Array.from(groups.values()).filter(
+      (group) => group.members.length > 0,
+    );
 
     result.sort((a, b) => {
       const hoistA = a.hoist ? 1 : 0;
@@ -171,8 +197,12 @@
         return hoistB - hoistA;
       }
 
-      const orderA = orderByGroupId.has(a.id) ? orderByGroupId.get(a.id)! : Number.MAX_SAFE_INTEGER;
-      const orderB = orderByGroupId.has(b.id) ? orderByGroupId.get(b.id)! : Number.MAX_SAFE_INTEGER;
+      const orderA = orderByGroupId.has(a.id)
+        ? orderByGroupId.get(a.id)!
+        : Number.MAX_SAFE_INTEGER;
+      const orderB = orderByGroupId.has(b.id)
+        ? orderByGroupId.get(b.id)!
+        : Number.MAX_SAFE_INTEGER;
       if (orderA !== orderB) {
         return orderA - orderB;
       }
@@ -205,7 +235,7 @@
 <Sidebar
   class="hidden lg:flex"
   data-settings-page={isSettingsPage}
-  aria-label={isSettingsPage ? 'Member settings' : 'Server members'}
+  aria-label={isSettingsPage ? "Member settings" : "Server members"}
 >
   {#if isSettingsPage}
     <SidebarHeader>
@@ -219,7 +249,9 @@
     <SidebarContent class="flex">
       <ScrollArea class="h-full w-full">
         {#if members.length === 0}
-          <div class="flex flex-col items-center gap-3 px-6 py-8 text-center text-sm text-muted-foreground">
+          <div
+            class="flex flex-col items-center gap-3 px-6 py-8 text-center text-sm text-muted-foreground"
+          >
             <Users class="size-5" aria-hidden="true" />
             <p>No members in this chat.</p>
           </div>
@@ -238,7 +270,9 @@
                     {/if}
                     <span class="truncate text-foreground">{group.label}</span>
                   </div>
-                  <span class="text-xs font-semibold text-muted-foreground">{group.members.length}</span>
+                  <span class="text-xs font-semibold text-muted-foreground"
+                    >{group.members.length}</span
+                  >
                 </SidebarGroupLabel>
                 <SidebarGroupContent class="space-y-1">
                   <SidebarMenu class="space-y-1">
@@ -248,20 +282,36 @@
                           <Popover.Trigger>
                             <SidebarMenuButton
                               class="flex items-center gap-3"
-                              ondblclick={(event) => openUserCardModal?.(member, event.clientX, event.clientY, true)}
+                              ondblclick={(event) =>
+                                openUserCardModal?.(
+                                  member,
+                                  event.clientX,
+                                  event.clientY,
+                                  true,
+                                )}
                             >
                               <div class="relative">
                                 <Avatar class="size-8">
-                                  <AvatarImage src={member.avatar} alt={member.name} />
+                                  <AvatarImage
+                                    src={member.avatar}
+                                    alt={member.name}
+                                  />
                                   <AvatarFallback>
-                                    {(member.name || '?').slice(0, 2).toUpperCase()}
+                                    {(member.name || "?")
+                                      .slice(0, 2)
+                                      .toUpperCase()}
                                   </AvatarFallback>
                                 </Avatar>
                                 {#if member.online}
-                                  <span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"></span>
+                                  <span
+                                    class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"
+                                  ></span>
                                 {/if}
                               </div>
-                              <span class="truncate text-sm font-medium text-foreground">{member.name}</span>
+                              <span
+                                class="truncate text-sm font-medium text-foreground"
+                                >{member.name}</span
+                              >
                             </SidebarMenuButton>
                           </Popover.Trigger>
                           <Popover.Content class="w-auto border-none p-0">

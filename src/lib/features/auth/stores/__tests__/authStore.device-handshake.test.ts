@@ -7,22 +7,22 @@ vi.mock("$app/environment", () => ({ browser: true }));
 let mockHandshake: DeviceHandshakePayload | null = null;
 
 const hashStringMock = vi.fn<(value: string) => Promise<string>>();
-const encryptWithSecretMock = vi.fn<
-  (
-    secret: string,
-    plain: string,
-  ) => Promise<{ cipherText: string; iv: string; salt: string }>
->();
-const verifyTotpMock = vi.fn<
-  (secret: string, token: string) => Promise<boolean>
->();
+const encryptWithSecretMock =
+  vi.fn<
+    (
+      secret: string,
+      plain: string,
+    ) => Promise<{ cipherText: string; iv: string; salt: string }>
+  >();
+const verifyTotpMock =
+  vi.fn<(secret: string, token: string) => Promise<boolean>>();
 const invokeMock = vi.fn<(...args: unknown[]) => unknown>();
-const initializeMock = vi.fn<
-  (password: string, opts: { username: string }) => void
->();
-const addToastMock = vi.fn<
-  (msg: string, variant: "success" | "error" | "info" | string) => void
->();
+const initializeMock =
+  vi.fn<(password: string, opts: { username: string }) => void>();
+const addToastMock =
+  vi.fn<
+    (msg: string, variant: "success" | "error" | "info" | string) => void
+  >();
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
@@ -67,9 +67,8 @@ vi.mock("$lib/utils/security", () => ({
 
   hashString: (...args: Parameters<typeof hashStringMock>) =>
     hashStringMock(...args),
-  encryptWithSecret: (
-    ...args: Parameters<typeof encryptWithSecretMock>
-  ) => encryptWithSecretMock(...args),
+  encryptWithSecret: (...args: Parameters<typeof encryptWithSecretMock>) =>
+    encryptWithSecretMock(...args),
   verifyTotp: (...args: Parameters<typeof verifyTotpMock>) =>
     verifyTotpMock(...args),
 
@@ -103,7 +102,9 @@ describe("authStore device handshake", () => {
     }));
 
     verifyTotpMock.mockReset();
-    verifyTotpMock.mockImplementation(async (_secret, token) => token === "123456");
+    verifyTotpMock.mockImplementation(
+      async (_secret, token) => token === "123456",
+    );
 
     invokeMock.mockReset();
     invokeMock.mockImplementation(async () => undefined);
@@ -144,9 +145,14 @@ describe("authStore device handshake", () => {
     expect(state.pendingDeviceLogin).toBeNull();
     expect(state.requireTotpOnUnlock).toBe(true);
 
-    expect(initializeMock).toHaveBeenCalledWith("SecurëPass💡", { username: "casey" });
+    expect(initializeMock).toHaveBeenCalledWith("SecurëPass💡", {
+      username: "casey",
+    });
     expect(hashStringMock).toHaveBeenCalledWith("SecurëPass💡");
-    expect(encryptWithSecretMock).toHaveBeenCalledWith("SHAREDSECRET", "SecurëPass💡");
+    expect(encryptWithSecretMock).toHaveBeenCalledWith(
+      "SHAREDSECRET",
+      "SecurëPass💡",
+    );
     expect(verifyTotpMock).toHaveBeenCalledWith("SHAREDSECRET", "123456");
     expect(addToastMock).toHaveBeenCalledWith(
       "Device approved and authenticated.",

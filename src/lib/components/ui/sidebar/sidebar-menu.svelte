@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { cn } from '$lib/utils';
-  import type { Snippet } from 'svelte';
-  import type { HTMLAttributes } from 'svelte/elements';
+  import { cn } from "$lib/utils";
+  import type { Snippet } from "svelte";
+  import type { HTMLAttributes } from "svelte/elements";
 
-  type MenuProps = Omit<HTMLAttributes<HTMLElement>, 'children'> & {
+  type MenuProps = Omit<HTMLAttributes<HTMLElement>, "children"> & {
     children?: Snippet;
   };
 
@@ -12,7 +12,7 @@
 
 <nav
   data-slot="sidebar-menu"
-  class={cn('flex flex-col gap-1', className)}
+  class={cn("flex flex-col gap-1", className)}
   {...rest}
 >
   {@render children?.()}

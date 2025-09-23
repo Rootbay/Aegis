@@ -7,21 +7,21 @@ vi.mock("$app/environment", () => ({ browser: true }));
 type AuthModule = typeof import("$lib/features/auth/stores/authStore");
 
 const hashStringMock = vi.fn<(value: string) => Promise<string>>();
-const encryptWithSecretMock = vi.fn<
-  (
-    secret: string,
-    plain: string,
-  ) => Promise<{ cipherText: string; iv: string; salt: string }>
->();
-const verifyTotpMock = vi.fn<
-  (secret: string, token: string) => Promise<boolean>
->();
-const initializeMock = vi.fn<
-  (password: string, opts: { username: string }) => void
->();
-const addToastMock = vi.fn<
-  (msg: string, variant: "success" | "error" | "info" | string) => void
->();
+const encryptWithSecretMock =
+  vi.fn<
+    (
+      secret: string,
+      plain: string,
+    ) => Promise<{ cipherText: string; iv: string; salt: string }>
+  >();
+const verifyTotpMock =
+  vi.fn<(secret: string, token: string) => Promise<boolean>>();
+const initializeMock =
+  vi.fn<(password: string, opts: { username: string }) => void>();
+const addToastMock =
+  vi.fn<
+    (msg: string, variant: "success" | "error" | "info" | string) => void
+  >();
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -85,9 +85,8 @@ vi.mock("$lib/utils/security", () => ({
   derivePasswordKey: async () => "phrase-key",
   hashString: (...args: Parameters<typeof hashStringMock>) =>
     hashStringMock(...args),
-  encryptWithSecret: (
-    ...args: Parameters<typeof encryptWithSecretMock>
-  ) => encryptWithSecretMock(...args),
+  encryptWithSecret: (...args: Parameters<typeof encryptWithSecretMock>) =>
+    encryptWithSecretMock(...args),
   verifyTotp: (...args: Parameters<typeof verifyTotpMock>) =>
     verifyTotpMock(...args),
   decryptWithSecret: async () => "decrypted",
@@ -186,9 +185,7 @@ describe("security question recovery acknowledgment", () => {
 
     const persistence = get(authPersistenceStore);
     expect(persistence.username).toBe("casey");
-    expect(persistence.recoveryHash).toBe(
-      "hash:" + generatedPhrase.join(" "),
-    );
+    expect(persistence.recoveryHash).toBe("hash:" + generatedPhrase.join(" "));
     expect(persistence.recoveryEnvelope).toEqual({
       cipherText: "phrase-key:N3wP@ssw0rd!Ω",
       iv: "iv",

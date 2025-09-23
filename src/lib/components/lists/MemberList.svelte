@@ -1,9 +1,12 @@
 <script lang="ts">
-  import type { User } from '$lib/features/auth/models/User';
+  import type { User } from "$lib/features/auth/models/User";
 
   type OpenUserCardModal = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
 
-  let { members = [], openUserCardModal }: { members?: User[]; openUserCardModal: OpenUserCardModal } = $props();
+  let {
+    members = [],
+    openUserCardModal,
+  }: { members?: User[]; openUserCardModal: OpenUserCardModal } = $props();
 
   function openMemberCard(member: User, event: MouseEvent | KeyboardEvent) {
     let x = 0;
@@ -17,7 +20,7 @@
       x = rect.left + rect.width / 2;
       y = rect.top + rect.height / 2;
     }
-    console.log('Attempting to open UserCardModal for:', member.name);
+    console.log("Attempting to open UserCardModal for:", member.name);
     openUserCardModal(member, x, y, true);
   }
 </script>
@@ -34,10 +37,17 @@
             tabindex="0"
             class="w-full flex items-center justify-between p-2 rounded-md bg-zinc-700 hover:bg-zinc-600/50 transition-colors"
             onclick={(e) => openMemberCard(member, e)}
-            onkeydown={(e) => { if (e.key === 'Enter') { openMemberCard(member, e); } }}
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                openMemberCard(member, e);
+              }
+            }}
           >
             <span class="text-white">{member.name}</span>
-            <button class="text-red-400 hover:text-destructive/80" onclick={(e) => e.stopPropagation()}>Remove</button>
+            <button
+              class="text-red-400 hover:text-destructive/80"
+              onclick={(e) => e.stopPropagation()}>Remove</button
+            >
           </div>
         {/each}
       </ul>
@@ -46,4 +56,3 @@
     {/if}
   </div>
 </div>
-

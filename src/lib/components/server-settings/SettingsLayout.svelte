@@ -1,26 +1,50 @@
 <script lang="ts">
-  import { X, Smile, Search } from '@lucide/svelte';
-  import type { Component } from 'svelte';
-  import RolesManagement from '$lib/features/servers/components/RolesManagement.svelte';
-  import ChannelManagement from '$lib/features/channels/components/ChannelManagement.svelte';
-  import WebhookManagement from '$lib/features/servers/components/WebhookManagement.svelte';
-  import MemberList from '$lib/components/lists/MemberList.svelte';
-  import BanList from '$lib/components/lists/BanList.svelte';
-  import Overview from '$lib/components/server-settings/Overview.svelte';
-  import Moderation from '$lib/components/server-settings/Moderation.svelte';
-  import UserManagement from '$lib/components/server-settings/UserManagement.svelte';
-  import Roles from '$lib/components/server-settings/Roles.svelte';
-  import Privacy from '$lib/components/server-settings/Privacy.svelte';
-  import { AlertDialog, AlertDialogHeader, AlertDialogContent, AlertDialogCancel, AlertDialogAction, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '$lib/components/ui/alert-dialog/index.js';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import { Input } from '$lib/components/ui/input/index.js';
-  import { Separator } from '$lib/components/ui/separator/index.js';
-  import { ScrollArea } from '$lib/components/ui/scroll-area/index.js';
-  import { Select, SelectTrigger, SelectContent, SelectItem } from '$lib/components/ui/select/index.js';
-  import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '$lib/components/ui/card/index.js';
-  import { Avatar, AvatarImage, AvatarFallback } from '$lib/components/ui/avatar/index.js';
-  import { Switch } from '$lib/components/ui/switch/index.js';
-  
+  import { X, Smile, Search } from "@lucide/svelte";
+  import type { Component } from "svelte";
+  import RolesManagement from "$lib/features/servers/components/RolesManagement.svelte";
+  import ChannelManagement from "$lib/features/channels/components/ChannelManagement.svelte";
+  import WebhookManagement from "$lib/features/servers/components/WebhookManagement.svelte";
+  import MemberList from "$lib/components/lists/MemberList.svelte";
+  import BanList from "$lib/components/lists/BanList.svelte";
+  import Overview from "$lib/components/server-settings/Overview.svelte";
+  import Moderation from "$lib/components/server-settings/Moderation.svelte";
+  import UserManagement from "$lib/components/server-settings/UserManagement.svelte";
+  import Roles from "$lib/components/server-settings/Roles.svelte";
+  import Privacy from "$lib/components/server-settings/Privacy.svelte";
+  import {
+    AlertDialog,
+    AlertDialogHeader,
+    AlertDialogContent,
+    AlertDialogCancel,
+    AlertDialogAction,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+  } from "$lib/components/ui/alert-dialog/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Separator } from "$lib/components/ui/separator/index.js";
+  import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+  import {
+    Select,
+    SelectTrigger,
+    SelectContent,
+    SelectItem,
+  } from "$lib/components/ui/select/index.js";
+  import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+    CardContent,
+  } from "$lib/components/ui/card/index.js";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
+
   type Events = {
     close: void;
     update_setting: { id: string; property: string; value: any };
@@ -44,11 +68,13 @@
   };
 
   type SidebarSeparator = {
-    type: 'separator';
+    type: "separator";
   };
 
   type SidebarItem = SidebarLinkItem | SidebarSeparator;
-  type EventHandler<T> = T extends void ? (() => void) | undefined : ((detail: T) => void) | undefined; // eslint-disable-line no-unused-vars
+  type EventHandler<T> = T extends void
+    ? (() => void) | undefined
+    : ((detail: T) => void) | undefined; // eslint-disable-line no-unused-vars
 
   let {
     title,
@@ -68,7 +94,7 @@
     onadd_channel,
     onupdate_channel,
     ondelete_channel,
-    onbutton_click
+    onbutton_click,
   }: {
     title: string;
     sidebarItems: SidebarItem[];
@@ -76,50 +102,54 @@
     categoryHeadings: { [key: string]: string };
     currentData: any;
     initialActiveTab?: string;
-    onclose?: EventHandler<Events['close']>;
-    onupdate_setting?: EventHandler<Events['update_setting']>;
-    onadd_role?: EventHandler<Events['add_role']>;
-    onupdate_role?: EventHandler<Events['update_role']>;
-    ondelete_role?: EventHandler<Events['delete_role']>;
-    onupdate_server?: EventHandler<Events['update_server']>;
-    ondelete_server?: EventHandler<Events['delete_server']>;
-    ontoggle_permission?: EventHandler<Events['toggle_permission']>;
-    onadd_channel?: EventHandler<Events['add_channel']>;
-    onupdate_channel?: EventHandler<Events['update_channel']>;
-    ondelete_channel?: EventHandler<Events['delete_channel']>;
-    onbutton_click?: EventHandler<Events['button_click']>;
+    onclose?: EventHandler<Events["close"]>;
+    onupdate_setting?: EventHandler<Events["update_setting"]>;
+    onadd_role?: EventHandler<Events["add_role"]>;
+    onupdate_role?: EventHandler<Events["update_role"]>;
+    ondelete_role?: EventHandler<Events["delete_role"]>;
+    onupdate_server?: EventHandler<Events["update_server"]>;
+    ondelete_server?: EventHandler<Events["delete_server"]>;
+    ontoggle_permission?: EventHandler<Events["toggle_permission"]>;
+    onadd_channel?: EventHandler<Events["add_channel"]>;
+    onupdate_channel?: EventHandler<Events["update_channel"]>;
+    ondelete_channel?: EventHandler<Events["delete_channel"]>;
+    onbutton_click?: EventHandler<Events["button_click"]>;
   } = $props();
 
   let filteredSidebarItems = $derived(
-    sidebarItems.filter(item => {
+    sidebarItems.filter((item) => {
       if (isSeparator(item)) {
         return !searchQuery;
       }
       if (!searchQuery) return true;
-      const content = pageContents[item.tab] || '';
+      const content = pageContents[item.tab] || "";
       return (
         item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
         content.toLowerCase().includes(searchQuery.toLowerCase())
       );
-    })
+    }),
   );
 
   let pageContents = $state<{ [key: string]: string }>({});
-  let activeTab = $state('');
-  let searchQuery = $state('');
+  let activeTab = $state("");
+  let searchQuery = $state("");
   let isSearching = $derived(searchQuery.length > 0);
 
   let showDeleteServerConfirm = $state(false);
 
-  const serverAwareComponents = new Set(['Overview', 'Moderation', 'Privacy']);
-  const isSeparator = (item: SidebarItem): item is SidebarSeparator => item.type === 'separator';
+  const serverAwareComponents = new Set(["Overview", "Moderation", "Privacy"]);
+  const isSeparator = (item: SidebarItem): item is SidebarSeparator =>
+    item.type === "separator";
 
-  function getOptionLabel(options: Array<{ value: string; label: string }>, value: unknown): string {
+  function getOptionLabel(
+    options: Array<{ value: string; label: string }>,
+    value: unknown,
+  ): string {
     if (!Array.isArray(options)) {
-      return '';
+      return "";
     }
     const match = options.find((option) => option.value === value);
-    return match?.label ?? '';
+    return match?.label ?? "";
   }
 
   const componentMap: { [key: string]: any } = {
@@ -132,14 +162,14 @@
     Moderation,
     UserManagement,
     Roles,
-    Privacy
+    Privacy,
   };
 
   $effect(() => {
     const initialize = async () => {
       if (
         initialActiveTab &&
-        sidebarItems.some(i => !isSeparator(i) && i.tab === initialActiveTab)
+        sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)
       ) {
         activeTab = initialActiveTab;
       }
@@ -151,21 +181,21 @@
     void initialize();
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         closeSettings();
       }
     };
-    window.addEventListener('keydown', handleEscape);
+    window.addEventListener("keydown", handleEscape);
 
     return () => {
-      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener("keydown", handleEscape);
     };
   });
 
   $effect(() => {
     if (!activeTab) {
       const firstTabItem = sidebarItems.find(
-        (item): item is SidebarLinkItem => !isSeparator(item)
+        (item): item is SidebarLinkItem => !isSeparator(item),
       );
       if (firstTabItem) {
         activeTab = firstTabItem.tab;
@@ -176,7 +206,7 @@
   $effect(() => {
     if (
       initialActiveTab &&
-      sidebarItems.some(i => !isSeparator(i) && i.tab === initialActiveTab)
+      sidebarItems.some((i) => !isSeparator(i) && i.tab === initialActiveTab)
     ) {
       if (activeTab !== initialActiveTab) activeTab = initialActiveTab;
     }
@@ -191,7 +221,7 @@
       pageContents[tab] = tab;
     } catch (error) {
       console.error(`Failed to fetch content for ${tab}:`, error);
-      pageContents[tab] = '';
+      pageContents[tab] = "";
     }
   }
 
@@ -207,19 +237,19 @@
       return;
     }
 
-    if (typeof detail === 'string') {
+    if (typeof detail === "string") {
       ondelete_server({ serverId: detail } as any);
       return;
     }
 
-    if (detail && typeof detail === 'object') {
+    if (detail && typeof detail === "object") {
       const record = detail as Record<string, unknown>;
       const serverId =
-        typeof record['serverId'] === 'string'
-          ? (record['serverId'] as string)
-          : typeof record['id'] === 'string'
-            ? (record['id'] as string)
-            : typeof currentData?.id === 'string'
+        typeof record["serverId"] === "string"
+          ? (record["serverId"] as string)
+          : typeof record["id"] === "string"
+            ? (record["id"] as string)
+            : typeof currentData?.id === "string"
               ? (currentData.id as string)
               : undefined;
 
@@ -232,7 +262,7 @@
       return;
     }
 
-    if (typeof currentData?.id === 'string') {
+    if (typeof currentData?.id === "string") {
       ondelete_server({ serverId: currentData.id } as any);
       return;
     }
@@ -250,7 +280,11 @@
       props.server = currentData;
     }
 
-    if (componentName === 'Overview' || componentName === 'Moderation' || componentName === 'Privacy') {
+    if (
+      componentName === "Overview" ||
+      componentName === "Moderation" ||
+      componentName === "Privacy"
+    ) {
       props.onupdateServer = handleUpdateServer;
     }
 
@@ -263,17 +297,13 @@
     <ScrollArea class="flex-grow py-[60px] px-2">
       <div class="w-[238px] ml-auto">
         <div class="relative mb-4">
-            <Input
-              placeholder="Search"
-              bind:value={searchQuery}
-              class="pr-9"
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-              onclick={() => (searchQuery = '')}
-            >
+          <Input placeholder="Search" bind:value={searchQuery} class="pr-9" />
+          <Button
+            variant="ghost"
+            size="icon"
+            class="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+            onclick={() => (searchQuery = "")}
+          >
             {#if searchQuery}
               <X class="w-4 h-4" />
             {:else}
@@ -281,8 +311,18 @@
             {/if}
           </Button>
         </div>
-        <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase" class:hidden={isSearching}>{title}</h2>
-        <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase" class:hidden={!isSearching}>Search Result</h2>
+        <h2
+          class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase"
+          class:hidden={isSearching}
+        >
+          {title}
+        </h2>
+        <h2
+          class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase"
+          class:hidden={!isSearching}
+        >
+          Search Result
+        </h2>
         <ul>
           {#each filteredSidebarItems as item, index (isSeparator(item) ? `sep-${index}` : item.tab)}
             {#if isSeparator(item)}
@@ -293,7 +333,7 @@
               <li>
                 <Button
                   variant="ghost"
-                  class={`w-full justify-start h-8 px-[10px] gap-2 ${activeTab === navItem.tab ? 'bg-zinc-700 text-white hover:bg-zinc-600' : ''}`}
+                  class={`w-full justify-start h-8 px-[10px] gap-2 ${activeTab === navItem.tab ? "bg-zinc-700 text-white hover:bg-zinc-600" : ""}`}
                   onclick={() => (activeTab = navItem.tab)}
                 >
                   <Icon class="w-4 h-4" />
@@ -318,7 +358,9 @@
           </ul>
         {/if}
         {#if isSearching && filteredSidebarItems.length === 0}
-          <div class="flex flex-col items-center justify-center text-muted-foreground mt-8">
+          <div
+            class="flex flex-col items-center justify-center text-muted-foreground mt-8"
+          >
             <Smile class="w-12 h-12 mb-2" />
             <p class="text-sm">No Search Results</p>
           </div>
@@ -341,36 +383,51 @@
         {#if activeTab === category}
           <h3 class="text-2xl font-semibold mb-6 text-blue-400">{heading}</h3>
           <div class="space-y-8">
-            {#each allSettings.filter(setting => setting.category === category) as setting, i (setting.id ?? `${category}-${i}`)}
+            {#each allSettings.filter((setting) => setting.category === category) as setting, i (setting.id ?? `${category}-${i}`)}
               <Card>
                 <CardHeader>
                   <CardTitle>{setting.title}</CardTitle>
                   <CardDescription>{setting.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {#if setting.type === 'text' || setting.type === 'image'}
+                  {#if setting.type === "text" || setting.type === "image"}
                     <Input
                       type="text"
                       value={currentData[setting.property]}
-                      onchange={(e) => onupdate_setting?.({
+                      onchange={(e) =>
+                        onupdate_setting?.({
                           id: setting.id,
                           property: setting.property,
-                          value: (e.currentTarget as HTMLInputElement).value
-                        })
-                      }
+                          value: (e.currentTarget as HTMLInputElement).value,
+                        })}
                     />
-                    {#if setting.type === 'image' && currentData[setting.property]}
-                      <img src={currentData[setting.property]} alt="Server Icon" class="mt-4 w-24 h-24 object-cover rounded-full" />
+                    {#if setting.type === "image" && currentData[setting.property]}
+                      <img
+                        src={currentData[setting.property]}
+                        alt="Server Icon"
+                        class="mt-4 w-24 h-24 object-cover rounded-full"
+                      />
                     {/if}
                     {#if currentData[setting.property]}
                       <Avatar class="mt-4 h-24 w-24">
-                        <AvatarImage src={currentData[setting.property]} alt="Server Icon" />
-                        <AvatarFallback>{(currentData.name ?? 'SV').slice(0,2).toUpperCase()}</AvatarFallback>
+                        <AvatarImage
+                          src={currentData[setting.property]}
+                          alt="Server Icon"
+                        />
+                        <AvatarFallback
+                          >{(currentData.name ?? "SV")
+                            .slice(0, 2)
+                            .toUpperCase()}</AvatarFallback
+                        >
                       </Avatar>
                     {/if}
-                  {:else if setting.type === 'static'}
-                    <p class="text-muted-foreground font-mono bg-card p-2 rounded">{currentData[setting.property]}</p>
-                  {:else if setting.type === 'select'}
+                  {:else if setting.type === "static"}
+                    <p
+                      class="text-muted-foreground font-mono bg-card p-2 rounded"
+                    >
+                      {currentData[setting.property]}
+                    </p>
+                  {:else if setting.type === "select"}
                     <Select
                       type="single"
                       value={currentData[setting.property]}
@@ -378,65 +435,73 @@
                         onupdate_setting?.({
                           id: setting.id,
                           property: setting.property,
-                          value
-                        })
-                      }
+                          value,
+                        })}
                     >
                       <SelectTrigger class="w-full">
                         <span data-slot="select-value" class="flex-1 text-left">
-                          {getOptionLabel(setting.options, currentData[setting.property]) || 'Select an option'}
+                          {getOptionLabel(
+                            setting.options,
+                            currentData[setting.property],
+                          ) || "Select an option"}
                         </span>
                       </SelectTrigger>
                       <SelectContent>
                         {#each setting.options as option (option.value)}
-                          <SelectItem value={option.value}>{option.label}</SelectItem>
+                          <SelectItem value={option.value}
+                            >{option.label}</SelectItem
+                          >
                         {/each}
                       </SelectContent>
                     </Select>
-                  {:else if setting.type === 'toggle'}
+                  {:else if setting.type === "toggle"}
                     <Switch
                       checked={currentData[setting.property]}
                       onCheckedChange={(val) =>
                         onupdate_setting?.({
                           id: setting.id,
                           property: setting.property,
-                          value: val
-                        })
-                      }
+                          value: val,
+                        })}
                     />
-                    <span class="ml-3 text-zinc-300 font-medium">{setting.title}</span>
-                  {:else if setting.type === 'custom_component'}
-                    {#if setting.component === 'RolesManagement'}
+                    <span class="ml-3 text-zinc-300 font-medium"
+                      >{setting.title}</span
+                    >
+                  {:else if setting.type === "custom_component"}
+                    {#if setting.component === "RolesManagement"}
                       <RolesManagement
                         roles={currentData.roles ?? []}
-                        onadd_role={onadd_role}
-                        onupdate_role={onupdate_role}
-                        ondelete_role={ondelete_role}
-                        ontoggle_permission={ontoggle_permission}
+                        {onadd_role}
+                        {onupdate_role}
+                        {ondelete_role}
+                        {ontoggle_permission}
                       />
-                    {:else if setting.component === 'ChannelManagement'}
+                    {:else if setting.component === "ChannelManagement"}
                       <ChannelManagement
                         channels={currentData.channels ?? []}
-                        onadd_channel={onadd_channel}
-                        onupdate_channel={onupdate_channel}
-                        ondelete_channel={ondelete_channel}
+                        {onadd_channel}
+                        {onupdate_channel}
+                        {ondelete_channel}
                       />
-                    {:else}
-                      {#if componentMap[setting.component]}
-                        {@const dynamicComponent = componentMap[setting.component]}
-                        {@const componentProps = getComponentProps(setting.component)}
-                        {#if dynamicComponent}
-                          <dynamicComponent
-                            {...componentProps}
-                            onupdate_setting={onupdate_setting}
-                            onbutton_click={onbutton_click}
-                          ></dynamicComponent>
-                        {/if}
+                    {:else if componentMap[setting.component]}
+                      {@const dynamicComponent =
+                        componentMap[setting.component]}
+                      {@const componentProps = getComponentProps(
+                        setting.component,
+                      )}
+                      {#if dynamicComponent}
+                        <dynamicComponent
+                          {...componentProps}
+                          {onupdate_setting}
+                          {onbutton_click}
+                        ></dynamicComponent>
                       {/if}
                     {/if}
-                  {:else if setting.type === 'button'}
+                  {:else if setting.type === "button"}
                     <Button
-                      variant={setting.buttonType === 'danger' ? 'destructive' : 'default'}
+                      variant={setting.buttonType === "danger"
+                        ? "destructive"
+                        : "default"}
                       onclick={() => onbutton_click?.({ id: setting.id })}
                     >
                       {setting.buttonLabel}
@@ -456,7 +521,8 @@
       <AlertDialogHeader>
         <AlertDialogTitle class="text-red-400">Delete server?</AlertDialogTitle>
         <AlertDialogDescription>
-          This action permanently removes {currentData?.name ?? 'this server'} and all of its data. You cannot undo this.
+          This action permanently removes {currentData?.name ?? "this server"} and
+          all of its data. You cannot undo this.
         </AlertDialogDescription>
       </AlertDialogHeader>
 
@@ -503,10 +569,10 @@
   }
 
   .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: theme('colors.zinc.700');
+    background-color: theme("colors.zinc.700");
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: theme('colors.zinc.600');
+    background-color: theme("colors.zinc.600");
   }
 </style>

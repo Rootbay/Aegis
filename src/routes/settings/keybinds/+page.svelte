@@ -1,7 +1,5 @@
 <script>
-  const keybinds = [
-    { action: 'Close Modal', key: 'Esc' },
-  ];
+  const keybinds = [{ action: "Close Modal", key: "Esc" }];
 </script>
 
 <div class="p-4">

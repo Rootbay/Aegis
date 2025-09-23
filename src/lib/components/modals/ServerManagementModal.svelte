@@ -1,20 +1,20 @@
 <script lang="ts">
-  import { Plus, CirclePlus, X } from '@lucide/svelte';
-  import { invoke } from '@tauri-apps/api/core';
-  import { v4 as uuidv4 } from 'uuid';
-  import { userStore } from '$lib/stores/userStore';
-  import type { Server } from '$lib/features/servers/models/Server';
+  import { Plus, CirclePlus, X } from "@lucide/svelte";
+  import { invoke } from "@tauri-apps/api/core";
+  import { v4 as uuidv4 } from "uuid";
+  import { userStore } from "$lib/stores/userStore";
+  import type { Server } from "$lib/features/servers/models/Server";
   import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
     DialogDescription,
-    DialogClose
-  } from '$lib/components/ui/dialog';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import { Input } from '$lib/components/ui/input/index.js';
-  import { Label } from '$lib/components/ui/label/index.js';
+    DialogClose,
+  } from "$lib/components/ui/dialog";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Label } from "$lib/components/ui/label/index.js";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 
@@ -29,11 +29,11 @@
     show = $bindable(false),
     onclose,
     onserverCreated,
-    onserverJoined
+    onserverJoined,
   }: ServerManagementModalProps = $props();
 
-  let newServerName = $state('');
-  let joinServerId = $state('');
+  let newServerName = $state("");
+  let joinServerId = $state("");
   let wasOpen = $state(show);
 
   let trimmedNewServerName = $derived(newServerName.trim());
@@ -54,7 +54,7 @@
   async function handleCreateServer() {
     if (!trimmedNewServerName) return;
     if (!$userStore.me) {
-      console.error('User not loaded, cannot create server.');
+      console.error("User not loaded, cannot create server.");
       return;
     }
 
@@ -69,31 +69,34 @@
     };
 
     try {
-      await invoke('create_server', { server: newServer });
-      console.log('Server created:', newServer);
-      newServerName = '';
+      await invoke("create_server", { server: newServer });
+      console.log("Server created:", newServer);
+      newServerName = "";
       closeModal();
       onserverCreated?.(newServer);
     } catch (error) {
-      console.error('Failed to create server:', error);
+      console.error("Failed to create server:", error);
     }
   }
 
   async function handleJoinServer() {
     if (!trimmedJoinServerId) return;
     if (!$userStore.me) {
-      console.error('User not loaded, cannot join server.');
+      console.error("User not loaded, cannot join server.");
       return;
     }
 
     try {
-      await invoke('send_server_invite', { server_id: trimmedJoinServerId, user_id: $userStore.me.id });
-      console.log('Joined server:', trimmedJoinServerId);
-      joinServerId = '';
+      await invoke("send_server_invite", {
+        server_id: trimmedJoinServerId,
+        user_id: $userStore.me.id,
+      });
+      console.log("Joined server:", trimmedJoinServerId);
+      joinServerId = "";
       closeModal();
       onserverJoined?.(trimmedJoinServerId);
     } catch (error) {
-      console.error('Failed to join server:', error);
+      console.error("Failed to join server:", error);
     }
   }
 </script>
@@ -110,8 +113,12 @@
     <div class="space-y-6">
       <section class="space-y-4 rounded-md border border-border bg-card/60 p-4">
         <div class="space-y-1">
-          <h3 class="text-sm font-semibold text-foreground">Create New Server</h3>
-          <p class="text-xs text-muted-foreground">Spin up a fresh home for your community.</p>
+          <h3 class="text-sm font-semibold text-foreground">
+            Create New Server
+          </h3>
+          <p class="text-xs text-muted-foreground">
+            Spin up a fresh home for your community.
+          </p>
         </div>
 
         <div class="space-y-2">
@@ -124,7 +131,12 @@
           />
         </div>
 
-        <Button class="w-full" type="button" disabled={!trimmedNewServerName} onclick={handleCreateServer}>
+        <Button
+          class="w-full"
+          type="button"
+          disabled={!trimmedNewServerName}
+          onclick={handleCreateServer}
+        >
           <Plus class="size-4" />
           Create Server
         </Button>
@@ -132,8 +144,12 @@
 
       <section class="space-y-4 rounded-md border border-border bg-card/60 p-4">
         <div class="space-y-1">
-          <h3 class="text-sm font-semibold text-foreground">Join Existing Server</h3>
-          <p class="text-xs text-muted-foreground">Enter a server ID shared with you.</p>
+          <h3 class="text-sm font-semibold text-foreground">
+            Join Existing Server
+          </h3>
+          <p class="text-xs text-muted-foreground">
+            Enter a server ID shared with you.
+          </p>
         </div>
 
         <div class="space-y-2">

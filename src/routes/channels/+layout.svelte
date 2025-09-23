@@ -4,10 +4,13 @@
   import { page } from "$app/stores";
   import { invoke } from "@tauri-apps/api/core";
   import { toasts } from "$lib/stores/ToastStore";
-  import { goto } from '$app/navigation';
+  import { goto } from "$app/navigation";
   import { setContext, getContext } from "svelte";
-  import { SERVER_LAYOUT_DATA_CONTEXT_KEY, CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
-  import type { CreateGroupContext } from '$lib/contextTypes';
+  import {
+    SERVER_LAYOUT_DATA_CONTEXT_KEY,
+    CREATE_GROUP_CONTEXT_KEY,
+  } from "$lib/contextKeys";
+  import type { CreateGroupContext } from "$lib/contextTypes";
 
   let serverId = $state<string | null>(null);
   let server = $state<any>(null);
@@ -16,7 +19,9 @@
   let loading = $state(true);
   let { children } = $props();
 
-  const { openUserCardModal } = getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
+  const { openUserCardModal } = getContext<CreateGroupContext>(
+    CREATE_GROUP_CONTEXT_KEY,
+  );
 
   type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
 
@@ -37,15 +42,31 @@
   async function fetchServerData(id: string) {
     loading = true;
     try {
-      const fetchedServer = await invoke("get_server_details", { serverId: id, server_id: id });
-      const fetchedChannels = await invoke("get_channels_for_server", { serverId: id, server_id: id }) as any[];
-      const fetchedMembers = await invoke("get_members_for_server", { serverId: id, server_id: id }) as any[];
-      server = fetchedServer ? { ...fetchedServer, channels: fetchedChannels, members: fetchedMembers } : null;
+      const fetchedServer = await invoke("get_server_details", {
+        serverId: id,
+        server_id: id,
+      });
+      const fetchedChannels = (await invoke("get_channels_for_server", {
+        serverId: id,
+        server_id: id,
+      })) as any[];
+      const fetchedMembers = (await invoke("get_members_for_server", {
+        serverId: id,
+        server_id: id,
+      })) as any[];
+      server = fetchedServer
+        ? {
+            ...fetchedServer,
+            channels: fetchedChannels,
+            members: fetchedMembers,
+          }
+        : null;
       channels = fetchedChannels;
       members = fetchedMembers;
     } catch (error) {
       console.error("Failed to fetch server data:", error);
-      const message = error instanceof Error ? error.message : 'Failed to load server data.';
+      const message =
+        error instanceof Error ? error.message : "Failed to load server data.";
       toasts.addToast(message, "error");
       server = null;
       channels = [];
@@ -66,18 +87,18 @@
   {#if loading}
     <p class="text-muted-foreground text-center mt-8">Loading server data...</p>
   {:else if server}
-    {#if !$page.url.pathname.includes('/settings')}
+    {#if !$page.url.pathname.includes("/settings")}
       <ServerSidebar {server} onSelectChannel={handleSelectChannel} />
     {/if}
     <main class="flex-grow flex flex-col bg-muted">
       {@render children()}
     </main>
-    {#if !$page.url.pathname.includes('/settings')}
+    {#if !$page.url.pathname.includes("/settings")}
       <MemberSidebar {members} {openUserCardModal} />
     {/if}
   {:else}
-    <p class="text-muted-foreground text-center mt-8">Server not found or an error occurred.</p>
+    <p class="text-muted-foreground text-center mt-8">
+      Server not found or an error occurred.
+    </p>
   {/if}
 </div>
-
-

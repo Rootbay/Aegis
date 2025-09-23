@@ -5,6 +5,9 @@ export interface ChatSearchState {
   query: string;
   matches: number[];
   activeMatchIndex: number;
+  dropdownOpen: boolean;
+  history: string[];
+  searching: boolean;
 }
 
 interface ChatSearchHandlers {
@@ -12,12 +15,21 @@ interface ChatSearchHandlers {
   clearSearch?: () => void;
 }
 
-const initialState: ChatSearchState = {
+const BASE_STATE = {
   open: false,
   query: "",
   matches: [],
   activeMatchIndex: 0,
+  dropdownOpen: false,
+  searching: false,
+} satisfies Omit<ChatSearchState, "history">;
+
+const initialState: ChatSearchState = {
+  ...BASE_STATE,
+  history: [],
 };
+
+const MAX_HISTORY = 8;
 
 function arraysEqual(a: number[], b: number[]) {
   if (a === b) return true;
@@ -38,13 +50,25 @@ function createChatSearchStore() {
       update((state) => (state.open ? state : { ...state, open: true }));
     },
     close() {
-      update((state) => (state.open ? { ...state, open: false } : state));
+      update((state) =>
+        state.open ? { ...state, open: false, dropdownOpen: false } : state,
+      );
     },
     reset() {
-      update((state) => ({ ...state, ...initialState }));
+      update((state) => ({ ...state, ...BASE_STATE }));
     },
     setQuery(query: string) {
-      update((state) => (state.query === query ? state : { ...state, query }));
+      update((state) => {
+        if (state.query === query) {
+          return state;
+        }
+        const trimmed = query.trim();
+        return {
+          ...state,
+          query,
+          searching: trimmed.length > 0 ? state.searching : false,
+        };
+      });
     },
     setMatches(matches: number[]) {
       update((state) => {
@@ -64,7 +88,16 @@ function createChatSearchStore() {
       });
     },
     setActiveMatchIndex(index: number) {
-      update((state) => (state.activeMatchIndex === index ? state : { ...state, activeMatchIndex: index }));
+      update((state) =>
+        state.activeMatchIndex === index
+          ? state
+          : { ...state, activeMatchIndex: index },
+      );
+    },
+    setDropdownOpen(open: boolean) {
+      update((state) =>
+        state.dropdownOpen === open ? state : { ...state, dropdownOpen: open },
+      );
     },
     registerHandlers(nextHandlers: ChatSearchHandlers) {
       handlers = nextHandlers;
@@ -81,8 +114,31 @@ function createChatSearchStore() {
       if (handlers.clearSearch) {
         handlers.clearSearch();
       } else {
-        set(initialState);
+        update((state) => ({ ...state, ...BASE_STATE }));
       }
+    },
+    executeSearch() {
+      update((state) => {
+        const trimmed = state.query.trim();
+        if (!trimmed.length) {
+          return { ...state, searching: false };
+        }
+        const nextHistory = [
+          trimmed,
+          ...state.history.filter((entry) => entry !== trimmed),
+        ].slice(0, MAX_HISTORY);
+        return {
+          ...state,
+          searching: true,
+          history: nextHistory,
+          dropdownOpen: false,
+        };
+      });
+    },
+    clearHistory() {
+      update((state) =>
+        state.history.length ? { ...state, history: [] } : state,
+      );
     },
   };
 }
