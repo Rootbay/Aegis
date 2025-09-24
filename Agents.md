@@ -2,7 +2,7 @@
 
 This repository represent:
 
-A \*\*desktop application\*\* built with \*\*Tauri v2\*\*, \*\*Svelte 5\*\*, \*\*TypeScript\*\*, \*\*TailwindCSS v4\*\*, \*\*shadcn-svelte\*\*, and \*\*lucide\*\* for icons.
+A \*\*desktop application\*\* built with \*\*Tauri v2\*\*, \*\*Svelte 5 runes mode\*\*, \*\*TypeScript\*\*, \*\*TailwindCSS v4\*\*, \*\*shadcn-svelte\*\*, and \*\*lucide\*\* for icons.
 
 \*\*Bun\*\* is used as the runtime, package manager, and task runner across all projects.
 
