@@ -53,6 +53,7 @@ pub async fn run() {
             commands::files::send_file,
             commands::files::approve_file_transfer,
             commands::files::reject_file_transfer,
+            commands::calls::send_call_signal,
             commands::settings::get_file_acl_policy,
             commands::settings::set_file_acl_policy
         ])
