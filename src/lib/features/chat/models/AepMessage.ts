@@ -3,6 +3,8 @@ export interface ChatMessage {
   content: string;
   channel_id?: string;
   server_id?: string;
+  conversation_id?: string;
+  conversationId?: string;
 }
 
 export interface PeerDiscovery {

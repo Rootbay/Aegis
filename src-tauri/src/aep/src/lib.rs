@@ -120,8 +120,8 @@ async fn fetch_public_key_for_user(db_pool: &Pool<Sqlite>, user_id: &str) -> Res
 
 pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, state: AppState) -> Result<(), AegisError> {
     match message {
-        AepMessage::ChatMessage { sender, content, channel_id, server_id, signature } => {
-            let chat_message_data = ChatMessageData { sender: sender.clone(), content: content.clone(), channel_id: channel_id.clone(), server_id: server_id.clone() };
+        AepMessage::ChatMessage { sender, content, channel_id, server_id, conversation_id, signature } => {
+            let chat_message_data = ChatMessageData { sender: sender.clone(), content: content.clone(), channel_id: channel_id.clone(), server_id: server_id.clone(), conversation_id: conversation_id.clone() };
             let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &sender).await?;
 
@@ -136,7 +136,9 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             }
 
             println!("Received chat message from {}: {} (Channel: {:?}, Server: {:?})", sender, content, channel_id, server_id);
-            let chat_id = if let Some(channel_id) = channel_id {
+            let chat_id = if let Some(conversation_id) = conversation_id {
+                conversation_id
+            } else if let Some(channel_id) = channel_id {
                 channel_id
             } else if let Some(server_id) = server_id {
                 // If it's a server message but no specific channel, use server ID as chat ID

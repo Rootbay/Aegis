@@ -340,13 +340,21 @@ function createChatStore(): ChatStore {
     });
 
     try {
-      await invoke("send_message", {
-        message: content,
-        channelId: type === "server" ? channelId : null,
-        channel_id: type === "server" ? channelId : null,
-        serverId: type === "server" ? chatId : null,
-        server_id: type === "server" ? chatId : null,
-      });
+      if (type === "dm") {
+        await invoke("send_direct_message", {
+          message: content,
+          recipientId: chatId,
+          recipient_id: chatId,
+        });
+      } else {
+        await invoke("send_message", {
+          message: content,
+          channelId: channelId,
+          channel_id: channelId,
+          serverId: chatId,
+          server_id: chatId,
+        });
+      }
     } catch (error) {
       console.error("Failed to send message:", error);
       messagesByChatIdStore.update((map) => {
@@ -394,18 +402,31 @@ function createChatStore(): ChatStore {
     });
 
     try {
-      await invoke("send_message_with_attachments", {
-        message: content,
-        attachments: attachments.map((a) => ({
-          name: a.name,
-          type: a.type,
-          size: a.size,
-        })),
-        channelId: type === "server" ? channelId : null,
-        channel_id: type === "server" ? channelId : null,
-        serverId: type === "server" ? chatId : null,
-        server_id: type === "server" ? chatId : null,
-      });
+      if (type === "dm") {
+        await invoke("send_direct_message_with_attachments", {
+          message: content,
+          recipientId: chatId,
+          recipient_id: chatId,
+          attachments: attachments.map((a) => ({
+            name: a.name,
+            type: a.type,
+            size: a.size,
+          })),
+        });
+      } else {
+        await invoke("send_message_with_attachments", {
+          message: content,
+          attachments: attachments.map((a) => ({
+            name: a.name,
+            type: a.type,
+            size: a.size,
+          })),
+          channelId: channelId,
+          channel_id: channelId,
+          serverId: chatId,
+          server_id: chatId,
+        });
+      }
     } catch (error) {
       console.error("Failed to send message with attachments:", error);
       messagesByChatIdStore.update((map) => {
@@ -441,12 +462,17 @@ function createChatStore(): ChatStore {
   };
 
   const handleNewMessageEvent = (message: ChatMessage) => {
-    const { sender, content, channel_id } = message;
+    const { sender, content } = message;
+    const channelIdFromPayload = message.channel_id ?? message.channelId;
+    const conversationId =
+      message.conversation_id ?? message.conversationId;
     const me = get(userStore).me;
 
     let targetChatId: string | null = null;
-    if (channel_id) {
-      targetChatId = channel_id;
+    if (conversationId) {
+      targetChatId = conversationId;
+    } else if (channelIdFromPayload) {
+      targetChatId = channelIdFromPayload;
     } else {
       targetChatId = sender;
     }

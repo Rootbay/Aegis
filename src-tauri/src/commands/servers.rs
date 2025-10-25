@@ -325,8 +325,7 @@ pub async fn delete_server(
     let delete_server_data = aegis_protocol::DeleteServerData {
         server_id: payload_server_id.clone(),
     };
-    let delete_server_bytes =
-        bincode::serialize(&delete_server_data).map_err(|e| e.to_string())?;
+    let delete_server_bytes = bincode::serialize(&delete_server_data).map_err(|e| e.to_string())?;
     let signature = state
         .identity
         .keypair()

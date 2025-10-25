@@ -18,18 +18,19 @@ pub struct AttachmentDescriptor {
 async fn persist_and_broadcast_message(
     state: AppState,
     message: String,
+    conversation_id: Option<String>,
     channel_id: Option<String>,
     server_id: Option<String>,
 ) -> Result<(), String> {
     let peer_id = state.identity.peer_id().to_base58();
 
-    let chat_id_local = if let Some(ref c) = channel_id {
-        c.clone()
-    } else if let Some(ref s) = server_id {
-        s.clone()
-    } else {
-        peer_id.clone()
-    };
+    let chat_id_local = conversation_id
+        .clone()
+        .or_else(|| channel_id.clone())
+        .or_else(|| server_id.clone())
+        .unwrap_or_else(|| peer_id.clone());
+
+    let payload_conversation_id = Some(chat_id_local.clone());
 
     let new_local_message = database::Message {
         id: uuid::Uuid::new_v4().to_string(),
@@ -48,6 +49,7 @@ async fn persist_and_broadcast_message(
         content: message.clone(),
         channel_id: channel_id.clone(),
         server_id: server_id.clone(),
+        conversation_id: payload_conversation_id.clone(),
     };
     let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
     let signature = state
@@ -61,6 +63,7 @@ async fn persist_and_broadcast_message(
         content: message,
         channel_id,
         server_id,
+        conversation_id: payload_conversation_id,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
@@ -81,7 +84,7 @@ pub async fn send_message(
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, channel_id, server_id).await
+    persist_and_broadcast_message(state, message, None, channel_id, server_id).await
 }
 
 #[tauri::command]
@@ -100,7 +103,41 @@ pub async fn send_message_with_attachments(
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, channel_id, server_id).await
+    persist_and_broadcast_message(state, message, None, channel_id, server_id).await
+}
+
+#[tauri::command]
+pub async fn send_direct_message(
+    recipient_id: String,
+    message: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+
+    persist_and_broadcast_message(state, message, Some(recipient_id), None, None).await
+}
+
+#[tauri::command]
+pub async fn send_direct_message_with_attachments(
+    recipient_id: String,
+    message: String,
+    attachments: Vec<AttachmentDescriptor>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    if !attachments.is_empty() {
+        let attachment_count = attachments.len();
+        let sample: Vec<String> = attachments.iter().take(3).map(|a| a.name.clone()).collect();
+        eprintln!(
+            "send_direct_message_with_attachments invoked with {attachment_count} attachment(s); deferring to basic message pipeline. Samples: {:?}",
+            sample
+        );
+    }
+
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+
+    persist_and_broadcast_message(state, message, Some(recipient_id), None, None).await
 }
 
 #[tauri::command]
