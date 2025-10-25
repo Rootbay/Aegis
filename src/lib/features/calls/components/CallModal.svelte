@@ -23,6 +23,9 @@
 
   let duration = $state(0);
   let interval: ReturnType<typeof setInterval> | null = null;
+  let localVideoEl: HTMLVideoElement | null = null;
+  let remoteVideoEl: HTMLVideoElement | null = null;
+  let remoteAudioEl: HTMLAudioElement | null = null;
 
   function beginTimer(call: ActiveCall | null) {
     if (!call?.connectedAt) {
@@ -79,6 +82,40 @@
         activeCall.status === "connecting" ||
         activeCall.status === "initializing"),
   );
+  const hasRemoteStream = $derived(Boolean(activeCall?.remoteStream));
+
+  $effect(() => {
+    const stream = activeCall?.localStream ?? null;
+    if (localVideoEl) {
+      if (stream) {
+        localVideoEl.srcObject = stream;
+        localVideoEl.muted = true;
+        localVideoEl.play().catch(() => {});
+      } else {
+        localVideoEl.srcObject = null;
+      }
+    }
+  });
+
+  $effect(() => {
+    const stream = activeCall?.remoteStream ?? null;
+    if (remoteVideoEl) {
+      if (stream) {
+        remoteVideoEl.srcObject = stream;
+        remoteVideoEl.play().catch(() => {});
+      } else {
+        remoteVideoEl.srcObject = null;
+      }
+    }
+    if (remoteAudioEl) {
+      if (stream) {
+        remoteAudioEl.srcObject = stream;
+        remoteAudioEl.play().catch(() => {});
+      } else {
+        remoteAudioEl.srcObject = null;
+      }
+    }
+  });
 </script>
 
 <Dialog open={state.showCallModal && Boolean(activeCall)} onOpenChange={handleOpenChange}>
@@ -106,16 +143,34 @@
         </div>
 
         {#if activeCall.type === "video"}
-          <div
-            class="flex h-40 flex-col items-center justify-center gap-3 rounded-md border border-dashed border-border bg-background/80 text-center text-xs text-muted-foreground"
-          >
-            <Video class="h-6 w-6 text-muted-foreground" />
-            <span>Live video preview is handled by the call service.</span>
+          <div class="relative h-56 w-full overflow-hidden rounded-md border border-border bg-black">
+            <video
+              bind:this={remoteVideoEl}
+              autoplay
+              playsinline
+              class="h-full w-full object-cover"
+            />
+            {#if !hasRemoteStream}
+              <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-xs text-muted-foreground">
+                <Video class="h-6 w-6" />
+                <span>Waiting for remote video...</span>
+              </div>
+            {/if}
+            <video
+              bind:this={localVideoEl}
+              autoplay
+              playsinline
+              muted
+              class="absolute bottom-3 right-3 h-20 w-28 rounded-md border border-white/30 object-cover shadow-lg"
+            />
           </div>
         {:else}
-          <div class="flex items-center gap-3 rounded-md border border-border bg-background/80 px-3 py-2 text-sm">
-            <Mic class="h-4 w-4 text-muted-foreground" />
-            <span>Audio connected</span>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-3 rounded-md border border-border bg-background/80 px-3 py-2 text-sm">
+              <Mic class="h-4 w-4 text-muted-foreground" />
+              <span>{hasRemoteStream ? "Audio connected" : "Connecting audio..."}</span>
+            </div>
+            <audio bind:this={remoteAudioEl} autoplay playsinline class="sr-only" />
           </div>
         {/if}
       </div>

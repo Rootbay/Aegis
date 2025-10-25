@@ -430,6 +430,21 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         }
                                                     }
                                                 }
+                                                AepMessage::CallSignal { sender_id, recipient_id, call_id, signal } => {
+                                                    let my_id = state_clone_for_aep.identity.peer_id().to_base58();
+                                                    if recipient_id == my_id {
+                                                        if let Err(e) = app_for_emit.emit(
+                                                            "call-signal",
+                                                            serde_json::json!({
+                                                                "senderId": sender_id,
+                                                                "callId": call_id,
+                                                                "signal": signal,
+                                                            }),
+                                                        ) {
+                                                            eprintln!("Failed to emit call-signal event: {}", e);
+                                                        }
+                                                    }
+                                                }
                                                 _ => {
                                                     if let Err(e) = handle_aep_message(
                                                         aep_message.clone(),

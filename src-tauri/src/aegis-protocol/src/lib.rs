@@ -87,6 +87,12 @@ pub enum AepMessage {
         file_name: String,
         error: String,
     },
+    CallSignal {
+        sender_id: String,
+        recipient_id: String,
+        call_id: String,
+        signal: CallSignalPayload,
+    },
     MessageReaction {
         message_id: String,
         chat_id: String,
@@ -148,6 +154,30 @@ pub struct AttachmentPayload {
     pub content_type: Option<String>,
     pub size: u64,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum CallSignalPayload {
+    Offer {
+        sdp: String,
+        call_type: String,
+        chat_name: Option<String>,
+    },
+    Answer {
+        sdp: String,
+    },
+    IceCandidate {
+        candidate: String,
+        sdp_mid: Option<String>,
+        sdp_mline_index: Option<u16>,
+    },
+    End {
+        reason: Option<String>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]

@@ -67,6 +67,7 @@
   );
   const isError = $derived(call.status === "error");
   const canDismiss = $derived(call.status === "ended" || call.status === "error");
+  const directionLabel = $derived(call.direction === "incoming" ? "Incoming" : "Outgoing");
 </script>
 
 <div
@@ -76,7 +77,8 @@
 >
   <div class="space-y-0.5">
     <p class="font-medium text-foreground">
-      {call.type === "video" ? "Video call" : "Voice call"} · {statusLabel}
+      {call.type === "video" ? "Video call" : "Voice call"} · {directionLabel} ·
+      {statusLabel}
     </p>
     {#if call.status === "in-call" && call.connectedAt}
       <p class="text-xs text-muted-foreground">Duration {formatDuration(duration)}</p>
