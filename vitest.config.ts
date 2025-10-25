@@ -18,6 +18,10 @@ export default defineConfig({
     alias: {
       $lib: resolve(projectRootDir, "src/lib"),
       $services: resolve(projectRootDir, "src/lib/services"),
+      "$app/environment": resolve(
+        projectRootDir,
+        "tests/mocks/app-environment",
+      ),
     },
     conditions: ["browser"],
   },
