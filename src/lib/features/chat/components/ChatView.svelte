@@ -421,8 +421,36 @@
     showMsgMenu = true;
   }
 
+  const REACTION_EMOJIS = ["❤️", "😂", "👍", "🔥"] as const;
+  const DEFAULT_REACTION = REACTION_EMOJIS[2];
+  const reactionOptions = REACTION_EMOJIS.map((emoji) => ({
+    emoji,
+    action: `react_${emoji}` as const,
+  }));
+  const reactionMenuItems = reactionOptions.map(({ emoji, action }) => ({
+    label: `React ${emoji}`,
+    action,
+  }));
+  const reactionActionMap = new Map(
+    reactionOptions.map(({ action, emoji }) => [action, emoji] as const),
+  );
+  type ReactionAction = (typeof reactionOptions)[number]["action"];
+
+  const baseMessageMenuItems = [
+    { label: "Copy Message", action: "copy_message" },
+    { label: "Reply", action: "reply_message" },
+  ];
+
   function handleMessageMenuAction({ action }: { action: string }) {
     if (!selectedMsg) return;
+
+    const reactionEmoji = reactionActionMap.get(action as ReactionAction);
+    if (reactionEmoji) {
+      chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, reactionEmoji);
+      showMsgMenu = false;
+      return;
+    }
+
     switch (action) {
       case "copy_message":
         navigator.clipboard.writeText(selectedMsg.content || "").then(() => {
@@ -433,18 +461,6 @@
         messageInput = `> ${selectedMsg.content}\n`;
         textareaRef?.focus();
         adjustTextareaHeight();
-        break;
-      case "react_❤️":
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, "❤️");
-        break;
-      case "react_😂":
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, "😂");
-        break;
-      case "react_👍":
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, "👍");
-        break;
-      case "react_🔥":
-        chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, "🔥");
         break;
       case "delete_message":
         if (selectedMsg.senderId === $userStore.me?.id) {
@@ -588,7 +604,11 @@
                       type="button"
                       class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
                       onclick={() =>
-                        chatStore.addReaction(msg.chatId, msg.id, "ðŸ‘")}
+                        chatStore.addReaction(
+                          msg.chatId,
+                          msg.id,
+                          DEFAULT_REACTION,
+                        )}
                       aria-label="Add reaction">+ React</button
                     >
                   </div>
@@ -598,7 +618,11 @@
                       type="button"
                       class="px-2 py-0.5 text-xs rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
                       onclick={() =>
-                        chatStore.addReaction(msg.chatId, msg.id, "ðŸ‘")}
+                        chatStore.addReaction(
+                          msg.chatId,
+                          msg.id,
+                          DEFAULT_REACTION,
+                        )}
                       aria-label="Add reaction">+ React</button
                     >
                   </div>
@@ -752,12 +776,8 @@
     y={msgMenuY}
     show={showMsgMenu}
     menuItems={[
-      { label: "Copy Message", action: "copy_message" },
-      { label: "Reply", action: "reply_message" },
-      { label: "React ðŸ‘", action: "react_ðŸ‘" },
-      { label: "React â¤ï¸", action: "react_â¤ï¸" },
-      { label: "React ðŸ˜‚", action: "react_ðŸ˜‚" },
-      { label: "React ðŸŽ‰", action: "react_ðŸŽ‰" },
+      ...baseMessageMenuItems,
+      ...reactionMenuItems,
       ...(selectedMsg.senderId === $userStore.me?.id
         ? [
             {
