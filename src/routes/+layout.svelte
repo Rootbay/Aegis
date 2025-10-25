@@ -124,8 +124,24 @@
   }
 
   async function bootstrapAfterAuthentication() {
-    await serverStore.initialize();
-    await friendStore.initialize();
+    const [serverResult, friendResult] = await Promise.allSettled([
+      serverStore.initialize(),
+      friendStore.initialize(),
+    ] as const);
+
+    if (serverResult.status === "rejected") {
+      console.error(
+        "Server store failed to initialize during post-auth bootstrap:",
+        serverResult.reason,
+      );
+    }
+
+    if (friendResult.status === "rejected") {
+      console.error(
+        "Friend store failed to initialize during post-auth bootstrap:",
+        friendResult.reason,
+      );
+    }
 
     clearUnlistenHandlers();
 
