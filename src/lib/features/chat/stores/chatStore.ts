@@ -55,6 +55,7 @@ interface ChatStore {
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   handleNewMessageEvent: (message: ChatMessage) => void;
   clearActiveChat: () => void;
+  dropChatHistory: (chatId: string) => void;
   loadMoreMessages: (targetChatId: string) => Promise<void>;
   loadAttachmentForMessage: (
     chatId: string,
@@ -73,7 +74,13 @@ interface ChatStore {
   ) => Promise<void>;
 }
 
-function createChatStore(): ChatStore {
+type ChatStoreOptions = {
+  maxMessagesPerChat?: number;
+};
+
+const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
+
+function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const messagesByChatIdStore = writable<Map<string, Message[]>>(new Map());
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const activeChatId = writable<string | null>(
@@ -93,6 +100,13 @@ function createChatStore(): ChatStore {
   );
   const loadingMessages = writable<boolean>(false);
   const PAGE_LIMIT = 50;
+
+  const configuredLimit = options.maxMessagesPerChat ?? DEFAULT_MAX_MESSAGES_PER_CHAT;
+  const maxMessagesPerChat = (
+    Number.isFinite(configuredLimit) && configuredLimit > 0
+      ? Math.floor(configuredLimit)
+      : DEFAULT_MAX_MESSAGES_PER_CHAT
+  );
 
   const ensureUint8Array = (
     input?: number[] | Uint8Array | ArrayBuffer,
@@ -125,6 +139,47 @@ function createChatStore(): ChatStore {
     }
   };
 
+  const revokeAttachmentsForMessages = (messages: Message[]) => {
+    for (const url of collectAttachmentUrlsFromMessages(messages)) {
+      revokeAttachmentUrl(url);
+    }
+    for (const message of messages) {
+      const attachments = message.attachments ?? [];
+      for (const attachment of attachments) {
+        pendingAttachmentFetches.delete(attachment.id);
+      }
+    }
+  };
+
+  const enforceRetention = (messages: Message[]): Message[] => {
+    if (maxMessagesPerChat <= 0) {
+      return messages;
+    }
+
+    const persisted = messages.filter((msg) => !msg.pending);
+    if (persisted.length <= maxMessagesPerChat) {
+      return messages;
+    }
+
+    const sortedPersisted = [...persisted].sort((a, b) =>
+      a.timestamp.localeCompare(b.timestamp),
+    );
+    const removeCount = sortedPersisted.length - maxMessagesPerChat;
+    if (removeCount <= 0) {
+      return messages;
+    }
+
+    const toRemove = sortedPersisted.slice(0, removeCount);
+    const toRemoveIds = new Set(toRemove.map((msg) => msg.id));
+    if (toRemove.length > 0) {
+      revokeAttachmentsForMessages(toRemove);
+    }
+
+    return messages.filter(
+      (msg) => msg.pending || !toRemoveIds.has(msg.id),
+    );
+  };
+
   const collectAttachmentUrlsFromMessages = (messages: Message[]): Set<string> => {
     const urls = new Set<string>();
     for (const message of messages) {
@@ -144,7 +199,7 @@ function createChatStore(): ChatStore {
   ) => {
     messagesByChatIdStore.update((map) => {
       const existing = map.get(chatId) || [];
-      const next = updater(existing);
+      const next = enforceRetention(updater(existing));
 
       const existingUrls = collectAttachmentUrlsFromMessages(existing);
       const nextUrls = collectAttachmentUrlsFromMessages(next);
@@ -347,8 +402,13 @@ function createChatStore(): ChatStore {
           .map((m: BackendMessage) => mapBackendMessage(m, messageChatId))
           .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
         handleMessagesUpdate(messageChatId, mapped);
+        const updatedMessages =
+          get(messagesByChatIdStore).get(messageChatId) || [];
+        const persistedCount = updatedMessages.filter((msg) => !msg.pending).length;
+        const limitReached =
+          maxMessagesPerChat > 0 && persistedCount >= maxMessagesPerChat;
         hasMoreByChatIdStore.update((map) => {
-          map.set(messageChatId, fetched.length >= PAGE_LIMIT);
+          map.set(messageChatId, !limitReached && fetched.length >= PAGE_LIMIT);
           return new Map(map);
         });
       } catch (e) {
@@ -403,6 +463,13 @@ function createChatStore(): ChatStore {
     try {
       const current = get(messagesByChatIdStore).get(targetChatId) || [];
       const persistedCount = current.filter((m) => !m.pending).length;
+      if (maxMessagesPerChat > 0 && persistedCount >= maxMessagesPerChat) {
+        hasMoreByChatIdStore.update((map) => {
+          map.set(targetChatId, false);
+          return new Map(map);
+        });
+        return;
+      }
       const fetched: BackendMessage[] = await invoke("get_messages", {
         chatId: targetChatId,
         chat_id: targetChatId,
@@ -449,8 +516,13 @@ function createChatStore(): ChatStore {
           ...remainingPending,
         ];
       });
+      const updatedMessages = get(messagesByChatIdStore).get(targetChatId) || [];
+      const updatedPersisted = updatedMessages.filter((msg) => !msg.pending).length;
+      const limitReached =
+        maxMessagesPerChat > 0 && updatedPersisted >= maxMessagesPerChat;
       hasMoreByChatIdStore.update((map) => {
-        const hasMore = fetched.length >= PAGE_LIMIT && newAdds > 0;
+        const hasMore =
+          !limitReached && fetched.length >= PAGE_LIMIT && newAdds > 0;
         map.set(targetChatId, hasMore);
         return new Map(map);
       });
@@ -801,7 +873,27 @@ function createChatStore(): ChatStore {
     }
   };
 
+  const dropChatHistory = (chatId: string) => {
+    if (!chatId) return;
+    const existing = get(messagesByChatIdStore).get(chatId);
+    if (!existing) return;
+    revokeAttachmentsForMessages(existing);
+    messagesByChatIdStore.update((map) => {
+      const next = new Map(map);
+      next.delete(chatId);
+      return next;
+    });
+    hasMoreByChatIdStore.update((map) => {
+      const next = new Map(map);
+      next.delete(chatId);
+      return next;
+    });
+  };
+
   const clearActiveChat = () => {
+    const previousChatId = get(activeChatId);
+    const previousChatType = get(activeChatType);
+    const previousChannelId = get(activeChannelId);
     activeChatId.set(null);
     activeChatType.set(null);
     activeChannelId.set(null);
@@ -809,6 +901,11 @@ function createChatStore(): ChatStore {
       localStorage.removeItem("activeChatId");
       localStorage.removeItem("activeChatType");
       localStorage.removeItem("activeChannelId");
+    }
+    const historyId =
+      previousChatType === "server" ? previousChannelId : previousChatId;
+    if (historyId) {
+      dropChatHistory(historyId);
     }
   };
 
@@ -896,6 +993,7 @@ function createChatStore(): ChatStore {
     deleteMessage,
     handleNewMessageEvent,
     clearActiveChat,
+    dropChatHistory,
     loadMoreMessages,
     loadAttachmentForMessage,
     addReaction,

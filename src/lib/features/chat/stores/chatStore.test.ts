@@ -1,4 +1,5 @@
 import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
+import { get } from "svelte/store";
 import { createChatStore } from "./chatStore";
 
 const invokeMock = vi.fn();
@@ -109,6 +110,93 @@ describe("chatStore attachment lifecycle", () => {
     await store.deleteMessage("chat-1", "msg-1");
 
     expect(createdUrls.length).toBeGreaterThan(0);
+    expect(revokeSpy).toHaveBeenCalledWith(createdUrls[0]);
+  });
+
+  it("prunes oldest persisted messages when retention limit is exceeded", async () => {
+    const base = Date.now();
+    const backendMessages = Array.from({ length: 4 }, (_, index) => ({
+      id: `msg-${index + 1}`,
+      content: `message-${index + 1}`,
+      timestamp: new Date(base + index * 1000).toISOString(),
+      attachments: [
+        {
+          id: `att-${index + 1}`,
+          name: `file-${index + 1}.txt`,
+          content_type: "text/plain",
+          data: [index + 1],
+        },
+      ],
+    }));
+
+    invokeMock.mockResolvedValueOnce(backendMessages);
+
+    const store = createChatStore({ maxMessagesPerChat: 2 });
+
+    await store.setActiveChat("chat-1", "dm");
+
+    const storedMessages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(storedMessages.map((msg) => msg.id)).toEqual(["msg-3", "msg-4"]);
+    expect(revokeSpy).toHaveBeenCalledWith(createdUrls[0]);
+    expect(revokeSpy).toHaveBeenCalledWith(createdUrls[1]);
+    expect(revokeSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not request more messages once the retention limit is reached", async () => {
+    const timestamp = new Date().toISOString();
+
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: "msg-1",
+        content: "hello",
+        timestamp,
+      },
+      {
+        id: "msg-2",
+        content: "world",
+        timestamp,
+      },
+    ]);
+
+    const store = createChatStore({ maxMessagesPerChat: 2 });
+
+    await store.setActiveChat("chat-1", "dm");
+    const callCountAfterLoad = invokeMock.mock.calls.length;
+
+    await store.loadMoreMessages("chat-1");
+
+    expect(invokeMock.mock.calls.length).toBe(callCountAfterLoad);
+    expect(get(store.hasMoreByChatId).get("chat-1")).toBe(false);
+  });
+
+  it("clears cached history and revokes URLs when the active chat is cleared", async () => {
+    const timestamp = new Date().toISOString();
+
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: "msg-1",
+        content: "hello",
+        timestamp,
+        attachments: [
+          {
+            id: "att-1",
+            name: "file-a.txt",
+            content_type: "text/plain",
+            data: [1, 2, 3],
+          },
+        ],
+      },
+    ]);
+
+    const store = createChatStore({ maxMessagesPerChat: 2 });
+
+    await store.setActiveChat("chat-1", "dm");
+    expect(get(store.messagesByChatId).get("chat-1")).toBeDefined();
+
+    store.clearActiveChat();
+
+    expect(get(store.messagesByChatId).get("chat-1")).toBeUndefined();
+    expect(get(store.hasMoreByChatId).get("chat-1")).toBeUndefined();
     expect(revokeSpy).toHaveBeenCalledWith(createdUrls[0]);
   });
 
