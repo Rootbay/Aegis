@@ -6,6 +6,15 @@
     authPersistenceStore,
   } from "$lib/features/auth/stores/authStore";
   import { KeyRound, QrCode, ShieldCheck } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Textarea } from "$lib/components/ui/textarea/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
+  import {
+    Alert,
+    AlertDescription,
+    AlertTitle,
+  } from "$lib/components/ui/alert/index.js";
 
   let displayName = $state("");
   let profileBio = $state("");
@@ -26,6 +35,12 @@
 
   const requireTotpOnUnlock = $derived(
     $authPersistenceStore.requireTotpOnUnlock ?? false,
+  );
+
+  const profileAlertVariant = $derived(
+    profileMessage && /error|fail|unable/i.test(profileMessage)
+      ? "destructive"
+      : "default",
   );
 
   const sanitizeCode = (value: string) =>
@@ -100,9 +115,8 @@
     }
   }
 
-  function handleToggleUnlockTotp(event: Event) {
-    const target = event.currentTarget as HTMLInputElement;
-    authStore.setRequireTotpOnUnlock(target.checked);
+  function handleToggleUnlockTotp(checked: boolean) {
+    authStore.setRequireTotpOnUnlock(checked);
   }
 </script>
 
@@ -122,38 +136,41 @@
         <label for="display-name" class="text-sm font-medium text-zinc-300"
           >Display name</label
         >
-        <input
+        <Input
           id="display-name"
           type="text"
-          class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           bind:value={displayName}
           minlength={3}
           required
           disabled={savingProfile}
+          class="w-full"
         />
       </div>
       <div class="space-y-2 md:col-span-2">
         <label for="profile-bio" class="text-sm font-medium text-zinc-300"
           >Bio</label
         >
-        <textarea
+        <Textarea
           id="profile-bio"
-          class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm focus:border-primary focus:outline-none min-h-[80px]"
           bind:value={profileBio}
           maxlength={280}
           disabled={savingProfile}
-        ></textarea>
+          class="w-full min-h-[80px]"
+        />
       </div>
-      <div class="md:col-span-2 flex items-center justify-between">
+      <div class="md:col-span-2 flex items-center justify-between gap-4">
         {#if profileMessage}
-          <span class="text-sm text-zinc-400">{profileMessage}</span>
+          <Alert class="flex-1" variant={profileAlertVariant}>
+            <AlertDescription>{profileMessage}</AlertDescription>
+          </Alert>
         {/if}
-        <button
-          class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-60"
+        <Button
+          type="submit"
           disabled={savingProfile}
+          aria-busy={savingProfile}
         >
           Save changes
-        </button>
+        </Button>
       </div>
     </form>
   </section>
@@ -184,15 +201,15 @@
           mandatory for device approvals.
         </p>
       </div>
-      <label class="flex items-center gap-2 text-sm text-zinc-200">
-        <input
-          type="checkbox"
-          class="h-4 w-4"
+      <div class="flex items-center gap-3 text-sm text-zinc-200">
+        <Switch
+          class="shrink-0"
           checked={requireTotpOnUnlock}
-          onchange={handleToggleUnlockTotp}
+          onCheckedChange={handleToggleUnlockTotp}
+          aria-label="Require authenticator when unlocking"
         />
-        {requireTotpOnUnlock ? "Enabled" : "Disabled"}
-      </label>
+        <span>{requireTotpOnUnlock ? "Enabled" : "Disabled"}</span>
+      </div>
     </div>
 
     <form class="space-y-4" onsubmit={revealTotp}>
@@ -202,41 +219,42 @@
           class="text-xs uppercase text-zinc-500 mb-1 block"
           >Authenticator code</label
         >
-        <input
+        <Input
           id="reveal-totp"
           type="text"
           inputmode="numeric"
           pattern="[0-9]*"
-          class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           value={totpCode}
-          oninput={(event) => {
+          on:input={(event) => {
             const target = event.currentTarget as HTMLInputElement;
             totpCode = sanitizeCode(target.value);
           }}
           maxlength={6}
           required
           disabled={revealingTotp}
+          class="w-full"
         />
       </div>
       <div class="flex items-center justify-between gap-4">
         <p class="text-sm text-zinc-400">
           Enter a fresh 6-digit code to reveal the provisioning secret.
         </p>
-        <button
-          class="rounded-lg border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-60"
+        <Button
+          type="submit"
+          variant="outline"
           disabled={totpCode.length !== 6 || revealingTotp}
+          aria-busy={revealingTotp}
         >
           Reveal secret
-        </button>
+        </Button>
       </div>
     </form>
 
     {#if totpError}
-      <div
-        class="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-      >
-        {totpError}
-      </div>
+      <Alert variant="destructive">
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{totpError}</AlertDescription>
+      </Alert>
     {/if}
 
     {#if totpSecret && totpUri}
@@ -286,36 +304,36 @@
           class="text-xs uppercase text-zinc-500 mb-1 block"
           >Authenticator code</label
         >
-        <input
+        <Input
           id="device-totp"
           type="text"
           inputmode="numeric"
           pattern="[0-9]*"
-          class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm focus:border-primary focus:outline-none"
           value={deviceTotp}
-          oninput={(event) => {
+          on:input={(event) => {
             const target = event.currentTarget as HTMLInputElement;
             deviceTotp = sanitizeCode(target.value);
           }}
           maxlength={6}
           required
           disabled={generatingDeviceQr}
+          class="w-full"
         />
       </div>
-      <button
-        class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-primary/80 disabled:opacity-60"
+      <Button
+        type="submit"
         disabled={deviceTotp.length !== 6 || generatingDeviceQr}
+        aria-busy={generatingDeviceQr}
       >
         Generate login QR
-      </button>
+      </Button>
     </form>
 
     {#if deviceError}
-      <div
-        class="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-      >
-        {deviceError}
-      </div>
+      <Alert variant="destructive">
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{deviceError}</AlertDescription>
+      </Alert>
     {/if}
 
     {#if deviceQr}

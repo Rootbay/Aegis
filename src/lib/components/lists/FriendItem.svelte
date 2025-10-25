@@ -15,6 +15,7 @@
     Unlock,
     X,
   } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
   import type { Friend } from "$lib/features/friends/models/Friend";
 
   type FriendStatus =
@@ -335,62 +336,74 @@
   </div>
   <div class="flex items-center gap-2">
     {#if isPending}
-      <button
-        class="px-2 py-1 text-xs rounded-md bg-green-600 hover:bg-green-500 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+      <Button
+        size="sm"
         onclick={handleAccept}
         disabled={actionInProgress === "accept"}
+        aria-busy={actionInProgress === "accept"}
       >
-        <CircleCheck size={14} /> Accept
-      </button>
-      <button
-        class="px-2 py-1 text-xs rounded-md bg-zinc-700 hover:bg-zinc-600 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        <CircleCheck class="size-4" /> Accept
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
         onclick={handleDecline}
         disabled={actionInProgress === "decline"}
+        aria-busy={actionInProgress === "decline"}
       >
-        <X size={14} /> Decline
-      </button>
+        <X class="size-4" /> Decline
+      </Button>
     {:else if isBlocked}
       {#if canUnblock}
-        <button
-          class="px-2 py-1 text-xs rounded-md bg-amber-600 hover:bg-amber-500 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        <Button
+          size="sm"
+          variant="secondary"
           onclick={handleUnblock}
           disabled={actionInProgress === "unblock"}
+          aria-busy={actionInProgress === "unblock"}
         >
-          <Unlock size={14} /> Unblock
-        </button>
+          <Unlock class="size-4" /> Unblock
+        </Button>
       {/if}
-      <button
-        class="px-2 py-1 text-xs rounded-md bg-zinc-700 hover:bg-zinc-600 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+      <Button
+        size="sm"
+        variant="outline"
         onclick={handleRemove}
         disabled={actionInProgress === "remove"}
+        aria-busy={actionInProgress === "remove"}
       >
-        <UserMinus size={14} /> Remove
-      </button>
+        <UserMinus class="size-4" /> Remove
+      </Button>
       {#if blockedByOther}
         <span class="text-xs text-muted-foreground">Blocked by this user</span>
       {/if}
     {:else}
-      <button
-        class="px-2 py-1 text-xs rounded-md bg-cyan-600 hover:bg-cyan-500 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+      <Button
+        size="sm"
         onclick={handleMessage}
         disabled={actionInProgress === "message"}
+        aria-busy={actionInProgress === "message"}
       >
-        <MessageCircle size={14} /> Message
-      </button>
-      <button
-        class="px-2 py-1 text-xs rounded-md bg-zinc-700 hover:bg-zinc-600 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        <MessageCircle class="size-4" /> Message
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
         onclick={handleRemove}
         disabled={actionInProgress === "remove"}
+        aria-busy={actionInProgress === "remove"}
       >
-        <UserMinus size={14} /> Remove
-      </button>
-      <button
-        class="px-2 py-1 text-xs rounded-md bg-red-600 hover:bg-red-500 flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+        <UserMinus class="size-4" /> Remove
+      </Button>
+      <Button
+        size="sm"
+        variant="destructive"
         onclick={handleBlock}
         disabled={actionInProgress === "block"}
+        aria-busy={actionInProgress === "block"}
       >
-        <Ban size={14} /> Block
-      </button>
+        <Ban class="size-4" /> Block
+      </Button>
     {/if}
   </div>
 </div>

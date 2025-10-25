@@ -4,6 +4,8 @@
   import { userStore } from "$lib/stores/userStore";
   import { Plus, Scan } from "@lucide/svelte";
   import QRCodeScanner from "$lib/components/modals/QRCodeScanner.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
 
   let friendIdToAdd = $state("");
   let isSending = $state(false);
@@ -53,36 +55,38 @@
   </p>
   <form
     onsubmit={handleAddFriend}
-    class="flex items-center bg-base-100 p-2 rounded-lg border border-border"
+    class="flex items-center bg-base-100 p-2 rounded-lg border border-border gap-2"
   >
-    <input
+    <Input
       type="search"
       bind:value={friendIdToAdd}
       placeholder="Enter a User ID"
       minlength="3"
       maxlength="20"
-      class="flex-grow bg-transparent text-foreground placeholder-text-tertiary focus:outline-none px-2 py-1"
+      class="flex-grow"
     />
-    <button
+    <Button
       type="submit"
-      class="bg-primary hover:bg-accent text-foreground font-bold py-2 px-4 rounded-md flex items-center cursor-pointer disabled:cursor-not-allowed"
       disabled={!friendIdToAdd.trim() || isSending}
+      aria-busy={isSending}
+      class="whitespace-nowrap"
     >
       {#if isSending}
         Sending...
       {:else}
-        <Plus size={10} class="mr-2" />
+        <Plus class="size-4" />
         Send Friend Request
       {/if}
-    </button>
-    <button
+    </Button>
+    <Button
       type="button"
-      class="bg-muted hover:bg-base-400 text-foreground font-bold py-2 px-4 rounded-md flex items-center ml-2 cursor-pointer"
-      onclick={handleScanQrCode}
+      variant="secondary"
+      on:click={handleScanQrCode}
+      class="whitespace-nowrap"
     >
-      <Scan size={10} class="mr-2" />
+      <Scan class="size-4" />
       Scan
-    </button>
+    </Button>
   </form>
   {#if showQrScanner}
     <QRCodeScanner
