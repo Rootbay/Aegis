@@ -1,3 +1,12 @@
+export interface AttachmentPayload {
+  id: string;
+  name: string;
+  content_type?: string;
+  contentType?: string;
+  size?: number;
+  data?: number[] | Uint8Array;
+}
+
 export interface ChatMessage {
   id?: string;
   message_id?: string;
@@ -9,6 +18,7 @@ export interface ChatMessage {
   server_id?: string;
   conversation_id?: string;
   conversationId?: string;
+  attachments?: AttachmentPayload[];
 }
 
 export interface PeerDiscovery {

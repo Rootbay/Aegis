@@ -1,5 +1,5 @@
 //--- FILE: src/aep/src/database.rs ---
-use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite, FromRow};
+use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite, FromRow, QueryBuilder};
 use serde::{Serialize, Deserialize};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -57,6 +57,16 @@ impl TryFrom<&str> for FriendshipStatus {
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attachment {
+    pub id: String,
+    pub message_id: String,
+    pub name: String,
+    pub content_type: Option<String>,
+    pub size: u64,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub id: String,
     pub chat_id: String, // friend_id or channel_id
@@ -64,6 +74,7 @@ pub struct Message {
     pub content: String,
     pub timestamp: DateTime<Utc>, // ISO 8601 string
     pub read: bool,
+    pub attachments: Vec<Attachment>,
 }
 
 pub async fn initialize_db(db_path: std::path::PathBuf) -> Result<Pool<Sqlite>, sqlx::Error> {
@@ -321,6 +332,7 @@ pub async fn delete_channel(pool: &Pool<Sqlite>, channel_id: &str) -> Result<(),
 }
 
 pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
     let timestamp_str = message.timestamp.to_rfc3339();
     sqlx::query!(
         "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read) VALUES (?, ?, ?, ?, ?, ?)",
@@ -331,8 +343,32 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
         timestamp_str,
         message.read,
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+
+    for attachment in &message.attachments {
+        if attachment.size > i64::MAX as u64 {
+            return Err(sqlx::Error::Protocol(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "attachment size too large",
+            ))));
+        }
+        let size_i64 = attachment.size as i64;
+
+        sqlx::query!(
+            "INSERT INTO attachments (id, message_id, name, content_type, size, data) VALUES (?, ?, ?, ?, ?, ?)",
+            attachment.id,
+            attachment.message_id,
+            attachment.name,
+            attachment.content_type,
+            size_i64,
+            attachment.data,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
     Ok(())
 }
 
@@ -366,10 +402,12 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         .await?;
 
     let mut messages = Vec::with_capacity(messages_raw.len());
+    let mut message_ids: Vec<String> = Vec::with_capacity(messages_raw.len());
     for m_raw in messages_raw {
         let timestamp = DateTime::parse_from_rfc3339(&m_raw.timestamp)
             .map(|dt| dt.with_timezone(&Utc))
             .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
+        message_ids.push(m_raw.id.clone());
         messages.push(Message {
             id: m_raw.id,
             chat_id: m_raw.chat_id,
@@ -377,7 +415,60 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             content: m_raw.content,
             timestamp,
             read: m_raw.read,
+            attachments: Vec::new(),
         });
+    }
+
+    if !message_ids.is_empty() {
+        #[derive(FromRow)]
+        struct AttachmentRow {
+            id: String,
+            message_id: String,
+            name: String,
+            content_type: Option<String>,
+            size: i64,
+            data: Vec<u8>,
+        }
+
+        let mut query_builder = QueryBuilder::<Sqlite>::new(
+            "SELECT id, message_id, name, content_type, size, data FROM attachments WHERE message_id IN (",
+        );
+        {
+            let mut separated = query_builder.separated(", ");
+            for message_id in &message_ids {
+                separated.push_bind(message_id);
+            }
+        }
+        query_builder.push(") ORDER BY id");
+        let attachment_rows = query_builder
+            .build_query_as::<AttachmentRow>()
+            .fetch_all(pool)
+            .await?;
+
+        use std::collections::HashMap;
+        let mut attachments_map: HashMap<String, Vec<Attachment>> = HashMap::new();
+        for row in attachment_rows {
+            let mut size_u64 = if row.size < 0 { 0 } else { row.size as u64 };
+            let actual_size = row.data.len() as u64;
+            if size_u64 == 0 {
+                size_u64 = actual_size;
+            }
+            attachments_map.entry(row.message_id.clone()).or_default().push(Attachment {
+                id: row.id,
+                message_id: row.message_id,
+                name: row.name,
+                content_type: row.content_type,
+                size: if size_u64 == 0 { actual_size } else { size_u64 },
+                data: row.data,
+            });
+        }
+
+        for message in &mut messages {
+            if let Some(mut attachments) = attachments_map.remove(&message.id) {
+                attachments.sort_by(|a, b| a.id.cmp(&b.id));
+                message.attachments = attachments;
+            }
+        }
     }
 
     messages.reverse();

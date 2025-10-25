@@ -45,3 +45,4 @@ bs58 = "0.4"
 [dev-dependencies]
 rstest = "0.21.0"
 assert_cmd = "2.0.14"
+tempfile = "3"

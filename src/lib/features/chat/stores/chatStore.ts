@@ -1,6 +1,6 @@
 import { writable, get, derived, type Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import type { Message } from "$lib/features/chat/models/Message";
+import type { AttachmentMeta, Message } from "$lib/features/chat/models/Message";
 import type { ChatMessage } from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
 
@@ -13,6 +13,18 @@ type BackendMessage = {
   content: string;
   timestamp: string | number | Date;
   read?: boolean;
+  attachments?: BackendAttachment[];
+};
+
+type BackendAttachment = {
+  id: string;
+  message_id?: string;
+  messageId?: string;
+  name: string;
+  content_type?: string;
+  contentType?: string;
+  size?: number;
+  data?: number[] | Uint8Array;
 };
 
 interface ChatStore {
@@ -67,6 +79,47 @@ function createChatStore(): ChatStore {
   const loadingMessages = writable<boolean>(false);
   const PAGE_LIMIT = 50;
 
+  const ensureUint8Array = (
+    input?: number[] | Uint8Array,
+  ): Uint8Array | undefined => {
+    if (!input) {
+      return undefined;
+    }
+    if (input instanceof Uint8Array) {
+      return input;
+    }
+    return new Uint8Array(input);
+  };
+
+  const toAttachmentMeta = (attachment: BackendAttachment): AttachmentMeta => {
+    const mime =
+      attachment.content_type ??
+      attachment.contentType ??
+      "application/octet-stream";
+    const bytes = ensureUint8Array(attachment.data);
+    const url = bytes
+      ? URL.createObjectURL(new Blob([bytes], { type: mime }))
+      : undefined;
+
+    return {
+      id: attachment.id,
+      name: attachment.name,
+      type: mime,
+      size: attachment.size ?? bytes?.length,
+      url,
+      bytes,
+    };
+  };
+
+  const mapAttachmentPayloads = (
+    attachments?: BackendAttachment[] | null,
+  ): AttachmentMeta[] => {
+    if (!attachments || attachments.length === 0) {
+      return [];
+    }
+    return attachments.map(toAttachmentMeta);
+  };
+
   const normalizeTimestamp = (
     value: string | number | Date | undefined,
   ): string => {
@@ -85,15 +138,19 @@ function createChatStore(): ChatStore {
   const mapBackendMessage = (
     message: BackendMessage,
     fallbackChatId: string,
-  ): Message => ({
-    id: message.id,
-    chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
-    senderId: message.sender_id ?? message.senderId ?? "",
-    content: message.content,
-    timestamp: normalizeTimestamp(message.timestamp),
-    read: message.read ?? true,
-    pending: false,
-  });
+  ): Message => {
+    const attachments = mapAttachmentPayloads(message.attachments);
+    return {
+      id: message.id,
+      chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
+      senderId: message.sender_id ?? message.senderId ?? "",
+      content: message.content,
+      timestamp: normalizeTimestamp(message.timestamp),
+      read: message.read ?? true,
+      pending: false,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    };
+  };
 
   const isOptimisticMatch = (
     optimistic: Message,
@@ -382,6 +439,13 @@ function createChatStore(): ChatStore {
     }
   };
 
+  const createOptimisticAttachmentId = () => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  };
+
   const sendMessageWithAttachments = async (content: string, files: File[]) => {
     const type = get(activeChatType);
     const chatId = get(activeChatId);
@@ -393,12 +457,34 @@ function createChatStore(): ChatStore {
     if (!messageChatId) return;
 
     const tempId = Date.now().toString() + "-a";
-    const attachments = files.map((f) => ({
-      name: f.name,
-      type: f.type,
-      size: f.size,
-      url: URL.createObjectURL(f),
-    }));
+
+    const attachmentsCombined = await Promise.all(
+      files.map(async (file) => {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const mime = file.type || "application/octet-stream";
+        return {
+          backend: {
+            name: file.name,
+            type: mime,
+            size: file.size,
+            data: Array.from(bytes),
+          },
+          ui: {
+            id: createOptimisticAttachmentId(),
+            name: file.name,
+            type: mime,
+            size: file.size,
+            url: URL.createObjectURL(file),
+            bytes,
+          } satisfies AttachmentMeta,
+        };
+      }),
+    );
+
+    const backendAttachments = attachmentsCombined.map((entry) => entry.backend);
+    const optimisticAttachments = attachmentsCombined.map((entry) => entry.ui);
+
     const newMessage: Message = {
       id: tempId,
       chatId: messageChatId,
@@ -406,7 +492,8 @@ function createChatStore(): ChatStore {
       content: content,
       timestamp: new Date().toISOString(),
       read: true,
-      attachments,
+      attachments:
+        optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
     };
     messagesByChatIdStore.update((map) => {
@@ -421,20 +508,12 @@ function createChatStore(): ChatStore {
           message: content,
           recipientId: chatId,
           recipient_id: chatId,
-          attachments: attachments.map((a) => ({
-            name: a.name,
-            type: a.type,
-            size: a.size,
-          })),
+          attachments: backendAttachments,
         });
       } else {
         await invoke("send_message_with_attachments", {
           message: content,
-          attachments: attachments.map((a) => ({
-            name: a.name,
-            type: a.type,
-            size: a.size,
-          })),
+          attachments: backendAttachments,
           channelId: channelId,
           channel_id: channelId,
           serverId: chatId,
@@ -526,6 +605,10 @@ function createChatStore(): ChatStore {
         content: content,
         timestamp: normalizeTimestamp(timestampFromPayload),
         read: sender === me?.id,
+        attachments:
+          message.attachments && message.attachments.length > 0
+            ? mapAttachmentPayloads(message.attachments)
+            : undefined,
       };
       messagesByChatIdStore.update((map) => {
         const existing = map.get(targetChatId) || [];

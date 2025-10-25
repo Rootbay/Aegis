@@ -128,6 +128,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             channel_id,
             server_id,
             conversation_id,
+            attachments,
             signature,
         } => {
             let chat_message_data = ChatMessageData {
@@ -138,6 +139,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 channel_id: channel_id.clone(),
                 server_id: server_id.clone(),
                 conversation_id: conversation_id.clone(),
+                attachments: attachments.clone(),
             };
             let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &sender).await?;
@@ -165,6 +167,27 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 sender.clone() // Use sender ID as chat ID for DMs
             };
 
+            let mut attachments_for_db = Vec::new();
+            for attachment in &attachments {
+                let data_len = attachment.data.len() as u64;
+                let sanitized_size = if attachment.size == 0 {
+                    data_len
+                } else if attachment.size != data_len {
+                    data_len
+                } else {
+                    attachment.size
+                };
+
+                attachments_for_db.push(database::Attachment {
+                    id: attachment.id.clone(),
+                    message_id: id.clone(),
+                    name: attachment.name.clone(),
+                    content_type: attachment.content_type.clone(),
+                    size: sanitized_size,
+                    data: attachment.data.clone(),
+                });
+            }
+
             let new_message = database::Message {
                 id,
                 chat_id,
@@ -172,6 +195,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 content: content,
                 timestamp,
                 read: false,
+                attachments: attachments_for_db,
             };
             database::insert_message(db_pool, &new_message).await?;
         }

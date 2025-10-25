@@ -13,11 +13,13 @@ pub struct AttachmentDescriptor {
     #[serde(rename = "type")]
     pub content_type: Option<String>,
     pub size: u64,
+    pub data: Vec<u8>,
 }
 
 async fn persist_and_broadcast_message(
     state: AppState,
     message: String,
+    attachments: Vec<AttachmentDescriptor>,
     conversation_id: Option<String>,
     channel_id: Option<String>,
     server_id: Option<String>,
@@ -32,29 +34,72 @@ async fn persist_and_broadcast_message(
 
     let payload_conversation_id = Some(chat_id_local.clone());
 
+    let message_id = uuid::Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now();
+
+    let mut db_attachments = Vec::new();
+    let mut protocol_attachments = Vec::new();
+
+    for descriptor in attachments {
+        let AttachmentDescriptor {
+            name,
+            content_type,
+            size,
+            data,
+        } = descriptor;
+        if data.is_empty() {
+            return Err(format!("Attachment '{name}' is missing binary data"));
+        }
+
+        let attachment_id = uuid::Uuid::new_v4().to_string();
+        let data_len = data.len() as u64;
+        let effective_size = if size == 0 { data_len } else { size };
+        let sanitized_size = if effective_size == data_len {
+            effective_size
+        } else {
+            data_len
+        };
+
+        db_attachments.push(database::Attachment {
+            id: attachment_id.clone(),
+            message_id: message_id.clone(),
+            name: name.clone(),
+            content_type: content_type.clone(),
+            size: sanitized_size,
+            data: data.clone(),
+        });
+
+        protocol_attachments.push(aegis_protocol::AttachmentPayload {
+            id: attachment_id,
+            name,
+            content_type,
+            size: sanitized_size,
+            data,
+        });
+    }
+
     let new_local_message = database::Message {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: message_id.clone(),
         chat_id: chat_id_local,
         sender_id: peer_id.clone(),
         content: message.clone(),
-        timestamp: chrono::Utc::now(),
+        timestamp: timestamp,
         read: false,
+        attachments: db_attachments,
     };
     database::insert_message(&state.db_pool, &new_local_message)
         .await
         .map_err(|e| e.to_string())?;
 
-    let message_id = new_local_message.id.clone();
-    let message_timestamp = new_local_message.timestamp;
-
     let chat_message_data = aegis_protocol::ChatMessageData {
         id: message_id.clone(),
-        timestamp: message_timestamp.clone(),
+        timestamp: new_local_message.timestamp.clone(),
         sender: peer_id.clone(),
         content: message.clone(),
         channel_id: channel_id.clone(),
         server_id: server_id.clone(),
         conversation_id: payload_conversation_id.clone(),
+        attachments: protocol_attachments.clone(),
     };
     let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
     let signature = state
@@ -65,12 +110,13 @@ async fn persist_and_broadcast_message(
 
     let aep_message = AepMessage::ChatMessage {
         id: message_id,
-        timestamp: message_timestamp,
+        timestamp: new_local_message.timestamp,
         sender: peer_id,
         content: message,
         channel_id,
         server_id,
         conversation_id: payload_conversation_id,
+        attachments: protocol_attachments,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
@@ -91,7 +137,7 @@ pub async fn send_message(
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, None, channel_id, server_id).await
+    persist_and_broadcast_message(state, message, Vec::new(), None, channel_id, server_id).await
 }
 
 #[tauri::command]
@@ -102,15 +148,10 @@ pub async fn send_message_with_attachments(
     server_id: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    if !attachments.is_empty() {
-        let attachment_count = attachments.len();
-        let sample: Vec<String> = attachments.iter().take(3).map(|a| a.name.clone()).collect();
-        eprintln!("send_message_with_attachments invoked with {attachment_count} attachment(s); deferring to basic message pipeline. Samples: {:?}", sample);
-    }
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, None, channel_id, server_id).await
+    persist_and_broadcast_message(state, message, attachments, None, channel_id, server_id).await
 }
 
 #[tauri::command]
@@ -122,7 +163,7 @@ pub async fn send_direct_message(
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, Some(recipient_id), None, None).await
+    persist_and_broadcast_message(state, message, Vec::new(), Some(recipient_id), None, None).await
 }
 
 #[tauri::command]
@@ -132,19 +173,10 @@ pub async fn send_direct_message_with_attachments(
     attachments: Vec<AttachmentDescriptor>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    if !attachments.is_empty() {
-        let attachment_count = attachments.len();
-        let sample: Vec<String> = attachments.iter().take(3).map(|a| a.name.clone()).collect();
-        eprintln!(
-            "send_direct_message_with_attachments invoked with {attachment_count} attachment(s); deferring to basic message pipeline. Samples: {:?}",
-            sample
-        );
-    }
-
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, Some(recipient_id), None, None).await
+    persist_and_broadcast_message(state, message, attachments, Some(recipient_id), None, None).await
 }
 
 #[tauri::command]
@@ -192,6 +224,7 @@ pub async fn send_encrypted_dm(
         content: message.clone(),
         timestamp: chrono::Utc::now(),
         read: false,
+        attachments: Vec::new(),
     };
     database::insert_message(&state.db_pool, &new_local_message)
         .await
