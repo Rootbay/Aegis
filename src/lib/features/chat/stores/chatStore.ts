@@ -158,14 +158,24 @@ function createChatStore(): ChatStore {
     }
     const messageChatId = type === "server" ? channelId : chatId;
     if (messageChatId) {
-      messagesByChatIdStore.update((map) => {
-        map.set(messageChatId, []);
-        return new Map(map);
-      });
-      hasMoreByChatIdStore.update((map) => {
-        map.set(messageChatId, true);
-        return new Map(map);
-      });
+      const existingMessages = get(messagesByChatIdStore).get(messageChatId);
+      const hasCachedMessages =
+        Array.isArray(existingMessages) && existingMessages.length > 0;
+
+      if (!hasCachedMessages) {
+        messagesByChatIdStore.update((map) => {
+          const current = map.get(messageChatId);
+          if (!current || current.length === 0) {
+            map.set(messageChatId, []);
+          }
+          return new Map(map);
+        });
+        hasMoreByChatIdStore.update((map) => {
+          map.set(messageChatId, true);
+          return new Map(map);
+        });
+      }
+
       loadingMessages.set(true);
       try {
         const fetched: BackendMessage[] = await invoke("get_messages", {
