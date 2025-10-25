@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { AttachmentMeta, Message } from "$lib/features/chat/models/Message";
 import type { ChatMessage } from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
+import { serverStore } from "$lib/features/servers/stores/serverStore";
 
 type BackendMessage = {
   id: string;
@@ -40,6 +41,8 @@ interface ChatStore {
   activeChatId: Readable<string | null>;
   activeChatType: Readable<"dm" | "server" | null>;
   activeChannelId: Readable<string | null>;
+  serverChannelSelections: Readable<Map<string, string>>;
+  activeServerChannelId: Readable<string | null>;
   loadingMessages: Readable<boolean>;
   setActiveChat: (
     chatId: string,
@@ -83,21 +86,91 @@ const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
 function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const messagesByChatIdStore = writable<Map<string, Message[]>>(new Map());
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
-  const activeChatId = writable<string | null>(
+
+  const SERVER_CHANNEL_SELECTIONS_KEY = "serverChannelSelections";
+
+  const loadServerChannelSelections = (): Map<string, string> => {
+    if (typeof localStorage === "undefined") {
+      return new Map();
+    }
+    try {
+      const raw = localStorage.getItem(SERVER_CHANNEL_SELECTIONS_KEY);
+      if (!raw) {
+        return new Map();
+      }
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return new Map(
+          parsed.filter(
+            (entry): entry is [string, string] =>
+              Array.isArray(entry) && entry.length === 2,
+          ),
+        );
+      }
+      if (parsed && typeof parsed === "object") {
+        return new Map(
+          Object.entries(parsed).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[0] === "string" && typeof entry[1] === "string",
+          ),
+        );
+      }
+    } catch (error) {
+      console.debug("Failed to parse server channel selections", error);
+    }
+    return new Map();
+  };
+
+  const persistServerChannelSelections = (map: Map<string, string>) => {
+    if (typeof localStorage === "undefined") {
+      return;
+    }
+    try {
+      localStorage.setItem(
+        SERVER_CHANNEL_SELECTIONS_KEY,
+        JSON.stringify(Array.from(map.entries())),
+      );
+    } catch (error) {
+      console.debug("Failed to persist server channel selections", error);
+    }
+  };
+
+  const initialActiveChatId =
     typeof localStorage !== "undefined"
       ? localStorage.getItem("activeChatId")
-      : null,
-  );
+      : null;
+  const initialActiveChatType =
+    typeof localStorage !== "undefined"
+      ? (localStorage.getItem("activeChatType") as "dm" | "server" | null)
+      : null;
+
+  const initialServerChannelSelections = loadServerChannelSelections();
+
+  let initialActiveChannelId: string | null = null;
+  if (initialActiveChatId && initialActiveChatType === "server") {
+    initialActiveChannelId =
+      initialServerChannelSelections.get(initialActiveChatId) ?? null;
+    if (!initialActiveChannelId && typeof localStorage !== "undefined") {
+      const legacyChannelId = localStorage.getItem("activeChannelId");
+      if (legacyChannelId) {
+        initialActiveChannelId = legacyChannelId;
+        initialServerChannelSelections.set(initialActiveChatId, legacyChannelId);
+        persistServerChannelSelections(initialServerChannelSelections);
+      }
+      localStorage.removeItem("activeChannelId");
+    }
+  } else if (typeof localStorage !== "undefined") {
+    localStorage.removeItem("activeChannelId");
+  }
+
+  const activeChatId = writable<string | null>(initialActiveChatId);
   const activeChatType = writable<"dm" | "server" | null>(
-    typeof localStorage !== "undefined"
-      ? (localStorage.getItem("activeChatType") as "dm" | "server")
-      : null,
+    initialActiveChatType,
   );
-  const activeChannelId = writable<string | null>(
-    typeof localStorage !== "undefined"
-      ? localStorage.getItem("activeChannelId")
-      : null,
+  const serverChannelSelectionsStore = writable<Map<string, string>>(
+    initialServerChannelSelections,
   );
+  const activeChannelId = writable<string | null>(initialActiveChannelId);
   const loadingMessages = writable<boolean>(false);
   const PAGE_LIMIT = 50;
 
@@ -359,11 +432,24 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       forceRefresh?: boolean;
     },
   ) => {
-    const previousChannelId = get(activeChannelId);
-    const resolvedChannelId =
-      type === "server"
-        ? channelId ?? previousChannelId ?? null
-        : null;
+    let resolvedChannelId: string | null = null;
+    if (type === "server") {
+      resolvedChannelId = channelId ?? null;
+      if (!resolvedChannelId) {
+        resolvedChannelId =
+          get(serverChannelSelectionsStore).get(chatId) ?? null;
+      }
+      serverChannelSelectionsStore.update((map) => {
+        const next = new Map(map);
+        if (resolvedChannelId) {
+          next.set(chatId, resolvedChannelId);
+        } else {
+          next.delete(chatId);
+        }
+        persistServerChannelSelections(next);
+        return next;
+      });
+    }
 
     activeChatId.set(chatId);
     activeChatType.set(type);
@@ -371,11 +457,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("activeChatId", chatId);
       localStorage.setItem("activeChatType", type);
-      if (resolvedChannelId) {
-        localStorage.setItem("activeChannelId", resolvedChannelId);
-      } else {
-        localStorage.removeItem("activeChannelId");
-      }
+      localStorage.removeItem("activeChannelId");
     }
     const messageChatId = type === "server" ? resolvedChannelId : chatId;
     if (messageChatId) {
@@ -991,6 +1073,20 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     activeChatId: derived(activeChatId, ($id) => $id),
     activeChatType: derived(activeChatType, ($type) => $type),
     activeChannelId: derived(activeChannelId, ($id) => $id),
+    serverChannelSelections: derived(
+      serverChannelSelectionsStore,
+      ($map) => new Map($map),
+    ),
+    activeServerChannelId: derived(
+      [serverStore, serverChannelSelectionsStore],
+      ([$serverState, $map]) => {
+        const activeServerId = $serverState.activeServerId;
+        if (!activeServerId) {
+          return null;
+        }
+        return $map.get(activeServerId) ?? null;
+      },
+    ),
     loadingMessages: derived(loadingMessages, ($loading) => $loading),
     setActiveChat,
     handleMessagesUpdate,
@@ -1011,6 +1107,8 @@ export const chatStore = createChatStore();
 export const messagesByChatId = chatStore.messagesByChatId;
 export const hasMoreByChatId = chatStore.hasMoreByChatId;
 export const activeChannelId = chatStore.activeChannelId;
+export const serverChannelSelections = chatStore.serverChannelSelections;
+export const activeServerChannelId = chatStore.activeServerChannelId;
 export const activeChatId = chatStore.activeChatId;
 export const activeChatType = chatStore.activeChatType;
 export { createChatStore };

@@ -19,6 +19,7 @@ import {
   activeChannelId,
   activeChatId,
   activeChatType,
+  activeServerChannelId,
   chatStore,
   messagesByChatId,
 } from "$lib/features/chat/stores/chatStore";
@@ -269,7 +270,6 @@ export function createAppController(): AppController {
     const storedActiveServerId = localStorage.getItem("activeServerId");
     const storedActiveChatId = localStorage.getItem("activeChatId");
     const storedActiveChatType = localStorage.getItem("activeChatType");
-    const storedActiveChannelId = localStorage.getItem("activeChannelId");
 
     if (storedActiveServerId) {
       serverStore.setActiveServer(storedActiveServerId);
@@ -278,7 +278,6 @@ export function createAppController(): AppController {
       chatStore.setActiveChat(
         storedActiveChatId,
         storedActiveChatType as "dm" | "server",
-        storedActiveChannelId || undefined,
       );
     }
 
@@ -368,15 +367,24 @@ export function createAppController(): AppController {
 
     const chatType = get(activeChatType);
     const chatId = get(activeChatId);
-    const channelId = get(activeChannelId);
+    const selectedChannelId = get(activeServerChannelId);
 
-    const isServerChat = chatType === "server" && chatId === server.id;
     const hasValidChannel =
-      Boolean(channelId) && server.channels.some((channel) => channel.id === channelId);
+      Boolean(selectedChannelId) &&
+      server.channels.some((channel) => channel.id === selectedChannelId);
 
-    if (!isServerChat || !hasValidChannel) {
+    if (!hasValidChannel) {
       untrack(() => {
         chatStore.setActiveChat(server.id, "server", targetChannelId);
+      });
+      return;
+    }
+
+    const isServerChat = chatType === "server" && chatId === server.id;
+
+    if (!isServerChat) {
+      untrack(() => {
+        chatStore.setActiveChat(server.id, "server");
       });
     }
   });
