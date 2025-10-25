@@ -16,7 +16,7 @@
     messagesByChatId,
     hasMoreByChatId,
   } from "$lib/features/chat/stores/chatStore";
-  import { getContext, onMount } from "svelte";
+  import { afterUpdate, getContext, onMount } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { get, derived } from "svelte/store";
@@ -53,72 +53,111 @@
   let fileInput: HTMLInputElement | null = $state(null);
   let textareaRef: HTMLTextAreaElement | null = $state(null);
   let viewportEl: HTMLElement | null = null;
+  let detachViewportListener: (() => void) | null = null;
   let showMsgMenu = $state(false);
   let msgMenuX = $state(0);
   let msgMenuY = $state(0);
   let selectedMsg: Message | null = $state(null);
 
-  onMount(() => {
-    viewportEl = document.querySelector(".chat-viewport") as HTMLElement | null;
-    const onScroll = () => {
-      if (!viewportEl) return;
-      const bottomThreshold = 24;
-      const atBottom =
-        viewportEl.scrollHeight -
-          (viewportEl.scrollTop + viewportEl.clientHeight) <=
-        bottomThreshold;
-      isAtBottom = atBottom;
-      if (atBottom) unseenCount = 0;
+  const onScroll = () => {
+    const el = viewportEl;
+    if (!el) return;
 
-      const topThreshold = 24;
-      const hasMore = chat?.id
-        ? ($hasMoreByChatId.get(chat.id) ?? true)
-        : false;
-      const awayThreshold = topThreshold * 8;
-      if (!loadingMoreMessages && viewportEl.scrollTop > awayThreshold) {
-        canTriggerTopLoad = true;
-      }
-      const now = Date.now();
-      if (
-        !loadingMoreMessages &&
-        hasMore &&
-        canTriggerTopLoad &&
-        now - lastTopLoad > LOAD_COOLDOWN_MS &&
-        viewportEl.scrollTop <= topThreshold &&
-        chat?.id
-      ) {
-        loadingMoreMessages = true;
-        canTriggerTopLoad = false;
-        lastTopLoad = now;
-        const oldScrollHeight = viewportEl.scrollHeight;
-        const oldScrollTop = viewportEl.scrollTop;
-        chatStore.loadMoreMessages(chat.id).finally(() => {
-          if (viewportEl) {
-            requestAnimationFrame(() => {
-              const newScrollHeight = viewportEl!.scrollHeight;
-              const delta = newScrollHeight - oldScrollHeight;
-              let nextTop = oldScrollTop + (Number.isFinite(delta) ? delta : 0);
-              if (nextTop <= topThreshold) nextTop = topThreshold + 1;
-              viewportEl!.scrollTop = nextTop;
-            });
-          }
-          loadingMoreMessages = false;
-        });
+    const bottomThreshold = 24;
+    const atBottom =
+      el.scrollHeight - (el.scrollTop + el.clientHeight) <= bottomThreshold;
+    isAtBottom = atBottom;
+    if (atBottom) unseenCount = 0;
+
+    const topThreshold = 24;
+    const hasMore = chat?.id ? ($hasMoreByChatId.get(chat.id) ?? true) : false;
+    const awayThreshold = topThreshold * 8;
+    if (!loadingMoreMessages && el.scrollTop > awayThreshold) {
+      canTriggerTopLoad = true;
+    }
+    const now = Date.now();
+    if (
+      !loadingMoreMessages &&
+      hasMore &&
+      canTriggerTopLoad &&
+      now - lastTopLoad > LOAD_COOLDOWN_MS &&
+      el.scrollTop <= topThreshold &&
+      chat?.id
+    ) {
+      loadingMoreMessages = true;
+      canTriggerTopLoad = false;
+      lastTopLoad = now;
+      const oldScrollHeight = el.scrollHeight;
+      const oldScrollTop = el.scrollTop;
+      chatStore.loadMoreMessages(chat.id).finally(() => {
+        if (viewportEl) {
+          requestAnimationFrame(() => {
+            const newScrollHeight = viewportEl!.scrollHeight;
+            const delta = newScrollHeight - oldScrollHeight;
+            let nextTop = oldScrollTop + (Number.isFinite(delta) ? delta : 0);
+            if (nextTop <= topThreshold) nextTop = topThreshold + 1;
+            viewportEl!.scrollTop = nextTop;
+          });
+        }
+        loadingMoreMessages = false;
+      });
+    }
+  };
+
+  function attachViewportElement(element: HTMLElement | null) {
+    if (viewportEl === element) return;
+    if (detachViewportListener) {
+      detachViewportListener();
+      detachViewportListener = null;
+    }
+
+    viewportEl = element;
+    if (!viewportEl) return;
+
+    viewportEl.addEventListener("scroll", onScroll, {
+      passive: true,
+    } as AddEventListenerOptions);
+    onScroll();
+    detachViewportListener = () => {
+      viewportEl?.removeEventListener("scroll", onScroll);
+      if (viewportEl === element) {
+        viewportEl = null;
       }
     };
-    if (viewportEl) {
-      viewportEl.addEventListener("scroll", onScroll, { passive: true } as any);
-      onScroll();
+  }
+
+  function captureViewport(node: HTMLElement) {
+    const nextViewport = node.closest(".chat-viewport") as HTMLElement | null;
+    if (nextViewport) {
+      attachViewportElement(nextViewport);
     }
+    return {
+      destroy() {
+        if (viewportEl && !viewportEl.isConnected) {
+          attachViewportElement(null);
+        }
+      },
+    };
+  }
+
+  onMount(() => {
     const unregisterSearchHandlers = chatSearchStore.registerHandlers({
       jumpToMatch,
       clearSearch,
     });
     return () => {
-      if (viewportEl) viewportEl.removeEventListener("scroll", onScroll as any);
+      detachViewportListener?.();
+      detachViewportListener = null;
+      viewportEl = null;
       unregisterSearchHandlers();
       chatSearchStore.reset();
     };
+  });
+
+  afterUpdate(() => {
+    if (viewportEl && !viewportEl.isConnected) {
+      attachViewportElement(null);
+    }
   });
 
   let prevCount = $state(0);
@@ -449,7 +488,7 @@
               Loading older messages...
             </div>
           {/if}
-          <div class="space-y-6">
+          <div class="space-y-6" use:captureViewport>
             <div
               class="flex items-start gap-3 {isMe ? 'flex-row-reverse' : ''}"
             >
