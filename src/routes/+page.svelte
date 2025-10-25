@@ -4,9 +4,9 @@
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
   import type { FriendsLayoutContext } from "$lib/contextTypes";
 
-  const { friends } = getContext<FriendsLayoutContext>(
+  const { friends, loading } = getContext<FriendsLayoutContext>(
     FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
   );
 </script>
 
-<FriendsList {friends} />
+<FriendsList {friends} {loading} />

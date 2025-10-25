@@ -13,4 +13,5 @@ export interface CreateGroupContext {
 export interface FriendsLayoutContext {
   friends: Friend[];
   activeTab: string;
+  loading: boolean;
 }

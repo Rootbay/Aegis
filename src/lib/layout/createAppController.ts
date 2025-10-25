@@ -492,6 +492,9 @@ export function createAppController(): AppController {
     get activeTab() {
       return get(activeTab);
     },
+    get loading() {
+      return get(friendStore).loading;
+    },
   };
 
   setContext(FRIENDS_LAYOUT_DATA_CONTEXT_KEY, friendsLayoutContext);

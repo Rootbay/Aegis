@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import "../app.css";
+  import { getContext } from "svelte";
   import { theme } from "$lib/stores/theme";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
@@ -16,11 +17,15 @@
   import AppModals from "$lib/layout/AppModals.svelte";
   import { ChatView } from "$features/chat";
   import { createAppController } from "$lib/layout/createAppController";
+  import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
+  import type { FriendsLayoutContext } from "$lib/contextTypes";
   import type { User } from "$lib/features/auth/models/User";
 
   type MemberWithRoles = User & Record<string, unknown>;
 
   let { children } = $props();
+
+  const appController = createAppController();
 
   const {
     authState,
@@ -32,7 +37,16 @@
     activeTab,
     modal,
     handlers,
-  } = createAppController();
+  } = appController;
+
+  const friendsLayoutContext =
+    getContext<FriendsLayoutContext | undefined>(
+      FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
+    );
+
+  const friendsLoading = $derived(
+    () => friendsLayoutContext?.loading ?? false,
+  );
 
   const {
     handleKeydown,
@@ -60,7 +74,10 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="flex h-screen bg-base-100 text-foreground">
+<div
+  class="flex h-screen bg-base-100 text-foreground"
+  data-friends-loading={friendsLoading ? "true" : undefined}
+>
   <LoadingOverlay show={$authState.loading} />
   {#if $authState.status !== "authenticated" || !$currentUser}
     <InitialSetup />
