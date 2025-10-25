@@ -13,6 +13,20 @@ export interface AttachmentPayload {
   data?: BytePayload;
 }
 
+export type ReactionAction = "add" | "remove";
+
+export interface MessageReaction {
+  message_id?: string;
+  messageId?: string;
+  chat_id?: string;
+  chatId?: string;
+  emoji: string;
+  user_id?: string;
+  userId?: string;
+  action: ReactionAction;
+  signature?: BytePayload;
+}
+
 export interface ChatMessage {
   id?: string;
   message_id?: string;
@@ -25,6 +39,7 @@ export interface ChatMessage {
   conversation_id?: string;
   conversationId?: string;
   attachments?: AttachmentPayload[];
+  reactions?: Record<string, string[]> | null;
   signature?: BytePayload;
 }
 
@@ -202,4 +217,5 @@ export interface AepMessage {
   FileTransferChunk?: FileTransferChunk;
   FileTransferComplete?: FileTransferComplete;
   FileTransferError?: FileTransferError;
+  MessageReaction?: MessageReaction;
 }

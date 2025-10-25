@@ -44,13 +44,10 @@ describe("chatStore attachment lifecycle", () => {
       return url;
     });
     revokeSpy = vi.fn();
-    vi.stubGlobal(
-      "URL",
-      {
-        createObjectURL: createSpy,
-        revokeObjectURL: revokeSpy,
-      } as unknown as typeof URL,
-    );
+    vi.stubGlobal("URL", {
+      createObjectURL: createSpy,
+      revokeObjectURL: revokeSpy,
+    } as unknown as typeof URL);
   });
 
   afterEach(() => {
@@ -94,7 +91,9 @@ describe("chatStore attachment lifecycle", () => {
     const store = createChatStore();
 
     await store.setActiveChat("chat-1", "dm");
-    await store.setActiveChat("chat-1", "dm", undefined, { forceRefresh: true });
+    await store.setActiveChat("chat-1", "dm", undefined, {
+      forceRefresh: true,
+    });
 
     expect(createdUrls.length).toBeGreaterThan(1);
     expect(revokeSpy).toHaveBeenCalledWith(createdUrls[0]);
@@ -237,6 +236,39 @@ describe("chatStore attachment lifecycle", () => {
     expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
+  it("reconciles optimistic reactions with authoritative updates", async () => {
+    const timestamp = new Date().toISOString();
+    const store = createChatStore();
+
+    store.handleMessagesUpdate("chat-1", [
+      {
+        id: "msg-1",
+        chatId: "chat-1",
+        senderId: "user-2",
+        content: "hello",
+        timestamp,
+        read: true,
+      },
+    ]);
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await store.addReaction("chat-1", "msg-1", "🔥");
+
+    let messages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(messages[0]?.reactions?.["🔥"]).toEqual(["user-1"]);
+
+    store.handleReactionUpdate({
+      chat_id: "chat-1",
+      message_id: "msg-1",
+      emoji: "🔥",
+      user_id: "user-1",
+      action: "add",
+    });
+
+    messages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(messages[0]?.reactions?.["🔥"]).toEqual(["user-1"]);
+  });
+
   it("retains the selected server channel when no new channel id is provided", async () => {
     invokeMock.mockResolvedValue([]);
 
@@ -246,17 +278,17 @@ describe("chatStore attachment lifecycle", () => {
 
     serverStore.setActiveServer("server-1");
 
-    expect(JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]")).toEqual([
-      ["server-1", "channel-2"],
-    ]);
+    expect(
+      JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]"),
+    ).toEqual([["server-1", "channel-2"]]);
     expect(get(store.activeChannelId)).toBe("channel-2");
     expect(get(store.activeServerChannelId)).toBe("channel-2");
 
     await store.setActiveChat("server-1", "server");
 
-    expect(JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]")).toEqual([
-      ["server-1", "channel-2"],
-    ]);
+    expect(
+      JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]"),
+    ).toEqual([["server-1", "channel-2"]]);
     expect(get(store.activeChannelId)).toBe("channel-2");
     expect(get(store.activeServerChannelId)).toBe("channel-2");
   });
@@ -303,7 +335,10 @@ describe("chatStore attachment lifecycle", () => {
   });
 
   it("ignores stale responses when a newer load begins", async () => {
-    const deferreds: Array<{ chatId: string; deferred: ReturnType<typeof createDeferred> }> = [];
+    const deferreds: Array<{
+      chatId: string;
+      deferred: ReturnType<typeof createDeferred>;
+    }> = [];
     invokeMock.mockImplementation((command: string, payload: unknown) => {
       if (command === "get_messages") {
         const params = payload as { chatId?: string; chat_id?: string };

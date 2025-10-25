@@ -1,7 +1,14 @@
 import { writable, get, derived, type Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import type { AttachmentMeta, Message } from "$lib/features/chat/models/Message";
-import type { ChatMessage } from "$lib/features/chat/models/AepMessage";
+import type {
+  AttachmentMeta,
+  Message,
+} from "$lib/features/chat/models/Message";
+import type {
+  ChatMessage,
+  MessageReaction,
+  ReactionAction,
+} from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 
@@ -15,6 +22,7 @@ type BackendMessage = {
   timestamp: string | number | Date;
   read?: boolean;
   attachments?: BackendAttachment[];
+  reactions?: Record<string, string[]> | null;
 };
 
 type BackendAttachment = {
@@ -57,6 +65,7 @@ interface ChatStore {
   sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   handleNewMessageEvent: (message: ChatMessage) => void;
+  handleReactionUpdate: (payload: MessageReaction) => void;
   clearActiveChat: () => void;
   dropChatHistory: (chatId: string) => void;
   loadMoreMessages: (targetChatId: string) => Promise<void>;
@@ -154,7 +163,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       const legacyChannelId = localStorage.getItem("activeChannelId");
       if (legacyChannelId) {
         initialActiveChannelId = legacyChannelId;
-        initialServerChannelSelections.set(initialActiveChatId, legacyChannelId);
+        initialServerChannelSelections.set(
+          initialActiveChatId,
+          legacyChannelId,
+        );
         persistServerChannelSelections(initialServerChannelSelections);
       }
       localStorage.removeItem("activeChannelId");
@@ -204,12 +216,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
   const PAGE_LIMIT = 50;
 
-  const configuredLimit = options.maxMessagesPerChat ?? DEFAULT_MAX_MESSAGES_PER_CHAT;
-  const maxMessagesPerChat = (
+  const configuredLimit =
+    options.maxMessagesPerChat ?? DEFAULT_MAX_MESSAGES_PER_CHAT;
+  const maxMessagesPerChat =
     Number.isFinite(configuredLimit) && configuredLimit > 0
       ? Math.floor(configuredLimit)
-      : DEFAULT_MAX_MESSAGES_PER_CHAT
-  );
+      : DEFAULT_MAX_MESSAGES_PER_CHAT;
 
   const ensureUint8Array = (
     input?: number[] | Uint8Array | ArrayBuffer,
@@ -278,12 +290,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       revokeAttachmentsForMessages(toRemove);
     }
 
-    return messages.filter(
-      (msg) => msg.pending || !toRemoveIds.has(msg.id),
-    );
+    return messages.filter((msg) => msg.pending || !toRemoveIds.has(msg.id));
   };
 
-  const collectAttachmentUrlsFromMessages = (messages: Message[]): Set<string> => {
+  const collectAttachmentUrlsFromMessages = (
+    messages: Message[],
+  ): Set<string> => {
     const urls = new Set<string>();
     for (const message of messages) {
       const attachments = message.attachments ?? [];
@@ -350,6 +362,62 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return attachments.map(toAttachmentMeta);
   };
 
+  const normalizeReactions = (
+    reactions?: Record<string, string[] | null | undefined> | null,
+  ): Record<string, string[]> | undefined => {
+    if (!reactions) {
+      return undefined;
+    }
+    const normalized: Record<string, string[]> = {};
+    for (const [emoji, users] of Object.entries(reactions)) {
+      if (!users) continue;
+      const filtered = users.filter(
+        (user): user is string => typeof user === "string",
+      );
+      if (filtered.length === 0) continue;
+      normalized[emoji] = Array.from(new Set(filtered));
+    }
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  };
+
+  const applyReactionMutation = (
+    chatId: string,
+    messageId: string,
+    emoji: string,
+    userId: string,
+    action: ReactionAction,
+  ) => {
+    updateMessagesForChat(chatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        const currentUsers = new Set(message.reactions?.[emoji] ?? []);
+        if (action === "add") {
+          if (currentUsers.has(userId)) {
+            return message;
+          }
+          currentUsers.add(userId);
+        } else {
+          if (!currentUsers.delete(userId)) {
+            return message;
+          }
+        }
+
+        const nextReactions = { ...(message.reactions ?? {}) };
+        if (currentUsers.size === 0) {
+          delete nextReactions[emoji];
+        } else {
+          nextReactions[emoji] = Array.from(currentUsers);
+        }
+
+        const cleaned =
+          Object.keys(nextReactions).length > 0 ? nextReactions : undefined;
+        return { ...message, reactions: cleaned };
+      }),
+    );
+  };
+
   const normalizeTimestamp = (
     value: string | number | Date | undefined,
   ): string => {
@@ -370,6 +438,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     fallbackChatId: string,
   ): Message => {
     const attachments = mapAttachmentPayloads(message.attachments);
+    const reactions = normalizeReactions(message.reactions ?? null);
     return {
       id: message.id,
       chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
@@ -379,6 +448,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       read: message.read ?? true,
       pending: false,
       attachments: attachments.length > 0 ? attachments : undefined,
+      reactions,
     };
   };
 
@@ -415,6 +485,14 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       optimistic.attachments.length > 0
     ) {
       merged.attachments = optimistic.attachments;
+    }
+
+    if (
+      (!merged.reactions || Object.keys(merged.reactions).length === 0) &&
+      optimistic.reactions &&
+      Object.keys(optimistic.reactions).length > 0
+    ) {
+      merged.reactions = optimistic.reactions;
     }
 
     return merged;
@@ -491,8 +569,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
     const messageChatId = type === "server" ? resolvedChannelId : chatId;
     if (messageChatId) {
-      const existingMessages = get(messagesByChatIdStore).get(messageChatId) || [];
-      const hasCachedPersistedMessages = existingMessages.some((msg) => !msg.pending);
+      const existingMessages =
+        get(messagesByChatIdStore).get(messageChatId) || [];
+      const hasCachedPersistedMessages = existingMessages.some(
+        (msg) => !msg.pending,
+      );
       const forceRefresh = options?.forceRefresh ?? false;
       const shouldFetch = forceRefresh || !hasCachedPersistedMessages;
 
@@ -525,7 +606,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         handleMessagesUpdate(messageChatId, mapped);
         const updatedMessages =
           get(messagesByChatIdStore).get(messageChatId) || [];
-        const persistedCount = updatedMessages.filter((msg) => !msg.pending).length;
+        const persistedCount = updatedMessages.filter(
+          (msg) => !msg.pending,
+        ).length;
         const limitReached =
           maxMessagesPerChat > 0 && persistedCount >= maxMessagesPerChat;
         hasMoreByChatIdStore.update((map) => {
@@ -639,14 +722,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         const remainingPending = existing.filter(
           (msg) => msg.pending && !matchedPendingIds.has(msg.id),
         );
-        return [
-          ...deduped,
-          ...persistedExisting,
-          ...remainingPending,
-        ];
+        return [...deduped, ...persistedExisting, ...remainingPending];
       });
-      const updatedMessages = get(messagesByChatIdStore).get(targetChatId) || [];
-      const updatedPersisted = updatedMessages.filter((msg) => !msg.pending).length;
+      const updatedMessages =
+        get(messagesByChatIdStore).get(targetChatId) || [];
+      const updatedPersisted = updatedMessages.filter(
+        (msg) => !msg.pending,
+      ).length;
       const limitReached =
         maxMessagesPerChat > 0 && updatedPersisted >= maxMessagesPerChat;
       hasMoreByChatIdStore.update((map) => {
@@ -722,7 +804,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           throw new Error("Attachment data was empty");
         }
         const mime = attachment.type || "application/octet-stream";
-        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const objectUrl = URL.createObjectURL(
+          new Blob([bytes], { type: mime }),
+        );
         trackAttachmentUrl(objectUrl);
         updateMessagesForChat(chatId, (existing) =>
           existing.map((msg) => {
@@ -803,7 +887,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       pending: true,
     };
 
-    updateMessagesForChat(messageChatId, (existing) => [...existing, newMessage]);
+    updateMessagesForChat(messageChatId, (existing) => [
+      ...existing,
+      newMessage,
+    ]);
 
     try {
       if (type === "dm") {
@@ -849,37 +936,43 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const tempId = Date.now().toString() + "-a";
 
     const attachmentsCombined = await Promise.all(
-      files.map(async (file): Promise<{
-        backend: AttachmentPayload;
-        ui: AttachmentMeta;
-      }> => {
-        const buffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(buffer);
-        const mime = file.type || "application/octet-stream";
-        const url = URL.createObjectURL(file);
-        trackAttachmentUrl(url);
-        return {
-          backend: {
-            name: file.name,
-            type: mime,
-            size: file.size,
-            data: bytes,
-          },
-          ui: {
-            id: createOptimisticAttachmentId(),
-            name: file.name,
-            type: mime,
-            size: file.size,
-            objectUrl: url,
-            isLoaded: true,
-            isLoading: false,
-            loadError: undefined,
-          } satisfies AttachmentMeta,
-        };
-      }),
+      files.map(
+        async (
+          file,
+        ): Promise<{
+          backend: AttachmentPayload;
+          ui: AttachmentMeta;
+        }> => {
+          const buffer = await file.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          const mime = file.type || "application/octet-stream";
+          const url = URL.createObjectURL(file);
+          trackAttachmentUrl(url);
+          return {
+            backend: {
+              name: file.name,
+              type: mime,
+              size: file.size,
+              data: bytes,
+            },
+            ui: {
+              id: createOptimisticAttachmentId(),
+              name: file.name,
+              type: mime,
+              size: file.size,
+              objectUrl: url,
+              isLoaded: true,
+              isLoading: false,
+              loadError: undefined,
+            } satisfies AttachmentMeta,
+          };
+        },
+      ),
     );
 
-    const backendAttachments = attachmentsCombined.map((entry) => entry.backend);
+    const backendAttachments = attachmentsCombined.map(
+      (entry) => entry.backend,
+    );
     const optimisticAttachments = attachmentsCombined.map((entry) => entry.ui);
 
     const newMessage: Message = {
@@ -893,7 +986,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
     };
-    updateMessagesForChat(messageChatId, (existing) => [...existing, newMessage]);
+    updateMessagesForChat(messageChatId, (existing) => [
+      ...existing,
+      newMessage,
+    ]);
 
     try {
       if (type === "dm") {
@@ -967,8 +1063,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const handleNewMessageEvent = (message: ChatMessage) => {
     const { sender, content } = message;
     const channelIdFromPayload = message.channel_id ?? message.channelId;
-    const conversationId =
-      message.conversation_id ?? message.conversationId;
+    const conversationId = message.conversation_id ?? message.conversationId;
     const me = get(userStore).me;
 
     let targetChatId: string | null = null;
@@ -984,8 +1079,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       const messageIdFromPayload =
         message.id ?? message.message_id ?? message.messageId;
       const timestampFromPayload = message.timestamp;
-      const isMissingMetadata =
-        !messageIdFromPayload || !timestampFromPayload;
+      const isMissingMetadata = !messageIdFromPayload || !timestampFromPayload;
 
       const newMessage: Message = {
         id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
@@ -998,6 +1092,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           message.attachments && message.attachments.length > 0
             ? mapAttachmentPayloads(message.attachments)
             : undefined,
+        reactions: normalizeReactions(message.reactions ?? null),
       };
       updateMessagesForChat(targetChatId, (existing) =>
         insertRealtimeMessage(existing, newMessage, me?.id),
@@ -1006,6 +1101,22 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         void refreshChatMessages(targetChatId);
       }
     }
+  };
+
+  const handleReactionUpdate = (payload: MessageReaction) => {
+    const chatId = payload.chat_id ?? payload.chatId;
+    const messageId = payload.message_id ?? payload.messageId;
+    const userId = payload.user_id ?? payload.userId;
+    if (!chatId || !messageId || !userId || !payload.emoji) {
+      return;
+    }
+
+    const action = payload.action;
+    if (action !== "add" && action !== "remove") {
+      return;
+    }
+
+    applyReactionMutation(chatId, messageId, payload.emoji, userId, action);
   };
 
   const dropChatHistory = (chatId: string) => {
@@ -1060,19 +1171,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   ) => {
     const me = get(userStore).me;
     if (!me) return;
-    updateMessagesForChat(targetChatId, (existing) =>
-      existing.map((m) => {
-        if (m.id !== messageId) return m;
-        const reactions = { ...(m.reactions || {}) } as Record<
-          string,
-          string[]
-        >;
-        const users = new Set(reactions[emoji] || []);
-        users.add(me.id);
-        reactions[emoji] = Array.from(users);
-        return { ...m, reactions };
-      }),
-    );
+    applyReactionMutation(targetChatId, messageId, emoji, me.id, "add");
     try {
       await invoke("add_reaction", {
         chatId: targetChatId,
@@ -1093,23 +1192,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   ) => {
     const me = get(userStore).me;
     if (!me) return;
-    updateMessagesForChat(targetChatId, (existing) =>
-      existing.map((m) => {
-        if (m.id !== messageId) return m;
-        const reactions = { ...(m.reactions || {}) } as Record<
-          string,
-          string[]
-        >;
-        const users = new Set(reactions[emoji] || []);
-        users.delete(me.id);
-        if (users.size === 0) {
-          delete reactions[emoji];
-        } else {
-          reactions[emoji] = Array.from(users);
-        }
-        return { ...m, reactions };
-      }),
-    );
+    applyReactionMutation(targetChatId, messageId, emoji, me.id, "remove");
     try {
       await invoke("remove_reaction", {
         chatId: targetChatId,
@@ -1153,6 +1236,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     sendMessageWithAttachments,
     deleteMessage,
     handleNewMessageEvent,
+    handleReactionUpdate,
     clearActiveChat,
     dropChatHistory,
     loadMoreMessages,

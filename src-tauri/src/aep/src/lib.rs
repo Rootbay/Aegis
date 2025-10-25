@@ -2,7 +2,7 @@
 use sqlx::{Pool, Sqlite};
 use aegis_shared_types::{AppState, IncomingFile};
 use std::path::Path;
-use aegis_protocol::{AepMessage, ChatMessageData, PeerDiscoveryData, PresenceUpdateData, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
+use aegis_protocol::{AepMessage, ChatMessageData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
 use aegis_core::services;
@@ -196,8 +196,52 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 timestamp,
                 read: false,
                 attachments: attachments_for_db,
+                reactions: std::collections::HashMap::new(),
             };
             database::insert_message(db_pool, &new_message).await?;
+        }
+        AepMessage::MessageReaction {
+            message_id,
+            chat_id,
+            emoji,
+            user_id,
+            action,
+            signature,
+        } => {
+            let reaction_data = MessageReactionData {
+                message_id: message_id.clone(),
+                chat_id: chat_id.clone(),
+                emoji: emoji.clone(),
+                user_id: user_id.clone(),
+                action: action.clone(),
+            };
+            let reaction_bytes =
+                bincode::serialize(&reaction_data).map_err(AegisError::Serialization)?;
+            let public_key = fetch_public_key_for_user(db_pool, &user_id).await?;
+
+            let signature = signature.ok_or_else(|| {
+                AegisError::InvalidInput("Missing signature for message reaction.".into())
+            })?;
+
+            if !public_key.verify(&reaction_bytes, &signature) {
+                eprintln!(
+                    "Invalid signature for reaction {:?} on message {} from user {}",
+                    action, message_id, user_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Invalid signature for message reaction.".into(),
+                ));
+            }
+
+            match action {
+                ReactionAction::Add => {
+                    database::add_reaction_to_message(db_pool, &message_id, &user_id, &emoji).await?;
+                }
+                ReactionAction::Remove => {
+                    database::remove_reaction_from_message(db_pool, &message_id, &user_id, &emoji)
+                        .await?;
+                }
+            }
         }
         AepMessage::EncryptedChatMessage { .. } => {
             // handled in bootstrap for E2EE flow
