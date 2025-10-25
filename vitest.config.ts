@@ -1,5 +1,9 @@
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const projectRootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [svelte({ hot: !process.env.VITEST })],
@@ -8,8 +12,12 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.{test,spec}.{js,ts}"],
     setupFiles: ["./vitest-setup.ts"],
+    tsconfig: "tsconfig.vitest.json",
   },
   resolve: {
+    alias: {
+      $lib: resolve(projectRootDir, "src/lib"),
+    },
     conditions: ["browser"],
   },
 });
