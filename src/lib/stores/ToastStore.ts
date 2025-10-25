@@ -10,10 +10,21 @@ export interface Toast {
   duration?: number;
 }
 
-function createToastStore() {
+export interface ToastStoreOptions {
+  dedupeWindowMs?: number;
+  maxDedupeCacheSize?: number;
+  dedupeCache?: Map<string, number>;
+}
+
+export function createToastStore(options: ToastStoreOptions = {}) {
   const { subscribe, update } = writable<Toast[]>([]);
 
   const MAX_VISIBLE = 5;
+  const {
+    dedupeWindowMs: DEDUPE_WINDOW_MS = 2000,
+    maxDedupeCacheSize: MAX_DEDUPE_CACHE_SIZE = 200,
+    dedupeCache = new Map<string, number>(),
+  } = options;
   const DEFAULT_DURATION: Record<ToastType, number> = {
     success: 2500,
     info: 3000,
@@ -23,17 +34,38 @@ function createToastStore() {
 
   const queue: Toast[] = [];
 
-  let lastToastAt: Record<string, number> = {};
-  const DEDUPE_WINDOW_MS = 2000;
+  function pruneDedupeCache(now: number) {
+    for (const [key, timestamp] of dedupeCache) {
+      if (now - timestamp > DEDUPE_WINDOW_MS) {
+        dedupeCache.delete(key);
+      }
+    }
+  }
+
+  function enforceCacheSize() {
+    if (MAX_DEDUPE_CACHE_SIZE <= 0) {
+      return;
+    }
+
+    while (dedupeCache.size > MAX_DEDUPE_CACHE_SIZE) {
+      const oldestKey = dedupeCache.keys().next().value as string | undefined;
+      if (oldestKey === undefined) {
+        break;
+      }
+      dedupeCache.delete(oldestKey);
+    }
+  }
 
   function addToast(message: string, type: ToastType, duration?: number) {
     const now = Date.now();
     const key = `${type}:${message}`;
-    const last = lastToastAt[key] || 0;
-    if (now - last < DEDUPE_WINDOW_MS) {
+    pruneDedupeCache(now);
+    const last = dedupeCache.get(key);
+    if (last !== undefined && now - last < DEDUPE_WINDOW_MS) {
       return "";
     }
-    lastToastAt[key] = now;
+    dedupeCache.set(key, now);
+    enforceCacheSize();
 
     const id = uuidv4();
     const toast: Toast = {
