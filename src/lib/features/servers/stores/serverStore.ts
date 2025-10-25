@@ -209,28 +209,43 @@ function createServerStore(): ServerStore {
     }
     update((s) => ({ ...s, loading: true }));
     try {
-      const channels = await invoke<Channel[]>("get_channels_for_server", {
-        serverId,
-        server_id: serverId,
-      });
-      const membersBackend = await invoke<BackendUser[]>(
-        "get_members_for_server",
-        { serverId, server_id: serverId },
-      );
-      const members: User[] = membersBackend.map(fromBackendUser);
+      const [channelsResult, membersResult] = await Promise.all([
+        invoke<Channel[]>("get_channels_for_server", {
+          serverId,
+          server_id: serverId,
+        }).catch((e) => {
+          console.error(`Failed to get channels for server ${serverId}:`, e);
+          return null;
+        }),
+        invoke<BackendUser[]>("get_members_for_server", {
+          serverId,
+          server_id: serverId,
+        }).catch((e) => {
+          console.error(`Failed to get members for server ${serverId}:`, e);
+          return null;
+        }),
+      ]);
 
       update((s) => {
-        const newServers = s.servers.map((server) =>
-          server.id === serverId
-            ? { ...server, channels: channels, members: members }
-            : server,
-        );
+        const newServers = s.servers.map((server) => {
+          if (server.id !== serverId) return server;
+
+          const updatedServer = { ...server };
+
+          if (channelsResult !== null) {
+            updatedServer.channels = channelsResult;
+          }
+
+          if (membersResult !== null) {
+            updatedServer.members = membersResult.map(fromBackendUser);
+          }
+
+          return updatedServer;
+        });
         const serverToCache = newServers.find((s) => s.id === serverId);
         if (serverToCache) serverCache.set(serverId, serverToCache);
         return { ...s, servers: newServers };
       });
-    } catch (e) {
-      console.error("Failed to get channels or members for server:", e);
     } finally {
       update((s) => ({ ...s, loading: false }));
     }
