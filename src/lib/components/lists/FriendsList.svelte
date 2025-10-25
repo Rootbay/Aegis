@@ -7,16 +7,35 @@
   import FriendItem from "$lib/components/lists/FriendItem.svelte";
   import type { Friend } from "$lib/features/friends/models/Friend";
 
-  let { clazz = "", friends }: { clazz?: string; friends: Friend[] } = $props();
-  const { activeTab } = getContext<FriendsLayoutContext>(
+  const friendsLayoutContext = getContext<FriendsLayoutContext | undefined>(
     FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
+  );
+
+  const props = $props<{
+    clazz?: string;
+    friends?: Friend[];
+    loading?: boolean;
+    activeTab?: string;
+  }>();
+
+  const extraClass = $derived.by(() => props.clazz ?? "");
+  const friendsList = $derived.by(
+    () => props.friends ?? friendsLayoutContext?.friends ?? [],
+  );
+
+  const loading = $derived.by(() =>
+    props.loading ?? friendsLayoutContext?.loading ?? false,
+  );
+
+  const activeTab = $derived.by(() =>
+    props.activeTab ?? friendsLayoutContext?.activeTab ?? "All",
   );
 
   type FriendsListHeader = { kind: "header"; status: string; count: number };
   type FriendsListItem = Friend | FriendsListHeader;
 
   const filteredFriends = $derived.by(() =>
-    friends.filter((friend: Friend) => {
+    friendsList.filter((friend: Friend) => {
       switch (activeTab) {
         case "All":
           return friend.status !== "Blocked" && friend.status !== "Pending";
@@ -62,9 +81,18 @@
   }
 </script>
 
-<div class="flex flex-col h-full w-full text-zinc-100 {clazz}">
+<div class="flex flex-col h-full w-full text-zinc-100 {extraClass}">
   <div class="flex-grow overflow-y-auto px-4 pb-4">
-    {#if listItems.length > 0}
+    {#if loading}
+      <div class="flex justify-center mt-8" role="status" aria-live="polite">
+        <span class="sr-only">Loading friends…</span>
+        <div
+          class="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"
+          data-testid="friends-loading-indicator"
+          aria-hidden="true"
+        ></div>
+      </div>
+    {:else if listItems.length > 0}
       <ul class="space-y-2">
         {#each listItems as item (isHeader(item) ? `header-${item.status}` : `friend-${item.id}`)}
           {#if isHeader(item)}
