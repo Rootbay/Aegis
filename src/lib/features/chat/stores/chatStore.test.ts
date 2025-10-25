@@ -5,6 +5,16 @@ import { serverStore } from "$lib/features/servers/stores/serverStore";
 
 const invokeMock = vi.fn();
 
+const createDeferred = <T>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
@@ -249,5 +259,88 @@ describe("chatStore attachment lifecycle", () => {
     ]);
     expect(get(store.activeChannelId)).toBe("channel-2");
     expect(get(store.activeServerChannelId)).toBe("channel-2");
+  });
+
+  it("tracks loading state per chat during concurrent loads", async () => {
+    const deferredByChat = new Map<string, ReturnType<typeof createDeferred>>();
+    invokeMock.mockImplementation((command: string, payload: unknown) => {
+      if (command === "get_messages") {
+        const params = payload as { chatId?: string; chat_id?: string };
+        const chatId = params.chatId ?? params.chat_id ?? "";
+        const deferred = createDeferred<any>();
+        deferredByChat.set(chatId, deferred);
+        return deferred.promise;
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const store = createChatStore();
+
+    const loadA = store.setActiveChat("chat-1", "dm");
+    const loadB = store.setActiveChat("chat-2", "dm");
+
+    expect(get(store.loadingStateByChat).get("chat-1")).toBe(true);
+    expect(get(store.loadingStateByChat).get("chat-2")).toBe(true);
+
+    const firstDeferred = deferredByChat.get("chat-1");
+    expect(firstDeferred).toBeDefined();
+    firstDeferred?.resolve([
+      { id: "msg-1", content: "hello", timestamp: new Date().toISOString() },
+    ]);
+    await loadA;
+
+    expect(get(store.loadingStateByChat).get("chat-1")).toBe(false);
+    expect(get(store.loadingStateByChat).get("chat-2")).toBe(true);
+
+    const secondDeferred = deferredByChat.get("chat-2");
+    expect(secondDeferred).toBeDefined();
+    secondDeferred?.resolve([
+      { id: "msg-2", content: "world", timestamp: new Date().toISOString() },
+    ]);
+    await loadB;
+
+    expect(get(store.loadingStateByChat).get("chat-2")).toBe(false);
+  });
+
+  it("ignores stale responses when a newer load begins", async () => {
+    const deferreds: Array<{ chatId: string; deferred: ReturnType<typeof createDeferred> }> = [];
+    invokeMock.mockImplementation((command: string, payload: unknown) => {
+      if (command === "get_messages") {
+        const params = payload as { chatId?: string; chat_id?: string };
+        const chatId = params.chatId ?? params.chat_id ?? "";
+        const deferred = createDeferred<any>();
+        deferreds.push({ chatId, deferred });
+        return deferred.promise;
+      }
+      return Promise.resolve(undefined);
+    });
+
+    const store = createChatStore();
+
+    const initialLoad = store.setActiveChat("chat-1", "dm");
+    const refreshLoad = store.setActiveChat("chat-1", "dm", undefined, {
+      forceRefresh: true,
+    });
+
+    expect(deferreds.length).toBe(2);
+    expect(get(store.loadingStateByChat).get("chat-1")).toBe(true);
+
+    deferreds[0]?.deferred.resolve([
+      { id: "msg-old", content: "old", timestamp: new Date().toISOString() },
+    ]);
+    await initialLoad;
+
+    expect(get(store.loadingStateByChat).get("chat-1")).toBe(true);
+    expect(get(store.messagesByChatId).get("chat-1") ?? []).toEqual([]);
+
+    const newerTimestamp = new Date(Date.now() + 1000).toISOString();
+    deferreds[1]?.deferred.resolve([
+      { id: "msg-new", content: "new", timestamp: newerTimestamp },
+    ]);
+    await refreshLoad;
+
+    const finalMessages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(finalMessages.map((msg) => msg.id)).toEqual(["msg-new"]);
+    expect(get(store.loadingStateByChat).get("chat-1")).toBe(false);
   });
 });

@@ -14,6 +14,7 @@
     chatStore,
     messagesByChatId,
     hasMoreByChatId,
+    loadingStateByChat,
   } from "$lib/features/chat/stores/chatStore";
   import { afterUpdate, getContext, onMount } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
@@ -394,6 +395,10 @@
     chat ? $messagesByChatId.get(chat.id) || [] : [],
   );
 
+  let isChatLoading = $derived(
+    chat ? Boolean($loadingStateByChat.get(chat.id)) : false,
+  );
+
   function handlePaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -658,6 +663,12 @@
           </div>
         {/snippet}
       </VirtualList>
+
+      {#if isChatLoading && (currentChatMessages?.length ?? 0) === 0}
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span class="text-sm text-muted-foreground">Loading messages...</span>
+        </div>
+      {/if}
 
       {#if unseenCount > 0}
         <button

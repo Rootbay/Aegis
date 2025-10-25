@@ -43,7 +43,7 @@ interface ChatStore {
   activeChannelId: Readable<string | null>;
   serverChannelSelections: Readable<Map<string, string>>;
   activeServerChannelId: Readable<string | null>;
-  loadingMessages: Readable<boolean>;
+  loadingStateByChat: Readable<Map<string, boolean>>;
   setActiveChat: (
     chatId: string,
     chatType: "dm" | "server",
@@ -171,7 +171,37 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     initialServerChannelSelections,
   );
   const activeChannelId = writable<string | null>(initialActiveChannelId);
-  const loadingMessages = writable<boolean>(false);
+  const loadingStateByChatStore = writable<Map<string, boolean>>(new Map());
+  const loadSequenceNumbers = new Map<string, number>();
+  const updateLoadingStateForChat = (chatId: string, isLoading: boolean) => {
+    if (!chatId) return;
+    loadingStateByChatStore.update((map) => {
+      const next = new Map(map);
+      next.set(chatId, isLoading);
+      return next;
+    });
+  };
+  const beginLoadingForChat = (chatId: string): number => {
+    if (!chatId) return 0;
+    const nextToken = (loadSequenceNumbers.get(chatId) ?? 0) + 1;
+    loadSequenceNumbers.set(chatId, nextToken);
+    updateLoadingStateForChat(chatId, true);
+    return nextToken;
+  };
+  const isCurrentLoad = (chatId: string, token: number): boolean => {
+    if (!chatId || token === 0) {
+      return false;
+    }
+    return loadSequenceNumbers.get(chatId) === token;
+  };
+  const completeLoadingForChat = (chatId: string, token: number) => {
+    if (!chatId || token === 0) return;
+    if (!isCurrentLoad(chatId, token)) {
+      return;
+    }
+    loadSequenceNumbers.delete(chatId);
+    updateLoadingStateForChat(chatId, false);
+  };
   const PAGE_LIMIT = 50;
 
   const configuredLimit = options.maxMessagesPerChat ?? DEFAULT_MAX_MESSAGES_PER_CHAT;
@@ -467,7 +497,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       const shouldFetch = forceRefresh || !hasCachedPersistedMessages;
 
       if (!shouldFetch) {
-        loadingMessages.set(false);
+        updateLoadingStateForChat(messageChatId, false);
         return;
       }
 
@@ -478,7 +508,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         });
       }
 
-      loadingMessages.set(true);
+      const loadToken = beginLoadingForChat(messageChatId);
       try {
         const fetched: BackendMessage[] = await invoke("get_messages", {
           chatId: messageChatId,
@@ -486,6 +516,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           limit: PAGE_LIMIT,
           offset: 0,
         });
+        if (!isCurrentLoad(messageChatId, loadToken)) {
+          return;
+        }
         const mapped = fetched
           .map((m: BackendMessage) => mapBackendMessage(m, messageChatId))
           .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
@@ -501,7 +534,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         });
       } catch (e) {
         console.error("Failed to fetch messages:", e);
-        loadingMessages.set(false);
+      } finally {
+        completeLoadingForChat(messageChatId, loadToken);
       }
     }
   };
@@ -543,27 +577,34 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       );
       return [...mergedPersisted, ...remainingPending];
     });
-    loadingMessages.set(false);
   };
 
   const loadMoreMessages = async (targetChatId: string) => {
-    loadingMessages.set(true);
+    if (loadSequenceNumbers.has(targetChatId)) {
+      return;
+    }
+    const current = get(messagesByChatIdStore).get(targetChatId) || [];
+    const persistedCount = current.filter((m) => !m.pending).length;
+    if (maxMessagesPerChat > 0 && persistedCount >= maxMessagesPerChat) {
+      hasMoreByChatIdStore.update((map) => {
+        map.set(targetChatId, false);
+        return new Map(map);
+      });
+      updateLoadingStateForChat(targetChatId, false);
+      return;
+    }
+
+    const loadToken = beginLoadingForChat(targetChatId);
     try {
-      const current = get(messagesByChatIdStore).get(targetChatId) || [];
-      const persistedCount = current.filter((m) => !m.pending).length;
-      if (maxMessagesPerChat > 0 && persistedCount >= maxMessagesPerChat) {
-        hasMoreByChatIdStore.update((map) => {
-          map.set(targetChatId, false);
-          return new Map(map);
-        });
-        return;
-      }
       const fetched: BackendMessage[] = await invoke("get_messages", {
         chatId: targetChatId,
         chat_id: targetChatId,
         limit: PAGE_LIMIT,
         offset: persistedCount,
       });
+      if (!isCurrentLoad(targetChatId, loadToken)) {
+        return;
+      }
       const mapped = fetched
         .map((m: BackendMessage) => mapBackendMessage(m, targetChatId))
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
@@ -617,7 +658,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     } catch (e) {
       console.error("Failed to load more messages:", e);
     } finally {
-      loadingMessages.set(false);
+      completeLoadingForChat(targetChatId, loadToken);
     }
   };
 
@@ -897,6 +938,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const refreshChatMessages = async (chatId: string) => {
+    const loadToken = beginLoadingForChat(chatId);
     try {
       const fetched: BackendMessage[] = await invoke("get_messages", {
         chatId,
@@ -904,6 +946,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         limit: PAGE_LIMIT,
         offset: 0,
       });
+      if (!isCurrentLoad(chatId, loadToken)) {
+        return;
+      }
       const mapped = fetched
         .map((m: BackendMessage) => mapBackendMessage(m, chatId))
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
@@ -914,6 +959,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       });
     } catch (error) {
       console.error("Failed to refresh chat messages:", error);
+    } finally {
+      completeLoadingForChat(chatId, loadToken);
     }
   };
 
@@ -966,12 +1013,21 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const existing = get(messagesByChatIdStore).get(chatId);
     if (!existing) return;
     revokeAttachmentsForMessages(existing);
+    loadSequenceNumbers.delete(chatId);
     messagesByChatIdStore.update((map) => {
       const next = new Map(map);
       next.delete(chatId);
       return next;
     });
     hasMoreByChatIdStore.update((map) => {
+      const next = new Map(map);
+      next.delete(chatId);
+      return next;
+    });
+    loadingStateByChatStore.update((map) => {
+      if (!map.has(chatId)) {
+        return map;
+      }
       const next = new Map(map);
       next.delete(chatId);
       return next;
@@ -1087,7 +1143,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         return $map.get(activeServerId) ?? null;
       },
     ),
-    loadingMessages: derived(loadingMessages, ($loading) => $loading),
+    loadingStateByChat: derived(
+      loadingStateByChatStore,
+      ($map) => new Map($map),
+    ),
     setActiveChat,
     handleMessagesUpdate,
     sendMessage,
@@ -1111,4 +1170,5 @@ export const serverChannelSelections = chatStore.serverChannelSelections;
 export const activeServerChannelId = chatStore.activeServerChannelId;
 export const activeChatId = chatStore.activeChatId;
 export const activeChatType = chatStore.activeChatType;
+export const loadingStateByChat = chatStore.loadingStateByChat;
 export { createChatStore };
