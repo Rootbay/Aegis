@@ -1,8 +1,11 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum AepMessage {
     ChatMessage {
+        id: String,
+        timestamp: DateTime<Utc>,
         sender: String,
         content: String,
         channel_id: Option<String>,
@@ -119,6 +122,8 @@ pub struct SendServerInviteData {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChatMessageData {
+    pub id: String,
+    pub timestamp: DateTime<Utc>,
     pub sender: String,
     pub content: String,
     pub channel_id: Option<String>,

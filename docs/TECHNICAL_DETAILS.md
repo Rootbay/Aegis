@@ -110,3 +110,12 @@ Server owners can create and manage roles with granular permissions.
 - **Ban:** Removes a user from the server and adds them to a ban list, preventing them from rejoining.
 - **Mute:** Revokes a user's ability to send messages or speak in voice channels. Can be time-limited.
 - **Moderation Log:** All moderation actions (kicks, bans, mutes, etc.) are recorded in a local, encrypted audit log that is only accessible to administrators.
+
+---
+
+## Manual QA Checklist
+
+To guard against regressions in the realtime messaging pipeline:
+
+- Send a message from one client and confirm it appears exactly once after a `messages-updated` broadcast (no duplicate optimistic entries).
+- React to the freshly received realtime message and verify the reaction persists without requiring a manual refresh.

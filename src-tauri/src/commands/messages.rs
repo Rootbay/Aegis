@@ -44,7 +44,12 @@ async fn persist_and_broadcast_message(
         .await
         .map_err(|e| e.to_string())?;
 
+    let message_id = new_local_message.id.clone();
+    let message_timestamp = new_local_message.timestamp;
+
     let chat_message_data = aegis_protocol::ChatMessageData {
+        id: message_id.clone(),
+        timestamp: message_timestamp.clone(),
         sender: peer_id.clone(),
         content: message.clone(),
         channel_id: channel_id.clone(),
@@ -59,6 +64,8 @@ async fn persist_and_broadcast_message(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::ChatMessage {
+        id: message_id,
+        timestamp: message_timestamp,
         sender: peer_id,
         content: message,
         channel_id,
