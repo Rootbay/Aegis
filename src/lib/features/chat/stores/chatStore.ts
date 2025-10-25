@@ -49,6 +49,11 @@ interface ChatStore {
   handleNewMessageEvent: (message: ChatMessage) => void;
   clearActiveChat: () => void;
   loadMoreMessages: (targetChatId: string) => Promise<void>;
+  loadAttachmentForMessage: (
+    chatId: string,
+    messageId: string,
+    attachmentId: string,
+  ) => Promise<string>;
   addReaction: (
     targetChatId: string,
     messageId: string,
@@ -95,6 +100,7 @@ function createChatStore(): ChatStore {
   };
 
   const activeAttachmentUrls = new Set<string>();
+  const pendingAttachmentFetches = new Map<string, Promise<string>>();
 
   const trackAttachmentUrl = (url?: string) => {
     if (url) {
@@ -114,8 +120,8 @@ function createChatStore(): ChatStore {
     for (const message of messages) {
       const attachments = message.attachments ?? [];
       for (const attachment of attachments) {
-        if (attachment.url) {
-          urls.add(attachment.url);
+        if (attachment.objectUrl) {
+          urls.add(attachment.objectUrl);
         }
       }
     }
@@ -149,19 +155,21 @@ function createChatStore(): ChatStore {
       attachment.contentType ??
       "application/octet-stream";
     const bytes = ensureUint8Array(attachment.data);
-    const url = bytes
-      ? URL.createObjectURL(new Blob([bytes], { type: mime }))
-      : undefined;
-
-    trackAttachmentUrl(url);
+    let objectUrl: string | undefined;
+    if (bytes && bytes.length > 0) {
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      trackAttachmentUrl(objectUrl);
+    }
 
     return {
       id: attachment.id,
       name: attachment.name,
       type: mime,
       size: attachment.size ?? bytes?.length,
-      url,
-      bytes,
+      objectUrl,
+      isLoaded: Boolean(objectUrl),
+      isLoading: false,
+      loadError: undefined,
     };
   };
 
@@ -443,6 +451,125 @@ function createChatStore(): ChatStore {
     }
   };
 
+  const loadAttachmentForMessage = async (
+    chatId: string,
+    messageId: string,
+    attachmentId: string,
+  ): Promise<string> => {
+    const currentMessages = get(messagesByChatIdStore).get(chatId) || [];
+    const message = currentMessages.find((m) => m.id === messageId);
+    if (!message) {
+      throw new Error("Message not found for attachment fetch");
+    }
+
+    const attachment = message.attachments?.find(
+      (item) => item.id === attachmentId,
+    );
+    if (!attachment) {
+      throw new Error("Attachment not found in message");
+    }
+
+    if (attachment.isLoaded && attachment.objectUrl) {
+      return attachment.objectUrl;
+    }
+
+    const inFlight = pendingAttachmentFetches.get(attachmentId);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    updateMessagesForChat(chatId, (existing) =>
+      existing.map((msg) => {
+        if (msg.id !== messageId || !msg.attachments) {
+          return msg;
+        }
+        const nextAttachments = msg.attachments.map((meta) => {
+          if (meta.id !== attachmentId) {
+            return meta;
+          }
+          return {
+            ...meta,
+            isLoading: true,
+            loadError: undefined,
+          };
+        });
+        return { ...msg, attachments: nextAttachments };
+      }),
+    );
+
+    const fetchPromise = (async () => {
+      try {
+        const rawBytes = await invoke<number[] | Uint8Array>(
+          "get_attachment_bytes",
+          {
+            attachmentId,
+            attachment_id: attachmentId,
+          },
+        );
+        const bytes = ensureUint8Array(rawBytes);
+        if (!bytes || bytes.length === 0) {
+          throw new Error("Attachment data was empty");
+        }
+        const mime = attachment.type || "application/octet-stream";
+        const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        trackAttachmentUrl(objectUrl);
+        updateMessagesForChat(chatId, (existing) =>
+          existing.map((msg) => {
+            if (msg.id !== messageId || !msg.attachments) {
+              return msg;
+            }
+            const nextAttachments = msg.attachments.map((meta) => {
+              if (meta.id !== attachmentId) {
+                return meta;
+              }
+              return {
+                ...meta,
+                objectUrl,
+                size:
+                  typeof meta.size === "number" && meta.size > 0
+                    ? meta.size
+                    : bytes.length,
+                isLoaded: true,
+                isLoading: false,
+                loadError: undefined,
+              };
+            });
+            return { ...msg, attachments: nextAttachments };
+          }),
+        );
+        return objectUrl;
+      } catch (error) {
+        const messageText =
+          error instanceof Error ? error.message : String(error);
+        updateMessagesForChat(chatId, (existing) =>
+          existing.map((msg) => {
+            if (msg.id !== messageId || !msg.attachments) {
+              return msg;
+            }
+            const nextAttachments = msg.attachments.map((meta) => {
+              if (meta.id !== attachmentId) {
+                return meta;
+              }
+              return {
+                ...meta,
+                isLoaded: false,
+                isLoading: false,
+                loadError: messageText,
+              };
+            });
+            return { ...msg, attachments: nextAttachments };
+          }),
+        );
+        throw error;
+      } finally {
+        pendingAttachmentFetches.delete(attachmentId);
+      }
+    })();
+
+    pendingAttachmentFetches.set(attachmentId, fetchPromise);
+    return fetchPromise;
+  };
+
   const sendMessage = async (content: string) => {
     const type = get(activeChatType);
     const chatId = get(activeChatId);
@@ -529,8 +656,10 @@ function createChatStore(): ChatStore {
             name: file.name,
             type: mime,
             size: file.size,
-            url,
-            bytes,
+            objectUrl: url,
+            isLoaded: true,
+            isLoading: false,
+            loadError: undefined,
           } satisfies AttachmentMeta,
         };
       }),
@@ -755,6 +884,7 @@ function createChatStore(): ChatStore {
     handleNewMessageEvent,
     clearActiveChat,
     loadMoreMessages,
+    loadAttachmentForMessage,
     addReaction,
     removeReaction,
   };

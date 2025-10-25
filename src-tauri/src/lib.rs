@@ -38,6 +38,7 @@ pub async fn run() {
             commands::friends::get_friendships,
             commands::servers::get_servers,
             commands::messages::get_messages,
+            commands::messages::get_attachment_bytes,
             commands::servers::get_channels_for_server,
             commands::servers::get_members_for_server,
             commands::servers::send_server_invite,

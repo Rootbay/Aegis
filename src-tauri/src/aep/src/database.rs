@@ -63,7 +63,8 @@ pub struct Attachment {
     pub name: String,
     pub content_type: Option<String>,
     pub size: u64,
-    pub data: Vec<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -355,6 +356,13 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
         }
         let size_i64 = attachment.size as i64;
 
+        let data = attachment.data.clone().ok_or_else(|| {
+            sqlx::Error::Protocol(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "attachment is missing binary data for insert",
+            )))
+        })?;
+
         sqlx::query!(
             "INSERT INTO attachments (id, message_id, name, content_type, size, data) VALUES (?, ?, ?, ?, ?, ?)",
             attachment.id,
@@ -362,7 +370,7 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
             attachment.name,
             attachment.content_type,
             size_i64,
-            attachment.data,
+            data,
         )
         .execute(&mut *tx)
         .await?;
@@ -427,11 +435,10 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             name: String,
             content_type: Option<String>,
             size: i64,
-            data: Vec<u8>,
         }
 
         let mut query_builder = QueryBuilder::<Sqlite>::new(
-            "SELECT id, message_id, name, content_type, size, data FROM attachments WHERE message_id IN (",
+            "SELECT id, message_id, name, content_type, size FROM attachments WHERE message_id IN (",
         );
         {
             let mut separated = query_builder.separated(", ");
@@ -448,18 +455,14 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         use std::collections::HashMap;
         let mut attachments_map: HashMap<String, Vec<Attachment>> = HashMap::new();
         for row in attachment_rows {
-            let mut size_u64 = if row.size < 0 { 0 } else { row.size as u64 };
-            let actual_size = row.data.len() as u64;
-            if size_u64 == 0 {
-                size_u64 = actual_size;
-            }
+            let size_u64 = if row.size < 0 { 0 } else { row.size as u64 };
             attachments_map.entry(row.message_id.clone()).or_default().push(Attachment {
                 id: row.id,
                 message_id: row.message_id,
                 name: row.name,
                 content_type: row.content_type,
-                size: if size_u64 == 0 { actual_size } else { size_u64 },
-                data: row.data,
+                size: size_u64,
+                data: None,
             });
         }
 
@@ -474,6 +477,23 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
     messages.reverse();
 
     Ok(messages)
+}
+
+pub async fn get_attachment_data(
+    pool: &Pool<Sqlite>,
+    attachment_id: &str,
+) -> Result<Vec<u8>, sqlx::Error> {
+    let record = sqlx::query!(
+        "SELECT data FROM attachments WHERE id = ?",
+        attachment_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    match record {
+        Some(row) => Ok(row.data),
+        None => Err(sqlx::Error::RowNotFound),
+    }
 }
 
 pub async fn add_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &str) -> Result<(), sqlx::Error> {
