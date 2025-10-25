@@ -359,19 +359,25 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       forceRefresh?: boolean;
     },
   ) => {
+    const previousChannelId = get(activeChannelId);
+    const resolvedChannelId =
+      type === "server"
+        ? channelId ?? previousChannelId ?? null
+        : null;
+
     activeChatId.set(chatId);
     activeChatType.set(type);
-    activeChannelId.set(channelId || null);
+    activeChannelId.set(resolvedChannelId);
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("activeChatId", chatId);
       localStorage.setItem("activeChatType", type);
-      if (channelId) {
-        localStorage.setItem("activeChannelId", channelId);
+      if (resolvedChannelId) {
+        localStorage.setItem("activeChannelId", resolvedChannelId);
       } else {
         localStorage.removeItem("activeChannelId");
       }
     }
-    const messageChatId = type === "server" ? channelId : chatId;
+    const messageChatId = type === "server" ? resolvedChannelId : chatId;
     if (messageChatId) {
       const existingMessages = get(messagesByChatIdStore).get(messageChatId) || [];
       const hasCachedPersistedMessages = existingMessages.some((msg) => !msg.pending);

@@ -24,6 +24,7 @@ describe("chatStore attachment lifecycle", () => {
   beforeEach(() => {
     createdUrls = [];
     invokeMock.mockReset();
+    localStorage.clear();
     const createSpy = vi.fn(() => {
       const url = `blob:${createdUrls.length}`;
       createdUrls.push(url);
@@ -218,5 +219,21 @@ describe("chatStore attachment lifecycle", () => {
 
     await store.setActiveChat("chat-1", "dm");
     expect(invokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the selected server channel when no new channel id is provided", async () => {
+    invokeMock.mockResolvedValue([]);
+
+    const store = createChatStore();
+
+    await store.setActiveChat("server-1", "server", "channel-2");
+
+    expect(localStorage.getItem("activeChannelId")).toBe("channel-2");
+    expect(get(store.activeChannelId)).toBe("channel-2");
+
+    await store.setActiveChat("server-1", "server");
+
+    expect(localStorage.getItem("activeChannelId")).toBe("channel-2");
+    expect(get(store.activeChannelId)).toBe("channel-2");
   });
 });
