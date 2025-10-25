@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Check } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
 
   let selectedLanguage = $state("English");
   const languages = [
@@ -25,19 +26,20 @@
     >
       {#each languages as lang (lang)}
         <li>
-          <button
-            class="w-full flex items-center justify-between px-4 py-3 text-sm
-              transition-colors duration-200
-              {selectedLanguage === lang
-              ? 'bg-primary/20 text-primary font-medium'
-              : 'hover:bg-muted text-foreground'}"
+          <Button
+            variant="ghost"
+            class={`w-full justify-between px-4 py-3 text-sm transition-colors duration-200 ${
+              selectedLanguage === lang
+                ? "bg-primary/20 text-primary font-medium hover:bg-primary/30"
+                : "text-foreground hover:bg-muted"
+            }`}
             onclick={() => (selectedLanguage = lang)}
           >
             <span>{lang}</span>
             {#if selectedLanguage === lang}
               <Check class="w-4 h-4" />
             {/if}
-          </button>
+          </Button>
         </li>
       {/each}
     </ul>

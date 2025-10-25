@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Label } from "$lib/components/ui/label/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
   import type { Server } from "$lib/features/servers/models/Server";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
@@ -27,22 +30,25 @@
   <div class="flex items-center justify-between p-4 bg-card rounded-lg">
     <div>
       <h3 class="font-medium">Enable Read Receipts</h3>
-      <p class="text-sm text-gray-400">
+      <p
+        id="read-receipts-description"
+        class="text-sm text-gray-400"
+      >
         If enabled, members can see if their messages have been read. This is
         reciprocal.
       </p>
     </div>
-    <input
-      type="checkbox"
-      bind:checked={enableReadReceipts}
-      class="form-checkbox h-5 w-5 text-indigo-600"
-    />
+    <div class="flex items-center gap-2">
+      <Label class="sr-only" for="read-receipts">Enable Read Receipts</Label>
+      <Switch
+        id="read-receipts"
+        aria-describedby="read-receipts-description"
+        bind:checked={enableReadReceipts}
+      />
+    </div>
   </div>
 
-  <button
-    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
-    onclick={saveChanges}
-  >
+  <Button class="font-semibold" onclick={saveChanges}>
     Save Changes
-  </button>
+  </Button>
 </div>
