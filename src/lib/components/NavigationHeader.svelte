@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { tick, getContext } from "svelte";
+  import { tick, getContext, onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import {
     Avatar,
@@ -35,6 +35,8 @@
     PopoverTrigger,
     PopoverContent,
   } from "$lib/components/ui/popover";
+  import CallModal from "$lib/features/calls/components/CallModal.svelte";
+  import { callStore } from "$lib/features/calls/stores/callStore";
 
   type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -527,6 +529,126 @@
     }
   }
 
+  onMount(() => {
+    callStore.initialize();
+  });
+
+  let activeCallForChat = $derived(() => {
+    if (!chat?.id) return null;
+    const active = $callStore.activeCall;
+    return active && active.chatId === chat.id ? active : null;
+  });
+
+  let voiceButtonDisabled = $derived(() => {
+    if (!chat?.id) return true;
+    const state = $callStore;
+    const active = state.activeCall;
+    if (
+      active &&
+      active.chatId !== chat.id &&
+      active.status !== "ended" &&
+      active.status !== "error"
+    ) {
+      return true;
+    }
+    if (!state.deviceAvailability.audioInput) {
+      return true;
+    }
+    if (state.permissions.audio === "denied") {
+      return true;
+    }
+    if (state.permissions.checking) {
+      return true;
+    }
+    return false;
+  });
+
+  let videoButtonDisabled = $derived(() => {
+    if (!chat?.id) return true;
+    const state = $callStore;
+    const active = state.activeCall;
+    if (
+      active &&
+      active.chatId !== chat.id &&
+      active.status !== "ended" &&
+      active.status !== "error"
+    ) {
+      return true;
+    }
+    if (
+      !state.deviceAvailability.audioInput ||
+      !state.deviceAvailability.videoInput
+    ) {
+      return true;
+    }
+    if (
+      state.permissions.audio === "denied" ||
+      state.permissions.video === "denied"
+    ) {
+      return true;
+    }
+    if (state.permissions.checking) {
+      return true;
+    }
+    return false;
+  });
+
+  const voiceCallActive = $derived(
+    Boolean(
+      activeCallForChat &&
+        activeCallForChat.type === "voice" &&
+        activeCallForChat.status !== "ended" &&
+        activeCallForChat.status !== "error",
+    ),
+  );
+
+  const videoCallActive = $derived(
+    Boolean(
+      activeCallForChat &&
+        activeCallForChat.type === "video" &&
+        activeCallForChat.status !== "ended" &&
+        activeCallForChat.status !== "error",
+    ),
+  );
+
+  async function startVoiceCall() {
+    if (!chat || chat.type !== "dm") return;
+    const active = $callStore.activeCall;
+    if (
+      active &&
+      active.chatId === chat.id &&
+      active.status !== "ended" &&
+      active.status !== "error"
+    ) {
+      callStore.setCallModalOpen(true);
+      return;
+    }
+    await callStore.startCall({
+      chatId: chat.id,
+      chatName: chat.friend.name,
+      type: "voice",
+    });
+  }
+
+  async function startVideoCall() {
+    if (!chat || chat.type !== "dm") return;
+    const active = $callStore.activeCall;
+    if (
+      active &&
+      active.chatId === chat.id &&
+      active.status !== "ended" &&
+      active.status !== "error"
+    ) {
+      callStore.setCallModalOpen(true);
+      return;
+    }
+    await callStore.startCall({
+      chatId: chat.id,
+      chatName: chat.friend.name,
+      type: "video",
+    });
+  }
+
   $effect(() => {
     if (!chat) {
       resetLocalState();
@@ -605,17 +727,29 @@
       {#if chat.type === "dm"}
         <Button
           variant="ghost"
-          class="cursor-pointer"
+          class={cn(
+            "cursor-pointer",
+            voiceCallActive ? "text-cyan-400" : "",
+          )}
           size="icon"
           aria-label="Start voice call"
+          onclick={startVoiceCall}
+          disabled={voiceButtonDisabled}
+          aria-pressed={voiceCallActive}
         >
           <Phone class="w-4 h-4" />
         </Button>
         <Button
           variant="ghost"
-          class="cursor-pointer"
+          class={cn(
+            "cursor-pointer",
+            videoCallActive ? "text-cyan-400" : "",
+          )}
           size="icon"
           aria-label="Start video call"
+          onclick={startVideoCall}
+          disabled={videoButtonDisabled}
+          aria-pressed={videoCallActive}
         >
           <Video class="w-4 h-4" />
         </Button>
@@ -858,3 +992,5 @@
     Select a chat to get started.
   </header>
 {/if}
+
+<CallModal />

@@ -1,11 +1,12 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { Link, Mic, SendHorizontal, Users } from "@lucide/svelte";
+  import { Link, Mic, SendHorizontal, Square, Users } from "@lucide/svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
   import FileTransferApprovals from "$lib/features/chat/components/FileTransferApprovals.svelte";
   import FileTransferHistory from "$lib/features/chat/components/FileTransferHistory.svelte";
+  import CallStatusBanner from "$lib/features/calls/components/CallStatusBanner.svelte";
 
   import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
@@ -18,7 +19,7 @@
     hasMoreByChatId,
     loadingStateByChat,
   } from "$lib/features/chat/stores/chatStore";
-  import { afterUpdate, getContext, onMount } from "svelte";
+  import { afterUpdate, getContext, onDestroy, onMount } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { get, derived } from "svelte/store";
@@ -29,6 +30,7 @@
     type MessageContentCache,
   } from "$lib/features/chat/utils/chatSearch";
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
+  import { callStore } from "$lib/features/calls/stores/callStore";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -57,6 +59,16 @@
   let sending = $state(false);
   let isAtBottom = $state(true);
   let unseenCount = $state(0);
+
+  const supportsVoiceRecording =
+    typeof window !== "undefined" && "MediaRecorder" in window;
+  let isRecording = $state(false);
+  let recordingDuration = $state(0);
+  let recordingStartedAt = 0;
+  let recordingInterval: ReturnType<typeof setInterval> | null = null;
+  let mediaRecorder: MediaRecorder | null = null;
+  let recordingStream: MediaStream | null = null;
+  let recordedChunks: Blob[] = [];
 
   let listRef: any = $state();
   let fileInput: HTMLInputElement | null = $state(null);
@@ -162,6 +174,12 @@
       unregisterSearchHandlers();
       chatSearchStore.reset();
     };
+  });
+
+  onDestroy(() => {
+    if (isRecording || mediaRecorder || recordingStream) {
+      stopRecording({ save: false, silent: true });
+    }
   });
 
   afterUpdate(() => {
@@ -318,6 +336,189 @@
       Math.min(textareaRef.scrollHeight, maxHeight) + "px";
   }
 
+  function clearRecordingInterval() {
+    if (recordingInterval) {
+      clearInterval(recordingInterval);
+      recordingInterval = null;
+    }
+  }
+
+  function cleanupRecordingStream() {
+    if (!recordingStream) return;
+    for (const track of recordingStream.getTracks()) {
+      try {
+        track.stop();
+      } catch (error) {
+        console.warn("Failed to stop recording track", error);
+      }
+    }
+    recordingStream = null;
+  }
+
+  async function stopRecording({
+    save = true,
+    silent = false,
+  }: { save?: boolean; silent?: boolean } = {}) {
+    if (!mediaRecorder) {
+      clearRecordingInterval();
+      cleanupRecordingStream();
+      recordingDuration = 0;
+      recordingStartedAt = 0;
+      isRecording = false;
+      recordedChunks = [];
+      return;
+    }
+
+    const recorder = mediaRecorder;
+    clearRecordingInterval();
+    const wasRecording = isRecording;
+    isRecording = false;
+
+    const stopPromise =
+      recorder.state !== "inactive"
+        ? new Promise<void>((resolve) => {
+            recorder.addEventListener(
+              "stop",
+              () => {
+                resolve();
+              },
+              { once: true },
+            );
+          })
+        : Promise.resolve();
+
+    if (recorder.state !== "inactive") {
+      try {
+        recorder.stop();
+      } catch (error) {
+        console.warn("Failed to stop recorder", error);
+      }
+    }
+
+    await stopPromise;
+
+    cleanupRecordingStream();
+
+    const blob =
+      recordedChunks.length > 0
+        ? new Blob(recordedChunks, {
+            type: recorder.mimeType || "audio/webm",
+          })
+        : null;
+
+    recordedChunks = [];
+    mediaRecorder = null;
+    recordingDuration = 0;
+    recordingStartedAt = 0;
+
+    if (!save) {
+      if (wasRecording && !silent) {
+        toasts.addToast("Recording discarded.", "info");
+      }
+      return;
+    }
+
+    if (!blob || blob.size === 0) {
+      if (!silent) {
+        toasts.addToast("Recording was empty.", "warning");
+      }
+      return;
+    }
+
+    try {
+      const safeTimestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const fileName = `voice-message-${safeTimestamp}.webm`;
+      const file = new File([blob], fileName, {
+        type: blob.type || "audio/webm",
+      });
+      addAttachments([file]);
+      if (!silent) {
+        toasts.addToast("Voice message attached.", "success");
+      }
+    } catch (error) {
+      console.error("Failed to attach recording", error);
+      if (!silent) {
+        toasts.showErrorToast("Failed to attach recording.");
+      }
+    }
+  }
+
+  async function startRecording() {
+    if (!supportsVoiceRecording || !navigator.mediaDevices?.getUserMedia) {
+      toasts.addToast(
+        "Voice recording is not supported on this device.",
+        "warning",
+      );
+      return;
+    }
+
+    if (isRecording) {
+      await stopRecording();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true },
+      });
+      recordingStream = stream;
+      recordedChunks = [];
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorder = recorder;
+      recorder.addEventListener("dataavailable", (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      });
+      recorder.addEventListener("error", (event) => {
+        console.error("MediaRecorder error", event);
+        toasts.showErrorToast("Recording error occurred.");
+        stopRecording({ save: false, silent: true });
+      });
+
+      recorder.start();
+      recordingStartedAt = Date.now();
+      recordingDuration = 0;
+      clearRecordingInterval();
+      recordingInterval = setInterval(() => {
+        recordingDuration = Date.now() - recordingStartedAt;
+      }, 200);
+      isRecording = true;
+      toasts.addToast("Recording voice message...", "info");
+    } catch (error) {
+      console.error("Failed to start recording", error);
+      const message =
+        error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Microphone permission is required to record audio."
+          : "Unable to access the microphone.";
+      toasts.showErrorToast(message);
+      clearRecordingInterval();
+      cleanupRecordingStream();
+      mediaRecorder = null;
+      recordedChunks = [];
+      isRecording = false;
+      recordingDuration = 0;
+      recordingStartedAt = 0;
+    }
+  }
+
+  async function handleMicClick() {
+    if (isRecording) {
+      await stopRecording();
+    } else {
+      await startRecording();
+    }
+  }
+
+  function formatRecordingDuration(ms: number) {
+    if (!ms) return "00:00";
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }
+
   function addAttachments(newFiles: File[]) {
     if (!newFiles.length) return;
 
@@ -398,6 +599,32 @@
   let normalizedMessages = $derived(
     buildLowercaseContent(currentChatMessages || [], messageContentCache),
   );
+
+  let callForChat = $derived(() => {
+    if (!chat?.id) return null;
+    const activeCall = $callStore.activeCall;
+    return activeCall && activeCall.chatId === chat.id ? activeCall : null;
+  });
+
+  function hangUpCurrentCall() {
+    if (!callForChat) {
+      callStore.dismissCall();
+      return;
+    }
+    const reason =
+      callForChat.type === "video"
+        ? "Video call ended"
+        : "Voice call ended";
+    callStore.endCall(reason);
+  }
+
+  function reopenCallModal() {
+    callStore.setCallModalOpen(true);
+  }
+
+  function dismissCallStatus() {
+    callStore.dismissCall();
+  }
 
   let normalizedQuery = $derived(normalizeSearchQuery($chatSearchQueryStore));
 
@@ -507,7 +734,18 @@
 
 <div class="flex-grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
-    <div class="flex-grow min-h-0 relative">
+    <div class="flex min-h-0 flex-grow flex-col">
+      {#if callForChat}
+        <div class="px-4 pt-4">
+          <CallStatusBanner
+            call={callForChat}
+            onLeave={hangUpCurrentCall}
+            onDismiss={dismissCallStatus}
+            onOpenModal={reopenCallModal}
+          />
+        </div>
+      {/if}
+      <div class="flex-grow min-h-0 relative">
       <VirtualList
         items={currentChatMessages}
         mode="bottomToTop"
@@ -760,11 +998,32 @@
             sendMessage(e);
           }}
         ></textarea>
+        {#if isRecording}
+          <div class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400">
+            <span
+              class="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
+              aria-hidden="true"
+            ></span>
+            <span>{formatRecordingDuration(recordingDuration)}</span>
+          </div>
+        {/if}
         <button
           type="button"
           class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
+          class:text-red-400={isRecording}
+          aria-pressed={isRecording}
+          onclick={handleMicClick}
+          title={
+            isRecording
+              ? "Stop recording voice message"
+              : "Record voice message"
+          }
         >
-          <Mic size={12} />
+          {#if isRecording}
+            <Square size={12} />
+          {:else}
+            <Mic size={12} />
+          {/if}
         </button>
         <button
           type="submit"
@@ -776,6 +1035,7 @@
         </button>
       </form>
     </footer>
+    </div>
   {:else}
     <div
       class="flex flex-col h-full w-full items-center justify-center text-zinc-500"
