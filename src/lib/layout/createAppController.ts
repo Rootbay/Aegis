@@ -312,8 +312,133 @@ export function createAppController(): AppController {
             const { user_id, is_online } = receivedMessage.PresenceUpdate;
             friendStore.updateFriendPresence(user_id, is_online);
             serverStore.updateServerMemberPresence(user_id, is_online);
-          } else if (receivedMessage.ChatMessage) {
+            return;
+          }
+
+          if (receivedMessage.ChatMessage) {
             chatStore.handleNewMessageEvent(receivedMessage.ChatMessage);
+            return;
+          }
+
+          const currentUserId = get(userStore).me?.id;
+
+          if (receivedMessage.FriendRequest && currentUserId) {
+            const { sender_id, target_id } = receivedMessage.FriendRequest;
+            if (sender_id === currentUserId || target_id === currentUserId) {
+              const counterpartId =
+                sender_id === currentUserId ? target_id : sender_id;
+              if (counterpartId) {
+                friendStore.addFriend({
+                  id: counterpartId,
+                  relationshipStatus: "pending",
+                  status: "Pending",
+                });
+              }
+            }
+            return;
+          }
+
+          if (receivedMessage.FriendRequestResponse && currentUserId) {
+            const { sender_id, target_id, accepted } =
+              receivedMessage.FriendRequestResponse;
+            if (sender_id === currentUserId || target_id === currentUserId) {
+              const counterpartId =
+                sender_id === currentUserId ? target_id : sender_id;
+              if (!counterpartId) {
+                return;
+              }
+              if (accepted) {
+                friendStore.addFriend({
+                  id: counterpartId,
+                  relationshipStatus: "accepted",
+                  status: "Offline",
+                });
+              } else {
+                friendStore.removeFriend(counterpartId);
+              }
+            }
+            return;
+          }
+
+          if (receivedMessage.BlockUser && currentUserId) {
+            const { blocker_id, blocked_id } = receivedMessage.BlockUser;
+            if (blocker_id === currentUserId) {
+              friendStore.addFriend({
+                id: blocked_id,
+                relationshipStatus: "blocked",
+                status: "Blocked",
+              });
+            } else if (blocked_id === currentUserId) {
+              friendStore.removeFriend(blocker_id);
+            }
+            return;
+          }
+
+          if (receivedMessage.UnblockUser && currentUserId) {
+            const { unblocker_id, unblocked_id } = receivedMessage.UnblockUser;
+            if (unblocker_id === currentUserId) {
+              friendStore.removeFriend(unblocked_id);
+            } else if (unblocked_id === currentUserId) {
+              friendStore.removeFriend(unblocker_id);
+            }
+            return;
+          }
+
+          if (receivedMessage.RemoveFriendship && currentUserId) {
+            const { remover_id, removed_id } = receivedMessage.RemoveFriendship;
+            if (remover_id === currentUserId) {
+              friendStore.removeFriend(removed_id);
+            } else if (removed_id === currentUserId) {
+              friendStore.removeFriend(remover_id);
+            }
+            return;
+          }
+
+          if (receivedMessage.CreateServer) {
+            serverStore.addServer(receivedMessage.CreateServer.server);
+            return;
+          }
+
+          if (receivedMessage.DeleteServer) {
+            serverStore.removeServer(receivedMessage.DeleteServer.server_id);
+            return;
+          }
+
+          if (receivedMessage.CreateChannel) {
+            const { channel } = receivedMessage.CreateChannel;
+            if (channel?.server_id) {
+              serverStore.addChannelToServer(channel.server_id, channel);
+            }
+            return;
+          }
+
+          if (receivedMessage.DeleteChannel) {
+            const { channel_id } = receivedMessage.DeleteChannel;
+            const serverState = get(serverStore);
+            const hostingServer = serverState.servers.find((server) =>
+              (server.channels ?? []).some((channel) => channel.id === channel_id),
+            );
+            if (hostingServer) {
+              serverStore.removeChannelFromServer(hostingServer.id, channel_id);
+            }
+            return;
+          }
+
+          if (receivedMessage.JoinServer) {
+            const { server_id, user_id } = receivedMessage.JoinServer;
+            if (currentUserId && user_id === currentUserId) {
+              void serverStore.initialize();
+            } else {
+              void serverStore.fetchServerDetails(server_id);
+            }
+            return;
+          }
+
+          if (receivedMessage.SendServerInvite && currentUserId) {
+            const { user_id } = receivedMessage.SendServerInvite;
+            if (user_id === currentUserId) {
+              void serverStore.initialize();
+            }
           }
         },
       );
