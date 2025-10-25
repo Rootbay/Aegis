@@ -58,6 +58,7 @@
   let msgMenuX = $state(0);
   let msgMenuY = $state(0);
   let selectedMsg: Message | null = $state(null);
+  let memberById = $state<Map<string, User>>(new Map());
 
   const onScroll = () => {
     const el = viewportEl;
@@ -170,6 +171,14 @@
       prevCount = 0;
       prevChatId = id;
       chatSearchStore.reset();
+    }
+  });
+
+  $effect(() => {
+    if (chat?.type === "channel" && chat.members) {
+      memberById = new Map(chat.members.map((member) => [member.id, member]));
+    } else {
+      memberById = new Map();
     }
   });
 
@@ -491,7 +500,7 @@
           {@const senderInfo =
             chat.type === "dm"
               ? chat.friend
-              : chat.members?.find((m: User) => m.id === msg.senderId)}
+              : memberById.get(msg.senderId)}
           {@const senderName = isMe
             ? $userStore.me?.name
             : senderInfo?.name || "Unknown User"}
