@@ -9,7 +9,8 @@
     "types": ["vitest/globals"],
     "baseUrl": ".",
     "paths": {
-      "$lib/*": ["src/lib/*"]
+      "$lib/*": ["src/lib/*"],
+      "$services/*": ["src/lib/services/*"]
     }
   },
   "include": ["src", "vitest-setup.ts"]

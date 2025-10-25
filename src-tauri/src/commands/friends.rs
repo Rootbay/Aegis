@@ -276,14 +276,14 @@ pub async fn remove_friendship(
 pub async fn get_friendships(
     current_user_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<Vec<database::Friendship>, String> {
+) -> Result<Vec<database::FriendshipWithProfile>, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
     let my_id = state.identity.peer_id().to_base58();
     if current_user_id != my_id {
         return Err("Caller identity mismatch".into());
     }
-    database::get_all_friendships_for_user(&state.db_pool, &my_id)
+    database::get_friendships_with_profiles(&state.db_pool, &my_id)
         .await
         .map_err(|e| e.to_string())
 }

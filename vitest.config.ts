@@ -17,6 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       $lib: resolve(projectRootDir, "src/lib"),
+      $services: resolve(projectRootDir, "src/lib/services"),
     },
     conditions: ["browser"],
   },
