@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import CreateGroupModal from "$lib/components/modals/CreateGroupModal.svelte";
   import ServerManagementModal from "$lib/components/modals/ServerManagementModal.svelte";
   import ProfileModal from "$lib/components/modals/ProfileModal.svelte";
@@ -24,6 +25,19 @@
   function handleServerCreated(server: Parameters<typeof serverStore.addServer>[0]) {
     serverStore.addServer(server);
   }
+
+  function handleServerJoined(server: Parameters<typeof serverStore.addServer>[0]) {
+    const { servers } = get(serverStore);
+    const existingServer = servers.find((s) => s.id === server.id);
+
+    if (existingServer) {
+      serverStore.updateServer(server.id, server);
+    } else {
+      serverStore.addServer(server);
+    }
+
+    serverStore.setActiveServer(server.id);
+  }
 </script>
 
 {#if activeModal === "createGroup"}
@@ -35,6 +49,7 @@
     show={true}
     onclose={closeModal}
     onserverCreated={handleServerCreated}
+    onserverJoined={handleServerJoined}
   />
 {/if}
 
