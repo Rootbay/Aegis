@@ -67,6 +67,78 @@ function createChatStore(): ChatStore {
   const loadingMessages = writable<boolean>(false);
   const PAGE_LIMIT = 50;
 
+  const isOptimisticMatch = (
+    optimistic: Message,
+    incoming: Message,
+    selfId?: string,
+  ) => {
+    if (!optimistic.pending) return false;
+    if (selfId && optimistic.senderId !== selfId) return false;
+    if (optimistic.senderId !== incoming.senderId) return false;
+    if (optimistic.content !== incoming.content) return false;
+    const optimisticAttachments = optimistic.attachments?.length ?? 0;
+    const incomingAttachments = incoming.attachments?.length ?? 0;
+    if (optimisticAttachments > 0 && incomingAttachments > 0) {
+      return optimisticAttachments === incomingAttachments;
+    }
+    return true;
+  };
+
+  const mergeOptimisticDetails = (incoming: Message, optimistic?: Message) => {
+    if (!optimistic) {
+      return { ...incoming, pending: false };
+    }
+
+    const merged: Message = {
+      ...incoming,
+      pending: false,
+    };
+
+    if (
+      (!merged.attachments || merged.attachments.length === 0) &&
+      optimistic.attachments &&
+      optimistic.attachments.length > 0
+    ) {
+      merged.attachments = optimistic.attachments;
+    }
+
+    return merged;
+  };
+
+  const insertRealtimeMessage = (
+    existing: Message[],
+    incoming: Message,
+    selfId?: string,
+  ) => {
+    const normalized = { ...incoming, pending: false };
+    const updated = [...existing];
+
+    const existingIndex = updated.findIndex(
+      (msg) => !msg.pending && msg.id === normalized.id,
+    );
+    if (existingIndex !== -1) {
+      updated[existingIndex] = normalized;
+      return updated;
+    }
+
+    if (selfId && normalized.senderId === selfId) {
+      const pendingIndex = updated.findIndex((msg) =>
+        isOptimisticMatch(msg, normalized, selfId),
+      );
+      if (pendingIndex !== -1) {
+        const merged = mergeOptimisticDetails(
+          normalized,
+          updated[pendingIndex],
+        );
+        updated[pendingIndex] = merged;
+        return updated;
+      }
+    }
+
+    updated.push(normalized);
+    return updated;
+  };
+
   const setActiveChat = async (
     chatId: string,
     type: "dm" | "server",
@@ -126,8 +198,32 @@ function createChatStore(): ChatStore {
   };
 
   const handleMessagesUpdate = (chatId: string, messages: Message[]) => {
+    const selfId = get(userStore).me?.id;
     messagesByChatIdStore.update((map) => {
-      map.set(chatId, messages);
+      const existing = map.get(chatId) || [];
+      const usedPendingIds = new Set<string>();
+      const normalized = messages.map((incoming) => {
+        const optimisticMatch = existing.find(
+          (msg) =>
+            isOptimisticMatch(msg, incoming, selfId) &&
+            !usedPendingIds.has(msg.id),
+        );
+        if (optimisticMatch) {
+          usedPendingIds.add(optimisticMatch.id);
+        }
+        return mergeOptimisticDetails(incoming, optimisticMatch);
+      });
+      const seenIds = new Set<string>();
+      const deduped: Message[] = [];
+      for (const msg of normalized) {
+        if (seenIds.has(msg.id)) continue;
+        seenIds.add(msg.id);
+        deduped.push({ ...msg, pending: false });
+      }
+      const remainingPending = existing.filter(
+        (msg) => msg.pending && !usedPendingIds.has(msg.id),
+      );
+      map.set(chatId, [...deduped, ...remainingPending]);
       return new Map(map);
     });
     loadingMessages.set(false);
@@ -137,11 +233,12 @@ function createChatStore(): ChatStore {
     loadingMessages.set(true);
     try {
       const current = get(messagesByChatIdStore).get(targetChatId) || [];
+      const persistedCount = current.filter((m) => !m.pending).length;
       const fetched: BackendMessage[] = await invoke("get_messages", {
         chatId: targetChatId,
         chat_id: targetChatId,
         limit: PAGE_LIMIT,
-        offset: current.length,
+        offset: persistedCount,
       });
       const mapped = fetched.map((m: BackendMessage) => ({
         id: m.id,
@@ -155,18 +252,41 @@ function createChatStore(): ChatStore {
         read: m.read ?? true,
       })) as Message[];
       let newAdds = 0;
+      const selfId = get(userStore).me?.id;
       messagesByChatIdStore.update((map) => {
         const existing = map.get(targetChatId) || [];
-        const seen = new Set(existing.map((m) => m.id));
-        const deduped = [] as Message[];
-        for (const m of mapped) {
-          if (!seen.has(m.id)) {
-            deduped.push(m);
-            seen.add(m.id);
+        const seen = new Set(
+          existing.filter((msg) => !msg.pending).map((msg) => msg.id),
+        );
+        const matchedPendingIds = new Set<string>();
+        const deduped: Message[] = [];
+        for (const incoming of mapped) {
+          if (seen.has(incoming.id)) {
+            continue;
           }
+          const optimisticMatch = existing.find(
+            (msg) =>
+              msg.pending &&
+              !matchedPendingIds.has(msg.id) &&
+              isOptimisticMatch(msg, incoming, selfId),
+          );
+          const normalized = mergeOptimisticDetails(incoming, optimisticMatch);
+          if (optimisticMatch) {
+            matchedPendingIds.add(optimisticMatch.id);
+          }
+          seen.add(normalized.id);
+          deduped.push(normalized);
         }
         newAdds = deduped.length;
-        map.set(targetChatId, [...deduped, ...existing]);
+        const persistedExisting = existing.filter((msg) => !msg.pending);
+        const remainingPending = existing.filter(
+          (msg) => msg.pending && !matchedPendingIds.has(msg.id),
+        );
+        map.set(targetChatId, [
+          ...deduped,
+          ...persistedExisting,
+          ...remainingPending,
+        ]);
         return new Map(map);
       });
       hasMoreByChatIdStore.update((map) => {
@@ -200,6 +320,7 @@ function createChatStore(): ChatStore {
       content: content,
       timestamp: new Date().toISOString(),
       read: true,
+      pending: true,
     };
 
     messagesByChatIdStore.update((map) => {
@@ -254,6 +375,7 @@ function createChatStore(): ChatStore {
       timestamp: new Date().toISOString(),
       read: true,
       attachments,
+      pending: true,
     };
     messagesByChatIdStore.update((map) => {
       const existing = map.get(messageChatId) || [];
@@ -312,8 +434,6 @@ function createChatStore(): ChatStore {
     const { sender, content, channel_id } = message;
     const me = get(userStore).me;
 
-    if (sender === me?.id) return;
-
     let targetChatId: string | null = null;
     if (channel_id) {
       targetChatId = channel_id;
@@ -328,11 +448,12 @@ function createChatStore(): ChatStore {
         senderId: sender,
         content: content,
         timestamp: new Date().toISOString(),
-        read: false,
+        read: sender === me?.id,
       };
       messagesByChatIdStore.update((map) => {
         const existing = map.get(targetChatId) || [];
-        map.set(targetChatId, [...existing, newMessage]);
+        const updated = insertRealtimeMessage(existing, newMessage, me?.id);
+        map.set(targetChatId, updated);
         return new Map(map);
       });
     }

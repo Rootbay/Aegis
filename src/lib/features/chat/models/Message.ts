@@ -14,4 +14,5 @@ export interface Message {
   read: boolean;
   attachments?: AttachmentMeta[];
   reactions?: Record<string, string[]>;
+  pending?: boolean;
 }
