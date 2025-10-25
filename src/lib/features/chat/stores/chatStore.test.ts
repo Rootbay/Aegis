@@ -7,6 +7,15 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+vi.mock("$lib/stores/userStore", () => ({
+  userStore: {
+    subscribe: (run: (value: { me: { id: string } | null }) => void) => {
+      run({ me: { id: "user-1" } });
+      return () => {};
+    },
+  },
+}));
+
 describe("chatStore attachment lifecycle", () => {
   let createdUrls: string[];
   let revokeSpy: ReturnType<typeof vi.fn>;
@@ -67,7 +76,7 @@ describe("chatStore attachment lifecycle", () => {
     const store = createChatStore();
 
     await store.setActiveChat("chat-1", "dm");
-    await store.setActiveChat("chat-1", "dm");
+    await store.setActiveChat("chat-1", "dm", undefined, { forceRefresh: true });
 
     expect(createdUrls.length).toBeGreaterThan(1);
     expect(revokeSpy).toHaveBeenCalledWith(createdUrls[0]);
@@ -101,5 +110,25 @@ describe("chatStore attachment lifecycle", () => {
 
     expect(createdUrls.length).toBeGreaterThan(0);
     expect(revokeSpy).toHaveBeenCalledWith(createdUrls[0]);
+  });
+
+  it("does not re-fetch when cached persisted messages exist", async () => {
+    const timestamp = new Date().toISOString();
+
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: "msg-1",
+        content: "hello",
+        timestamp,
+      },
+    ]);
+
+    const store = createChatStore();
+
+    await store.setActiveChat("chat-1", "dm");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    await store.setActiveChat("chat-1", "dm");
+    expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 });

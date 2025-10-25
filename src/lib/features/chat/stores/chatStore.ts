@@ -38,6 +38,9 @@ interface ChatStore {
     chatId: string,
     chatType: "dm" | "server",
     channelId?: string,
+    options?: {
+      forceRefresh?: boolean;
+    },
   ) => Promise<void>;
   handleMessagesUpdate: (chatId: string, messages: Message[]) => void;
   sendMessage: (content: string) => Promise<void>;
@@ -279,6 +282,9 @@ function createChatStore(): ChatStore {
     chatId: string,
     type: "dm" | "server",
     channelId?: string,
+    options?: {
+      forceRefresh?: boolean;
+    },
   ) => {
     activeChatId.set(chatId);
     activeChatType.set(type);
@@ -294,17 +300,17 @@ function createChatStore(): ChatStore {
     }
     const messageChatId = type === "server" ? channelId : chatId;
     if (messageChatId) {
-      const existingMessages = get(messagesByChatIdStore).get(messageChatId);
-      const hasCachedMessages =
-        Array.isArray(existingMessages) && existingMessages.length > 0;
+      const existingMessages = get(messagesByChatIdStore).get(messageChatId) || [];
+      const hasCachedPersistedMessages = existingMessages.some((msg) => !msg.pending);
+      const forceRefresh = options?.forceRefresh ?? false;
+      const shouldFetch = forceRefresh || !hasCachedPersistedMessages;
 
-      if (!hasCachedMessages) {
-        updateMessagesForChat(messageChatId, (existing) => {
-          if (existing.length === 0) {
-            return [];
-          }
-          return existing;
-        });
+      if (!shouldFetch) {
+        loadingMessages.set(false);
+        return;
+      }
+
+      if (existingMessages.length === 0) {
         hasMoreByChatIdStore.update((map) => {
           map.set(messageChatId, true);
           return new Map(map);
@@ -338,6 +344,7 @@ function createChatStore(): ChatStore {
     const selfId = get(userStore).me?.id;
     updateMessagesForChat(chatId, (existing) => {
       const usedPendingIds = new Set<string>();
+      const persistedExisting = existing.filter((msg) => !msg.pending);
       const normalized = messages.map((incoming) => {
         const optimisticMatch = existing.find(
           (msg) =>
@@ -356,11 +363,19 @@ function createChatStore(): ChatStore {
         seenIds.add(msg.id);
         deduped.push({ ...msg, pending: false });
       }
-      deduped.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const persistedById = new Map(
+        persistedExisting.map((msg) => [msg.id, { ...msg, pending: false }]),
+      );
+      for (const msg of deduped) {
+        persistedById.set(msg.id, msg);
+      }
+      const mergedPersisted = Array.from(persistedById.values()).sort((a, b) =>
+        a.timestamp.localeCompare(b.timestamp),
+      );
       const remainingPending = existing.filter(
         (msg) => msg.pending && !usedPendingIds.has(msg.id),
       );
-      return [...deduped, ...remainingPending];
+      return [...mergedPersisted, ...remainingPending];
     });
     loadingMessages.set(false);
   };
