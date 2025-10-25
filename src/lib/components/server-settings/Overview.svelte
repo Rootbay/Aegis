@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Label } from "$lib/components/ui/label/index.js";
+  import { Textarea } from "$lib/components/ui/textarea/index.js";
   import type { Server } from "$lib/features/servers/models/Server";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
@@ -34,44 +38,36 @@
 
   <div class="bg-zinc-800 rounded-2xl shadow p-6 space-y-5">
     <div class="space-y-2">
-      <label for="serverName" class="block text-sm font-medium text-zinc-300">
+      <Label for="serverName" class="text-sm font-medium text-zinc-300">
         Server Name
-      </label>
-      <input
-        type="text"
+      </Label>
+      <Input
         id="serverName"
         bind:value={serverName}
-        class="block w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-white placeholder-zinc-500
-               focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50"
+        class="bg-zinc-900 border-zinc-700 text-white placeholder-zinc-500 focus-visible:border-indigo-500 focus-visible:ring-indigo-500"
         placeholder="Enter a server name"
       />
     </div>
 
     <div class="space-y-2">
-      <label
+      <Label
         for="serverDescription"
-        class="block text-sm font-medium text-zinc-300"
+        class="text-sm font-medium text-zinc-300"
       >
         Server Description
-      </label>
-      <textarea
+      </Label>
+      <Textarea
         id="serverDescription"
         bind:value={serverDescription}
-        rows="3"
-        class="block w-full rounded-lg bg-zinc-900 border border-zinc-700 px-3 py-2 text-white placeholder-zinc-500
-               focus:border-indigo-500 focus:ring focus:ring-indigo-500 focus:ring-opacity-50 resize-none"
+        class="bg-zinc-900 border-zinc-700 text-white placeholder-zinc-500 focus-visible:border-indigo-500 focus-visible:ring-indigo-500"
         placeholder="Write a short description for your server"
-      ></textarea>
+      />
     </div>
 
     <div class="pt-4 flex justify-end">
-      <button
-        class="inline-flex items-center px-5 py-2.5 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-500
-               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all"
-        onclick={saveChanges}
-      >
+      <Button class="px-5 py-2.5" onclick={saveChanges}>
         Save Changes
-      </button>
+      </Button>
     </div>
   </div>
 </section>
