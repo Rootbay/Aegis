@@ -55,7 +55,7 @@ interface ServerStore extends Readable<ServerStoreState> {
   getServer: (serverId: string) => Promise<Server | null>;
 }
 
-function createServerStore(): ServerStore {
+export function createServerStore(): ServerStore {
   const { subscribe, set, update } = writable<ServerStoreState>({
     servers: [],
     loading: true,
