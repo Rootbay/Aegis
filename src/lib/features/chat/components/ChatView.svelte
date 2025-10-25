@@ -20,6 +20,12 @@
   import { toasts } from "$lib/stores/ToastStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { get, derived } from "svelte/store";
+  import {
+    buildLowercaseContent,
+    matchNormalizedMessages,
+    normalizeSearchQuery,
+    type MessageContentCache,
+  } from "$lib/features/chat/utils/chatSearch";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -204,37 +210,6 @@
   const myId = $userStore.me?.id;
   const chatSearchQueryStore = derived(chatSearchStore, (state) => state.query);
 
-  function arraysEqualNumbers(a: number[], b: number[]) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i += 1) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }
-
-  $effect(() => {
-    const query = $chatSearchQueryStore.trim();
-    const messages = currentChatMessages || [];
-    const { matches: currentMatches } = get(chatSearchStore);
-
-    if (!chat?.id || !query) {
-      if (currentMatches.length) {
-        chatSearchStore.setMatches([]);
-      }
-      return;
-    }
-
-    const lower = query.toLowerCase();
-    const matches = messages
-      .map((m, idx) => ({ idx, content: (m.content || "").toLowerCase() }))
-      .filter(({ content }) => content.includes(lower))
-      .map(({ idx }) => idx);
-
-    if (!arraysEqualNumbers(matches, currentMatches)) {
-      chatSearchStore.setMatches(matches);
-    }
-  });
-
   function jumpToMatch(next = true) {
     const { matches, activeMatchIndex } = get(chatSearchStore);
     if (!matches.length) return;
@@ -398,6 +373,25 @@
   let isChatLoading = $derived(
     chat ? Boolean($loadingStateByChat.get(chat.id)) : false,
   );
+
+  const messageContentCache: MessageContentCache = new Map();
+
+  let normalizedMessages = $derived(
+    buildLowercaseContent(currentChatMessages || [], messageContentCache),
+  );
+
+  let normalizedQuery = $derived(normalizeSearchQuery($chatSearchQueryStore));
+
+  let chatSearchMatches = $derived(() => {
+    if (!chat?.id) {
+      return [];
+    }
+    return matchNormalizedMessages(normalizedMessages, normalizedQuery);
+  });
+
+  $effect(() => {
+    chatSearchStore.setMatches(chatSearchMatches);
+  });
 
   function handlePaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items;
