@@ -3,6 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { v4 as uuidv4 } from "uuid";
   import { userStore } from "$lib/stores/userStore";
+  import { serverStore } from "$lib/features/servers/stores/serverStore";
   import type { Server } from "$lib/features/servers/models/Server";
   import {
     Dialog,
@@ -22,7 +23,7 @@
     show?: boolean;
     onclose?: () => void;
     onserverCreated?: UnaryHandler<Server>;
-    onserverJoined?: UnaryHandler<string>;
+    onserverJoined?: UnaryHandler<Server>;
   };
 
   let {
@@ -87,14 +88,23 @@
     }
 
     try {
-      await invoke("send_server_invite", {
+      await invoke("join_server", {
         server_id: trimmedJoinServerId,
         user_id: $userStore.me.id,
       });
-      console.log("Joined server:", trimmedJoinServerId);
+
+      const joinedServer = await serverStore.getServer(trimmedJoinServerId);
+
+      if (!joinedServer) {
+        throw new Error(
+          `Server details unavailable after joining ${trimmedJoinServerId}.`,
+        );
+      }
+
+      console.log("Joined server:", joinedServer);
       joinServerId = "";
       closeModal();
-      onserverJoined?.(trimmedJoinServerId);
+      onserverJoined?.(joinedServer);
     } catch (error) {
       console.error("Failed to join server:", error);
     }
