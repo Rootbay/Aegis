@@ -4,7 +4,6 @@
   import { Link, Mic, SendHorizontal, Users } from "@lucide/svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
-  import DownloadProgress from "$lib/components/ui/DownloadProgress.svelte";
 
   import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
@@ -638,28 +637,19 @@
                 {/if}
                 {#if msg.attachments && msg.attachments.length > 0}
                   <div class="mt-2 space-y-2">
-                    {#each msg.attachments as attachment, i (i)}
-                      {#if attachment.type.startsWith("image/") && attachment.url}
-                        <button
-                          onclick={() =>
-                            attachment.url && openLightbox(attachment.url)}
-                          class="max-w-xs rounded-lg overflow-hidden cursor-pointer"
-                          oncontextmenu={(event) =>
-                            handleMessageContextMenu(event, msg)}
-                        >
-                          <img
-                            src={attachment.url}
-                            alt="attachment"
-                            class="max-h-64"
-                          />
-                        </button>
-                      {:else}
-                        <DownloadProgress
-                          fileName={attachment.name}
-                          status="completed"
-                          progress={100}
+                    {#each msg.attachments as attachment (attachment.id)}
+                      <div
+                        oncontextmenu={(event) =>
+                          handleMessageContextMenu(event, msg)}
+                      >
+                        <FilePreview
+                          variant="message"
+                          {attachment}
+                          chatId={msg.chatId}
+                          messageId={msg.id}
+                          onOpen={openLightbox}
                         />
-                      {/if}
+                      </div>
                     {/each}
                   </div>
                 {/if}

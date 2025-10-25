@@ -22,7 +22,7 @@ async fn message_with_attachments_round_trips() {
         name: "greeting.txt".to_string(),
         content_type: Some("text/plain".to_string()),
         size: attachment_bytes.len() as u64,
-        data: attachment_bytes.clone(),
+        data: Some(attachment_bytes.clone()),
     };
 
     let message = database::Message {
@@ -55,5 +55,10 @@ async fn message_with_attachments_round_trips() {
     assert_eq!(fetched_attachment.name, attachment.name);
     assert_eq!(fetched_attachment.content_type, attachment.content_type);
     assert_eq!(fetched_attachment.size, attachment_bytes.len() as u64);
-    assert_eq!(fetched_attachment.data, attachment_bytes);
+    assert!(fetched_attachment.data.is_none());
+
+    let fetched_bytes = database::get_attachment_data(&pool, &attachment.id)
+        .await
+        .expect("fetch attachment bytes");
+    assert_eq!(fetched_bytes, attachment_bytes);
 }

@@ -66,7 +66,7 @@ async fn persist_and_broadcast_message(
             name: name.clone(),
             content_type: content_type.clone(),
             size: sanitized_size,
-            data: data.clone(),
+            data: Some(data.clone()),
         });
 
         protocol_attachments.push(aegis_protocol::AttachmentPayload {
@@ -189,6 +189,18 @@ pub async fn get_messages(
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
     database::get_messages_for_chat(&state.db_pool, &chat_id, limit, offset)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_attachment_bytes(
+    attachment_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<u8>, String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?;
+    database::get_attachment_data(&state.db_pool, &attachment_id)
         .await
         .map_err(|e| e.to_string())
 }

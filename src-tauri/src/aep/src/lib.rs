@@ -184,7 +184,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                     name: attachment.name.clone(),
                     content_type: attachment.content_type.clone(),
                     size: sanitized_size,
-                    data: attachment.data.clone(),
+                    data: Some(attachment.data.clone()),
                 });
             }
 

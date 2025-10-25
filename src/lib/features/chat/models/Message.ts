@@ -3,8 +3,10 @@ export interface AttachmentMeta {
   name: string;
   type: string;
   size?: number;
-  url?: string;
-  bytes?: Uint8Array;
+  objectUrl?: string;
+  isLoaded: boolean;
+  isLoading: boolean;
+  loadError?: string;
 }
 
 export interface Message {
