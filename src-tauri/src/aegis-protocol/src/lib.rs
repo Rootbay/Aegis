@@ -87,6 +87,14 @@ pub enum AepMessage {
         file_name: String,
         error: String,
     },
+    MessageReaction {
+        message_id: String,
+        chat_id: String,
+        emoji: String,
+        user_id: String,
+        action: ReactionAction,
+        signature: Option<Vec<u8>>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -140,6 +148,22 @@ pub struct AttachmentPayload {
     pub content_type: Option<String>,
     pub size: u64,
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ReactionAction {
+    Add,
+    Remove,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MessageReactionData {
+    pub message_id: String,
+    pub chat_id: String,
+    pub emoji: String,
+    pub user_id: String,
+    pub action: ReactionAction,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

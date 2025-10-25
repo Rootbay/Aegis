@@ -353,6 +353,11 @@ export function createAppController(): AppController {
             return;
           }
 
+          if (receivedMessage.MessageReaction) {
+            chatStore.handleReactionUpdate(receivedMessage.MessageReaction);
+            return;
+          }
+
           const currentUserId = get(userStore).me?.id;
 
           if (receivedMessage.FriendRequest && currentUserId) {

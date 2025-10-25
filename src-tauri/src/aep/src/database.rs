@@ -82,6 +82,7 @@ pub struct Message {
     pub timestamp: DateTime<Utc>, // ISO 8601 string
     pub read: bool,
     pub attachments: Vec<Attachment>,
+    pub reactions: HashMap<String, Vec<String>>,
 }
 
 pub async fn initialize_db(db_path: std::path::PathBuf) -> Result<Pool<Sqlite>, sqlx::Error> {
@@ -461,6 +462,46 @@ pub async fn delete_message(pool: &Pool<Sqlite>, message_id: &str) -> Result<(),
     Ok(())
 }
 
+pub async fn add_reaction_to_message(
+    pool: &Pool<Sqlite>,
+    message_id: &str,
+    user_id: &str,
+    emoji: &str,
+) -> Result<(), sqlx::Error> {
+    let created_at = Utc::now().to_rfc3339();
+    sqlx::query!(
+        r#"
+        INSERT INTO message_reactions (message_id, user_id, emoji, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(message_id, user_id, emoji) DO UPDATE SET created_at = excluded.created_at
+        "#,
+        message_id,
+        user_id,
+        emoji,
+        created_at,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn remove_reaction_from_message(
+    pool: &Pool<Sqlite>,
+    message_id: &str,
+    user_id: &str,
+    emoji: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+        message_id,
+        user_id,
+        emoji,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 
 pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i64, offset: i64) -> Result<Vec<Message>, sqlx::Error> {
     #[derive(FromRow)]
@@ -498,6 +539,7 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             timestamp,
             read: m_raw.read,
             attachments: Vec::new(),
+            reactions: HashMap::new(),
         });
     }
 
@@ -544,6 +586,45 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             if let Some(mut attachments) = attachments_map.remove(&message.id) {
                 attachments.sort_by(|a, b| a.id.cmp(&b.id));
                 message.attachments = attachments;
+            }
+        }
+
+        #[derive(FromRow)]
+        struct ReactionRow {
+            message_id: String,
+            user_id: String,
+            emoji: String,
+        }
+
+        let mut reactions_query = QueryBuilder::<Sqlite>::new(
+            "SELECT message_id, user_id, emoji FROM message_reactions WHERE message_id IN (",
+        );
+        {
+            let mut separated = reactions_query.separated(", ");
+            for message_id in &message_ids {
+                separated.push_bind(message_id);
+            }
+        }
+        reactions_query.push(")");
+        let reaction_rows = reactions_query
+            .build_query_as::<ReactionRow>()
+            .fetch_all(pool)
+            .await?;
+
+        let mut reaction_map: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+        for row in reaction_rows {
+            let entry = reaction_map
+                .entry(row.message_id)
+                .or_insert_with(HashMap::new);
+            entry
+                .entry(row.emoji)
+                .or_insert_with(Vec::new)
+                .push(row.user_id);
+        }
+
+        for message in &mut messages {
+            if let Some(reactions) = reaction_map.remove(&message.id) {
+                message.reactions = reactions;
             }
         }
     }

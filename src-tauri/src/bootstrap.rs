@@ -353,15 +353,16 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             };
                                                             if let Some(plaintext) = plaintext_opt {
                                                                 let chat_id = sender.clone();
-                                                                let new_message = database::Message {
-                                                                    id: uuid::Uuid::new_v4().to_string(),
-                                                                    chat_id,
-                                                                    sender_id: sender.clone(),
-                                                                    content: String::from_utf8_lossy(&plaintext).to_string(),
-                                                                    timestamp: chrono::Utc::now(),
-                                                                    read: false,
-                                                                    attachments: Vec::new(),
-                                                                };
+                                                            let new_message = database::Message {
+                                                                id: uuid::Uuid::new_v4().to_string(),
+                                                                chat_id,
+                                                                sender_id: sender.clone(),
+                                                                content: String::from_utf8_lossy(&plaintext).to_string(),
+                                                                timestamp: chrono::Utc::now(),
+                                                                read: false,
+                                                                attachments: Vec::new(),
+                                                                reactions: std::collections::HashMap::new(),
+                                                            };
                                                                 if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                             }
                                                         }
@@ -423,6 +424,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 timestamp: chrono::Utc::now(),
                                                                 read: false,
                                                                 attachments: Vec::new(),
+                                                                reactions: std::collections::HashMap::new(),
                                                             };
                                                             if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                         }
