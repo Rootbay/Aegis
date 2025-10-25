@@ -4,6 +4,8 @@
   import { Link, Mic, SendHorizontal, Users } from "@lucide/svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
+  import FileTransferApprovals from "$lib/features/chat/components/FileTransferApprovals.svelte";
+  import FileTransferHistory from "$lib/features/chat/components/FileTransferHistory.svelte";
 
   import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
@@ -500,6 +502,9 @@
   }
 </script>
 
+<FileTransferApprovals />
+<FileTransferHistory />
+
 <div class="flex-grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
     <div class="flex-grow min-h-0 relative">
@@ -513,9 +518,7 @@
         {#snippet renderItem(msg, index)}
           {@const isMe = msg.senderId === myId}
           {@const senderInfo =
-            chat.type === "dm"
-              ? chat.friend
-              : memberById.get(msg.senderId)}
+            chat.type === "dm" ? chat.friend : memberById.get(msg.senderId)}
           {@const senderName = isMe
             ? $userStore.me?.name
             : senderInfo?.name || "Unknown User"}
@@ -676,7 +679,9 @@
       </VirtualList>
 
       {#if isChatLoading && (currentChatMessages?.length ?? 0) === 0}
-        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div
+          class="absolute inset-0 flex items-center justify-center pointer-events-none"
+        >
           <span class="text-sm text-muted-foreground">Loading messages...</span>
         </div>
       {/if}

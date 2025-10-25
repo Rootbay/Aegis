@@ -8,13 +8,16 @@ import {
   type Readable,
   type Unsubscriber,
 } from "svelte/store";
-import {
-  authStore,
-  type AuthState,
-} from "$lib/features/auth/stores/authStore";
+import { authStore, type AuthState } from "$lib/features/auth/stores/authStore";
 import { userStore } from "$lib/stores/userStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
+import {
+  fileTransferStore,
+  type FileTransferDeniedPayload,
+  type FileTransferRequestPayload,
+  type FileReceivedPayload,
+} from "$lib/features/chat/stores/fileTransferStore";
 import {
   activeChannelId,
   activeChatId,
@@ -54,7 +57,10 @@ type PageState = {
   readonly friends: Friend[];
   readonly allUsers: Friend[];
   readonly currentChat: Chat | null;
-  readonly openModal: (modalType: AppModalType, props?: Record<string, unknown>) => void;
+  readonly openModal: (
+    modalType: AppModalType,
+    props?: Record<string, unknown>,
+  ) => void;
   readonly closeModal: () => void;
   readonly openUserCardModal: (
     user: User,
@@ -115,9 +121,13 @@ function withProfileDefaults(user: User): ProfileModalSource {
 
 function computeUserCardPosition(clickX: number, clickY: number) {
   const viewportWidth =
-    typeof window !== "undefined" ? window.innerWidth : CARD_WIDTH + CARD_MARGIN * 2;
+    typeof window !== "undefined"
+      ? window.innerWidth
+      : CARD_WIDTH + CARD_MARGIN * 2;
   const viewportHeight =
-    typeof window !== "undefined" ? window.innerHeight : CARD_HEIGHT + CARD_MARGIN * 2;
+    typeof window !== "undefined"
+      ? window.innerHeight
+      : CARD_HEIGHT + CARD_MARGIN * 2;
 
   const safeX = Number.isFinite(clickX) ? clickX : viewportWidth - CARD_MARGIN;
   const safeY = Number.isFinite(clickY) ? clickY : viewportHeight - CARD_MARGIN;
@@ -129,7 +139,10 @@ function computeUserCardPosition(clickX: number, clickY: number) {
   );
 
   let y = safeY - CARD_HEIGHT - CARD_MARGIN;
-  const maxY = Math.max(CARD_MARGIN, viewportHeight - CARD_HEIGHT - CARD_MARGIN);
+  const maxY = Math.max(
+    CARD_MARGIN,
+    viewportHeight - CARD_HEIGHT - CARD_MARGIN,
+  );
 
   if (y < CARD_MARGIN) {
     y = clamp(safeY + CARD_MARGIN, CARD_MARGIN, maxY);
@@ -205,7 +218,9 @@ export function createAppController(): AppController {
     });
   };
 
-  const openDetailedProfileModal: PageState["openDetailedProfileModal"] = (user) => {
+  const openDetailedProfileModal: PageState["openDetailedProfileModal"] = (
+    user,
+  ) => {
     const friends = get(friendStore).friends;
     openModal("detailedProfile", {
       profileUser: toProfileModalUser(user),
@@ -302,6 +317,24 @@ export function createAppController(): AppController {
       }>("messages-updated", (event) => {
         const { chatId: chatIdValue, messages } = event.payload;
         chatStore.handleMessagesUpdate(chatIdValue, messages);
+      });
+
+      const unlistenFileTransferRequest = await listen<{
+        payload: FileTransferRequestPayload;
+      }>("file-transfer-request", (event) => {
+        fileTransferStore.handleTransferRequest(event.payload);
+      });
+
+      const unlistenFileTransferDenied = await listen<{
+        payload: FileTransferDeniedPayload;
+      }>("file-transfer-denied", (event) => {
+        fileTransferStore.handleTransferDenied(event.payload);
+      });
+
+      const unlistenFileReceived = await listen<{
+        payload: FileReceivedPayload;
+      }>("file-received", (event) => {
+        fileTransferStore.handleFileReceived(event.payload);
       });
 
       const unlistenPresence = await listen<{ payload: AepMessage }>(
@@ -416,7 +449,9 @@ export function createAppController(): AppController {
             const { channel_id } = receivedMessage.DeleteChannel;
             const serverState = get(serverStore);
             const hostingServer = serverState.servers.find((server) =>
-              (server.channels ?? []).some((channel) => channel.id === channel_id),
+              (server.channels ?? []).some(
+                (channel) => channel.id === channel_id,
+              ),
             );
             if (hostingServer) {
               serverStore.removeChannelFromServer(hostingServer.id, channel_id);
@@ -448,6 +483,9 @@ export function createAppController(): AppController {
         unlistenServers,
         unlistenMessages,
         unlistenPresence,
+        unlistenFileTransferRequest,
+        unlistenFileTransferDenied,
+        unlistenFileReceived,
       );
     }
   };
@@ -487,8 +525,12 @@ export function createAppController(): AppController {
       return;
     }
 
-    const generalChannel = server.channels.find((channel) => channel.name === "general");
-    const targetChannelId = generalChannel ? generalChannel.id : server.channels[0].id;
+    const generalChannel = server.channels.find(
+      (channel) => channel.name === "general",
+    );
+    const targetChannelId = generalChannel
+      ? generalChannel.id
+      : server.channels[0].id;
 
     const chatType = get(activeChatType);
     const chatId = get(activeChatId);
@@ -526,7 +568,9 @@ export function createAppController(): AppController {
     clearUnlistenHandlers();
   });
 
-  const allUsers = derived(friendStore, ($friendStore) => [...$friendStore.friends]);
+  const allUsers = derived(friendStore, ($friendStore) => [
+    ...$friendStore.friends,
+  ]);
 
   const currentChat = derived(
     [
@@ -558,7 +602,9 @@ export function createAppController(): AppController {
       } else if ($activeChatType === "server") {
         const server = $serverStore.servers.find((s) => s.id === $activeChatId);
         if (server && server.channels) {
-          const channel = server.channels.find((c) => c.id === $activeChannelId);
+          const channel = server.channels.find(
+            (c) => c.id === $activeChannelId,
+          );
           if (channel) {
             return {
               type: "channel",
@@ -583,7 +629,8 @@ export function createAppController(): AppController {
   const isFriendsOrRootPage = derived(
     [page, serverStore],
     ([$page, $serverStore]) =>
-      ($page.url.pathname === "/" || $page.url.pathname.startsWith("/friends")) &&
+      ($page.url.pathname === "/" ||
+        $page.url.pathname.startsWith("/friends")) &&
       !$serverStore.activeServerId,
   );
 
