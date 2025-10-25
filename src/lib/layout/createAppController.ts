@@ -370,11 +370,11 @@ export function createAppController(): AppController {
     const chatId = get(activeChatId);
     const channelId = get(activeChannelId);
 
-    if (
-      chatType !== "server" ||
-      chatId !== server.id ||
-      channelId !== targetChannelId
-    ) {
+    const isServerChat = chatType === "server" && chatId === server.id;
+    const hasValidChannel =
+      Boolean(channelId) && server.channels.some((channel) => channel.id === channelId);
+
+    if (!isServerChat || !hasValidChannel) {
       untrack(() => {
         chatStore.setActiveChat(server.id, "server", targetChannelId);
       });
