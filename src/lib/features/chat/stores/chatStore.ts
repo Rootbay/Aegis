@@ -212,9 +212,9 @@ function createChatStore(): ChatStore {
           limit: PAGE_LIMIT,
           offset: 0,
         });
-        const mapped = fetched.map((m: BackendMessage) =>
-          mapBackendMessage(m, messageChatId),
-        );
+        const mapped = fetched
+          .map((m: BackendMessage) => mapBackendMessage(m, messageChatId))
+          .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
         handleMessagesUpdate(messageChatId, mapped);
         hasMoreByChatIdStore.update((map) => {
           map.set(messageChatId, fetched.length >= PAGE_LIMIT);
@@ -250,6 +250,7 @@ function createChatStore(): ChatStore {
         seenIds.add(msg.id);
         deduped.push({ ...msg, pending: false });
       }
+      deduped.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       const remainingPending = existing.filter(
         (msg) => msg.pending && !usedPendingIds.has(msg.id),
       );
@@ -270,9 +271,9 @@ function createChatStore(): ChatStore {
         limit: PAGE_LIMIT,
         offset: persistedCount,
       });
-      const mapped = fetched.map((m: BackendMessage) =>
-        mapBackendMessage(m, targetChatId),
-      );
+      const mapped = fetched
+        .map((m: BackendMessage) => mapBackendMessage(m, targetChatId))
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       let newAdds = 0;
       const selfId = get(userStore).me?.id;
       messagesByChatIdStore.update((map) => {
@@ -299,6 +300,7 @@ function createChatStore(): ChatStore {
           seen.add(normalized.id);
           deduped.push(normalized);
         }
+        deduped.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
         newAdds = deduped.length;
         const persistedExisting = existing.filter((msg) => !msg.pending);
         const remainingPending = existing.filter(
@@ -481,9 +483,9 @@ function createChatStore(): ChatStore {
         limit: PAGE_LIMIT,
         offset: 0,
       });
-      const mapped = fetched.map((m: BackendMessage) =>
-        mapBackendMessage(m, chatId),
-      );
+      const mapped = fetched
+        .map((m: BackendMessage) => mapBackendMessage(m, chatId))
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       handleMessagesUpdate(chatId, mapped);
       hasMoreByChatIdStore.update((map) => {
         map.set(chatId, fetched.length >= PAGE_LIMIT);

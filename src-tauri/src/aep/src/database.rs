@@ -355,24 +355,32 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         read: bool,
     }
 
-    let messages_raw = sqlx::query_as!(MessageRaw, "SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp ASC LIMIT ? OFFSET ?", chat_id, limit, offset)
+    let messages_raw = sqlx::query_as!(
+        MessageRaw,
+        "SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        chat_id,
+        limit,
+        offset
+    )
         .fetch_all(pool)
         .await?;
 
-    let mut messages = Vec::new();
-        for m_raw in messages_raw {
-            let timestamp = DateTime::parse_from_rfc3339(&m_raw.timestamp)
-                .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
-            messages.push(Message {
-                id: m_raw.id,
-                chat_id: m_raw.chat_id,
-                sender_id: m_raw.sender_id,
-                content: m_raw.content,
-                timestamp,
-                read: m_raw.read,
-            });
-        }
+    let mut messages = Vec::with_capacity(messages_raw.len());
+    for m_raw in messages_raw {
+        let timestamp = DateTime::parse_from_rfc3339(&m_raw.timestamp)
+            .map(|dt| dt.with_timezone(&Utc))
+            .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
+        messages.push(Message {
+            id: m_raw.id,
+            chat_id: m_raw.chat_id,
+            sender_id: m_raw.sender_id,
+            content: m_raw.content,
+            timestamp,
+            read: m_raw.read,
+        });
+    }
+
+    messages.reverse();
 
     Ok(messages)
 }
