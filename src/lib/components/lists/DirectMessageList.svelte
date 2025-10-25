@@ -9,6 +9,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
+  import { formatTimestamp } from "$lib/utils/time";
   import {
     ContextMenu,
     ContextMenuTrigger,
@@ -183,9 +184,10 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline justify-between gap-2">
                   <p class="font-semibold truncate">{friend.name}</p>
-                  {#if friend.timestamp}
+                  {@const timestampLabel = formatTimestamp(friend.timestamp)}
+                  {#if timestampLabel}
                     <p class="shrink-0 text-xs text-muted-foreground">
-                      {friend.timestamp}
+                      {timestampLabel}
                     </p>
                   {/if}
                 </div>
