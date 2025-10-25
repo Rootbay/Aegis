@@ -1,5 +1,4 @@
-import { writable, type Readable, get } from "svelte/store";
-import { browser } from "$app/environment";
+import { writable, get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import {
   generateRecoveryPhrase,
@@ -12,14 +11,32 @@ import {
   verifyTotp,
   encryptWithSecret,
   decryptWithSecret,
-  encodeDeviceHandshake,
-  decodeDeviceHandshake,
   type DeviceHandshakePayload,
-  type SecretEnvelope,
 } from "$lib/utils/security";
-import { persistentStore } from "$lib/stores/persistentStore";
 import { userStore } from "$lib/stores/userStore";
 import { toasts } from "$lib/stores/ToastStore";
+import {
+  authPersistenceStore,
+  getAuthPersistence,
+  setAuthPersistence,
+  updateAuthPersistence,
+  resetAuthPersistence,
+  DEFAULT_SESSION_TIMEOUT,
+  type AuthPersistence,
+  type TrustedDevice,
+  type SecurityQuestion,
+} from "../persistenceService";
+import {
+  createDeviceHandshake,
+  ingestDeviceHandshake as decodeDeviceHandshakePayload,
+  approveDeviceHandshake,
+  getDeviceInfo,
+} from "../deviceHandshakeService";
+import {
+  configureSecurityQuestions as configureSecurityQuestionsService,
+  prepareSecurityQuestionRecovery,
+  finalizeSecurityQuestionRecovery,
+} from "../securityService";
 
 type AuthStatus =
   | "checking"
@@ -31,41 +48,6 @@ type AuthStatus =
   | "account_locked";
 
 type PasswordPolicy = "unicode_required" | "legacy_allowed" | "enhanced";
-
-type AuthPersistence = {
-  username?: string;
-  passwordHash?: string;
-  passwordEnvelope?: SecretEnvelope | null;
-  recoveryEnvelope?: SecretEnvelope | null;
-  recoveryHash?: string | null;
-  totpSecret?: string;
-  requireTotpOnUnlock?: boolean;
-  createdAt?: string;
-  lastLoginAt?: string;
-  failedAttempts?: number;
-  lastFailedAttempt?: string;
-  accountLockedUntil?: string | null;
-  sessionTimeoutMinutes?: number;
-  trustedDevices?: TrustedDevice[];
-  securityQuestions?: SecurityQuestion[];
-  biometricEnabled?: boolean;
-  backupCodes?: string[];
-  backupCodesUsed?: string[];
-};
-
-type TrustedDevice = {
-  id: string;
-  name: string;
-  lastUsed: string;
-  userAgent?: string;
-  ipAddress?: string;
-  location?: string;
-};
-
-type SecurityQuestion = {
-  question: string;
-  answerHash: string;
-};
 
 type OnboardingState = {
   username: string;
@@ -99,11 +81,9 @@ type AuthState = {
   securityQuestionsConfigured: boolean;
 };
 
-const persistence = persistentStore<AuthPersistence>("auth-state", {});
 export const MIN_PASSWORD_LENGTH = 12;
 const MAX_FAILED_ATTEMPTS = 5;
 const ACCOUNT_LOCKOUT_MINUTES = 15;
-const DEFAULT_SESSION_TIMEOUT = 60;
 
 const initialState: AuthState = {
   status: "checking",
@@ -201,7 +181,7 @@ const bootstrap = async () => {
   update((state) => ({ ...state, loading: true }));
   try {
     const identityExists = await invoke<boolean>("is_identity_created");
-    const persisted = get(persistence);
+    const persisted = getAuthPersistence();
     const hasCredentials = Boolean(
       persisted.passwordHash &&
         persisted.recoveryEnvelope &&
@@ -373,7 +353,7 @@ const completeOnboarding = async ({
 
     await userStore.initialize(password, { username });
 
-    persistence.set({
+    setAuthPersistence({
       username,
       passwordHash,
       passwordEnvelope,
@@ -410,7 +390,7 @@ const completeOnboarding = async ({
 const loginWithPassword = async (password: string, totpCode?: string) => {
   update((state) => ({ ...state, loading: true, error: null }));
   try {
-    const persisted = get(persistence);
+    const persisted = getAuthPersistence();
     const now = new Date();
 
     const lockedUntil = persisted.accountLockedUntil
@@ -445,12 +425,12 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
         );
       }
 
-      persistence.update((value) => ({ ...value, ...updates }));
+      updateAuthPersistence((value) => ({ ...value, ...updates }));
       throw new Error("Incorrect password.");
     }
 
     if (persisted.failedAttempts && persisted.failedAttempts > 0) {
-      persistence.update((value) => ({
+      updateAuthPersistence((value) => ({
         ...value,
         failedAttempts: 0,
         lastFailedAttempt: undefined,
@@ -484,7 +464,7 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
 
     const updatedDevices = trustedDevices.slice(0, 5);
 
-    persistence.update((value) => ({
+    updateAuthPersistence((value) => ({
       ...value,
       lastLoginAt: now.toISOString(),
       trustedDevices: updatedDevices,
@@ -537,7 +517,7 @@ const loginWithRecovery = async ({
   }
   update((state) => ({ ...state, loading: true, error: null }));
   try {
-    const persisted = get(persistence);
+    const persisted = getAuthPersistence();
     if (!persisted.recoveryEnvelope || !persisted.recoveryHash) {
       throw new Error("Recovery data not available on this device.");
     }
@@ -578,7 +558,7 @@ const loginWithRecovery = async ({
       newPassword,
     );
 
-    persistence.set({
+    setAuthPersistence({
       username: persisted.username,
       passwordHash,
       passwordEnvelope: updatedPasswordEnvelope,
@@ -640,42 +620,10 @@ const loginWithSecurityQuestions = async ({
   }
   update((state) => ({ ...state, loading: true, error: null }));
   try {
-    const persisted = get(persistence);
-    if (
-      !persisted.securityQuestions ||
-      persisted.securityQuestions.length < 3
-    ) {
-      throw new Error("Security questions not configured on this device.");
-    }
-
-    let correctAnswers = 0;
-    for (const question of persisted.securityQuestions) {
-      const providedAnswer = answers[question.question];
-      if (providedAnswer) {
-        const answerHash = await hashString(
-          providedAnswer.trim().toLowerCase(),
-        );
-        if (answerHash === question.answerHash) {
-          correctAnswers += 1;
-        }
-      }
-    }
-
-    if (correctAnswers < 2) {
-      throw new Error("Insufficient correct answers provided.");
-    }
-
-    if (persisted.requireTotpOnUnlock && persisted.totpSecret) {
-      if (!totpCode) {
-        throw new Error("Authenticator code required.");
-      }
-      const totpValid = await verifyTotp(persisted.totpSecret, totpCode);
-      if (!totpValid) {
-        throw new Error("Invalid authenticator code.");
-      }
-    }
-
-    const newRecoveryPhrase = generateRecoveryPhrase(12);
+    const { newRecoveryPhrase } = await prepareSecurityQuestionRecovery({
+      answers,
+      totpCode,
+    });
 
     update((state) => ({
       ...state,
@@ -713,47 +661,15 @@ const completeSecurityQuestionRecovery = async () => {
 
   update((state) => ({ ...state, loading: true, error: null }));
   try {
-    const persisted = get(persistence);
-    const username = persisted.username;
-    if (!username) {
-      throw new Error("No identity found to finalize recovery.");
-    }
+    const persisted = getAuthPersistence();
 
-    const normalizedPhrase = normalizeRecoveryPhrase(pending.newRecoveryPhrase);
-    const phraseKey = await derivePasswordKey(normalizedPhrase);
-    const recoveryHash = await hashString(normalizedPhrase);
-
-    const passwordHash = await hashString(pending.newPassword);
-    const passwordEnvelope = persisted.totpSecret
-      ? await encryptWithSecret(persisted.totpSecret, pending.newPassword)
-      : null;
-    const recoveryEnvelope = await encryptWithSecret(
-      phraseKey,
-      pending.newPassword,
+    const updatedPersistence = await finalizeSecurityQuestionRecovery(
+      pending,
+      persisted,
     );
 
-    await userStore.initialize(pending.newPassword, { username });
-
-    persistence.set({
-      username,
-      passwordHash,
-      passwordEnvelope,
-      recoveryEnvelope,
-      recoveryHash,
-      totpSecret: persisted.totpSecret,
-      requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
-      trustedDevices: persisted.trustedDevices ?? [],
-      securityQuestions: persisted.securityQuestions,
-      biometricEnabled: persisted.biometricEnabled ?? false,
-      sessionTimeoutMinutes:
-        persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
-      backupCodes: persisted.backupCodes,
-      backupCodesUsed: persisted.backupCodesUsed ?? [],
-      failedAttempts: 0,
-      lastFailedAttempt: undefined,
-      accountLockedUntil: null,
-      createdAt: persisted.createdAt ?? new Date().toISOString(),
-      lastLoginAt: new Date().toISOString(),
+    await userStore.initialize(pending.newPassword, {
+      username: updatedPersistence.username ?? "",
     });
 
     update((state) => ({
@@ -761,7 +677,7 @@ const completeSecurityQuestionRecovery = async () => {
       status: "authenticated",
       loading: false,
       error: null,
-      requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
+      requireTotpOnUnlock: updatedPersistence.requireTotpOnUnlock ?? false,
       passwordPolicy: "enhanced",
       accountLocked: false,
       accountLockedUntil: null,
@@ -784,10 +700,7 @@ const completeSecurityQuestionRecovery = async () => {
 };
 
 const ingestDeviceHandshake = (raw: string) => {
-  const payload = decodeDeviceHandshake(raw);
-  if (!payload) {
-    throw new Error("Unrecognized device login QR payload.");
-  }
+  const payload = decodeDeviceHandshakePayload(raw);
   update((state) => ({ ...state, pendingDeviceLogin: payload, error: null }));
   return payload;
 };
@@ -799,40 +712,19 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
   }
   update((state) => ({ ...state, loading: true, error: null }));
   try {
-    const {
-      password,
-      totpSecret,
-      username,
-      recoveryEnvelope,
-      recoveryHash,
-      requireTotpOnUnlock,
-    } = pendingDeviceLogin;
-    const totpValid = await verifyTotp(totpSecret, totpCode);
-    if (!totpValid) {
-      throw new Error("Invalid authenticator code.");
-    }
+    const persisted = getAuthPersistence();
+    const { updatedPersistence, totpRequirement } =
+      await approveDeviceHandshake({
+        payload: pendingDeviceLogin,
+        totpCode,
+        persisted,
+      });
 
-    const passwordHash = await hashString(password);
-    const passwordEnvelope = await encryptWithSecret(totpSecret, password);
-    const persisted = get(persistence);
-    const totpRequirement =
-      typeof requireTotpOnUnlock === "boolean"
-        ? requireTotpOnUnlock
-        : (persisted.requireTotpOnUnlock ?? false);
-
-    await userStore.initialize(password, { username });
-
-    persistence.set({
-      username,
-      passwordHash,
-      passwordEnvelope,
-      recoveryEnvelope: recoveryEnvelope ?? null,
-      recoveryHash: recoveryHash ?? null,
-      totpSecret,
-      requireTotpOnUnlock: totpRequirement,
-      createdAt: persisted.createdAt ?? new Date().toISOString(),
-      lastLoginAt: new Date().toISOString(),
+    await userStore.initialize(pendingDeviceLogin.password, {
+      username: pendingDeviceLogin.username ?? "",
     });
+
+    setAuthPersistence(updatedPersistence);
 
     update((state) => ({
       ...state,
@@ -854,33 +746,12 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
 };
 
 const generateDeviceHandshake = async (totpCode: string): Promise<string> => {
-  const persisted = get(persistence);
-  if (!persisted.passwordEnvelope || !persisted.totpSecret) {
-    throw new Error("Device pairing is unavailable.");
-  }
-  const totpValid = await verifyTotp(persisted.totpSecret, totpCode);
-  if (!totpValid) {
-    throw new Error("Invalid authenticator code.");
-  }
-  const password = await decryptWithSecret(
-    persisted.totpSecret,
-    persisted.passwordEnvelope,
-  );
-  const payload: DeviceHandshakePayload = {
-    version: 1,
-    password,
-    totpSecret: persisted.totpSecret,
-    username: persisted.username,
-    issuedAt: Date.now(),
-    recoveryEnvelope: persisted.recoveryEnvelope ?? null,
-    recoveryHash: persisted.recoveryHash ?? null,
-    requireTotpOnUnlock: persisted.requireTotpOnUnlock ?? false,
-  };
-  return encodeDeviceHandshake(payload);
+  const persisted = getAuthPersistence();
+  return createDeviceHandshake({ totpCode, persisted });
 };
 
 const revealTotpSecret = async (totpCode: string) => {
-  const persisted = get(persistence);
+  const persisted = getAuthPersistence();
   if (!persisted.totpSecret || !persisted.username) {
     throw new Error("2FA has not been configured yet.");
   }
@@ -895,7 +766,7 @@ const revealTotpSecret = async (totpCode: string) => {
 };
 
 const setRequireTotpOnUnlock = (value: boolean) => {
-  persistence.update((current) => ({
+  updateAuthPersistence((current) => ({
     ...current,
     requireTotpOnUnlock: value,
   }));
@@ -903,7 +774,7 @@ const setRequireTotpOnUnlock = (value: boolean) => {
 };
 
 const resetForTests = () => {
-  persistence.set({});
+  resetAuthPersistence();
   update(() => ({ ...initialState }));
 };
 
@@ -956,7 +827,7 @@ const getDeviceName = (userAgent: string): string => {
 
 const setSessionTimeout = (minutes: number) => {
   const validMinutes = Math.max(5, Math.min(minutes, 1440)); // 5 minutes to 24 hours
-  persistence.update((current) => ({
+  updateAuthPersistence((current) => ({
     ...current,
     sessionTimeoutMinutes: validMinutes,
   }));
@@ -964,17 +835,7 @@ const setSessionTimeout = (minutes: number) => {
 };
 
 const configureSecurityQuestions = async (questions: SecurityQuestion[]) => {
-  const hashedQuestions = await Promise.all(
-    questions.map(async (q) => ({
-      question: q.question,
-      answerHash: await hashString(q.answerHash),
-    })),
-  );
-
-  persistence.update((current) => ({
-    ...current,
-    securityQuestions: hashedQuestions,
-  }));
+  await configureSecurityQuestionsService(questions);
 
   update((state) => ({
     ...state,
@@ -983,16 +844,12 @@ const configureSecurityQuestions = async (questions: SecurityQuestion[]) => {
 };
 
 const removeTrustedDevice = (deviceId: string) => {
-  persistence.update((current) => ({
+  updateAuthPersistence((current) => ({
     ...current,
     trustedDevices: (current.trustedDevices ?? []).filter(
       (d) => d.id !== deviceId,
     ),
   }));
-};
-
-const authPersistenceStore: Readable<AuthPersistence> = {
-  subscribe: persistence.subscribe,
 };
 
 export const authStore = {
@@ -1011,14 +868,14 @@ export const authStore = {
   setRequireTotpOnUnlock,
   logout,
   clearError,
-  getPersistence: () => get(persistence),
+  getPersistence: () => getAuthPersistence(),
   calculatePasswordStrength,
   setSessionTimeout,
   loginWithSecurityQuestions,
   completeSecurityQuestionRecovery,
   configureSecurityQuestions,
   removeTrustedDevice,
-  getTrustedDevices: () => get(persistence).trustedDevices ?? [],
+  getTrustedDevices: () => getAuthPersistence().trustedDevices ?? [],
   __resetForTests: resetForTests,
 };
 
