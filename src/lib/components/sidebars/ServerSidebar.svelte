@@ -78,7 +78,7 @@
     onSelectChannel,
   }: { server: Server; onSelectChannel: ChannelSelectHandler } = $props();
 
-  const { activeChannelId } = chatStore;
+  const { activeServerChannelId } = chatStore;
 
   let showCreateChannelModal = $state(false);
   let newChannelName = $state("");
@@ -313,7 +313,7 @@
       nextChannelId = remainingText?.id || updated[0]?.id || null;
 
       serverStore.updateServer(server.id, { channels: updated });
-      if ($activeChannelId === channelId && nextChannelId) {
+      if ($activeServerChannelId === channelId && nextChannelId) {
         onSelectChannel(server.id, nextChannelId);
       }
     } catch (error) {
@@ -696,7 +696,7 @@
                     role="button"
                     tabindex="0"
                     class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
-                    {$activeChannelId === channel.id
+                    {$activeServerChannelId === channel.id
                       ? 'bg-primary/80 text-foreground'
                       : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
                     onclick={() => onSelectChannel(server.id, channel.id)}

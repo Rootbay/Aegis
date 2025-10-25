@@ -111,6 +111,7 @@ import {
   activeChannelId,
   activeChatId,
   activeChatType,
+  activeServerChannelId,
 } from "$lib/features/chat/stores/chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import type { Server } from "$lib/features/servers/models/Server";
@@ -186,7 +187,10 @@ describe("createAppController server channel behavior", () => {
     await chatStore.setActiveChat(server.id, "server", "channel-random");
 
     expect(get(activeChannelId)).toBe("channel-random");
-    expect(localStorage.getItem("activeChannelId")).toBe("channel-random");
+    expect(get(activeServerChannelId)).toBe("channel-random");
+    expect(
+      JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]"),
+    ).toEqual([["server-1", "channel-random"]]);
 
     const updatedServer: Server = {
       ...server,
@@ -201,6 +205,117 @@ describe("createAppController server channel behavior", () => {
       expect(get(activeChatType)).toBe("server");
     });
 
-    expect(localStorage.getItem("activeChannelId")).toBe("channel-random");
+    expect(get(activeServerChannelId)).toBe("channel-random");
+    expect(
+      JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]"),
+    ).toEqual([["server-1", "channel-random"]]);
+  });
+
+  it("maintains independent channel selections per server", async () => {
+    let resolveReady: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+
+    const rendered = render(AppControllerTestHost, {
+      props: {
+        onReady: () => resolveReady?.(),
+      },
+    });
+    cleanup = rendered.unmount;
+
+    await ready;
+
+    const serverA: Server = {
+      id: "server-a",
+      name: "Alpha",
+      owner_id: "owner-1",
+      channels: [
+        {
+          id: "channel-alpha-general",
+          name: "general",
+          server_id: "server-a",
+          channel_type: "text",
+          private: false,
+        },
+        {
+          id: "channel-alpha-random",
+          name: "random",
+          server_id: "server-a",
+          channel_type: "text",
+          private: false,
+        },
+      ],
+      members: [],
+      roles: [],
+    };
+
+    const serverB: Server = {
+      id: "server-b",
+      name: "Beta",
+      owner_id: "owner-2",
+      channels: [
+        {
+          id: "channel-beta-general",
+          name: "general",
+          server_id: "server-b",
+          channel_type: "text",
+          private: false,
+        },
+        {
+          id: "channel-beta-chill",
+          name: "chill",
+          server_id: "server-b",
+          channel_type: "text",
+          private: false,
+        },
+      ],
+      members: [],
+      roles: [],
+    };
+
+    serverStore.handleServersUpdate([serverA, serverB]);
+    serverStore.setActiveServer(serverA.id);
+
+    await waitFor(() => {
+      expect(get(activeChatType)).toBe("server");
+      expect(get(activeChatId)).toBe(serverA.id);
+      expect(get(activeChannelId)).toBe("channel-alpha-general");
+    });
+
+    await chatStore.setActiveChat(serverA.id, "server", "channel-alpha-random");
+
+    expect(get(activeServerChannelId)).toBe("channel-alpha-random");
+
+    serverStore.setActiveServer(serverB.id);
+
+    await waitFor(() => {
+      expect(get(activeChatType)).toBe("server");
+      expect(get(activeChatId)).toBe(serverB.id);
+      expect(get(activeChannelId)).toBe("channel-beta-general");
+    });
+
+    await chatStore.setActiveChat(serverB.id, "server", "channel-beta-chill");
+
+    expect(get(activeServerChannelId)).toBe("channel-beta-chill");
+
+    serverStore.setActiveServer(serverA.id);
+
+    await waitFor(() => {
+      expect(get(activeChatType)).toBe("server");
+      expect(get(activeChatId)).toBe(serverA.id);
+      expect(get(activeChannelId)).toBe("channel-alpha-random");
+      expect(get(activeServerChannelId)).toBe("channel-alpha-random");
+    });
+
+    const storedSelections = JSON.parse(
+      localStorage.getItem("serverChannelSelections") ?? "[]",
+    );
+    expect(storedSelections).toEqual(
+      expect.arrayContaining([
+        ["server-a", "channel-alpha-random"],
+        ["server-b", "channel-beta-chill"],
+      ]),
+    );
   });
 });

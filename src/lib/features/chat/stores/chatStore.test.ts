@@ -1,6 +1,7 @@
 import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
 import { get } from "svelte/store";
 import { createChatStore } from "./chatStore";
+import { serverStore } from "$lib/features/servers/stores/serverStore";
 
 const invokeMock = vi.fn();
 
@@ -25,6 +26,8 @@ describe("chatStore attachment lifecycle", () => {
     createdUrls = [];
     invokeMock.mockReset();
     localStorage.clear();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
     const createSpy = vi.fn(() => {
       const url = `blob:${createdUrls.length}`;
       createdUrls.push(url);
@@ -42,6 +45,9 @@ describe("chatStore attachment lifecycle", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    localStorage.clear();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
   });
 
   it("revokes object URLs when messages are replaced", async () => {
@@ -228,12 +234,20 @@ describe("chatStore attachment lifecycle", () => {
 
     await store.setActiveChat("server-1", "server", "channel-2");
 
-    expect(localStorage.getItem("activeChannelId")).toBe("channel-2");
+    serverStore.setActiveServer("server-1");
+
+    expect(JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]")).toEqual([
+      ["server-1", "channel-2"],
+    ]);
     expect(get(store.activeChannelId)).toBe("channel-2");
+    expect(get(store.activeServerChannelId)).toBe("channel-2");
 
     await store.setActiveChat("server-1", "server");
 
-    expect(localStorage.getItem("activeChannelId")).toBe("channel-2");
+    expect(JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]")).toEqual([
+      ["server-1", "channel-2"],
+    ]);
     expect(get(store.activeChannelId)).toBe("channel-2");
+    expect(get(store.activeServerChannelId)).toBe("channel-2");
   });
 });
