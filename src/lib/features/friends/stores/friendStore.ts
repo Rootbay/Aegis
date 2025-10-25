@@ -1,14 +1,27 @@
 import { writable, type Readable, get } from "svelte/store";
 import type { Friend, FriendStatus } from "$lib/features/friends/models/Friend";
+import type { User } from "$lib/features/auth/models/User";
 import { getInvoke } from "$services/tauri";
 import type { InvokeFn } from "$services/tauri";
 import { userStore } from "$lib/stores/userStore";
+import { userCache } from "$lib/utils/cache";
 
 type FriendshipBackend = {
-  id: string;
-  user_a_id: string;
-  user_b_id: string;
-  status: string;
+  friendship: {
+    id: string;
+    user_a_id: string;
+    user_b_id: string;
+    status: string;
+  };
+  counterpart?: {
+    id: string;
+    username?: string | null;
+    avatar?: string | null;
+    is_online?: boolean | null;
+    public_key?: string | null;
+    bio?: string | null;
+    tag?: string | null;
+  } | null;
 };
 
 interface FriendStoreState {
@@ -94,29 +107,50 @@ function normalizeFriend(friend: Partial<Friend> & { id: string }): Friend {
   };
 }
 
-async function mapFriendshipToFriend(
-  friendship: FriendshipBackend,
+function mapFriendshipToFriend(
+  record: FriendshipBackend,
   currentUserId: string,
-): Promise<Friend | null> {
+): Friend | null {
+  const { friendship, counterpart } = record;
+
   const counterpartId =
-    friendship.user_a_id === currentUserId
+    counterpart?.id ??
+    (friendship.user_a_id === currentUserId
       ? friendship.user_b_id
-      : friendship.user_a_id;
+      : friendship.user_a_id);
 
   if (!counterpartId) {
     return null;
   }
 
-  const user = await userStore.getUser(counterpartId);
-  const base = user ?? {
+  const nameFromBackend = counterpart?.username ?? "";
+  const trimmedName = nameFromBackend.trim();
+  const name =
+    trimmedName.length > 0
+      ? trimmedName
+      : `User-${counterpartId.slice(0, 4)}`;
+
+  const avatarFromBackend = counterpart?.avatar ?? "";
+  const trimmedAvatar = avatarFromBackend.trim();
+  const avatar =
+    trimmedAvatar.length > 0
+      ? trimmedAvatar
+      : FALLBACK_AVATAR(counterpartId);
+
+  const baseUser: User = {
     id: counterpartId,
-    name: "User-" + counterpartId.slice(0, 4),
-    avatar: FALLBACK_AVATAR(counterpartId),
-    online: false,
+    name,
+    avatar,
+    online: counterpart?.is_online ?? false,
+    publicKey: counterpart?.public_key ?? undefined,
+    bio: counterpart?.bio ?? undefined,
+    tag: counterpart?.tag ?? undefined,
   };
 
+  userCache.set(baseUser.id, baseUser);
+
   return normalizeFriend({
-    ...base,
+    ...baseUser,
     friendshipId: friendship.id,
     relationshipStatus: friendship.status,
     messages: [],
@@ -124,7 +158,7 @@ async function mapFriendshipToFriend(
   });
 }
 
-function createFriendStore(): FriendStore {
+export function createFriendStore(): FriendStore {
   const { subscribe, set, update } = writable<FriendStoreState>({
     friends: [],
     loading: true,
@@ -199,11 +233,9 @@ function createFriendStore(): FriendStore {
         "get_friendships",
         { current_user_id: currentUser.id },
       );
-      const friends = (
-        await Promise.all(
-          friendships.map((fs) => mapFriendshipToFriend(fs, currentUser.id)),
-        )
-      ).filter((friend): friend is Friend => friend !== null);
+      const friends = friendships
+        .map((fs) => mapFriendshipToFriend(fs, currentUser.id))
+        .filter((friend): friend is Friend => friend !== null);
 
       set({ friends, loading: false });
     } catch (error) {

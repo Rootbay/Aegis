@@ -1,0 +1,6 @@
+[test]
+alias = {
+  "$lib" = "./src/lib",
+  "$services" = "./src/lib/services",
+  "$app/environment" = "./tests/shims/app-environment.ts"
+}

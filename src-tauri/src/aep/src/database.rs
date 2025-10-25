@@ -22,6 +22,12 @@ pub struct Friendship {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FriendshipWithProfile {
+    pub friendship: Friendship,
+    pub counterpart: Option<User>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FriendshipStatus {
     Pending,
     Accepted,
@@ -147,6 +153,74 @@ pub async fn get_all_friendships_for_user(pool: &Pool<Sqlite>, user_id: &str) ->
     )
     .fetch_all(pool)
     .await?;
+    Ok(friendships)
+}
+
+pub async fn get_friendships_with_profiles(
+    pool: &Pool<Sqlite>,
+    user_id: &str,
+) -> Result<Vec<FriendshipWithProfile>, sqlx::Error> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            f.id as friendship_id,
+            f.user_a_id,
+            f.user_b_id,
+            f.status,
+            f.created_at as "friendship_created_at!: DateTime<Utc>",
+            f.updated_at as "friendship_updated_at!: DateTime<Utc>",
+            u.id as counterpart_id,
+            u.username as counterpart_username,
+            u.avatar as counterpart_avatar,
+            u.is_online as "counterpart_is_online?: bool",
+            u.public_key as counterpart_public_key,
+            u.bio as counterpart_bio,
+            u.tag as counterpart_tag
+        FROM friendships f
+        LEFT JOIN users u
+            ON u.id = CASE WHEN f.user_a_id = ? THEN f.user_b_id ELSE f.user_a_id END
+        WHERE f.user_a_id = ? OR f.user_b_id = ?
+        "#,
+        user_id,
+        user_id,
+        user_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let friendships = rows
+        .into_iter()
+        .map(|row| {
+            let friendship = Friendship {
+                id: row.friendship_id,
+                user_a_id: row.user_a_id,
+                user_b_id: row.user_b_id,
+                status: row.status,
+                created_at: row.friendship_created_at,
+                updated_at: row.friendship_updated_at,
+            };
+
+            let counterpart = if let Some(counterpart_id) = row.counterpart_id {
+                Some(User {
+                    id: counterpart_id,
+                    username: row.counterpart_username.unwrap_or_default(),
+                    avatar: row.counterpart_avatar.unwrap_or_default(),
+                    is_online: row.counterpart_is_online.unwrap_or(false),
+                    public_key: row.counterpart_public_key,
+                    bio: row.counterpart_bio,
+                    tag: row.counterpart_tag,
+                })
+            } else {
+                None
+            };
+
+            FriendshipWithProfile {
+                friendship,
+                counterpart,
+            }
+        })
+        .collect();
+
     Ok(friendships)
 }
 
