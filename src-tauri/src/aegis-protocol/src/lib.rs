@@ -11,6 +11,7 @@ pub enum AepMessage {
         channel_id: Option<String>,
         server_id: Option<String>,
         conversation_id: Option<String>,
+        attachments: Vec<AttachmentPayload>,
         signature: Option<Vec<u8>>,
     },
     // Signal-style E2EE payload for direct messages
@@ -129,6 +130,16 @@ pub struct ChatMessageData {
     pub channel_id: Option<String>,
     pub server_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub attachments: Vec<AttachmentPayload>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AttachmentPayload {
+    pub id: String,
+    pub name: String,
+    pub content_type: Option<String>,
+    pub size: u64,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

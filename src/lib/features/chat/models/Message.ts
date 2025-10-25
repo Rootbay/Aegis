@@ -1,8 +1,10 @@
 export interface AttachmentMeta {
+  id: string;
   name: string;
   type: string;
   size?: number;
   url?: string;
+  bytes?: Uint8Array;
 }
 
 export interface Message {

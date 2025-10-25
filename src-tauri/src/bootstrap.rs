@@ -360,6 +360,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                     content: String::from_utf8_lossy(&plaintext).to_string(),
                                                                     timestamp: chrono::Utc::now(),
                                                                     read: false,
+                                                                    attachments: Vec::new(),
                                                                 };
                                                                 if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                             }
@@ -421,6 +422,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 content: String::from_utf8_lossy(&plaintext).to_string(),
                                                                 timestamp: chrono::Utc::now(),
                                                                 read: false,
+                                                                attachments: Vec::new(),
                                                             };
                                                             if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                         }
