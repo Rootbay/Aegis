@@ -722,11 +722,25 @@
           bind:this={textareaRef}
           oninput={adjustTextareaHeight}
           onfocus={adjustTextareaHeight}
+          title="Press Enter to send. Use Shift+Enter for a newline."
           onkeydown={(e) => {
-            if (e.key === "Enter" && e.ctrlKey) {
-              e.preventDefault();
-              sendMessage(e);
+            if (e.key !== "Enter") {
+              return;
             }
+
+            if (e.isComposing) {
+              return;
+            }
+
+            const hasExplicitNewlineModifier = e.shiftKey || e.ctrlKey;
+            const hasOtherModifier = e.altKey || e.metaKey;
+
+            if (hasExplicitNewlineModifier || hasOtherModifier) {
+              return;
+            }
+
+            e.preventDefault();
+            sendMessage(e);
           }}
         ></textarea>
         <button
