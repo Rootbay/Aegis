@@ -14,6 +14,8 @@ pub async fn run() {
             commands::identity::generate_identity,
             commands::messages::send_message,
             commands::messages::send_message_with_attachments,
+            commands::messages::send_direct_message,
+            commands::messages::send_direct_message_with_attachments,
             commands::messages::delete_message,
             commands::messages::add_reaction,
             commands::messages::remove_reaction,

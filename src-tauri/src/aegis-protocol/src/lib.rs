@@ -7,6 +7,7 @@ pub enum AepMessage {
         content: String,
         channel_id: Option<String>,
         server_id: Option<String>,
+        conversation_id: Option<String>,
         signature: Option<Vec<u8>>,
     },
     // Signal-style E2EE payload for direct messages
@@ -122,6 +123,7 @@ pub struct ChatMessageData {
     pub content: String,
     pub channel_id: Option<String>,
     pub server_id: Option<String>,
+    pub conversation_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
