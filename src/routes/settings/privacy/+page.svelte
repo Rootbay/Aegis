@@ -1,24 +1,55 @@
-<h1>Privacy Settings</h1>
+<script lang="ts">
+  import { Label } from "$lib/components/ui/label/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
+
+  let enableReadReceipts = $state(true);
+  let enableTypingIndicators = $state(true);
+</script>
+
+<h1 class="text-2xl font-semibold text-zinc-50">Privacy Settings</h1>
 
 <div class="space-y-4">
-  <div>
-    <label for="enableReadReceipts" class="block text-sm font-medium"
-      >Enable Read Receipts</label
-    >
-    <input
-      type="checkbox"
-      id="enableReadReceipts"
-      class="toggle toggle-primary"
+  <div
+    class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
+    <div class="mr-4">
+      <Label
+        for="enable-read-receipts"
+        class="text-sm font-medium text-zinc-200"
+      >
+        Enable read receipts
+      </Label>
+      <p class="text-xs text-muted-foreground">
+        Allow friends to see when you have viewed their messages.
+      </p>
+    </div>
+    <Switch
+      id="enable-read-receipts"
+      class="shrink-0"
+      bind:checked={enableReadReceipts}
+      aria-label="Toggle read receipts"
     />
   </div>
-  <div>
-    <label for="enableTypingIndicators" class="block text-sm font-medium"
-      >Enable Typing Indicators</label
-    >
-    <input
-      type="checkbox"
-      id="enableTypingIndicators"
-      class="toggle toggle-primary"
+
+  <div
+    class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
+    <div class="mr-4">
+      <Label
+        for="enable-typing-indicators"
+        class="text-sm font-medium text-zinc-200"
+      >
+        Enable typing indicators
+      </Label>
+      <p class="text-xs text-muted-foreground">
+        Share when you are actively typing a response.
+      </p>
+    </div>
+    <Switch
+      id="enable-typing-indicators"
+      class="shrink-0"
+      bind:checked={enableTypingIndicators}
+      aria-label="Toggle typing indicators"
     />
   </div>
 </div>

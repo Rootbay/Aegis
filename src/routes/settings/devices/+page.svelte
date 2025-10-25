@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button/index.js";
+
   interface Device {
     id: string;
     name: string;
@@ -20,33 +22,34 @@
   }
 </script>
 
-<h2 class="text-xl font-bold mb-4">Devices Settings</h2>
+<h2 class="text-2xl font-semibold text-zinc-50 mb-4">Devices Settings</h2>
 
 <div class="space-y-4">
   {#each devices as device (device.id)}
     <div
-      class="flex items-center justify-between p-4 bg-card rounded-md shadow"
+      class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
     >
       <div>
-        <h3 class="text-lg font-semibold">{device.name}</h3>
+        <h3 class="text-lg font-semibold text-zinc-100">{device.name}</h3>
         <p class="text-sm text-muted-foreground">
-          {device.type} - Status: {device.status}
+          {device.type} · Status: {device.status}
         </p>
       </div>
       {#if device.status === "Connected"}
-        <button
-          class="btn btn-error btn-sm"
-          onclick={() => disconnectDevice(device.id)}
+        <Button
+          variant="destructive"
+          size="sm"
+          on:click={() => disconnectDevice(device.id)}
         >
           Disconnect
-        </button>
+        </Button>
       {:else}
-        <button class="btn btn-sm btn-disabled" disabled> Disconnected </button>
+        <Button variant="outline" size="sm" disabled>Disconnected</Button>
       {/if}
     </div>
   {/each}
 
   {#if devices.length === 0}
-    <p class="text-muted-foreground">No devices found.</p>
+    <p class="text-sm text-muted-foreground">No devices found.</p>
   {/if}
 </div>
