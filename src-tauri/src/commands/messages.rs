@@ -13,6 +13,7 @@ pub struct AttachmentDescriptor {
     #[serde(rename = "type")]
     pub content_type: Option<String>,
     pub size: u64,
+    #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
 }
 

@@ -24,7 +24,14 @@ type BackendAttachment = {
   content_type?: string;
   contentType?: string;
   size?: number;
-  data?: number[] | Uint8Array;
+  data?: number[] | Uint8Array | ArrayBuffer;
+};
+
+type AttachmentPayload = {
+  name: string;
+  type?: string;
+  size: number;
+  data: Uint8Array | ArrayBuffer;
 };
 
 interface ChatStore {
@@ -88,13 +95,16 @@ function createChatStore(): ChatStore {
   const PAGE_LIMIT = 50;
 
   const ensureUint8Array = (
-    input?: number[] | Uint8Array,
+    input?: number[] | Uint8Array | ArrayBuffer,
   ): Uint8Array | undefined => {
     if (!input) {
       return undefined;
     }
     if (input instanceof Uint8Array) {
       return input;
+    }
+    if (input instanceof ArrayBuffer) {
+      return new Uint8Array(input);
     }
     return new Uint8Array(input);
   };
@@ -638,7 +648,10 @@ function createChatStore(): ChatStore {
     const tempId = Date.now().toString() + "-a";
 
     const attachmentsCombined = await Promise.all(
-      files.map(async (file) => {
+      files.map(async (file): Promise<{
+        backend: AttachmentPayload;
+        ui: AttachmentMeta;
+      }> => {
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         const mime = file.type || "application/octet-stream";
@@ -649,7 +662,7 @@ function createChatStore(): ChatStore {
             name: file.name,
             type: mime,
             size: file.size,
-            data: Array.from(bytes),
+            data: bytes,
           },
           ui: {
             id: createOptimisticAttachmentId(),
