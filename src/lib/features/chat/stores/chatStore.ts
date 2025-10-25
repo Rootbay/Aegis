@@ -91,6 +91,55 @@ function createChatStore(): ChatStore {
     return new Uint8Array(input);
   };
 
+  const activeAttachmentUrls = new Set<string>();
+
+  const trackAttachmentUrl = (url?: string) => {
+    if (url) {
+      activeAttachmentUrls.add(url);
+    }
+  };
+
+  const revokeAttachmentUrl = (url?: string) => {
+    if (!url) return;
+    if (activeAttachmentUrls.delete(url)) {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  const collectAttachmentUrlsFromMessages = (messages: Message[]): Set<string> => {
+    const urls = new Set<string>();
+    for (const message of messages) {
+      const attachments = message.attachments ?? [];
+      for (const attachment of attachments) {
+        if (attachment.url) {
+          urls.add(attachment.url);
+        }
+      }
+    }
+    return urls;
+  };
+
+  const updateMessagesForChat = (
+    chatId: string,
+    updater: (existing: Message[]) => Message[],
+  ) => {
+    messagesByChatIdStore.update((map) => {
+      const existing = map.get(chatId) || [];
+      const next = updater(existing);
+
+      const existingUrls = collectAttachmentUrlsFromMessages(existing);
+      const nextUrls = collectAttachmentUrlsFromMessages(next);
+      for (const url of existingUrls) {
+        if (!nextUrls.has(url)) {
+          revokeAttachmentUrl(url);
+        }
+      }
+
+      map.set(chatId, next);
+      return new Map(map);
+    });
+  };
+
   const toAttachmentMeta = (attachment: BackendAttachment): AttachmentMeta => {
     const mime =
       attachment.content_type ??
@@ -100,6 +149,8 @@ function createChatStore(): ChatStore {
     const url = bytes
       ? URL.createObjectURL(new Blob([bytes], { type: mime }))
       : undefined;
+
+    trackAttachmentUrl(url);
 
     return {
       id: attachment.id,
@@ -248,12 +299,11 @@ function createChatStore(): ChatStore {
         Array.isArray(existingMessages) && existingMessages.length > 0;
 
       if (!hasCachedMessages) {
-        messagesByChatIdStore.update((map) => {
-          const current = map.get(messageChatId);
-          if (!current || current.length === 0) {
-            map.set(messageChatId, []);
+        updateMessagesForChat(messageChatId, (existing) => {
+          if (existing.length === 0) {
+            return [];
           }
-          return new Map(map);
+          return existing;
         });
         hasMoreByChatIdStore.update((map) => {
           map.set(messageChatId, true);
@@ -286,8 +336,7 @@ function createChatStore(): ChatStore {
 
   const handleMessagesUpdate = (chatId: string, messages: Message[]) => {
     const selfId = get(userStore).me?.id;
-    messagesByChatIdStore.update((map) => {
-      const existing = map.get(chatId) || [];
+    updateMessagesForChat(chatId, (existing) => {
       const usedPendingIds = new Set<string>();
       const normalized = messages.map((incoming) => {
         const optimisticMatch = existing.find(
@@ -311,8 +360,7 @@ function createChatStore(): ChatStore {
       const remainingPending = existing.filter(
         (msg) => msg.pending && !usedPendingIds.has(msg.id),
       );
-      map.set(chatId, [...deduped, ...remainingPending]);
-      return new Map(map);
+      return [...deduped, ...remainingPending];
     });
     loadingMessages.set(false);
   };
@@ -333,8 +381,7 @@ function createChatStore(): ChatStore {
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       let newAdds = 0;
       const selfId = get(userStore).me?.id;
-      messagesByChatIdStore.update((map) => {
-        const existing = map.get(targetChatId) || [];
+      updateMessagesForChat(targetChatId, (existing) => {
         const seen = new Set(
           existing.filter((msg) => !msg.pending).map((msg) => msg.id),
         );
@@ -363,12 +410,11 @@ function createChatStore(): ChatStore {
         const remainingPending = existing.filter(
           (msg) => msg.pending && !matchedPendingIds.has(msg.id),
         );
-        map.set(targetChatId, [
+        return [
           ...deduped,
           ...persistedExisting,
           ...remainingPending,
-        ]);
-        return new Map(map);
+        ];
       });
       hasMoreByChatIdStore.update((map) => {
         const hasMore = fetched.length >= PAGE_LIMIT && newAdds > 0;
@@ -404,11 +450,7 @@ function createChatStore(): ChatStore {
       pending: true,
     };
 
-    messagesByChatIdStore.update((map) => {
-      const existing = map.get(messageChatId) || [];
-      map.set(messageChatId, [...existing, newMessage]);
-      return new Map(map);
-    });
+    updateMessagesForChat(messageChatId, (existing) => [...existing, newMessage]);
 
     try {
       if (type === "dm") {
@@ -428,14 +470,9 @@ function createChatStore(): ChatStore {
       }
     } catch (error) {
       console.error("Failed to send message:", error);
-      messagesByChatIdStore.update((map) => {
-        const existing = map.get(messageChatId) || [];
-        map.set(
-          messageChatId,
-          existing.filter((msg) => msg.id !== tempId),
-        );
-        return new Map(map);
-      });
+      updateMessagesForChat(messageChatId, (existing) =>
+        existing.filter((msg) => msg.id !== tempId),
+      );
     }
   };
 
@@ -463,6 +500,8 @@ function createChatStore(): ChatStore {
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         const mime = file.type || "application/octet-stream";
+        const url = URL.createObjectURL(file);
+        trackAttachmentUrl(url);
         return {
           backend: {
             name: file.name,
@@ -475,7 +514,7 @@ function createChatStore(): ChatStore {
             name: file.name,
             type: mime,
             size: file.size,
-            url: URL.createObjectURL(file),
+            url,
             bytes,
           } satisfies AttachmentMeta,
         };
@@ -496,11 +535,7 @@ function createChatStore(): ChatStore {
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
     };
-    messagesByChatIdStore.update((map) => {
-      const existing = map.get(messageChatId) || [];
-      map.set(messageChatId, [...existing, newMessage]);
-      return new Map(map);
-    });
+    updateMessagesForChat(messageChatId, (existing) => [...existing, newMessage]);
 
     try {
       if (type === "dm") {
@@ -522,26 +557,16 @@ function createChatStore(): ChatStore {
       }
     } catch (error) {
       console.error("Failed to send message with attachments:", error);
-      messagesByChatIdStore.update((map) => {
-        const existing = map.get(messageChatId) || [];
-        map.set(
-          messageChatId,
-          existing.filter((msg) => msg.id !== tempId),
-        );
-        return new Map(map);
-      });
+      updateMessagesForChat(messageChatId, (existing) =>
+        existing.filter((msg) => msg.id !== tempId),
+      );
     }
   };
 
   const deleteMessage = async (targetChatId: string, messageId: string) => {
-    messagesByChatIdStore.update((map) => {
-      const existing = map.get(targetChatId) || [];
-      map.set(
-        targetChatId,
-        existing.filter((m) => m.id !== messageId),
-      );
-      return new Map(map);
-    });
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.filter((m) => m.id !== messageId),
+    );
     try {
       await invoke("delete_message", {
         chatId: targetChatId,
@@ -610,12 +635,9 @@ function createChatStore(): ChatStore {
             ? mapAttachmentPayloads(message.attachments)
             : undefined,
       };
-      messagesByChatIdStore.update((map) => {
-        const existing = map.get(targetChatId) || [];
-        const updated = insertRealtimeMessage(existing, newMessage, me?.id);
-        map.set(targetChatId, updated);
-        return new Map(map);
-      });
+      updateMessagesForChat(targetChatId, (existing) =>
+        insertRealtimeMessage(existing, newMessage, me?.id),
+      );
       if (isMissingMetadata) {
         void refreshChatMessages(targetChatId);
       }
@@ -640,9 +662,8 @@ function createChatStore(): ChatStore {
   ) => {
     const me = get(userStore).me;
     if (!me) return;
-    messagesByChatIdStore.update((map) => {
-      const existing = map.get(targetChatId) || [];
-      const updated = existing.map((m) => {
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((m) => {
         if (m.id !== messageId) return m;
         const reactions = { ...(m.reactions || {}) } as Record<
           string,
@@ -652,10 +673,8 @@ function createChatStore(): ChatStore {
         users.add(me.id);
         reactions[emoji] = Array.from(users);
         return { ...m, reactions };
-      });
-      map.set(targetChatId, updated);
-      return new Map(map);
-    });
+      }),
+    );
     try {
       await invoke("add_reaction", {
         chatId: targetChatId,
@@ -676,9 +695,8 @@ function createChatStore(): ChatStore {
   ) => {
     const me = get(userStore).me;
     if (!me) return;
-    messagesByChatIdStore.update((map) => {
-      const existing = map.get(targetChatId) || [];
-      const updated = existing.map((m) => {
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((m) => {
         if (m.id !== messageId) return m;
         const reactions = { ...(m.reactions || {}) } as Record<
           string,
@@ -692,10 +710,8 @@ function createChatStore(): ChatStore {
           reactions[emoji] = Array.from(users);
         }
         return { ...m, reactions };
-      });
-      map.set(targetChatId, updated);
-      return new Map(map);
-    });
+      }),
+    );
     try {
       await invoke("remove_reaction", {
         chatId: targetChatId,
@@ -735,3 +751,4 @@ export const hasMoreByChatId = chatStore.hasMoreByChatId;
 export const activeChannelId = chatStore.activeChannelId;
 export const activeChatId = chatStore.activeChatId;
 export const activeChatType = chatStore.activeChatType;
+export { createChatStore };
