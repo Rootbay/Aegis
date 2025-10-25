@@ -59,14 +59,64 @@ export async function getInvoke(): Promise<InvokeFn | null> {
   });
 }
 
+let cachedListen: ListenFn | null = null;
+let listenPromise: Promise<ListenFn | null> | null = null;
+
 export async function getListen(): Promise<ListenFn | null> {
-  if (
-    browser &&
-    window.__TAURI__ &&
-    window.__TAURI__.event &&
-    window.__TAURI__.event.listen
-  ) {
-    return window.__TAURI__.event.listen as ListenFn;
+  if (!browser) {
+    return null;
   }
-  return null;
+
+  if (cachedListen) {
+    return cachedListen;
+  }
+
+  if (window.__TAURI__?.event?.listen) {
+    cachedListen = window.__TAURI__.event.listen as ListenFn;
+    return cachedListen;
+  }
+
+  if (!listenPromise) {
+    const pollInterval = 50;
+    const maxAttempts = 100;
+
+    listenPromise = new Promise<ListenFn | null>((resolve) => {
+      let attempts = 0;
+      let intervalId: ReturnType<typeof setInterval> | null = null;
+
+      const resolveSafely = (value: ListenFn | null) => {
+        if (intervalId !== null) {
+          clearInterval(intervalId);
+        }
+        resolve(value);
+      };
+
+      intervalId = setInterval(() => {
+        if (window.__TAURI__?.event?.listen) {
+          cachedListen = window.__TAURI__.event.listen as ListenFn;
+          resolveSafely(cachedListen);
+          return;
+        }
+
+        attempts += 1;
+
+        if (attempts >= maxAttempts) {
+          resolveSafely(null);
+        }
+      }, pollInterval);
+    }).finally(() => {
+      listenPromise = null;
+    });
+  }
+
+  const result = await listenPromise;
+  if (result) {
+    cachedListen = result;
+  }
+  return result;
+}
+
+export function __resetTauriServiceStateForTesting() {
+  cachedListen = null;
+  listenPromise = null;
 }
