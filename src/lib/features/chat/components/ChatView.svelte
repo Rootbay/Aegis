@@ -26,6 +26,7 @@
     normalizeSearchQuery,
     type MessageContentCache,
   } from "$lib/features/chat/utils/chatSearch";
+  import { mergeAttachments } from "$lib/features/chat/utils/attachments";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -315,6 +316,21 @@
       Math.min(textareaRef.scrollHeight, maxHeight) + "px";
   }
 
+  function addAttachments(newFiles: File[]) {
+    if (!newFiles.length) return;
+
+    const { files, duplicates } = mergeAttachments(attachedFiles, newFiles);
+    attachedFiles = files;
+
+    if (duplicates > 0) {
+      const message =
+        duplicates === 1
+          ? "Duplicate attachment skipped."
+          : `${duplicates} duplicate attachments skipped.`;
+      toasts.addToast(message, "warning");
+    }
+  }
+
   async function sendMessage(event: Event) {
     event.preventDefault();
     if (
@@ -344,7 +360,8 @@
   function handleFileSelect(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files) {
-      attachedFiles = [...attachedFiles, ...Array.from(target.files)];
+      addAttachments(Array.from(target.files));
+      target.value = "";
     }
   }
 
@@ -405,7 +422,7 @@
     }
     if (files.length > 0) {
       e.preventDefault();
-      attachedFiles = [...attachedFiles, ...files];
+      addAttachments(files);
     }
   }
 
@@ -413,7 +430,7 @@
     e.preventDefault();
     const dt = e.dataTransfer;
     if (!dt?.files?.length) return;
-    attachedFiles = [...attachedFiles, ...Array.from(dt.files)];
+    addAttachments(Array.from(dt.files));
   }
 
   function handleDragOver(e: DragEvent) {
