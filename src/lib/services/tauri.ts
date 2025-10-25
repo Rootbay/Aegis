@@ -21,17 +21,41 @@ declare global {
 }
 
 export async function getInvoke(): Promise<InvokeFn | null> {
+  if (!browser) {
+    return null;
+  }
+
+  if (window.__TAURI__?.invoke) {
+    return window.__TAURI__.invoke as InvokeFn;
+  }
+
+  const pollInterval = 50;
+  const maxAttempts = 100;
+
   return new Promise((resolve) => {
-    const checkTauri = () => {
-      if (browser && window.__TAURI__ && window.__TAURI__.invoke) {
-        resolve(window.__TAURI__.invoke as InvokeFn);
-      } else if (browser) {
-        setTimeout(checkTauri, 50);
-      } else {
-        resolve(null);
+    let attempts = 0;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const resolveSafely = (value: InvokeFn | null) => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
       }
+      resolve(value);
     };
-    checkTauri();
+
+    intervalId = setInterval(() => {
+      if (window.__TAURI__?.invoke) {
+        resolveSafely(window.__TAURI__.invoke as InvokeFn);
+        return;
+      }
+
+      attempts += 1;
+
+      if (attempts >= maxAttempts) {
+        // Resolve with null when Tauri never initialises so callers can handle fallbacks.
+        resolveSafely(null);
+      }
+    }, pollInterval);
   });
 }
 
