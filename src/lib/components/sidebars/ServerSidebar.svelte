@@ -28,6 +28,7 @@
   import type { Server } from "$lib/features/servers/models/Server";
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
+  import { browser } from "$app/environment";
   import { v4 as uuidv4 } from "uuid";
   import {
     DropdownMenu,
@@ -102,9 +103,10 @@
   let rafId: number | null = $state(null);
   let initialX = $state(0);
   let initialWidth = $state(0);
-  let sidebarWidth = $state(
-    parseInt(localStorage.getItem("serverSidebarWidth") || "240"),
-  );
+  const initialSidebarWidth = browser
+    ? parseInt(localStorage.getItem("serverSidebarWidth") ?? "240", 10)
+    : 240;
+  let sidebarWidth = $state(initialSidebarWidth);
 
   const TEXT_COLLAPSED_KEY = "serverSidebar.textCollapsed";
 
@@ -140,7 +142,9 @@
 
   function stopResize() {
     isResizing = false;
-    localStorage.setItem("serverSidebarWidth", sidebarWidth.toString());
+    if (browser) {
+      localStorage.setItem("serverSidebarWidth", sidebarWidth.toString());
+    }
     window.removeEventListener("mousemove", resize);
     window.removeEventListener("mouseup", stopResize);
   }
@@ -186,14 +190,16 @@
   function handleHideMutedChannels() {
     const key = "serverSidebar.hideMuted";
     let next = !hideMutedChannels;
-    try {
-      const storedValue = localStorage.getItem(key);
-      if (storedValue !== null) {
-        next = storedValue !== "true";
+    if (browser) {
+      try {
+        const storedValue = localStorage.getItem(key);
+        if (storedValue !== null) {
+          next = storedValue !== "true";
+        }
+        localStorage.setItem(key, next.toString());
+      } catch (e) {
+        console.error(e);
       }
-      localStorage.setItem(key, next.toString());
-    } catch (e) {
-      console.error(e);
     }
     hideMutedChannels = next;
     toasts.addToast(
@@ -369,6 +375,7 @@
 
   const MUTED_CHANNELS_KEY = "mutedChannels";
   function loadMutedChannels(): SvelteSet<string> {
+    if (!browser) return new SvelteSet();
     try {
       const raw = localStorage.getItem(MUTED_CHANNELS_KEY);
       if (!raw) return new SvelteSet();
@@ -378,6 +385,7 @@
     }
   }
   function saveMutedChannels(setVals: Set<string>) {
+    if (!browser) return;
     try {
       localStorage.setItem(
         MUTED_CHANNELS_KEY,
@@ -519,14 +527,16 @@
       case "hide_muted_channels": {
         const key = "serverSidebar.hideMuted";
         let next = !hideMutedChannels;
-        try {
-          const storedValue = localStorage.getItem(key);
-          if (storedValue !== null) {
-            next = storedValue !== "true";
+        if (browser) {
+          try {
+            const storedValue = localStorage.getItem(key);
+            if (storedValue !== null) {
+              next = storedValue !== "true";
+            }
+            localStorage.setItem(key, next.toString());
+          } catch (e) {
+            console.error(e);
           }
-          localStorage.setItem(key, next.toString());
-        } catch (e) {
-          console.error(e);
         }
         hideMutedChannels = next;
         toasts.addToast(
