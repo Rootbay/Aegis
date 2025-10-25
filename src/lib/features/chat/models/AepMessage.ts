@@ -1,4 +1,8 @@
 export interface ChatMessage {
+  id?: string;
+  message_id?: string;
+  messageId?: string;
+  timestamp?: string | number | Date;
   sender: string;
   content: string;
   channel_id?: string;

@@ -120,8 +120,25 @@ async fn fetch_public_key_for_user(db_pool: &Pool<Sqlite>, user_id: &str) -> Res
 
 pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, state: AppState) -> Result<(), AegisError> {
     match message {
-        AepMessage::ChatMessage { sender, content, channel_id, server_id, conversation_id, signature } => {
-            let chat_message_data = ChatMessageData { sender: sender.clone(), content: content.clone(), channel_id: channel_id.clone(), server_id: server_id.clone(), conversation_id: conversation_id.clone() };
+        AepMessage::ChatMessage {
+            id,
+            timestamp,
+            sender,
+            content,
+            channel_id,
+            server_id,
+            conversation_id,
+            signature,
+        } => {
+            let chat_message_data = ChatMessageData {
+                id: id.clone(),
+                timestamp: timestamp.clone(),
+                sender: sender.clone(),
+                content: content.clone(),
+                channel_id: channel_id.clone(),
+                server_id: server_id.clone(),
+                conversation_id: conversation_id.clone(),
+            };
             let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &sender).await?;
 
@@ -149,11 +166,11 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             };
 
             let new_message = database::Message {
-                id: uuid::Uuid::new_v4().to_string(),
+                id,
                 chat_id,
                 sender_id: sender,
                 content: content,
-                timestamp: chrono::Utc::now(),
+                timestamp,
                 read: false,
             };
             database::insert_message(db_pool, &new_message).await?;

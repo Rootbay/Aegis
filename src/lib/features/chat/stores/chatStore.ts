@@ -67,6 +67,34 @@ function createChatStore(): ChatStore {
   const loadingMessages = writable<boolean>(false);
   const PAGE_LIMIT = 50;
 
+  const normalizeTimestamp = (
+    value: string | number | Date | undefined,
+  ): string => {
+    if (!value) {
+      return new Date().toISOString();
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === "number") {
+      return new Date(value).toISOString();
+    }
+    return new Date(value).toISOString();
+  };
+
+  const mapBackendMessage = (
+    message: BackendMessage,
+    fallbackChatId: string,
+  ): Message => ({
+    id: message.id,
+    chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
+    senderId: message.sender_id ?? message.senderId ?? "",
+    content: message.content,
+    timestamp: normalizeTimestamp(message.timestamp),
+    read: message.read ?? true,
+    pending: false,
+  });
+
   const isOptimisticMatch = (
     optimistic: Message,
     incoming: Message,
@@ -184,17 +212,9 @@ function createChatStore(): ChatStore {
           limit: PAGE_LIMIT,
           offset: 0,
         });
-        const mapped = fetched.map((m: BackendMessage) => ({
-          id: m.id,
-          chatId: m.chat_id ?? m.chatId ?? messageChatId,
-          senderId: m.sender_id ?? m.senderId,
-          content: m.content,
-          timestamp:
-            typeof m.timestamp === "string"
-              ? m.timestamp
-              : new Date(m.timestamp).toISOString(),
-          read: m.read ?? true,
-        })) as Message[];
+        const mapped = fetched.map((m: BackendMessage) =>
+          mapBackendMessage(m, messageChatId),
+        );
         handleMessagesUpdate(messageChatId, mapped);
         hasMoreByChatIdStore.update((map) => {
           map.set(messageChatId, fetched.length >= PAGE_LIMIT);
@@ -250,17 +270,9 @@ function createChatStore(): ChatStore {
         limit: PAGE_LIMIT,
         offset: persistedCount,
       });
-      const mapped = fetched.map((m: BackendMessage) => ({
-        id: m.id,
-        chatId: m.chat_id ?? m.chatId ?? targetChatId,
-        senderId: m.sender_id ?? m.senderId,
-        content: m.content,
-        timestamp:
-          typeof m.timestamp === "string"
-            ? m.timestamp
-            : new Date(m.timestamp).toISOString(),
-        read: m.read ?? true,
-      })) as Message[];
+      const mapped = fetched.map((m: BackendMessage) =>
+        mapBackendMessage(m, targetChatId),
+      );
       let newAdds = 0;
       const selfId = get(userStore).me?.id;
       messagesByChatIdStore.update((map) => {
@@ -461,6 +473,27 @@ function createChatStore(): ChatStore {
     }
   };
 
+  const refreshChatMessages = async (chatId: string) => {
+    try {
+      const fetched: BackendMessage[] = await invoke("get_messages", {
+        chatId,
+        chat_id: chatId,
+        limit: PAGE_LIMIT,
+        offset: 0,
+      });
+      const mapped = fetched.map((m: BackendMessage) =>
+        mapBackendMessage(m, chatId),
+      );
+      handleMessagesUpdate(chatId, mapped);
+      hasMoreByChatIdStore.update((map) => {
+        map.set(chatId, fetched.length >= PAGE_LIMIT);
+        return new Map(map);
+      });
+    } catch (error) {
+      console.error("Failed to refresh chat messages:", error);
+    }
+  };
+
   const handleNewMessageEvent = (message: ChatMessage) => {
     const { sender, content } = message;
     const channelIdFromPayload = message.channel_id ?? message.channelId;
@@ -478,12 +511,18 @@ function createChatStore(): ChatStore {
     }
 
     if (targetChatId) {
+      const messageIdFromPayload =
+        message.id ?? message.message_id ?? message.messageId;
+      const timestampFromPayload = message.timestamp;
+      const isMissingMetadata =
+        !messageIdFromPayload || !timestampFromPayload;
+
       const newMessage: Message = {
-        id: Date.now().toString(),
+        id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
         chatId: targetChatId,
         senderId: sender,
         content: content,
-        timestamp: new Date().toISOString(),
+        timestamp: normalizeTimestamp(timestampFromPayload),
         read: sender === me?.id,
       };
       messagesByChatIdStore.update((map) => {
@@ -492,6 +531,9 @@ function createChatStore(): ChatStore {
         map.set(targetChatId, updated);
         return new Map(map);
       });
+      if (isMissingMetadata) {
+        void refreshChatMessages(targetChatId);
+      }
     }
   };
 
