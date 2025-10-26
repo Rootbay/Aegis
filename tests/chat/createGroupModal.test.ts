@@ -5,6 +5,18 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+class ResizeObserverMock {
+  callback: ResizeObserverCallback;
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+
 vi.mock("$lib/features/chat/stores/chatStore", () => ({
   chatStore: {
     handleGroupChatCreated: vi.fn(() => ({
@@ -47,8 +59,20 @@ describe("CreateGroupModal", () => {
     const { getByLabelText, getByText } = render(CreateGroupModal, {
       props: {
         allUsers: [
-          { id: "friend-1", name: "Alpha", avatar: "", isFriend: true, isPinned: false },
-          { id: "friend-2", name: "Beta", avatar: "", isFriend: true, isPinned: false },
+          {
+            id: "friend-1",
+            name: "Alpha",
+            avatar: "",
+            isFriend: true,
+            isPinned: false,
+          },
+          {
+            id: "friend-2",
+            name: "Beta",
+            avatar: "",
+            isFriend: true,
+            isPinned: false,
+          },
         ],
         onclose: vi.fn(),
       },
@@ -69,9 +93,49 @@ describe("CreateGroupModal", () => {
       });
     });
 
-    expect(chatStore.setActiveChat).toHaveBeenCalledWith("group-1", "group", undefined, {
-      forceRefresh: true,
-    });
+    expect(chatStore.setActiveChat).toHaveBeenCalledWith(
+      "group-1",
+      "group",
+      undefined,
+      {
+        forceRefresh: true,
+      },
+    );
     expect(toasts.addToast).toHaveBeenCalledWith("Group created.", "success");
+  });
+
+  it("preselects provided users and surfaces additional users", async () => {
+    const { getByLabelText, getByText } = render(CreateGroupModal, {
+      props: {
+        allUsers: [
+          {
+            id: "friend-1",
+            name: "Alpha",
+            avatar: "",
+            isFriend: true,
+            isPinned: false,
+          },
+        ],
+        preselectedUserIds: ["friend-1"],
+        additionalUsers: [
+          {
+            id: "user-2",
+            name: "Gamma",
+            avatar: "",
+            isFriend: false,
+            isPinned: false,
+          },
+        ],
+        onclose: vi.fn(),
+      },
+    });
+
+    const preselectedCheckbox = getByLabelText("Alpha") as HTMLInputElement;
+    expect(preselectedCheckbox.checked).toBe(true);
+
+    expect(() => getByText("Gamma")).not.toThrow();
+
+    await fireEvent.click(preselectedCheckbox);
+    expect(preselectedCheckbox.checked).toBe(false);
   });
 });

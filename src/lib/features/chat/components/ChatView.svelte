@@ -38,6 +38,10 @@
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
+  import {
+    buildGroupModalOptions,
+    buildReportUserPayload,
+  } from "$lib/features/chat/utils/contextMenu";
   import type { User } from "$lib/features/auth/models/User";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { Chat } from "$lib/features/chat/models/Chat";
@@ -51,8 +55,13 @@
 
   let { chat } = $props<{ chat: Chat | null }>();
 
-  const { openUserCardModal, openDetailedProfileModal } =
-    getContext<CreateGroupContext>(CREATE_GROUP_CONTEXT_KEY);
+  const createGroupContext = getContext<CreateGroupContext | undefined>(
+    CREATE_GROUP_CONTEXT_KEY,
+  );
+  const openUserCardModal = createGroupContext?.openUserCardModal;
+  const openDetailedProfileModal = createGroupContext?.openDetailedProfileModal;
+  const openCreateGroupModal = createGroupContext?.openCreateGroupModal;
+  const openReportUserModal = createGroupContext?.openReportUserModal;
 
   const LOAD_COOLDOWN_MS = 600;
   let showContextMenu = $state(false);
@@ -216,10 +225,7 @@
   });
 
   $effect(() => {
-    if (
-      (chat?.type === "channel" || chat?.type === "group") &&
-      chat.members
-    ) {
+    if ((chat?.type === "channel" || chat?.type === "group") && chat.members) {
       memberById = new Map(chat.members.map((member) => [member.id, member]));
     } else {
       memberById = new Map();
@@ -342,6 +348,20 @@
       toggleMuteUser(item);
     } else if (detail.action === "invite_to_server") {
       inviteUserToServer(item);
+    } else if (detail.action === "add_to_group") {
+      if (!openCreateGroupModal) {
+        toasts.addToast("Group creation is unavailable.", "error");
+        return;
+      }
+      const options = buildGroupModalOptions(item);
+      openCreateGroupModal(options);
+    } else if (detail.action === "report_user") {
+      if (!openReportUserModal) {
+        toasts.addToast("Reporting is currently unavailable.", "error");
+        return;
+      }
+      const payload = buildReportUserPayload(chat, item);
+      openReportUserModal(payload);
     } else {
       console.log(`Action not implemented: ${detail.action}`);
     }
@@ -395,7 +415,10 @@
       }
     } catch (error: any) {
       console.error("Failed to toggle mute:", error);
-      toasts.addToast(error?.message ?? "Failed to update mute status.", "error");
+      toasts.addToast(
+        error?.message ?? "Failed to update mute status.",
+        "error",
+      );
     }
   }
 
@@ -413,10 +436,13 @@
     }
 
     try {
-      const result = await invoke<SendServerInviteResult>("send_server_invite", {
-        server_id: activeServerId,
-        user_id: user.id,
-      });
+      const result = await invoke<SendServerInviteResult>(
+        "send_server_invite",
+        {
+          server_id: activeServerId,
+          user_id: user.id,
+        },
+      );
 
       if (!result.already_member) {
         await serverStore.fetchServerDetails(result.server_id);
@@ -429,7 +455,10 @@
       toasts.addToast(message, tone);
     } catch (error: any) {
       console.error("Failed to send server invite:", error);
-      toasts.addToast(error?.message ?? "Failed to send server invite.", "error");
+      toasts.addToast(
+        error?.message ?? "Failed to send server invite.",
+        "error",
+      );
     }
   }
 
@@ -701,7 +730,6 @@
 
   const messageContentCache: MessageContentCache = new Map();
 
-
   let normalizedMessages = $derived(
     buildLowercaseContent(currentChatMessages || [], messageContentCache),
   );
@@ -718,9 +746,7 @@
       return;
     }
     const reason =
-      callForChat.type === "video"
-        ? "Video call ended"
-        : "Voice call ended";
+      callForChat.type === "video" ? "Video call ended" : "Voice call ended";
     callStore.endCall(reason);
   }
 
@@ -747,7 +773,8 @@
 
   $effect(() => {
     if (!editingMessageId) return;
-    const exists = currentChatMessages?.some((msg) => msg.id === editingMessageId) ?? false;
+    const exists =
+      currentChatMessages?.some((msg) => msg.id === editingMessageId) ?? false;
     if (!exists) {
       cancelEditingMessage();
     }
@@ -918,144 +945,149 @@
         </div>
       {/if}
       <div class="flex-grow min-h-0 relative">
-      <VirtualList
-        items={currentChatMessages}
-        mode="bottomToTop"
-        defaultEstimatedItemHeight={80}
-        viewportClass="virtual-list-viewport p-4 chat-viewport"
-        bind:this={listRef}
-      >
-        {#snippet renderItem(msg, index)}
-          {@const isMe = msg.senderId === myId}
-          {@const senderInfo =
-            chat.type === "dm" ? chat.friend : memberById.get(msg.senderId)}
-          {@const senderName = isMe
-            ? $userStore.me?.name
-            : senderInfo?.name || "Unknown User"}
-          {@const senderAvatar = isMe
-            ? $userStore.me?.avatar
-            : senderInfo?.avatar}
-          {@const displayableUser = isMe ? $userStore.me : senderInfo}
-          {#if loadingMoreMessages && index === 0}
-            <div class="text-center text-muted-foreground py-2">
-              Loading older messages...
-            </div>
-          {/if}
-          <div class="space-y-6" use:captureViewport>
-            <div
-              class="flex items-start gap-3 {isMe ? 'flex-row-reverse' : ''}"
-            >
-              <button
-                onclick={(e) =>
-                  displayableUser &&
-                  openUserCardModal(
-                    displayableUser as User,
-                    e.clientX,
-                    e.clientY,
-                    chat.type === "channel",
-                  )}
-                oncontextmenu={(e) =>
-                  displayableUser && handleContextMenu(e, displayableUser)}
-                class="w-10 h-10 rounded-full flex-shrink-0 cursor-pointer"
+        <VirtualList
+          items={currentChatMessages}
+          mode="bottomToTop"
+          defaultEstimatedItemHeight={80}
+          viewportClass="virtual-list-viewport p-4 chat-viewport"
+          bind:this={listRef}
+        >
+          {#snippet renderItem(msg, index)}
+            {@const isMe = msg.senderId === myId}
+            {@const senderInfo =
+              chat.type === "dm" ? chat.friend : memberById.get(msg.senderId)}
+            {@const senderName = isMe
+              ? $userStore.me?.name
+              : senderInfo?.name || "Unknown User"}
+            {@const senderAvatar = isMe
+              ? $userStore.me?.avatar
+              : senderInfo?.avatar}
+            {@const displayableUser = isMe ? $userStore.me : senderInfo}
+            {#if loadingMoreMessages && index === 0}
+              <div class="text-center text-muted-foreground py-2">
+                Loading older messages...
+              </div>
+            {/if}
+            <div class="space-y-6" use:captureViewport>
+              <div
+                class="flex items-start gap-3 {isMe ? 'flex-row-reverse' : ''}"
               >
-                <img
-                  src={senderAvatar}
-                  alt={senderName}
-                  class="w-full h-full rounded-full"
-                />
-              </button>
-              <div class="flex flex-col {isMe ? 'items-end' : ''}">
-                <div class="flex items-center gap-2 mb-1">
-                  <MessageAuthorName
-                    chatType={chat.type}
-                    channelId={chat.type === "channel" ? chat.id : null}
-                    senderName={senderName ?? ""}
-                    className="font-bold text-white hover:underline cursor-pointer"
-                    onNameClick={(e) =>
-                      displayableUser &&
-                      openUserCardModal(
-                        displayableUser as User,
-                        e.clientX,
-                        e.clientY,
-                        chat.type === "channel",
-                      )}
-                    onNameContextMenu={(e) =>
-                      displayableUser && handleContextMenu(e, displayableUser)}
+                <button
+                  onclick={(e) =>
+                    displayableUser &&
+                    openUserCardModal(
+                      displayableUser as User,
+                      e.clientX,
+                      e.clientY,
+                      chat.type === "channel",
+                    )}
+                  oncontextmenu={(e) =>
+                    displayableUser && handleContextMenu(e, displayableUser)}
+                  class="w-10 h-10 rounded-full flex-shrink-0 cursor-pointer"
+                >
+                  <img
+                    src={senderAvatar}
+                    alt={senderName}
+                    class="w-full h-full rounded-full"
                   />
-                  >
-                  <p class="text-xs text-muted-foreground">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                  {#if msg.editedAt}
-                    <span class="text-[0.625rem] uppercase tracking-wide text-muted-foreground/80">
-                      (edited)
-                    </span>
-                  {/if}
-                </div>
-                {#if msg.content}
-                  <div
-                    class="max-w-md p-3 rounded-lg {isMe
-                      ? 'bg-cyan-600 text-white rounded-tr-none'
-                      : 'bg-zinc-700 rounded-tl-none'}"
-                    role="button"
-                    tabindex="0"
-                    aria-label="Message options"
-                    oncontextmenu={(e) => {
-                      if (editingMessageId === msg.id) {
-                        e.preventDefault();
-                        return;
-                      }
-                      handleMessageContextMenu(e, msg);
-                    }}
-                    onkeydown={(e) => {
-                      if (editingMessageId === msg.id) {
-                        return;
-                      }
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleMessageContextMenu(e as any as MouseEvent, msg);
-                      }
-                    }}
-                  >
-                    {#if editingMessageId === msg.id}
-                      <form
-                        class="space-y-2"
-                        onsubmit={(e) => {
-                          e.preventDefault();
-                          submitMessageEdit(msg);
-                        }}
+                </button>
+                <div class="flex flex-col {isMe ? 'items-end' : ''}">
+                  <div class="flex items-center gap-2 mb-1">
+                    <MessageAuthorName
+                      chatType={chat.type}
+                      channelId={chat.type === "channel" ? chat.id : null}
+                      senderName={senderName ?? ""}
+                      className="font-bold text-white hover:underline cursor-pointer"
+                      onNameClick={(e) =>
+                        displayableUser &&
+                        openUserCardModal(
+                          displayableUser as User,
+                          e.clientX,
+                          e.clientY,
+                          chat.type === "channel",
+                        )}
+                      onNameContextMenu={(e) =>
+                        displayableUser &&
+                        handleContextMenu(e, displayableUser)}
+                    />
+                    >
+                    <p class="text-xs text-muted-foreground">
+                      {new Date(msg.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                    {#if msg.editedAt}
+                      <span
+                        class="text-[0.625rem] uppercase tracking-wide text-muted-foreground/80"
                       >
-                        <textarea
-                          class="w-full resize-none rounded-md bg-zinc-800 p-2 text-sm text-white focus:outline-none"
-                          rows="3"
-                          bind:value={editingDraft}
-                          bind:this={editingTextarea}
-                          disabled={editingSaving}
-                          onkeydown={(event) => handleEditKeydown(event, msg)}
-                        ></textarea>
-                        <div class="flex items-center justify-end gap-2 text-sm">
-                          <button
-                            type="button"
-                            class="rounded-md px-2 py-1 text-muted-foreground hover:text-white disabled:opacity-60"
-                            onclick={cancelEditingMessage}
+                        (edited)
+                      </span>
+                    {/if}
+                  </div>
+                  {#if msg.content}
+                    <div
+                      class="max-w-md p-3 rounded-lg {isMe
+                        ? 'bg-cyan-600 text-white rounded-tr-none'
+                        : 'bg-zinc-700 rounded-tl-none'}"
+                      role="button"
+                      tabindex="0"
+                      aria-label="Message options"
+                      oncontextmenu={(e) => {
+                        if (editingMessageId === msg.id) {
+                          e.preventDefault();
+                          return;
+                        }
+                        handleMessageContextMenu(e, msg);
+                      }}
+                      onkeydown={(e) => {
+                        if (editingMessageId === msg.id) {
+                          return;
+                        }
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleMessageContextMenu(e as any as MouseEvent, msg);
+                        }
+                      }}
+                    >
+                      {#if editingMessageId === msg.id}
+                        <form
+                          class="space-y-2"
+                          onsubmit={(e) => {
+                            e.preventDefault();
+                            submitMessageEdit(msg);
+                          }}
+                        >
+                          <textarea
+                            class="w-full resize-none rounded-md bg-zinc-800 p-2 text-sm text-white focus:outline-none"
+                            rows="3"
+                            bind:value={editingDraft}
+                            bind:this={editingTextarea}
                             disabled={editingSaving}
+                            onkeydown={(event) => handleEditKeydown(event, msg)}
+                          ></textarea>
+                          <div
+                            class="flex items-center justify-end gap-2 text-sm"
                           >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            class="rounded-md bg-cyan-600 px-3 py-1 text-white hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed"
-                            disabled={editingSaving || editingDraft.trim().length === 0}
-                          >
-                            {editingSaving ? "Saving..." : "Save"}
-                          </button>
-                        </div>
-                      </form>
-                    {:else}
-                      {#if $chatSearchStore.query}
+                            <button
+                              type="button"
+                              class="rounded-md px-2 py-1 text-muted-foreground hover:text-white disabled:opacity-60"
+                              onclick={cancelEditingMessage}
+                              disabled={editingSaving}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              class="rounded-md bg-cyan-600 px-3 py-1 text-white hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed"
+                              disabled={editingSaving ||
+                                editingDraft.trim().length === 0}
+                            >
+                              {editingSaving ? "Saving..." : "Save"}
+                            </button>
+                          </div>
+                        </form>
+                      {:else if $chatSearchStore.query}
                         {#each highlightText(msg.content, $chatSearchStore.query) as part, i (i)}
                           {#if part.match}
                             <mark class="bg-yellow-500/60 text-white"
@@ -1070,200 +1102,205 @@
                           {msg.content}
                         </p>
                       {/if}
-                    {/if}
-                  </div>
-                {/if}
-                {#if msg.reactions}
-                  {@const reactionEntries: Array<[string, string[]]> = Object.entries(msg.reactions)}
-                  <div class="mt-1 flex gap-1 flex-wrap">
-                    {#each reactionEntries as [emoji, users] (emoji)}
+                    </div>
+                  {/if}
+                  {#if msg.reactions}
+                    {@const reactionEntries: Array<[string, string[]]> = Object.entries(msg.reactions)}
+                    <div class="mt-1 flex gap-1 flex-wrap">
+                      {#each reactionEntries as [emoji, users] (emoji)}
+                        <button
+                          type="button"
+                          class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
+                          aria-pressed={users.includes(myId || "")}
+                          onclick={() => {
+                            if (users.includes(myId || "")) {
+                              chatStore.removeReaction(
+                                msg.chatId,
+                                msg.id,
+                                emoji,
+                              );
+                            } else {
+                              chatStore.addReaction(msg.chatId, msg.id, emoji);
+                            }
+                          }}>{emoji} {users.length}</button
+                        >
+                      {/each}
                       <button
                         type="button"
                         class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
-                        aria-pressed={users.includes(myId || "")}
-                        onclick={() => {
-                          if (users.includes(myId || "")) {
-                            chatStore.removeReaction(msg.chatId, msg.id, emoji);
-                          } else {
-                            chatStore.addReaction(msg.chatId, msg.id, emoji);
-                          }
-                        }}>{emoji} {users.length}</button
+                        onclick={() =>
+                          chatStore.addReaction(
+                            msg.chatId,
+                            msg.id,
+                            DEFAULT_REACTION,
+                          )}
+                        aria-label="Add reaction">+ React</button
                       >
-                    {/each}
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
-                      onclick={() =>
-                        chatStore.addReaction(
-                          msg.chatId,
-                          msg.id,
-                          DEFAULT_REACTION,
-                        )}
-                      aria-label="Add reaction">+ React</button
-                    >
-                  </div>
-                {:else}
-                  <div class="mt-1">
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-xs rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
-                      onclick={() =>
-                        chatStore.addReaction(
-                          msg.chatId,
-                          msg.id,
-                          DEFAULT_REACTION,
-                        )}
-                      aria-label="Add reaction">+ React</button
-                    >
-                  </div>
-                {/if}
-                {#if msg.attachments && msg.attachments.length > 0}
-                  <div class="mt-2 space-y-2">
-                    {#each msg.attachments as attachment (attachment.id)}
-                      <div
-                        oncontextmenu={(event) =>
-                          handleMessageContextMenu(event, msg)}
+                    </div>
+                  {:else}
+                    <div class="mt-1">
+                      <button
+                        type="button"
+                        class="px-2 py-0.5 text-xs rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
+                        onclick={() =>
+                          chatStore.addReaction(
+                            msg.chatId,
+                            msg.id,
+                            DEFAULT_REACTION,
+                          )}
+                        aria-label="Add reaction">+ React</button
                       >
-                        <FilePreview
-                          variant="message"
-                          {attachment}
-                          chatId={msg.chatId}
-                          messageId={msg.id}
-                          onOpen={openLightbox}
-                        />
-                      </div>
-                    {/each}
-                  </div>
-                {/if}
+                    </div>
+                  {/if}
+                  {#if msg.attachments && msg.attachments.length > 0}
+                    <div class="mt-2 space-y-2">
+                      {#each msg.attachments as attachment (attachment.id)}
+                        <div
+                          oncontextmenu={(event) =>
+                            handleMessageContextMenu(event, msg)}
+                        >
+                          <FilePreview
+                            variant="message"
+                            {attachment}
+                            chatId={msg.chatId}
+                            messageId={msg.id}
+                            onOpen={openLightbox}
+                          />
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
               </div>
             </div>
-          </div>
-        {/snippet}
-      </VirtualList>
+          {/snippet}
+        </VirtualList>
 
-      {#if isChatLoading && (currentChatMessages?.length ?? 0) === 0}
-        <div
-          class="absolute inset-0 flex items-center justify-center pointer-events-none"
-        >
-          <span class="text-sm text-muted-foreground">Loading messages...</span>
-        </div>
-      {/if}
-
-      {#if unseenCount > 0}
-        <button
-          class="absolute right-4 bottom-4 bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-3 py-2 rounded-full shadow-lg cursor-pointer"
-          onclick={scrollToBottom}
-          aria-live="polite"
-        >
-          New messages ({unseenCount})
-        </button>
-      {/if}
-    </div>
-
-    <footer class="p-4 bg-card/50 border-t border-zinc-700/50">
-      {#if attachedFiles.length > 0}
-        <div class="p-2 mb-2 border-b border-zinc-700/50">
-          <p class="text-sm font-semibold mb-2 text-zinc-300">Attachments</p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {#each attachedFiles as file, i (i)}
-              <FilePreview {file} onRemove={removeAttachment} />
-            {/each}
-          </div>
-        </div>
-      {/if}
-      <form
-        onsubmit={sendMessage}
-        class="flex items-center bg-muted/50 rounded-lg pr-2 py-1 border border-transparent focus-within:border-zinc-600 transition-all"
-        onpaste={handlePaste}
-        ondrop={handleDrop}
-        ondragover={handleDragOver}
-      >
-        <input
-          type="file"
-          multiple
-          bind:this={fileInput}
-          onchange={handleFileSelect}
-          class="hidden"
-        />
-        <button
-          type="button"
-          onclick={() => fileInput?.click()}
-          class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
-        >
-          <Link size={12} />
-        </button>
-        <textarea
-          rows="1"
-          placeholder={`Message ${
-            chat.type === "dm"
-              ? `@${chat.friend.name}`
-              : chat.type === "group"
-                ? chat.name
-                : `#${chat.name}`
-          }`}
-          class="flex-grow bg-transparent resize-none focus:outline-none mx-2 text-white placeholder-zinc-400"
-          bind:value={messageInput}
-          bind:this={textareaRef}
-          oninput={adjustTextareaHeight}
-          onfocus={adjustTextareaHeight}
-          title="Press Enter to send. Use Shift+Enter for a newline."
-          onkeydown={(e) => {
-            if (e.key !== "Enter") {
-              return;
-            }
-
-            if (e.isComposing) {
-              return;
-            }
-
-            const hasExplicitNewlineModifier = e.shiftKey || e.ctrlKey;
-            const hasOtherModifier = e.altKey || e.metaKey;
-
-            if (hasExplicitNewlineModifier || hasOtherModifier) {
-              return;
-            }
-
-            e.preventDefault();
-            sendMessage(e);
-          }}
-        ></textarea>
-        {#if isRecording}
-          <div class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400">
-            <span
-              class="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
-              aria-hidden="true"
-            ></span>
-            <span>{formatRecordingDuration(recordingDuration)}</span>
+        {#if isChatLoading && (currentChatMessages?.length ?? 0) === 0}
+          <div
+            class="absolute inset-0 flex items-center justify-center pointer-events-none"
+          >
+            <span class="text-sm text-muted-foreground"
+              >Loading messages...</span
+            >
           </div>
         {/if}
-        <button
-          type="button"
-          class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
-          class:text-red-400={isRecording}
-          aria-pressed={isRecording}
-          onclick={handleMicClick}
-          title={
-            isRecording
-              ? "Stop recording voice message"
-              : "Record voice message"
-          }
+
+        {#if unseenCount > 0}
+          <button
+            class="absolute right-4 bottom-4 bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-3 py-2 rounded-full shadow-lg cursor-pointer"
+            onclick={scrollToBottom}
+            aria-live="polite"
+          >
+            New messages ({unseenCount})
+          </button>
+        {/if}
+      </div>
+
+      <footer class="p-4 bg-card/50 border-t border-zinc-700/50">
+        {#if attachedFiles.length > 0}
+          <div class="p-2 mb-2 border-b border-zinc-700/50">
+            <p class="text-sm font-semibold mb-2 text-zinc-300">Attachments</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              {#each attachedFiles as file, i (i)}
+                <FilePreview {file} onRemove={removeAttachment} />
+              {/each}
+            </div>
+          </div>
+        {/if}
+        <form
+          onsubmit={sendMessage}
+          class="flex items-center bg-muted/50 rounded-lg pr-2 py-1 border border-transparent focus-within:border-zinc-600 transition-all"
+          onpaste={handlePaste}
+          ondrop={handleDrop}
+          ondragover={handleDragOver}
         >
+          <input
+            type="file"
+            multiple
+            bind:this={fileInput}
+            onchange={handleFileSelect}
+            class="hidden"
+          />
+          <button
+            type="button"
+            onclick={() => fileInput?.click()}
+            class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
+          >
+            <Link size={12} />
+          </button>
+          <textarea
+            rows="1"
+            placeholder={`Message ${
+              chat.type === "dm"
+                ? `@${chat.friend.name}`
+                : chat.type === "group"
+                  ? chat.name
+                  : `#${chat.name}`
+            }`}
+            class="flex-grow bg-transparent resize-none focus:outline-none mx-2 text-white placeholder-zinc-400"
+            bind:value={messageInput}
+            bind:this={textareaRef}
+            oninput={adjustTextareaHeight}
+            onfocus={adjustTextareaHeight}
+            title="Press Enter to send. Use Shift+Enter for a newline."
+            onkeydown={(e) => {
+              if (e.key !== "Enter") {
+                return;
+              }
+
+              if (e.isComposing) {
+                return;
+              }
+
+              const hasExplicitNewlineModifier = e.shiftKey || e.ctrlKey;
+              const hasOtherModifier = e.altKey || e.metaKey;
+
+              if (hasExplicitNewlineModifier || hasOtherModifier) {
+                return;
+              }
+
+              e.preventDefault();
+              sendMessage(e);
+            }}
+          ></textarea>
           {#if isRecording}
-            <Square size={12} />
-          {:else}
-            <Mic size={12} />
+            <div
+              class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400"
+            >
+              <span
+                class="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
+                aria-hidden="true"
+              ></span>
+              <span>{formatRecordingDuration(recordingDuration)}</span>
+            </div>
           {/if}
-        </button>
-        <button
-          type="submit"
-          class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
-          disabled={sending}
-          aria-busy={sending}
-        >
-          <SendHorizontal size={12} />
-        </button>
-      </form>
-    </footer>
+          <button
+            type="button"
+            class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
+            class:text-red-400={isRecording}
+            aria-pressed={isRecording}
+            onclick={handleMicClick}
+            title={isRecording
+              ? "Stop recording voice message"
+              : "Record voice message"}
+          >
+            {#if isRecording}
+              <Square size={12} />
+            {:else}
+              <Mic size={12} />
+            {/if}
+          </button>
+          <button
+            type="submit"
+            class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
+            disabled={sending}
+            aria-busy={sending}
+          >
+            <SendHorizontal size={12} />
+          </button>
+        </form>
+      </footer>
     </div>
   {:else}
     <div
