@@ -3,7 +3,7 @@
   import CreateGroupModal from "$lib/components/modals/CreateGroupModal.svelte";
   import ReportUserModal from "$lib/components/modals/ReportUserModal.svelte";
   import ServerManagementModal from "$lib/components/modals/ServerManagementModal.svelte";
-  import ProfileModal from "$lib/components/modals/ProfileModal.svelte";
+  import DetailedProfileModal from "$lib/components/modals/DetailedProfileModal.svelte";
   import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import type { Friend } from "$lib/features/friends/models/Friend";
@@ -87,7 +87,7 @@
 {/if}
 
 {#if activeModal === "detailedProfile"}
-  <ProfileModal {...modalProps} close={closeModal} />
+  <DetailedProfileModal {...modalProps} close={closeModal} />
 {/if}
 
 {#if activeModal === "userCard" && modalProps?.profileUser}
