@@ -4,12 +4,15 @@
   import { browser } from "$app/environment";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
+  import { userStore } from "$lib/stores/userStore";
   import { Plus, Users, X } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
   import { formatTimestamp } from "$lib/utils/time";
+  import { toasts } from "$lib/stores/ToastStore";
   import {
     ContextMenu,
     ContextMenuTrigger,
@@ -81,31 +84,63 @@
     if (!item) return;
     if (action === "open") onSelect(friendId);
     if (action === "mute") {
-      /* ... */
+      toggleMute(item);
     }
     if (action === "remove") removeFriend(item);
   }
 
+  async function toggleMute(friend: Friend) {
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to mute conversations.", "error");
+      return;
+    }
+
+    const currentlyMuted = mutedFriendsStore.isMuted(friend.id);
+    try {
+      await invoke("mute_user", {
+        current_user_id: meId,
+        target_user_id: friend.id,
+        muted: !currentlyMuted,
+      });
+
+      if (currentlyMuted) {
+        mutedFriendsStore.unmute(friend.id);
+        toasts.addToast("Conversation unmuted.", "success");
+      } else {
+        mutedFriendsStore.mute(friend.id);
+        toasts.addToast("Conversation muted.", "success");
+      }
+    } catch (error: any) {
+      console.error("Failed to toggle mute:", error);
+      toasts.addToast(error?.message ?? "Failed to update mute status.", "error");
+    }
+  }
+
   async function removeFriend(friend: Friend) {
-    console.log("Removing friend:", friend);
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to remove friends.", "error");
+      return;
+    }
     const usesFallbackId = friend.friendshipId == null;
     const friendshipId = usesFallbackId ? friend.id : friend.friendshipId;
     if (!friendshipId) {
-      console.warn("Missing friendship identifier for friend", friend);
+      toasts.addToast("Unable to determine friendship identifier.", "error");
       return;
-    }
-    if (usesFallbackId) {
-      console.warn(
-        "Falling back to friend.id when removing friendship",
-        friend,
-      );
     }
     try {
       await invoke("remove_friendship", { friendship_id: friendshipId });
       friendStore.removeFriend(friend.id);
-      console.log("Friend removed:", friend);
+      mutedFriendsStore.unmute(friend.id);
+      toasts.addToast("Friend removed.", "success");
+      await friendStore.initialize();
     } catch (error) {
       console.error("Failed to remove friend:", error);
+      toasts.addToast(
+        (error as any)?.message ?? "Failed to remove friend.",
+        "error",
+      );
     }
   }
 

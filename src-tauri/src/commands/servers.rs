@@ -2,7 +2,15 @@ use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
 use aep::database;
 use aep::user_service;
+use serde::{Deserialize, Serialize};
 use tauri::State;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendServerInviteResult {
+    pub server_id: String,
+    pub user_id: String,
+    pub already_member: bool,
+}
 
 #[tauri::command]
 pub async fn create_server(
@@ -216,7 +224,7 @@ pub async fn send_server_invite(
     server_id: String,
     user_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> Result<SendServerInviteResult, String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
     let my_id = state.identity.peer_id().to_base58();
@@ -227,9 +235,15 @@ pub async fn send_server_invite(
         return Err("Only server owners can send invites".into());
     }
 
-    database::add_server_member(&state.db_pool, &server_id, &user_id)
+    let already_member = database::server_has_member(&state.db_pool, &server_id, &user_id)
         .await
         .map_err(|e| e.to_string())?;
+
+    if !already_member {
+        database::add_server_member(&state.db_pool, &server_id, &user_id)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
 
     let send_server_invite_data = aegis_protocol::SendServerInviteData {
         server_id: server_id.clone(),
@@ -253,7 +267,13 @@ pub async fn send_server_invite(
         .network_tx
         .send(serialized_message)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    Ok(SendServerInviteResult {
+        server_id,
+        user_id,
+        already_member,
+    })
 }
 
 #[tauri::command]

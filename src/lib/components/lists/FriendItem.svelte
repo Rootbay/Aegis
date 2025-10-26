@@ -294,7 +294,10 @@
         toasts.addToast("This user has blocked you.", "error");
         return;
       }
-      await invoke("unblock_user", { friendship_id: friendship.id });
+      await invoke("unblock_user", {
+        current_user_id: meId,
+        friendship_id: friendship.id,
+      });
       toasts.addToast("User unblocked.", "success");
       await refreshFriends();
     } catch (error) {

@@ -1,9 +1,29 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
+use aegis_shared_types::AppState;
 use aep::database::{self, Friendship, FriendshipStatus};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockUserResult {
+    pub friendship: database::FriendshipWithProfile,
+    pub newly_created: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnblockUserResult {
+    pub removed_friendship_id: String,
+    pub target_user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MuteUserResult {
+    pub target_user_id: String,
+    pub muted: bool,
+}
 
 #[tauri::command]
 pub async fn send_friend_request(
@@ -113,9 +133,19 @@ pub async fn block_user(
     current_user_id: String,
     target_user_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+) -> Result<BlockUserResult, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    drop(state_guard);
+
+    block_user_internal(state, current_user_id, target_user_id).await
+}
+
+async fn block_user_internal(
+    state: AppState,
+    current_user_id: String,
+    target_user_id: String,
+) -> Result<BlockUserResult, String> {
     let my_id = state.identity.peer_id().to_base58();
     if current_user_id != my_id {
         return Err("Caller identity mismatch".to_string());
@@ -126,7 +156,7 @@ pub async fn block_user(
         .await
         .map_err(|e| e.to_string())?;
 
-    if let Some(friendship) = friendship_option {
+    let (friendship_id, newly_created) = if let Some(friendship) = friendship_option {
         let new_status = if friendship.user_a_id == my_id {
             FriendshipStatus::BlockedByA
         } else {
@@ -134,7 +164,8 @@ pub async fn block_user(
         };
         database::update_friendship_status(&state.db_pool, &friendship.id, new_status)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(|e| e.to_string())?;
+        (friendship.id, false)
     } else {
         let friendship = Friendship {
             id: Uuid::new_v4().to_string(),
@@ -144,10 +175,18 @@ pub async fn block_user(
             created_at: now,
             updated_at: now,
         };
+        let friendship_id = friendship.id.clone();
         database::insert_friendship(&state.db_pool, &friendship)
             .await
+            .map_err(|e| e.to_string())?;
+        (friendship_id, true)
+    };
+
+    let friendship =
+        database::get_friendship_with_profile_for_user(&state.db_pool, &friendship_id, &my_id)
+            .await
             .map_err(|e| e.to_string())?
-    }
+            .ok_or_else(|| "Failed to load friendship details.".to_string())?;
 
     let block_user_data = aegis_protocol::BlockUserData {
         blocker_id: my_id.clone(),
@@ -170,52 +209,118 @@ pub async fn block_user(
         .network_tx
         .send(serialized_message)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    Ok(BlockUserResult {
+        friendship,
+        newly_created,
+    })
 }
 
 #[tauri::command]
 pub async fn unblock_user(
+    current_user_id: String,
     friendship_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+) -> Result<UnblockUserResult, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    drop(state_guard);
+
+    unblock_user_internal(state, current_user_id, friendship_id).await
+}
+
+async fn unblock_user_internal(
+    state: AppState,
+    current_user_id: String,
+    friendship_id: String,
+) -> Result<UnblockUserResult, String> {
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".to_string());
+    }
 
     let friendship = database::get_friendship_by_id(&state.db_pool, &friendship_id)
         .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Friendship not found.".to_string())?;
+
+    if friendship.user_a_id != my_id && friendship.user_b_id != my_id {
+        return Err("Caller identity mismatch".to_string());
+    }
+
+    let target_user_id = if friendship.user_a_id == my_id {
+        friendship.user_b_id.clone()
+    } else {
+        friendship.user_a_id.clone()
+    };
+
+    database::delete_friendship(&state.db_pool, &friendship.id)
+        .await
         .map_err(|e| e.to_string())?;
 
-    if let Some(friendship) = friendship {
-        database::delete_friendship(&state.db_pool, &friendship.id)
-            .await
-            .map_err(|e| e.to_string())?;
+    let unblock_user_data = aegis_protocol::UnblockUserData {
+        unblocker_id: my_id.clone(),
+        unblocked_id: target_user_id.clone(),
+    };
+    let unblock_user_bytes = bincode::serialize(&unblock_user_data).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&unblock_user_bytes)
+        .map_err(|e| e.to_string())?;
 
-        let unblock_user_data = aegis_protocol::UnblockUserData {
-            unblocker_id: friendship.user_a_id.clone(),
-            unblocked_id: friendship.user_b_id.clone(),
-        };
-        let unblock_user_bytes =
-            bincode::serialize(&unblock_user_data).map_err(|e| e.to_string())?;
-        let signature = state
-            .identity
-            .keypair()
-            .sign(&unblock_user_bytes)
-            .map_err(|e| e.to_string())?;
+    let aep_message = AepMessage::UnblockUser {
+        unblocker_id: my_id,
+        unblocked_id: target_user_id.clone(),
+        signature: Some(signature),
+    };
+    let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())?;
 
-        let aep_message = AepMessage::UnblockUser {
-            unblocker_id: friendship.user_a_id,
-            unblocked_id: friendship.user_b_id,
-            signature: Some(signature),
-        };
-        let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-        state
-            .network_tx
-            .send(serialized_message)
-            .await
-            .map_err(|e| e.to_string())
-    } else {
-        Err("Friendship not found.".to_string())
+    Ok(UnblockUserResult {
+        removed_friendship_id: friendship_id,
+        target_user_id,
+    })
+}
+
+#[tauri::command]
+pub async fn mute_user(
+    current_user_id: String,
+    target_user_id: String,
+    muted: bool,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<MuteUserResult, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    drop(state_guard);
+
+    mute_user_internal(state, current_user_id, target_user_id, muted).await
+}
+
+async fn mute_user_internal(
+    state: AppState,
+    current_user_id: String,
+    target_user_id: String,
+    muted: bool,
+) -> Result<MuteUserResult, String> {
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".to_string());
     }
+
+    if current_user_id == target_user_id {
+        return Err("Cannot mute yourself.".to_string());
+    }
+
+    Ok(MuteUserResult {
+        target_user_id,
+        muted,
+    })
 }
 
 #[tauri::command]
@@ -286,4 +391,135 @@ pub async fn get_friendships(
     database::get_friendships_with_profiles(&state.db_pool, &my_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, User};
+    use aep::user_service;
+    use bs58;
+    use crypto::identity::Identity;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tempfile::tempdir;
+    use tokio::sync::Mutex;
+    use tokio::time::{timeout, Duration};
+    use uuid::Uuid;
+
+    fn build_app_state(
+        identity: Identity,
+        db_pool: sqlx::Pool<sqlx::Sqlite>,
+    ) -> (AppState, tokio::sync::mpsc::Receiver<Vec<u8>>) {
+        let (network_tx, network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let app_state = AppState {
+            identity,
+            network_tx,
+            db_pool,
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+        };
+        (app_state, network_rx)
+    }
+
+    async fn seed_users(db_pool: &sqlx::Pool<sqlx::Sqlite>, me: &User, target: &User) {
+        user_service::insert_user(db_pool, me)
+            .await
+            .expect("insert me");
+        user_service::insert_user(db_pool, target)
+            .await
+            .expect("insert target");
+    }
+
+    #[tokio::test]
+    async fn block_and_unblock_friend_flow_updates_status() {
+        let temp = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(temp.path().join("block.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let my_id = identity.peer_id().to_base58();
+        let public_key =
+            bs58::encode(identity.keypair().public().to_protobuf_encoding()).into_string();
+        let target_id = Uuid::new_v4().to_string();
+
+        let me = User {
+            id: my_id.clone(),
+            username: "Me".into(),
+            avatar: "avatar".into(),
+            is_online: true,
+            public_key: Some(public_key.clone()),
+            bio: None,
+            tag: None,
+        };
+        let target = User {
+            id: target_id.clone(),
+            username: "Target".into(),
+            avatar: "avatar".into(),
+            is_online: true,
+            public_key: Some(public_key),
+            bio: None,
+            tag: None,
+        };
+
+        seed_users(&db_pool, &me, &target).await;
+
+        let (app_state, mut network_rx) = build_app_state(identity.clone(), db_pool.clone());
+
+        let block_result = block_user_internal(app_state.clone(), my_id.clone(), target_id.clone())
+            .await
+            .expect("block user");
+
+        assert!(block_result.newly_created);
+        assert_eq!(
+            block_result.friendship.friendship.status,
+            FriendshipStatus::BlockedByA.to_string()
+        );
+
+        let message = timeout(Duration::from_millis(250), network_rx.recv())
+            .await
+            .expect("block broadcast")
+            .expect("block message");
+        assert!(!message.is_empty());
+
+        let unblock_result = unblock_user_internal(
+            app_state.clone(),
+            my_id.clone(),
+            block_result.friendship.friendship.id.clone(),
+        )
+        .await
+        .expect("unblock user");
+
+        assert_eq!(unblock_result.target_user_id, target_id);
+
+        let message = timeout(Duration::from_millis(250), network_rx.recv())
+            .await
+            .expect("unblock broadcast")
+            .expect("unblock message");
+        assert!(!message.is_empty());
+    }
+
+    #[tokio::test]
+    async fn mute_user_internal_validates_identity() {
+        let temp = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(temp.path().join("mute.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let my_id = identity.peer_id().to_base58();
+        let target_id = Uuid::new_v4().to_string();
+
+        let (app_state, _rx) = build_app_state(identity.clone(), db_pool);
+
+        let result = mute_user_internal(app_state, my_id.clone(), target_id.clone(), true)
+            .await
+            .expect("mute user");
+
+        assert!(result.muted);
+        assert_eq!(result.target_user_id, target_id);
+    }
 }

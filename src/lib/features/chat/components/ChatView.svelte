@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { Link, Mic, SendHorizontal, Square, Users } from "@lucide/svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
   import FileTransferApprovals from "$lib/features/chat/components/FileTransferApprovals.svelte";
@@ -13,6 +14,7 @@
 
   import { userStore } from "$lib/stores/userStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import {
     chatStore,
     messagesByChatId,
@@ -31,6 +33,7 @@
   } from "$lib/features/chat/utils/chatSearch";
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
   import { callStore } from "$lib/features/calls/stores/callStore";
+  import { serverStore } from "$lib/features/servers/stores/serverStore";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -38,6 +41,12 @@
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { Message } from "$lib/features/chat/models/Message";
+
+  type SendServerInviteResult = {
+    server_id: string;
+    user_id: string;
+    already_member: boolean;
+  };
 
   let { chat } = $props<{ chat: Chat | null }>();
 
@@ -326,6 +335,12 @@
       openDetailedProfileModal(item);
     } else if (detail.action === "remove_friend") {
       removeFriend(item as Friend);
+    } else if (detail.action === "block_user") {
+      blockUserAction(item);
+    } else if (detail.action === "mute_user") {
+      toggleMuteUser(item);
+    } else if (detail.action === "invite_to_server") {
+      inviteUserToServer(item);
     } else {
       console.log(`Action not implemented: ${detail.action}`);
     }
@@ -333,6 +348,88 @@
 
   function removeFriend(user: Friend) {
     friendStore.removeFriend(user.id);
+  }
+
+  async function blockUserAction(user: User | Friend) {
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to block users.", "error");
+      return;
+    }
+
+    try {
+      await invoke("block_user", {
+        current_user_id: meId,
+        target_user_id: user.id,
+      });
+      toasts.addToast("User blocked.", "success");
+      await friendStore.initialize();
+    } catch (error: any) {
+      console.error("Failed to block user:", error);
+      toasts.addToast(error?.message ?? "Failed to block user.", "error");
+    }
+  }
+
+  async function toggleMuteUser(user: User | Friend) {
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to mute users.", "error");
+      return;
+    }
+
+    const currentlyMuted = mutedFriendsStore.isMuted(user.id);
+    try {
+      await invoke("mute_user", {
+        current_user_id: meId,
+        target_user_id: user.id,
+        muted: !currentlyMuted,
+      });
+
+      if (currentlyMuted) {
+        mutedFriendsStore.unmute(user.id);
+        toasts.addToast("User unmuted.", "success");
+      } else {
+        mutedFriendsStore.mute(user.id);
+        toasts.addToast("User muted.", "success");
+      }
+    } catch (error: any) {
+      console.error("Failed to toggle mute:", error);
+      toasts.addToast(error?.message ?? "Failed to update mute status.", "error");
+    }
+  }
+
+  async function inviteUserToServer(user: User | Friend) {
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to send invites.", "error");
+      return;
+    }
+
+    const activeServerId = get(serverStore).activeServerId;
+    if (!activeServerId) {
+      toasts.addToast("Select a server to send an invite.", "error");
+      return;
+    }
+
+    try {
+      const result = await invoke<SendServerInviteResult>("send_server_invite", {
+        server_id: activeServerId,
+        user_id: user.id,
+      });
+
+      if (!result.already_member) {
+        await serverStore.fetchServerDetails(result.server_id);
+      }
+
+      const message = result.already_member
+        ? "User is already a member of the server."
+        : "Invite sent.";
+      const tone = result.already_member ? "info" : "success";
+      toasts.addToast(message, tone);
+    } catch (error: any) {
+      console.error("Failed to send server invite:", error);
+      toasts.addToast(error?.message ?? "Failed to send server invite.", "error");
+    }
   }
 
   function adjustTextareaHeight() {

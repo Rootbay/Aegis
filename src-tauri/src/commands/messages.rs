@@ -216,15 +216,9 @@ async fn edit_message_internal(
 
     let edited_at = chrono::Utc::now();
 
-    database::update_message_content(
-        &state.db_pool,
-        &message_id,
-        trimmed,
-        edited_at,
-        &my_id,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    database::update_message_content(&state.db_pool, &message_id, trimmed, edited_at, &my_id)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let edit_payload = MessageEditData {
         message_id: message_id.clone(),
@@ -565,10 +559,9 @@ mod tests {
         .await
         .expect("edit message locally");
 
-        let updated_local =
-            database::get_messages_for_chat(&local_db, &chat_id, 10, 0)
-                .await
-                .expect("fetch local");
+        let updated_local = database::get_messages_for_chat(&local_db, &chat_id, 10, 0)
+            .await
+            .expect("fetch local");
         assert_eq!(updated_local.len(), 1);
         let updated = &updated_local[0];
         assert_eq!(updated.content, new_content);
@@ -615,10 +608,9 @@ mod tests {
             assert_eq!(editor_id, user_id);
             assert_eq!(event_content, new_content);
 
-            let remote_messages =
-                database::get_messages_for_chat(&remote_db, &chat_id, 10, 0)
-                    .await
-                    .expect("fetch remote");
+            let remote_messages = database::get_messages_for_chat(&remote_db, &chat_id, 10, 0)
+                .await
+                .expect("fetch remote");
             assert_eq!(remote_messages.len(), 1);
             let remote_message = &remote_messages[0];
             assert_eq!(remote_message.content, new_content);
