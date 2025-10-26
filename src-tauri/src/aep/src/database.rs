@@ -257,6 +257,69 @@ pub async fn get_friendships_with_profiles(
     Ok(friendships)
 }
 
+pub async fn get_friendship_with_profile_for_user(
+    pool: &Pool<Sqlite>,
+    friendship_id: &str,
+    user_id: &str,
+) -> Result<Option<FriendshipWithProfile>, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            f.id as friendship_id,
+            f.user_a_id,
+            f.user_b_id,
+            f.status,
+            f.created_at as "friendship_created_at!: DateTime<Utc>",
+            f.updated_at as "friendship_updated_at!: DateTime<Utc>",
+            u.id as counterpart_id,
+            u.username as counterpart_username,
+            u.avatar as counterpart_avatar,
+            u.is_online as "counterpart_is_online?: bool",
+            u.public_key as counterpart_public_key,
+            u.bio as counterpart_bio,
+            u.tag as counterpart_tag
+        FROM friendships f
+        LEFT JOIN users u
+            ON u.id = CASE WHEN f.user_a_id = ? THEN f.user_b_id ELSE f.user_a_id END
+        WHERE f.id = ? AND (f.user_a_id = ? OR f.user_b_id = ?)
+        "#,
+        user_id,
+        friendship_id,
+        user_id,
+        user_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let result = row.map(|row| {
+        let friendship = Friendship {
+            id: row.friendship_id,
+            user_a_id: row.user_a_id,
+            user_b_id: row.user_b_id,
+            status: row.status,
+            created_at: row.friendship_created_at,
+            updated_at: row.friendship_updated_at,
+        };
+
+        let counterpart = row.counterpart_id.map(|counterpart_id| User {
+            id: counterpart_id,
+            username: row.counterpart_username.unwrap_or_default(),
+            avatar: row.counterpart_avatar.unwrap_or_default(),
+            is_online: row.counterpart_is_online.unwrap_or(false),
+            public_key: row.counterpart_public_key,
+            bio: row.counterpart_bio,
+            tag: row.counterpart_tag,
+        });
+
+        FriendshipWithProfile {
+            friendship,
+            counterpart,
+        }
+    });
+
+    Ok(result)
+}
+
 pub async fn delete_friendship(pool: &Pool<Sqlite>, friendship_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM friendships WHERE id = ?", friendship_id)
         .execute(pool)
@@ -883,6 +946,22 @@ pub async fn add_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &s
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn server_has_member(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    user_id: &str,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        "SELECT 1 FROM server_members WHERE server_id = ? AND user_id = ? LIMIT 1",
+        server_id,
+        user_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result.is_some())
 }
 
 pub async fn remove_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &str) -> Result<(), sqlx::Error> {

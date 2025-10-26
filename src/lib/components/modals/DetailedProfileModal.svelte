@@ -5,6 +5,8 @@
   import UserOptionsMenu from "$lib/components/context-menus/UserOptionsMenu.svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import { userStore } from "$lib/stores/userStore";
+  import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
@@ -54,6 +56,12 @@
     channelName: string;
   };
   type UserOptionsEvent = { action: string };
+
+  type SendServerInviteResult = {
+    server_id: string;
+    user_id: string;
+    already_member: boolean;
+  };
 
   type Props = {
     profileUser: User;
@@ -327,12 +335,32 @@
               target_user_id: profileUser.id,
             });
             toasts.addToast("User blocked.", "success");
+            mutedFriendsStore.unmute(profileUser.id);
+            await friendStore.initialize();
           }
           break;
         }
-        case "mute_user":
-          toasts.addToast("User muted (local only).", "info");
+        case "mute_user": {
+          const meId = $userStore.me?.id;
+          if (!meId || !profileUser?.id) {
+            toasts.addToast("You must be signed in to mute users.", "error");
+            break;
+          }
+          const currentlyMuted = mutedFriendsStore.isMuted(profileUser.id);
+          await invoke("mute_user", {
+            current_user_id: meId,
+            target_user_id: profileUser.id,
+            muted: !currentlyMuted,
+          });
+          if (currentlyMuted) {
+            mutedFriendsStore.unmute(profileUser.id);
+            toasts.addToast("User unmuted.", "success");
+          } else {
+            mutedFriendsStore.mute(profileUser.id);
+            toasts.addToast("User muted.", "success");
+          }
           break;
+        }
         case "ignore":
           toasts.addToast("User ignored (local only).", "info");
           break;
@@ -391,11 +419,18 @@
     if (!selectedServerId || !profileUser?.id) return;
     sendingInvite = true;
     try {
-      await invoke("send_server_invite", {
+      const result = await invoke<SendServerInviteResult>("send_server_invite", {
         server_id: selectedServerId,
         user_id: profileUser.id,
       });
-      toasts.addToast("Invite sent.", "success");
+      if (!result.already_member) {
+        await serverStore.fetchServerDetails(result.server_id);
+      }
+      const message = result.already_member
+        ? "User is already a member of the server."
+        : "Invite sent.";
+      const tone = result.already_member ? "info" : "success";
+      toasts.addToast(message, tone);
     } catch (e: any) {
       console.error("Failed to send server invite:", e);
       toasts.addToast(e?.message || "Failed to send server invite.", "error");
