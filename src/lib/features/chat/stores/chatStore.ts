@@ -14,6 +14,11 @@ import type {
 } from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
+import {
+  decodeIncomingMessagePayload,
+  encryptOutgoingMessagePayload,
+  type MessageAttachmentPayload,
+} from "$lib/features/chat/services/chatEncryptionService";
 
 type BackendMessage = {
   id: string;
@@ -41,13 +46,6 @@ type BackendAttachment = {
   contentType?: string;
   size?: number;
   data?: number[] | Uint8Array | ArrayBuffer;
-};
-
-type AttachmentPayload = {
-  name: string;
-  type?: string;
-  size: number;
-  data: Uint8Array | ArrayBuffer;
 };
 
 export type BackendGroupChat = {
@@ -599,7 +597,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     message: BackendMessage,
     fallbackChatId: string,
   ): Message => {
-    const attachments = mapAttachmentPayloads(message.attachments);
+    const decoded = decodeIncomingMessagePayload({
+      content: message.content,
+      attachments: message.attachments,
+    });
+    const attachments = mapAttachmentPayloads(decoded.attachments);
     const reactions = normalizeReactions(message.reactions ?? null);
     const editedAt = normalizeOptionalDate(message.edited_at ?? message.editedAt);
     const editedBy = message.edited_by ?? message.editedBy ?? undefined;
@@ -607,7 +609,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       id: message.id,
       chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
       senderId: message.sender_id ?? message.senderId ?? "",
-      content: message.content,
+      content: decoded.content,
       timestamp: normalizeTimestamp(message.timestamp),
       read: message.read ?? true,
       pending: false,
@@ -1058,15 +1060,16 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       newMessage,
     ]);
 
+    let encryptedFailed = false;
     try {
       if (type === "dm") {
-        await invoke("send_direct_message", {
+        await invoke("send_encrypted_dm", {
           message: content,
           recipientId: chatId,
           recipient_id: chatId,
         });
       } else {
-        await invoke("send_message", {
+        await invoke("send_encrypted_group_message", {
           message: content,
           channelId: channelId,
           channel_id: channelId,
@@ -1075,10 +1078,35 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         });
       }
     } catch (error) {
-      console.error("Failed to send message:", error);
-      updateMessagesForChat(messageChatId, (existing) =>
-        existing.filter((msg) => msg.id !== tempId),
-      );
+      encryptedFailed = true;
+      console.warn("Encrypted send failed, attempting plaintext fallback", error);
+      try {
+        if (type === "dm") {
+          await invoke("send_direct_message", {
+            message: content,
+            recipientId: chatId,
+            recipient_id: chatId,
+          });
+        } else {
+          await invoke("send_message", {
+            message: content,
+            channelId: channelId,
+            channel_id: channelId,
+            serverId: chatId,
+            server_id: chatId,
+          });
+        }
+      } catch (fallbackError) {
+        console.error("Failed to send message:", fallbackError);
+        updateMessagesForChat(messageChatId, (existing) =>
+          existing.filter((msg) => msg.id !== tempId),
+        );
+        throw fallbackError;
+      }
+    }
+
+    if (encryptedFailed) {
+      console.info("Sent plaintext message after encryption fallback for", messageChatId);
     }
   };
 
@@ -1106,7 +1134,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         async (
           file,
         ): Promise<{
-          backend: AttachmentPayload;
+          backend: MessageAttachmentPayload;
           ui: AttachmentMeta;
         }> => {
           const buffer = await file.arrayBuffer();
@@ -1139,6 +1167,26 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const backendAttachments = attachmentsCombined.map(
       (entry) => entry.backend,
     );
+    let contentForSend = content;
+    let attachmentsForSend = backendAttachments;
+    try {
+      const encrypted = await encryptOutgoingMessagePayload({
+        content,
+        attachments: backendAttachments,
+        chatType: type,
+        chatId,
+        channelId: channelId,
+        senderId: me.id,
+        recipientId: type === "dm" ? chatId : null,
+      });
+      contentForSend = encrypted.content;
+      attachmentsForSend = encrypted.attachments;
+    } catch (error) {
+      console.warn(
+        "Attachment encryption failed, sending plaintext payloads",
+        error,
+      );
+    }
     const optimisticAttachments = attachmentsCombined.map((entry) => entry.ui);
 
     const newMessage: Message = {
@@ -1160,15 +1208,15 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     try {
       if (type === "dm") {
         await invoke("send_direct_message_with_attachments", {
-          message: content,
+          message: contentForSend,
           recipientId: chatId,
           recipient_id: chatId,
-          attachments: backendAttachments,
+          attachments: attachmentsForSend,
         });
       } else {
         await invoke("send_message_with_attachments", {
-          message: content,
-          attachments: backendAttachments,
+          message: contentForSend,
+          attachments: attachmentsForSend,
           channelId: channelId,
           channel_id: channelId,
           serverId: chatId,
@@ -1283,7 +1331,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const handleNewMessageEvent = (message: ChatMessage) => {
-    const { sender, content } = message;
+    const { sender } = message;
+    const decoded = decodeIncomingMessagePayload({
+      content: message.content,
+      attachments: message.attachments,
+    });
     const channelIdFromPayload = message.channel_id ?? message.channelId;
     const conversationId = message.conversation_id ?? message.conversationId;
     const me = get(userStore).me;
@@ -1307,12 +1359,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
         chatId: targetChatId,
         senderId: sender,
-        content: content,
+        content: decoded.content,
         timestamp: normalizeTimestamp(timestampFromPayload),
         read: sender === me?.id,
         attachments:
-          message.attachments && message.attachments.length > 0
-            ? mapAttachmentPayloads(message.attachments)
+          decoded.attachments && decoded.attachments.length > 0
+            ? mapAttachmentPayloads(decoded.attachments)
             : undefined,
         reactions: normalizeReactions(message.reactions ?? null),
       };
