@@ -40,12 +40,17 @@ import type { Message } from "$lib/features/chat/models/Message";
 import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { GroupChatSummary } from "$lib/features/chat/stores/chatStore";
+import type {
+  GroupModalOptions,
+  ReportUserModalPayload,
+} from "$lib/features/chat/utils/contextMenu";
 
 export type AppModalType =
   | "createGroup"
   | "serverManagement"
   | "detailedProfile"
-  | "userCard";
+  | "userCard"
+  | "reportUser";
 
 type ProfileModalSource = User & {
   bio?: string;
@@ -72,6 +77,8 @@ type PageState = {
     isServerMemberContext: boolean,
   ) => void;
   readonly openDetailedProfileModal: (user: User) => void;
+  readonly openCreateGroupModal: (options?: GroupModalOptions) => void;
+  readonly openReportUserModal: (payload: ReportUserModalPayload) => void;
   readonly messagesByChatId: typeof messagesByChatId;
 };
 
@@ -235,6 +242,16 @@ export function createAppController(): AppController {
     });
   };
 
+  const openCreateGroupModalWithOptions: PageState["openCreateGroupModal"] = (
+    options = {},
+  ) => {
+    openModal("createGroup", options);
+  };
+
+  const openReportUserModal: PageState["openReportUserModal"] = (payload) => {
+    openModal("reportUser", payload);
+  };
+
   const handleFriendsTabSelect = (tab: string) => {
     const url = new URL(get(page).url);
     if (url.pathname === "/friends/add") {
@@ -389,9 +406,13 @@ export function createAppController(): AppController {
                 id: groupId,
                 name: groupPayload.name ?? null,
                 owner_id:
-                  groupPayload.creator_id ?? groupPayload.creatorId ?? undefined,
+                  groupPayload.creator_id ??
+                  groupPayload.creatorId ??
+                  undefined,
                 created_at:
-                  groupPayload.created_at ?? groupPayload.createdAt ?? undefined,
+                  groupPayload.created_at ??
+                  groupPayload.createdAt ??
+                  undefined,
                 member_ids:
                   groupPayload.member_ids ?? groupPayload.memberIds ?? [],
               });
@@ -760,6 +781,8 @@ export function createAppController(): AppController {
     closeModal,
     openUserCardModal,
     openDetailedProfileModal,
+    openCreateGroupModal: openCreateGroupModalWithOptions,
+    openReportUserModal,
     messagesByChatId,
   };
 

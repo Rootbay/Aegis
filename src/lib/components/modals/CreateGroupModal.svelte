@@ -19,19 +19,24 @@
     chatStore,
     type BackendGroupChat,
   } from "$lib/features/chat/stores/chatStore";
+  import type {
+    GroupModalOptions,
+    GroupModalUser,
+  } from "$lib/features/chat/utils/contextMenu";
 
   type Props = {
     onclose: () => void;
-    allUsers: {
-      id: string;
-      name: string;
-      avatar: string;
-      isFriend: boolean;
-      isPinned: boolean;
-    }[];
+    allUsers: GroupModalUser[];
+    preselectedUserIds?: GroupModalOptions["preselectedUserIds"];
+    additionalUsers?: GroupModalUser[];
   };
 
-  let { onclose, allUsers }: Props = $props();
+  let {
+    onclose,
+    allUsers,
+    preselectedUserIds = [],
+    additionalUsers = [],
+  }: Props = $props();
 
   let open = $state(true);
   let searchTerm = $state("");
@@ -39,14 +44,26 @@
   // eslint-disable-next-line svelte/no-unnecessary-state-wrap
   let selectedUserIds = $state(new SvelteSet<string>());
 
+  let defaultSelectionsApplied = false;
+
+  function getAvailableUsers() {
+    const map = new Map(allUsers.map((user) => [user.id, user] as const));
+    for (const user of additionalUsers) {
+      if (!map.has(user.id)) {
+        map.set(user.id, user);
+      }
+    }
+    return Array.from(map.values());
+  }
+
   let filteredUsers = $derived(
-    allUsers.filter((user) =>
+    getAvailableUsers().filter((user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()),
     ),
   );
 
   let selectedUsers = $derived(
-    allUsers.filter((user) => selectedUserIds.has(user.id)),
+    getAvailableUsers().filter((user) => selectedUserIds.has(user.id)),
   );
 
   let pinnedFriends = $derived(
@@ -82,6 +99,17 @@
     return `${primary} +${selectedUsers.length - 2}`;
   }
 
+  $effect(() => {
+    if (!defaultSelectionsApplied && preselectedUserIds.length > 0) {
+      const next = new SvelteSet(selectedUserIds);
+      for (const id of preselectedUserIds) {
+        next.add(id);
+      }
+      selectedUserIds = next;
+      defaultSelectionsApplied = true;
+    }
+  });
+
   async function createGroup() {
     if (selectedUserIds.size === 0 || isSubmitting) {
       return;
@@ -90,14 +118,16 @@
     const proposedName = computeGroupName();
     isSubmitting = true;
     try {
-      const payload = await invoke<BackendGroupChat & {
-        ownerId?: string;
-        owner_id?: string;
-        createdAt?: string;
-        created_at?: string;
-        memberIds?: string[];
-        member_ids?: string[];
-      }>("create_group_dm", {
+      const payload = await invoke<
+        BackendGroupChat & {
+          ownerId?: string;
+          owner_id?: string;
+          createdAt?: string;
+          created_at?: string;
+          memberIds?: string[];
+          member_ids?: string[];
+        }
+      >("create_group_dm", {
         memberIds,
         member_ids: memberIds,
         name: proposedName,
@@ -108,8 +138,7 @@
         name: payload.name ?? proposedName,
         owner_id: payload.owner_id ?? payload.ownerId ?? undefined,
         created_at: payload.created_at ?? payload.createdAt ?? undefined,
-        member_ids:
-          payload.member_ids ?? payload.memberIds ?? [...memberIds],
+        member_ids: payload.member_ids ?? payload.memberIds ?? [...memberIds],
       });
 
       await chatStore.setActiveChat(summary.id, "group", undefined, {

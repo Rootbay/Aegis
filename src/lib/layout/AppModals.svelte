@@ -1,12 +1,17 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import CreateGroupModal from "$lib/components/modals/CreateGroupModal.svelte";
+  import ReportUserModal from "$lib/components/modals/ReportUserModal.svelte";
   import ServerManagementModal from "$lib/components/modals/ServerManagementModal.svelte";
   import ProfileModal from "$lib/components/modals/ProfileModal.svelte";
   import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { AppModalType } from "./createAppController";
+  import type {
+    GroupModalUser,
+    ReportUserModalPayload,
+  } from "$lib/features/chat/utils/contextMenu";
 
   type ModalProps = Record<string, unknown>;
 
@@ -22,7 +27,9 @@
     closeModal?: () => void;
   } = $props();
 
-  function handleServerCreated(server: Parameters<typeof serverStore.addServer>[0]) {
+  function handleServerCreated(
+    server: Parameters<typeof serverStore.addServer>[0],
+  ) {
     serverStore.addServer(server);
   }
 
@@ -43,10 +50,31 @@
 
     serverStore.setActiveServer(server.id);
   }
+  const groupModalProps = modalProps as Partial<{
+    preselectedUserIds: string[];
+    additionalUsers: GroupModalUser[];
+  }>;
+
+  const reportUserModalPayload = modalProps as ReportUserModalPayload;
+
+  const groupModalUsers = $derived(
+    allUsers.map((user) => ({
+      id: user.id,
+      name: user.name,
+      avatar: user.avatar,
+      isFriend: true,
+      isPinned: Boolean(user.isPinned),
+    })),
+  );
 </script>
 
 {#if activeModal === "createGroup"}
-  <CreateGroupModal onclose={closeModal} allUsers={allUsers} />
+  <CreateGroupModal
+    onclose={closeModal}
+    allUsers={groupModalUsers}
+    preselectedUserIds={groupModalProps?.preselectedUserIds}
+    additionalUsers={groupModalProps?.additionalUsers}
+  />
 {/if}
 
 {#if activeModal === "serverManagement"}
@@ -63,11 +91,7 @@
 {/if}
 
 {#if activeModal === "userCard" && modalProps?.profileUser}
-  <div
-    class="fixed inset-0 z-[70]"
-    onclick={closeModal}
-    role="presentation"
-  >
+  <div class="fixed inset-0 z-[70]" onclick={closeModal} role="presentation">
     <div
       class="absolute"
       style={`left: ${modalProps.x ?? 0}px; top: ${modalProps.y ?? 0}px;`}
@@ -82,4 +106,8 @@
       />
     </div>
   </div>
+{/if}
+
+{#if activeModal === "reportUser"}
+  <ReportUserModal onclose={closeModal} payload={reportUserModalPayload} />
 {/if}
