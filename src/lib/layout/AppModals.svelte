@@ -26,12 +26,17 @@
     serverStore.addServer(server);
   }
 
-  function handleServerJoined(server: Parameters<typeof serverStore.addServer>[0]) {
+  async function handleServerJoined(
+    server: Parameters<typeof serverStore.addServer>[0],
+  ) {
     const { servers } = get(serverStore);
     const existingServer = servers.find((s) => s.id === server.id);
 
     if (existingServer) {
-      serverStore.updateServer(server.id, server);
+      const result = await serverStore.updateServer(server.id, server);
+      if (!result.success) {
+        console.error("Failed to reconcile joined server state:", result.error);
+      }
     } else {
       serverStore.addServer(server);
     }

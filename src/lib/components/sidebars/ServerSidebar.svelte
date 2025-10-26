@@ -344,7 +344,13 @@
       );
       nextChannelId = remainingText?.id || updated[0]?.id || null;
 
-      serverStore.updateServer(server.id, { channels: updated });
+      const result = await serverStore.updateServer(server.id, {
+        channels: updated,
+      });
+      if (!result?.success) {
+        toasts.addToast("Failed to update channel list.", "error");
+        return;
+      }
       if ($activeServerChannelId === channelId && nextChannelId) {
         onSelectChannel(server.id, nextChannelId);
       }
@@ -501,8 +507,14 @@
             const updatedChannels = (server.channels || []).map((c: Channel) =>
               c.id === ch.id ? { ...c, name: updatedName } : c,
             );
-            serverStore.updateServer(server.id, { channels: updatedChannels });
-            toasts.addToast("Channel renamed.", "success");
+            const result = await serverStore.updateServer(server.id, {
+              channels: updatedChannels,
+            });
+            if (!result?.success) {
+              toasts.addToast("Failed to rename channel.", "error");
+            } else {
+              toasts.addToast("Channel renamed.", "success");
+            }
           }
           break;
         }

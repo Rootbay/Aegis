@@ -30,6 +30,23 @@
       : null,
   );
 
+  let saving = $state(false);
+  let saveError = $state<string | null>(null);
+
+  async function persistServerUpdate(patch: Partial<Server>) {
+    if (!server) {
+      return null;
+    }
+    saving = true;
+    saveError = null;
+    const result = await serverStore.updateServer(server.id, patch);
+    saving = false;
+    if (!result.success) {
+      saveError = result.error ?? "Failed to save server settings.";
+    }
+    return result;
+  }
+
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
@@ -255,7 +272,7 @@
     audit_log: "Audit Log",
   };
 
-  function handleUpdateSetting({
+  async function handleUpdateSetting({
     id,
     property,
     rootProperty,
@@ -283,45 +300,45 @@
             }
             return role;
           });
-          serverStore.updateServer(server.id, { roles: updatedRoles });
+          await persistServerUpdate({ roles: updatedRoles });
         } else {
           console.warn(
             `Unhandled nested property update: ${rootProperty}.${nestedProperty}`,
           );
         }
       } else {
-        serverStore.updateServer(server.id, { [property]: value });
+        await persistServerUpdate({ [property]: value } as Partial<Server>);
       }
     }
   }
 
-  function handleAddRole(newRole: Role) {
+  async function handleAddRole(newRole: Role) {
     if (server) {
-      serverStore.updateServer(server.id, {
+      await persistServerUpdate({
         roles: [...server.roles, newRole],
       });
     }
   }
 
-  function handleUpdateRole(updatedRole: Role) {
+  async function handleUpdateRole(updatedRole: Role) {
     if (server) {
       const updatedRoles = server.roles.map((role) =>
         role.id === updatedRole.id ? updatedRole : role,
       );
-      serverStore.updateServer(server.id, { roles: updatedRoles });
+      await persistServerUpdate({ roles: updatedRoles });
     }
   }
 
-  function handleDeleteRole(roleIdToDelete: string) {
+  async function handleDeleteRole(roleIdToDelete: string) {
     if (server) {
       const updatedRoles = server.roles.filter(
         (role) => role.id !== roleIdToDelete,
       );
-      serverStore.updateServer(server.id, { roles: updatedRoles });
+      await persistServerUpdate({ roles: updatedRoles });
     }
   }
 
-  function handleTogglePermission({
+  async function handleTogglePermission({
     roleId,
     permission,
   }: {
@@ -341,42 +358,42 @@
         }
         return role;
       });
-      serverStore.updateServer(server.id, { roles: updatedRoles });
+      await persistServerUpdate({ roles: updatedRoles });
     }
   }
 
-  function handleAddChannel(newChannel: Channel) {
+  async function handleAddChannel(newChannel: Channel) {
     if (server) {
-      serverStore.updateServer(server.id, {
+      await persistServerUpdate({
         channels: [...(server.channels || []), newChannel],
       });
     }
   }
 
-  function handleUpdateChannel(updatedChannel: Channel) {
+  async function handleUpdateChannel(updatedChannel: Channel) {
     if (server) {
       const updatedChannels = (server.channels || []).map((channel) =>
         channel.id === updatedChannel.id ? updatedChannel : channel,
       );
-      serverStore.updateServer(server.id, { channels: updatedChannels });
+      await persistServerUpdate({ channels: updatedChannels });
     }
   }
 
-  function handleDeleteChannel(channelIdToDelete: string) {
+  async function handleDeleteChannel(channelIdToDelete: string) {
     if (server) {
       const updatedChannels = (server.channels || []).filter(
         (channel) => channel.id !== channelIdToDelete,
       );
-      serverStore.updateServer(server.id, { channels: updatedChannels });
+      await persistServerUpdate({ channels: updatedChannels });
     }
   }
 
-  function handleUpdateServer(updates: Partial<Server>) {
+  async function handleUpdateServer(updates: Partial<Server>) {
     if (!server) {
       return;
     }
     if (updates && typeof updates === "object") {
-      serverStore.updateServer(server.id, updates);
+      await persistServerUpdate(updates);
     }
   }
 
@@ -400,6 +417,24 @@
 </script>
 
 {#if server}
+  {#if saving || saveError}
+    <div class="mb-4 space-y-2">
+      {#if saving}
+        <div
+          class="rounded-md border border-indigo-500/40 bg-indigo-500/10 px-3 py-2 text-sm text-indigo-200"
+        >
+          Saving changes…
+        </div>
+      {/if}
+      {#if saveError}
+        <div
+          class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+        >
+          Failed to persist server settings: {saveError}
+        </div>
+      {/if}
+    </div>
+  {/if}
   <SettingsLayout
     title={server ? server.name : "Server Settings"}
     {sidebarItems}

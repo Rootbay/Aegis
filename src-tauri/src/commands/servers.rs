@@ -1,7 +1,9 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
 use aep::database;
-use aep::database::{ChannelDisplayPreference, ServerInvite};
+use aep::database::{
+    ChannelDisplayPreference, ServerInvite, ServerMetadataUpdate, ServerModerationUpdate,
+};
 use aep::user_service;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -329,10 +331,7 @@ pub async fn generate_server_invite(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ServerInviteResponse, String> {
     let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or("State not initialized")?
-        .clone();
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -367,10 +366,7 @@ pub async fn get_channel_display_preferences(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ChannelDisplayPreferenceResponse>, String> {
     let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or("State not initialized")?
-        .clone();
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
     let user_id = state.identity.peer_id().to_base58();
 
     let prefs = database::get_channel_display_preferences_for_user(
@@ -381,7 +377,10 @@ pub async fn get_channel_display_preferences(
     .await
     .map_err(|e| e.to_string())?;
 
-    Ok(prefs.into_iter().map(ChannelDisplayPreferenceResponse::from).collect())
+    Ok(prefs
+        .into_iter()
+        .map(ChannelDisplayPreferenceResponse::from)
+        .collect())
 }
 
 #[tauri::command]
@@ -391,10 +390,7 @@ pub async fn set_channel_display_preferences(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ChannelDisplayPreferenceResponse, String> {
     let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or("State not initialized")?
-        .clone();
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
     let user_id = state.identity.peer_id().to_base58();
 
     let preference = database::upsert_channel_display_preference(
@@ -497,6 +493,123 @@ pub async fn delete_server(
         .map_err(|e| e.to_string())?;
 
     database::delete_server(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_server_metadata(
+    server_id: String,
+    metadata: ServerMetadataUpdate,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<database::Server, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let requester_id = state.identity.peer_id().to_base58();
+
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can update metadata.".into());
+    }
+
+    database::update_server_metadata(&state.db_pool, &server_id, &metadata)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_server_roles(
+    server_id: String,
+    roles: Vec<database::Role>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<database::Role>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let requester_id = state.identity.peer_id().to_base58();
+
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can update roles.".into());
+    }
+
+    database::replace_server_roles(&state.db_pool, &server_id, &roles)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut roles_map = database::get_roles_for_servers(&state.db_pool, &[server_id.clone()])
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(roles_map.remove(&server_id).unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn update_server_channels(
+    server_id: String,
+    channels: Vec<database::Channel>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<database::Channel>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let requester_id = state.identity.peer_id().to_base58();
+
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can update channels.".into());
+    }
+
+    if channels
+        .iter()
+        .any(|channel| channel.server_id != server_id)
+    {
+        return Err("All channels must belong to the target server.".into());
+    }
+
+    database::replace_server_channels(&state.db_pool, &server_id, &channels)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::get_channels_for_server(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_server_moderation_flags(
+    server_id: String,
+    moderation: ServerModerationUpdate,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<database::Server, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let requester_id = state.identity.peer_id().to_base58();
+
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can update moderation flags.".into());
+    }
+
+    database::update_server_moderation(&state.db_pool, &server_id, &moderation)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::get_server_by_id(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
 }

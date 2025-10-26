@@ -54,6 +54,11 @@ interface ServerStoreState {
   activeServerId: string | null;
 }
 
+export type ServerUpdateResult = {
+  success: boolean;
+  error?: string;
+};
+
 interface ServerStore extends Readable<ServerStoreState> {
   handleServersUpdate: (servers: Server[]) => void;
   setActiveServer: (serverId: string | null) => void;
@@ -63,7 +68,10 @@ interface ServerStore extends Readable<ServerStoreState> {
   fetchServerDetails: (serverId: string) => Promise<void>;
   addChannelToServer: (serverId: string, channel: Channel) => void;
   addInviteToServer: (serverId: string, invite: ServerInvite) => void;
-  updateServer: (serverId: string, patch: Partial<Server>) => void;
+  updateServer: (
+    serverId: string,
+    patch: Partial<Server>,
+  ) => Promise<ServerUpdateResult>;
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   initialize: () => Promise<void>;
   getServer: (serverId: string) => Promise<Server | null>;
@@ -97,7 +105,13 @@ export function createServerStore(): ServerStore {
   };
 
   const mapServer = (s: BackendServer): Server => {
-    const { members = [], channels = [], roles = [], invites = [], ...rest } = s;
+    const {
+      members = [],
+      channels = [],
+      roles = [],
+      invites = [],
+      ...rest
+    } = s;
     const normalizedMembers: BackendUser[] = Array.isArray(members)
       ? members
       : [];
@@ -131,6 +145,63 @@ export function createServerStore(): ServerStore {
       roles: normalizedRoles,
       invites: normalizedInvites.map(mapInvite),
     } as Server;
+  };
+
+  const normalizeServer = (server: Server): Server => ({
+    ...server,
+    invites: server.invites ?? [],
+    channels: server.channels ?? [],
+    members: server.members ?? [],
+    roles: server.roles ?? [],
+  });
+
+  const cloneServer = (server: Server): Server =>
+    JSON.parse(JSON.stringify(normalizeServer(server))) as Server;
+
+  const hasOwn = (object: Partial<Server>, key: keyof Server | string) =>
+    Object.prototype.hasOwnProperty.call(object, key);
+
+  const applyPatchToServer = (
+    original: Server,
+    patch: Partial<Server>,
+  ): Server => {
+    const next: Server = {
+      ...original,
+      ...patch,
+      channels: hasOwn(patch, "channels")
+        ? (patch.channels ?? [])
+        : (original.channels ?? []),
+      members: hasOwn(patch, "members")
+        ? (patch.members ?? [])
+        : (original.members ?? []),
+      roles: hasOwn(patch, "roles")
+        ? (patch.roles ?? [])
+        : (original.roles ?? []),
+      invites: hasOwn(patch, "invites")
+        ? (patch.invites ?? [])
+        : (original.invites ?? []),
+    } as Server;
+
+    if (hasOwn(patch, "iconUrl")) {
+      next.iconUrl = patch.iconUrl ?? undefined;
+    }
+    if (hasOwn(patch, "description")) {
+      next.description = patch.description ?? undefined;
+    }
+    if (hasOwn(patch, "default_channel_id")) {
+      next.default_channel_id = patch.default_channel_id ?? undefined;
+    }
+    if (hasOwn(patch, "allow_invites")) {
+      next.allow_invites = patch.allow_invites;
+    }
+    if (hasOwn(patch, "moderation_level")) {
+      next.moderation_level = patch.moderation_level;
+    }
+    if (hasOwn(patch, "explicit_content_filter")) {
+      next.explicit_content_filter = patch.explicit_content_filter;
+    }
+
+    return normalizeServer(next);
   };
 
   const getServer = async (serverId: string): Promise<Server | null> => {
@@ -312,7 +383,8 @@ export function createServerStore(): ServerStore {
           ? server.invites
           : [];
         const filtered = existingInvites.filter(
-          (existing) => existing.id !== invite.id && existing.code !== invite.code,
+          (existing) =>
+            existing.id !== invite.id && existing.code !== invite.code,
         );
         return {
           ...server,
@@ -325,17 +397,164 @@ export function createServerStore(): ServerStore {
     });
   };
 
-  const updateServer = (serverId: string, patch: Partial<Server>) => {
-    update((s) => {
-      const servers = s.servers.map((server) =>
-        server.id === serverId
-          ? { ...server, ...patch, invites: patch.invites ?? server.invites ?? [] }
-          : server,
+  const updateServer = async (
+    serverId: string,
+    patch: Partial<Server>,
+  ): Promise<ServerUpdateResult> => {
+    const snapshot = get({ subscribe });
+    const serverIndex = snapshot.servers.findIndex(
+      (srv) => srv.id === serverId,
+    );
+    if (serverIndex === -1) {
+      return {
+        success: false,
+        error: `Server ${serverId} not found`,
+      };
+    }
+
+    const currentServer = snapshot.servers[serverIndex];
+    const previousServer = cloneServer(currentServer);
+
+    const metadataPayload: Record<string, unknown> = {};
+    if (hasOwn(patch, "name")) {
+      metadataPayload.name = patch.name;
+    }
+    if (hasOwn(patch, "iconUrl")) {
+      metadataPayload.iconUrl = patch.iconUrl ?? null;
+    }
+    if (hasOwn(patch, "description")) {
+      metadataPayload.description = patch.description ?? null;
+    }
+    if (hasOwn(patch, "default_channel_id")) {
+      metadataPayload.defaultChannelId = patch.default_channel_id ?? null;
+    }
+    if (hasOwn(patch, "allow_invites")) {
+      metadataPayload.allowInvites = patch.allow_invites;
+    }
+    const metadataTouched = Object.keys(metadataPayload).length > 0;
+
+    const moderationPayload: Record<string, unknown> = {};
+    if (hasOwn(patch, "moderation_level")) {
+      moderationPayload.moderationLevel = patch.moderation_level ?? null;
+    }
+    if (hasOwn(patch, "explicit_content_filter")) {
+      moderationPayload.explicitContentFilter =
+        patch.explicit_content_filter ?? false;
+    }
+    const moderationTouched = Object.keys(moderationPayload).length > 0;
+
+    const rolesTouched = hasOwn(patch, "roles") && Array.isArray(patch.roles);
+    const channelsTouched =
+      hasOwn(patch, "channels") && Array.isArray(patch.channels);
+
+    const optimisticServer = applyPatchToServer(previousServer, patch);
+
+    update((state) => {
+      const servers = state.servers.map((srv, index) =>
+        index === serverIndex ? optimisticServer : srv,
       );
-      const updated = servers.find((sv) => sv.id === serverId);
-      if (updated) serverCache.set(serverId, updated);
-      return { ...s, servers };
+      serverCache.set(serverId, optimisticServer);
+      return { ...state, servers };
     });
+
+    let metadataResult: BackendServer | null = null;
+    let moderationResult: BackendServer | null = null;
+    let rolesResult: Role[] | null = null;
+    let channelsResult: Channel[] | null = null;
+
+    try {
+      if (metadataTouched) {
+        metadataResult = await invoke<BackendServer>("update_server_metadata", {
+          serverId,
+          server_id: serverId,
+          metadata: metadataPayload,
+        });
+      }
+
+      if (rolesTouched) {
+        rolesResult = await invoke<Role[]>("update_server_roles", {
+          serverId,
+          server_id: serverId,
+          roles: patch.roles ?? [],
+        });
+      }
+
+      if (channelsTouched) {
+        channelsResult = await invoke<Channel[]>("update_server_channels", {
+          serverId,
+          server_id: serverId,
+          channels: patch.channels ?? [],
+        });
+      }
+
+      if (moderationTouched) {
+        moderationResult = await invoke<BackendServer>(
+          "update_server_moderation_flags",
+          {
+            serverId,
+            server_id: serverId,
+            moderation: moderationPayload,
+          },
+        );
+      }
+
+      const backendServer = moderationResult ?? metadataResult;
+      let finalServer: Server = backendServer
+        ? mapServer(backendServer)
+        : optimisticServer;
+
+      if (channelsResult) {
+        finalServer = {
+          ...finalServer,
+          channels: channelsResult,
+        } as Server;
+      }
+
+      if (rolesResult) {
+        finalServer = {
+          ...finalServer,
+          roles: rolesResult,
+        } as Server;
+      }
+
+      if (hasOwn(patch, "settings")) {
+        finalServer = {
+          ...finalServer,
+          settings: patch.settings,
+        } as Server;
+      } else if (!finalServer.settings && previousServer.settings) {
+        finalServer = {
+          ...finalServer,
+          settings: previousServer.settings,
+        } as Server;
+      }
+
+      finalServer = normalizeServer(finalServer);
+
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? finalServer : srv,
+        );
+        serverCache.set(serverId, finalServer);
+        return { ...state, servers };
+      });
+
+      return { success: true };
+    } catch (error) {
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? previousServer : srv,
+        );
+        serverCache.set(serverId, previousServer);
+        return { ...state, servers };
+      });
+
+      console.error("Failed to persist server changes:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   };
 
   const removeChannelFromServer = (serverId: string, channelId: string) => {
