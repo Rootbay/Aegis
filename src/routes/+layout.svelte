@@ -123,7 +123,7 @@
           onFriendsAddClick={handleFriendsAddClick}
         />
         {@render children()}
-      {:else if $serverStore.activeServerId}
+      {:else if $currentChat}
         <div class="flex flex-1 min-h-0 flex-col">
           <NavigationHeader
             chat={$currentChat}
@@ -134,15 +134,15 @@
             <div class="flex flex-1 flex-col min-w-0">
               <ChatView chat={$currentChat} />
             </div>
-            {#if $chatSearchStore.searching}
-              <SearchSidebar />
-            {:else}
-              <MemberSidebar
-                members={$currentChat?.type === "channel"
-                  ? ($currentChat.members as MemberWithRoles[])
-                  : []}
-                {openDetailedProfileModal}
-              />
+            {#if $currentChat.type === "channel"}
+              {#if $chatSearchStore.searching}
+                <SearchSidebar />
+              {:else}
+                <MemberSidebar
+                  members={($currentChat.members as MemberWithRoles[])}
+                  {openDetailedProfileModal}
+                />
+              {/if}
             {/if}
           </div>
         </div>

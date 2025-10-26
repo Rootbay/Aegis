@@ -723,11 +723,12 @@ export function createAppController(): AppController {
   );
 
   const isFriendsOrRootPage = derived(
-    [page, serverStore],
-    ([$page, $serverStore]) =>
+    [page, serverStore, currentChat],
+    ([$page, $serverStore, $currentChat]) =>
       ($page.url.pathname === "/" ||
         $page.url.pathname.startsWith("/friends")) &&
-      !$serverStore.activeServerId,
+      !$serverStore.activeServerId &&
+      !$currentChat,
   );
 
   const activeTab = derived(page, ($page) => {
