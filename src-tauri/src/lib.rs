@@ -36,6 +36,7 @@ pub async fn run() {
             commands::servers::create_server,
             commands::servers::join_server,
             commands::servers::leave_server,
+            commands::servers::remove_server_member,
             commands::servers::create_channel,
             commands::friends::get_friendships,
             commands::servers::get_servers,

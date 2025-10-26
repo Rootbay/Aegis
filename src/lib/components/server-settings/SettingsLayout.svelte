@@ -280,6 +280,13 @@
       props.server = currentData;
     }
 
+    if (componentName === "MemberList" && currentData) {
+      props.members = Array.isArray(currentData.members)
+        ? currentData.members
+        : [];
+      props.serverId = currentData.id;
+    }
+
     if (
       componentName === "Overview" ||
       componentName === "Moderation" ||
