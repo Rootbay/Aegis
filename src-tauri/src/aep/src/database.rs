@@ -1,11 +1,12 @@
 //--- FILE: src/aep/src/database.rs ---
-use sqlx::{sqlite::SqlitePoolOptions, Pool, Sqlite, FromRow, QueryBuilder};
-use serde::{Serialize, Deserialize};
+use sqlx::{sqlite::SqlitePoolOptions, FromRow, Pool, QueryBuilder, Sqlite};
+use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use serde_json;
 use aegis_types::AegisError;
 
-pub use aegis_shared_types::{User, Server, Channel, ServerInvite};
+pub use aegis_shared_types::{Channel, Role, Server, ServerInvite, User};
 
 // Define migrations for the database schema
 // The path is relative to the crate root (src/aep), pointing up two levels to src-tauri/migrations.
@@ -350,6 +351,27 @@ pub async fn get_friendship_by_id(pool: &Pool<Sqlite>, friendship_id: &str) -> R
     Ok(friendship)
 }
 
+fn bool_from_i64(value: i64) -> bool {
+    value != 0
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerMetadataUpdate {
+    pub name: Option<String>,
+    pub icon_url: Option<Option<String>>,
+    pub description: Option<Option<String>>,
+    pub default_channel_id: Option<Option<String>>,
+    pub allow_invites: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerModerationUpdate {
+    pub moderation_level: Option<Option<String>>,
+    pub explicit_content_filter: Option<bool>,
+}
+
 pub async fn insert_server(pool: &Pool<Sqlite>, server: &Server) -> Result<(), sqlx::Error> {
     let created_at_str = server.created_at.to_rfc3339();
     sqlx::query!(
@@ -364,6 +386,80 @@ pub async fn insert_server(pool: &Pool<Sqlite>, server: &Server) -> Result<(), s
     Ok(())
 }
 
+pub async fn update_server_metadata(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    update: &ServerMetadataUpdate,
+) -> Result<(), sqlx::Error> {
+    let mut builder = QueryBuilder::<Sqlite>::new("UPDATE servers SET ");
+    let mut has_updates = false;
+    {
+        let mut separated = builder.separated(", ");
+        if let Some(name) = &update.name {
+            has_updates = true;
+            separated.push("name = ").push_bind(name);
+        }
+        if let Some(icon_url) = &update.icon_url {
+            has_updates = true;
+            separated.push("icon_url = ").push_bind(icon_url);
+        }
+        if let Some(description) = &update.description {
+            has_updates = true;
+            separated.push("description = ").push_bind(description);
+        }
+        if let Some(default_channel_id) = &update.default_channel_id {
+            has_updates = true;
+            separated
+                .push("default_channel_id = ")
+                .push_bind(default_channel_id);
+        }
+        if let Some(allow_invites) = update.allow_invites {
+            has_updates = true;
+            separated
+                .push("allow_invites = ")
+                .push_bind(allow_invites);
+        }
+    }
+
+    if !has_updates {
+        return Ok(());
+    }
+
+    builder.push(" WHERE id = ").push_bind(server_id);
+    builder.build().execute(pool).await?;
+    Ok(())
+}
+
+pub async fn update_server_moderation(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    update: &ServerModerationUpdate,
+) -> Result<(), sqlx::Error> {
+    let mut builder = QueryBuilder::<Sqlite>::new("UPDATE servers SET ");
+    let mut has_updates = false;
+    {
+        let mut separated = builder.separated(", ");
+        if let Some(level) = &update.moderation_level {
+            has_updates = true;
+            separated.push("moderation_level = ").push_bind(level);
+        }
+        if let Some(explicit_content_filter) = update.explicit_content_filter {
+            has_updates = true;
+            separated
+                .push("explicit_content_filter = ")
+                .push_bind(explicit_content_filter);
+        }
+    }
+
+    if !has_updates {
+        return Ok(());
+    }
+
+    builder.push(" WHERE id = ").push_bind(server_id);
+    builder.build().execute(pool).await?;
+    Ok(())
+}
+
 pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Result<Vec<Server>, sqlx::Error> {
     #[derive(FromRow)]
     struct ServerRow {
@@ -371,11 +467,17 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
         name: String,
         owner_id: String,
         created_at: String,
+        icon_url: Option<String>,
+        description: Option<String>,
+        default_channel_id: Option<String>,
+        allow_invites: i64,
+        moderation_level: Option<String>,
+        explicit_content_filter: i64,
     }
 
     let server_rows = sqlx::query_as!(
         ServerRow,
-        "SELECT s.id, s.name, s.owner_id, s.created_at FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
+        "SELECT s.id, s.name, s.owner_id, s.created_at, s.icon_url, s.description, s.default_channel_id, s.allow_invites, s.moderation_level, s.explicit_content_filter FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
         current_user_id
     )
     .fetch_all(pool)
@@ -386,6 +488,7 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
     let channels_map = get_channels_for_servers(pool, &server_ids).await?;
     let members_map = get_members_for_servers(pool, &server_ids).await?;
     let invites_map = get_invites_for_servers(pool, &server_ids).await?;
+    let roles_map = get_roles_for_servers(pool, &server_ids).await?;
 
     let mut servers: Vec<Server> = Vec::new();
     for server_row in server_rows {
@@ -393,13 +496,21 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
         let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
         let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
         let invites = invites_map.get(&server_row.id).cloned().unwrap_or_default();
+        let roles = roles_map.get(&server_row.id).cloned().unwrap_or_default();
         servers.push(Server {
             id: server_row.id,
             name: server_row.name,
             owner_id: server_row.owner_id,
             created_at,
+            icon_url: server_row.icon_url,
+            description: server_row.description,
+            default_channel_id: server_row.default_channel_id,
+            allow_invites: Some(bool_from_i64(server_row.allow_invites)),
+            moderation_level: server_row.moderation_level,
+            explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
             channels,
             members,
+            roles,
             invites,
         });
     }
@@ -421,11 +532,17 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         name: String,
         owner_id: String,
         created_at: String,
+        icon_url: Option<String>,
+        description: Option<String>,
+        default_channel_id: Option<String>,
+        allow_invites: i64,
+        moderation_level: Option<String>,
+        explicit_content_filter: i64,
     }
 
     let server_row = sqlx::query_as!(
         ServerRow,
-        "SELECT id, name, owner_id, created_at FROM servers WHERE id = ?",
+        "SELECT id, name, owner_id, created_at, icon_url, description, default_channel_id, allow_invites, moderation_level, explicit_content_filter FROM servers WHERE id = ?",
         server_id
     )
     .fetch_one(pool)
@@ -438,18 +555,27 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
     let channels_map = get_channels_for_servers(pool, &server_ids).await?;
     let members_map = get_members_for_servers(pool, &server_ids).await?;
     let invites_map = get_invites_for_servers(pool, &server_ids).await?;
+    let roles_map = get_roles_for_servers(pool, &server_ids).await?;
 
     let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
     let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
     let invites = invites_map.get(&server_row.id).cloned().unwrap_or_default();
+    let roles = roles_map.get(&server_row.id).cloned().unwrap_or_default();
 
     Ok(Server {
         id: server_row.id,
         name: server_row.name,
         owner_id: server_row.owner_id,
         created_at,
+        icon_url: server_row.icon_url,
+        description: server_row.description,
+        default_channel_id: server_row.default_channel_id,
+        allow_invites: Some(bool_from_i64(server_row.allow_invites)),
+        moderation_level: server_row.moderation_level,
+        explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
         channels,
         members,
+        roles,
         invites,
     })
 }
@@ -465,6 +591,34 @@ pub async fn insert_channel(pool: &Pool<Sqlite>, channel: &Channel) -> Result<()
     )
     .execute(pool)
     .await?;
+    Ok(())
+}
+
+pub async fn replace_server_channels(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    channels: &[Channel],
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query!("DELETE FROM channels WHERE server_id = ?", server_id)
+        .execute(&mut *tx)
+        .await?;
+
+    for channel in channels {
+        sqlx::query!(
+            "INSERT INTO channels (id, server_id, name, channel_type, private) VALUES (?, ?, ?, ?, ?)",
+            channel.id,
+            channel.server_id,
+            channel.name,
+            channel.channel_type,
+            channel.private,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
     Ok(())
 }
 
@@ -1041,6 +1195,98 @@ pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String])
     }
 
     Ok(members_map)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+struct ServerRoleRow {
+    id: String,
+    server_id: String,
+    name: String,
+    color: String,
+    hoist: i64,
+    mentionable: i64,
+    permissions: String,
+}
+
+impl ServerRoleRow {
+    fn into_role(self) -> Result<(String, Role), sqlx::Error> {
+        let permissions: HashMap<String, bool> = serde_json::from_str(&self.permissions)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+        Ok((
+            self.server_id,
+            Role {
+                id: self.id,
+                name: self.name,
+                color: self.color,
+                hoist: bool_from_i64(self.hoist),
+                mentionable: bool_from_i64(self.mentionable),
+                permissions,
+            },
+        ))
+    }
+}
+
+pub async fn get_roles_for_servers(
+    pool: &Pool<Sqlite>,
+    server_ids: &[String],
+) -> Result<HashMap<String, Vec<Role>>, sqlx::Error> {
+    let mut roles_map: HashMap<String, Vec<Role>> = HashMap::new();
+    if server_ids.is_empty() {
+        return Ok(roles_map);
+    }
+
+    let placeholders = server_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let query = format!(
+        "SELECT id, server_id, name, color, hoist, mentionable, permissions FROM server_roles WHERE server_id IN ({})",
+        placeholders
+    );
+
+    let mut builder = sqlx::query_as::<_, ServerRoleRow>(&query);
+    for id in server_ids {
+        builder = builder.bind(id);
+    }
+
+    let rows = builder.fetch_all(pool).await?;
+    for row in rows {
+        let (server_id, role) = row.into_role()?;
+        roles_map.entry(server_id).or_insert_with(Vec::new).push(role);
+    }
+
+    Ok(roles_map)
+}
+
+pub async fn replace_server_roles(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    roles: &[Role],
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query!("DELETE FROM server_roles WHERE server_id = ?", server_id)
+        .execute(&mut *tx)
+        .await?;
+
+    for role in roles {
+        let permissions_json = serde_json::to_string(&role.permissions)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+
+        sqlx::query!(
+            "INSERT INTO server_roles (id, server_id, name, color, hoist, mentionable, permissions) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            role.id,
+            server_id,
+            role.name,
+            role.color,
+            role.hoist,
+            role.mentionable,
+            permissions_json,
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

@@ -23,8 +23,24 @@ pub struct Server {
     pub name: String,
     pub owner_id: String,
     pub created_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_channel_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_invites: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub moderation_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explicit_content_filter: Option<bool>,
+    #[serde(default)]
     pub channels: Vec<Channel>,
+    #[serde(default)]
     pub members: Vec<User>,
+    #[serde(default)]
+    pub roles: Vec<Role>,
     #[serde(default)]
     pub invites: Vec<ServerInvite>,
 }
@@ -41,6 +57,16 @@ pub struct ServerInvite {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_uses: Option<i64>,
     pub uses: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Role {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub hoist: bool,
+    pub mentionable: bool,
+    pub permissions: HashMap<String, bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
