@@ -9,6 +9,7 @@
   import { chatStore } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
   import type { Channel } from "$lib/features/channels/models/Channel";
+  import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
   import {
     Bell,
     Plus,
@@ -67,6 +68,7 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
+  import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -98,6 +100,7 @@
   let textChannelsCollapsed = $state(false);
   let hideMutedChannels = $state(false);
   let mutedChannelIds = new SvelteSet<string>();
+  let lastLoadedPreferencesKey = $state<string | null>(null);
 
   let isResizing = $state(false);
   let rafId: number | null = $state(null);
@@ -174,6 +177,25 @@
     };
   });
 
+  $effect(() => {
+    if (!server?.id) return;
+    const channelIds = Array.isArray(server.channels)
+      ? server.channels.map((c: Channel) => c.id)
+      : [];
+    const key = `${server.id}:${channelIds.length}`;
+    if (lastLoadedPreferencesKey === key) return;
+    lastLoadedPreferencesKey = key;
+    channelDisplayPreferencesStore
+      .loadForServer(server.id, channelIds)
+      .catch((error) => {
+        console.error(
+          "Failed to load channel display preferences for server",
+          server.id,
+          error,
+        );
+      });
+  });
+
   onDestroy(() => {
     if (rafId) cancelAnimationFrame(rafId);
   });
@@ -212,16 +234,26 @@
     // Replace with actual reviews dialog
   }
 
-  function handleInviteToServerClick() {
-    const path = `/inv/${server.id}`;
-    const link =
-      typeof window !== "undefined" && window.location?.origin
-        ? `${window.location.origin}${path}`
-        : path;
-    navigator.clipboard
-      .writeText(link)
-      .then(() => toasts.addToast("Invite link copied.", "success"))
-      .catch(() => toasts.addToast("Failed to copy invite link.", "error"));
+  async function handleInviteToServerClick() {
+    try {
+      const response = await invoke<ServerInviteResponse>(
+        "generate_server_invite",
+        {
+          server_id: server.id,
+        },
+      );
+      const invite = mapInviteResponse(response);
+      serverStore.addInviteToServer(server.id, invite);
+      const link = buildInviteLinkFromCode(invite.code);
+      await navigator.clipboard.writeText(link);
+      toasts.addToast("Invite link copied.", "success");
+    } catch (error: any) {
+      console.error("Failed to generate invite link:", error);
+      toasts.addToast(
+        error?.message ?? "Failed to generate invite link.",
+        "error",
+      );
+    }
   }
 
   function handleCreateChannelClick() {
@@ -373,6 +405,40 @@
     return path;
   }
 
+  function buildInviteLinkFromCode(code: string) {
+    const path = `/inv/${code}`;
+    try {
+      if (typeof window !== "undefined" && window.location?.origin) {
+        return `${window.location.origin}${path}`;
+      }
+    } catch (e) {
+      void e;
+    }
+    return path;
+  }
+
+  type ServerInviteResponse = {
+    id: string;
+    server_id: string;
+    code: string;
+    created_by: string;
+    created_at: string;
+    expires_at?: string | null;
+    max_uses?: number | null;
+    uses: number;
+  };
+
+  const mapInviteResponse = (invite: ServerInviteResponse): ServerInvite => ({
+    id: invite.id,
+    serverId: invite.server_id,
+    code: invite.code,
+    createdBy: invite.created_by,
+    createdAt: invite.created_at,
+    expiresAt: invite.expires_at ?? undefined,
+    maxUses: invite.max_uses ?? undefined,
+    uses: invite.uses,
+  });
+
   const MUTED_CHANNELS_KEY = "mutedChannels";
   function loadMutedChannels(): SvelteSet<string> {
     if (!browser) return new SvelteSet();
@@ -493,7 +559,23 @@
           break;
         }
         case "hide_names": {
-          toasts.addToast("Hide names not implemented yet.", "info");
+          try {
+            const next = await channelDisplayPreferencesStore.toggleHideMemberNames(
+              channelId,
+            );
+            toasts.addToast(
+              next
+                ? "Member names hidden for this channel."
+                : "Member names visible for this channel.",
+              "success",
+            );
+          } catch (error: any) {
+            console.error("Failed to toggle hide names preference:", error);
+            toasts.addToast(
+              error?.message ?? "Failed to update channel preference.",
+              "error",
+            );
+          }
           break;
         }
         case "notification_settings": {

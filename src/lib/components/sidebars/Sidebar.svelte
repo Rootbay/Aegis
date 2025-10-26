@@ -10,6 +10,7 @@
   import { toasts } from "$lib/stores/ToastStore";
   import ServerContextMenu from "$lib/components/context-menus/ServerContextMenu.svelte";
   import type { Server } from "$lib/features/servers/models/Server";
+  import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
   import { lastVisitedServerId } from "$lib/stores/navigationStore";
   import { get } from "svelte/store";
   import { SvelteSet } from "svelte/reactivity";
@@ -100,8 +101,30 @@
     gotoResolved(href);
   }
 
-  function buildInviteLink(serverId: string) {
-    const path = `/inv/${serverId}`;
+  type ServerInviteResponse = {
+    id: string;
+    server_id: string;
+    code: string;
+    created_by: string;
+    created_at: string;
+    expires_at?: string | null;
+    max_uses?: number | null;
+    uses: number;
+  };
+
+  const mapInviteResponse = (invite: ServerInviteResponse): ServerInvite => ({
+    id: invite.id,
+    serverId: invite.server_id,
+    code: invite.code,
+    createdBy: invite.created_by,
+    createdAt: invite.created_at,
+    expiresAt: invite.expires_at ?? undefined,
+    maxUses: invite.max_uses ?? undefined,
+    uses: invite.uses,
+  });
+
+  function buildInviteLinkFromCode(code: string) {
+    const path = `/inv/${code}`;
     if (typeof window !== "undefined" && window.location?.origin) {
       return `${window.location.origin}${path}`;
     }
@@ -195,12 +218,26 @@
         );
         break;
       case "invite_people": {
-        const link = buildInviteLink(server.id);
-        await copyText(
-          link,
-          "Invite link copied.",
-          "Failed to copy invite link.",
-        );
+        try {
+          const response = await invoke<ServerInviteResponse>(
+            "generate_server_invite",
+            { server_id: server.id },
+          );
+          const invite = mapInviteResponse(response);
+          serverStore.addInviteToServer(server.id, invite);
+          const link = buildInviteLinkFromCode(invite.code);
+          await copyText(
+            link,
+            "Invite link copied.",
+            "Failed to copy invite link.",
+          );
+        } catch (error: any) {
+          console.error("Failed to generate invite link:", error);
+          toasts.addToast(
+            error?.message ?? "Failed to generate invite link.",
+            "error",
+          );
+        }
         break;
       }
       case "server-settings":

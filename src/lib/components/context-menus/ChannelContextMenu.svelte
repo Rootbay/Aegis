@@ -21,10 +21,12 @@
     x: number;
     y: number;
     channel: Channel;
+    hideNamesEnabled?: boolean;
     onaction?: ChannelContextMenuHandler;
   };
 
-  let { x, y, channel, onaction }: ChannelContextMenuProps = $props();
+  let { x, y, channel, hideNamesEnabled = false, onaction }: ChannelContextMenuProps =
+    $props();
 
   function handleAction(action: string) {
     onaction?.({ action, channelId: channel.id });
@@ -103,7 +105,7 @@
         Open Chat
       </DropdownMenuItem>
       <DropdownMenuItem onselect={() => handleAction("hide_names")}>
-        Hide Names
+        {hideNamesEnabled ? "Show Names" : "Hide Names"}
       </DropdownMenuItem>
 
       <DropdownMenuSeparator />

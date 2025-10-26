@@ -34,6 +34,7 @@
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import MessageAuthorName from "$lib/features/chat/components/MessageAuthorName.svelte";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -700,6 +701,7 @@
 
   const messageContentCache: MessageContentCache = new Map();
 
+
   let normalizedMessages = $derived(
     buildLowercaseContent(currentChatMessages || [], messageContentCache),
   );
@@ -964,8 +966,12 @@
               </button>
               <div class="flex flex-col {isMe ? 'items-end' : ''}">
                 <div class="flex items-center gap-2 mb-1">
-                  <button
-                    onclick={(e) =>
+                  <MessageAuthorName
+                    chatType={chat.type}
+                    channelId={chat.type === "channel" ? chat.id : null}
+                    senderName={senderName ?? ""}
+                    className="font-bold text-white hover:underline cursor-pointer"
+                    onNameClick={(e) =>
                       displayableUser &&
                       openUserCardModal(
                         displayableUser as User,
@@ -973,10 +979,9 @@
                         e.clientY,
                         chat.type === "channel",
                       )}
-                    oncontextmenu={(e) =>
+                    onNameContextMenu={(e) =>
                       displayableUser && handleContextMenu(e, displayableUser)}
-                    class="font-bold text-white hover:underline cursor-pointer"
-                    >{senderName}</button
+                  />
                   >
                   <p class="text-xs text-muted-foreground">
                     {new Date(msg.timestamp).toLocaleTimeString([], {
