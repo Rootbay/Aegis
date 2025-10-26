@@ -27,6 +27,7 @@ export default defineConfig({
         "tests/shims/app-navigation",
       ),
       "$app/stores": resolve(projectRootDir, "tests/shims/app-stores"),
+      "$app/paths": resolve(projectRootDir, "tests/shims/app-paths"),
     },
     conditions: ["browser"],
   },
