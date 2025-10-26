@@ -19,7 +19,7 @@
     hasMoreByChatId,
     loadingStateByChat,
   } from "$lib/features/chat/stores/chatStore";
-  import { afterUpdate, getContext, onDestroy, onMount } from "svelte";
+  import { afterUpdate, getContext, onDestroy, onMount, tick } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { get, derived } from "svelte/store";
@@ -80,6 +80,10 @@
   let msgMenuY = $state(0);
   let selectedMsg: Message | null = $state(null);
   let memberById = $state<Map<string, User>>(new Map());
+  let editingMessageId = $state<string | null>(null);
+  let editingDraft = $state("");
+  let editingSaving = $state(false);
+  let editingTextarea: HTMLTextAreaElement | null = $state(null);
 
   const onScroll = () => {
     const el = viewportEl;
@@ -642,6 +646,14 @@
     chatSearchStore.setMatches(chatSearchMatches);
   });
 
+  $effect(() => {
+    if (!editingMessageId) return;
+    const exists = currentChatMessages?.some((msg) => msg.id === editingMessageId) ?? false;
+    if (!exists) {
+      cancelEditingMessage();
+    }
+  });
+
   function handlePaste(e: ClipboardEvent) {
     const items = e.clipboardData?.items;
     if (!items) return;
@@ -718,6 +730,13 @@
         textareaRef?.focus();
         adjustTextareaHeight();
         break;
+      case "edit_message":
+        if (selectedMsg.senderId === $userStore.me?.id) {
+          startEditingMessage(selectedMsg);
+        } else {
+          toasts.addToast("Cannot edit others' messages.", "warning");
+        }
+        break;
       case "delete_message":
         if (selectedMsg.senderId === $userStore.me?.id) {
           chatStore.deleteMessage(selectedMsg.chatId, selectedMsg.id);
@@ -729,6 +748,57 @@
         console.debug("Unhandled message action", action);
     }
     showMsgMenu = false;
+  }
+
+  async function startEditingMessage(msg: Message) {
+    editingMessageId = msg.id;
+    editingDraft = msg.content;
+    editingSaving = false;
+    selectedMsg = null;
+    showMsgMenu = false;
+    await tick();
+    if (editingTextarea) {
+      editingTextarea.focus();
+      const length = editingTextarea.value.length;
+      editingTextarea.setSelectionRange?.(length, length);
+    }
+  }
+
+  function cancelEditingMessage() {
+    editingMessageId = null;
+    editingDraft = "";
+    editingSaving = false;
+  }
+
+  async function submitMessageEdit(msg: Message) {
+    if (!editingMessageId) return;
+    const trimmed = editingDraft.trim();
+    if (!trimmed) {
+      toasts.addToast("Message content cannot be empty.", "warning");
+      return;
+    }
+    editingSaving = true;
+    try {
+      await chatStore.editMessage(msg.chatId, msg.id, trimmed);
+      cancelEditingMessage();
+    } catch (error) {
+      console.error("Failed to edit message", error);
+      toasts.addToast("Failed to update message.", "error");
+    } finally {
+      editingSaving = false;
+    }
+  }
+
+  function handleEditKeydown(event: KeyboardEvent, msg: Message) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancelEditingMessage();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      submitMessageEdit(msg);
+    }
   }
 </script>
 
@@ -817,6 +887,11 @@
                       minute: "2-digit",
                     })}
                   </p>
+                  {#if msg.editedAt}
+                    <span class="text-[0.625rem] uppercase tracking-wide text-muted-foreground/80">
+                      (edited)
+                    </span>
+                  {/if}
                 </div>
                 {#if msg.content}
                   <div
@@ -826,28 +901,73 @@
                     role="button"
                     tabindex="0"
                     aria-label="Message options"
-                    oncontextmenu={(e) => handleMessageContextMenu(e, msg)}
+                    oncontextmenu={(e) => {
+                      if (editingMessageId === msg.id) {
+                        e.preventDefault();
+                        return;
+                      }
+                      handleMessageContextMenu(e, msg);
+                    }}
                     onkeydown={(e) => {
+                      if (editingMessageId === msg.id) {
+                        return;
+                      }
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         handleMessageContextMenu(e as any as MouseEvent, msg);
                       }
                     }}
                   >
-                    {#if $chatSearchStore.query}
-                      {#each highlightText(msg.content, $chatSearchStore.query) as part, i (i)}
-                        {#if part.match}
-                          <mark class="bg-yellow-500/60 text-white"
-                            >{part.text}</mark
+                    {#if editingMessageId === msg.id}
+                      <form
+                        class="space-y-2"
+                        onsubmit={(e) => {
+                          e.preventDefault();
+                          submitMessageEdit(msg);
+                        }}
+                      >
+                        <textarea
+                          class="w-full resize-none rounded-md bg-zinc-800 p-2 text-sm text-white focus:outline-none"
+                          rows="3"
+                          bind:value={editingDraft}
+                          bind:this={editingTextarea}
+                          disabled={editingSaving}
+                          onkeydown={(event) => handleEditKeydown(event, msg)}
+                        ></textarea>
+                        <div class="flex items-center justify-end gap-2 text-sm">
+                          <button
+                            type="button"
+                            class="rounded-md px-2 py-1 text-muted-foreground hover:text-white disabled:opacity-60"
+                            onclick={cancelEditingMessage}
+                            disabled={editingSaving}
                           >
-                        {:else}
-                          {part.text}
-                        {/if}
-                      {/each}
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            class="rounded-md bg-cyan-600 px-3 py-1 text-white hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed"
+                            disabled={editingSaving || editingDraft.trim().length === 0}
+                          >
+                            {editingSaving ? "Saving..." : "Save"}
+                          </button>
+                        </div>
+                      </form>
                     {:else}
-                      <p class="text-base whitespace-pre-wrap break-words">
-                        {msg.content}
-                      </p>
+                      {#if $chatSearchStore.query}
+                        {#each highlightText(msg.content, $chatSearchStore.query) as part, i (i)}
+                          {#if part.match}
+                            <mark class="bg-yellow-500/60 text-white"
+                              >{part.text}</mark
+                            >
+                          {:else}
+                            {part.text}
+                          {/if}
+                        {/each}
+                      {:else}
+                        <p class="text-base whitespace-pre-wrap break-words">
+                          {msg.content}
+                        </p>
+                      {/if}
                     {/if}
                   </div>
                 {/if}
@@ -1087,6 +1207,11 @@
       ...reactionMenuItems,
       ...(selectedMsg.senderId === $userStore.me?.id
         ? [
+            {
+              label: "Edit Message",
+              action: "edit_message",
+              disabled: selectedMsg.pending === true,
+            },
             {
               label: "Delete Message",
               action: "delete_message",

@@ -19,4 +19,6 @@ export interface Message {
   attachments?: AttachmentMeta[];
   reactions?: Record<string, string[]>;
   pending?: boolean;
+  editedAt?: string;
+  editedBy?: string;
 }

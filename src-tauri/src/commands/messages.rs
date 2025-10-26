@@ -1,7 +1,8 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::EncryptedDmSlot;
 use aegis_protocol::{
-    AepMessage, DeleteMessageData, MessageDeletionScope, MessageReactionData, ReactionAction,
+    AepMessage, DeleteMessageData, MessageDeletionScope, MessageEditData, MessageReactionData,
+    ReactionAction,
 };
 use aegis_shared_types::AppState;
 use aep::database;
@@ -91,6 +92,8 @@ async fn persist_and_broadcast_message(
         read: false,
         attachments: db_attachments,
         reactions: HashMap::new(),
+        edited_at: None,
+        edited_by: None,
     };
     database::insert_message(&state.db_pool, &new_local_message)
         .await
@@ -185,6 +188,74 @@ async fn delete_message_internal(
         .map_err(|e| e.to_string())
 }
 
+async fn edit_message_internal(
+    state: AppState,
+    chat_id: String,
+    message_id: String,
+    new_content: String,
+) -> Result<(), String> {
+    let trimmed = new_content.trim();
+    if trimmed.is_empty() {
+        return Err("Message content cannot be empty".to_string());
+    }
+
+    let my_id = state.identity.peer_id().to_base58();
+
+    let metadata = database::get_message_metadata(&state.db_pool, &message_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Message not found".to_string())?;
+
+    if metadata.chat_id != chat_id {
+        return Err("Message does not belong to the provided chat".to_string());
+    }
+
+    if metadata.sender_id != my_id {
+        return Err("You can only edit messages that you sent".to_string());
+    }
+
+    let edited_at = chrono::Utc::now();
+
+    database::update_message_content(
+        &state.db_pool,
+        &message_id,
+        trimmed,
+        edited_at,
+        &my_id,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let edit_payload = MessageEditData {
+        message_id: message_id.clone(),
+        chat_id: chat_id.clone(),
+        editor_id: my_id.clone(),
+        new_content: trimmed.to_string(),
+        edited_at,
+    };
+    let edit_bytes = bincode::serialize(&edit_payload).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&edit_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let aep_message = AepMessage::EditMessage {
+        message_id,
+        chat_id,
+        editor_id: my_id,
+        new_content: trimmed.to_string(),
+        edited_at,
+        signature: Some(signature),
+    };
+    let serialized = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn send_message(
     message: String,
@@ -261,6 +332,23 @@ pub async fn get_attachment_bytes(
     database::get_attachment_data(&state.db_pool, &attachment_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn edit_message(
+    chat_id: String,
+    message_id: String,
+    content: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    edit_message_internal(state, chat_id, message_id, content).await
 }
 #[tauri::command]
 pub async fn delete_message(
@@ -344,6 +432,8 @@ mod tests {
             read: false,
             attachments: Vec::new(),
             reactions: HashMap::new(),
+            edited_at: None,
+            edited_by: None,
         };
         database::insert_message(&local_db, &message)
             .await
@@ -408,6 +498,139 @@ mod tests {
             "message should be deleted on remote client"
         );
     }
+
+    #[tokio::test]
+    async fn edit_message_is_persisted_and_broadcast() {
+        let local_dir = tempdir().expect("tempdir");
+        let local_db = aep::database::initialize_db(local_dir.path().join("local.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let user_id = identity.peer_id().to_base58();
+        let public_key_b58 =
+            bs58::encode(identity.keypair().public().to_protobuf_encoding()).into_string();
+
+        let user = User {
+            id: user_id.clone(),
+            username: "Tester".into(),
+            avatar: "avatar.png".into(),
+            is_online: true,
+            public_key: Some(public_key_b58.clone()),
+            bio: None,
+            tag: None,
+        };
+
+        user_service::insert_user(&local_db, &user)
+            .await
+            .expect("insert user");
+
+        let message_id = Uuid::new_v4().to_string();
+        let chat_id = "chat-456".to_string();
+
+        let message = database::Message {
+            id: message_id.clone(),
+            chat_id: chat_id.clone(),
+            sender_id: user_id.clone(),
+            content: "Original".into(),
+            timestamp: Utc::now(),
+            read: false,
+            attachments: Vec::new(),
+            reactions: HashMap::new(),
+            edited_at: None,
+            edited_by: None,
+        };
+        database::insert_message(&local_db, &message)
+            .await
+            .expect("insert message");
+
+        let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let local_state = AppState {
+            identity: identity.clone(),
+            network_tx,
+            db_pool: local_db.clone(),
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+        };
+
+        let new_content = "Edited message".to_string();
+        edit_message_internal(
+            local_state,
+            chat_id.clone(),
+            message_id.clone(),
+            new_content.clone(),
+        )
+        .await
+        .expect("edit message locally");
+
+        let updated_local =
+            database::get_messages_for_chat(&local_db, &chat_id, 10, 0)
+                .await
+                .expect("fetch local");
+        assert_eq!(updated_local.len(), 1);
+        let updated = &updated_local[0];
+        assert_eq!(updated.content, new_content);
+        assert_eq!(updated.edited_by.as_deref(), Some(user_id.as_str()));
+        assert!(updated.edited_at.is_some());
+
+        let serialized = network_rx
+            .recv()
+            .await
+            .expect("edit event should be emitted");
+        let event: AepMessage =
+            bincode::deserialize(&serialized).expect("event deserializes correctly");
+
+        let remote_dir = tempdir().expect("tempdir");
+        let remote_db = aep::database::initialize_db(remote_dir.path().join("remote.db"))
+            .await
+            .expect("init remote db");
+
+        user_service::insert_user(&remote_db, &user)
+            .await
+            .expect("insert remote user");
+
+        database::insert_message(&remote_db, &message)
+            .await
+            .expect("insert remote message");
+
+        let remote_state = build_app_state(Identity::generate(), remote_db.clone());
+
+        aep::handle_aep_message(event.clone(), &remote_db, remote_state)
+            .await
+            .expect("remote edit should succeed");
+
+        if let AepMessage::EditMessage {
+            message_id: event_message_id,
+            chat_id: event_chat_id,
+            editor_id,
+            new_content: event_content,
+            edited_at: event_time,
+            ..
+        } = event
+        {
+            assert_eq!(event_message_id, message_id);
+            assert_eq!(event_chat_id, chat_id);
+            assert_eq!(editor_id, user_id);
+            assert_eq!(event_content, new_content);
+
+            let remote_messages =
+                database::get_messages_for_chat(&remote_db, &chat_id, 10, 0)
+                    .await
+                    .expect("fetch remote");
+            assert_eq!(remote_messages.len(), 1);
+            let remote_message = &remote_messages[0];
+            assert_eq!(remote_message.content, new_content);
+            assert_eq!(remote_message.edited_by.as_deref(), Some(user_id.as_str()));
+            let remote_time = remote_message
+                .edited_at
+                .expect("remote message should have edited_at");
+            assert_eq!(remote_time.to_rfc3339(), event_time.to_rfc3339());
+        } else {
+            panic!("expected edit message event");
+        }
+    }
 }
 
 #[tauri::command]
@@ -430,6 +653,8 @@ pub async fn send_encrypted_dm(
         read: false,
         attachments: Vec::new(),
         reactions: HashMap::new(),
+        edited_at: None,
+        edited_by: None,
     };
     database::insert_message(&state.db_pool, &new_local_message)
         .await

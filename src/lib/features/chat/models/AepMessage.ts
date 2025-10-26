@@ -46,6 +46,20 @@ export interface DeleteMessage {
   signature?: BytePayload;
 }
 
+export interface EditMessage {
+  message_id?: string;
+  messageId?: string;
+  chat_id?: string;
+  chatId?: string;
+  editor_id?: string;
+  editorId?: string;
+  new_content?: string;
+  newContent?: string;
+  edited_at?: string | number | Date;
+  editedAt?: string | number | Date;
+  signature?: BytePayload;
+}
+
 export interface ChatMessage {
   id?: string;
   message_id?: string;

@@ -375,6 +375,11 @@ export function createAppController(): AppController {
             return;
           }
 
+          if (receivedMessage.EditMessage) {
+            chatStore.handleMessageEdited(receivedMessage.EditMessage);
+            return;
+          }
+
           if (receivedMessage.CreateGroupChat) {
             const groupPayload = receivedMessage.CreateGroupChat;
             const groupId =

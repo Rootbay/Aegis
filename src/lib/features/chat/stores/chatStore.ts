@@ -8,6 +8,7 @@ import type {
   ChatMessage,
   DeleteMessage,
   MessageDeletionScope,
+  EditMessage,
   MessageReaction,
   ReactionAction,
 } from "$lib/features/chat/models/AepMessage";
@@ -25,6 +26,10 @@ type BackendMessage = {
   read?: boolean;
   attachments?: BackendAttachment[];
   reactions?: Record<string, string[]> | null;
+  edited_at?: string | number | Date | null;
+  editedAt?: string | number | Date | null;
+  edited_by?: string | null;
+  editedBy?: string | null;
 };
 
 type BackendAttachment = {
@@ -85,8 +90,10 @@ interface ChatStore {
   sendMessage: (content: string) => Promise<void>;
   sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
+  editMessage: (chatId: string, messageId: string, content: string) => Promise<void>;
   handleNewMessageEvent: (message: ChatMessage) => void;
   handleMessageDeleted: (payload: DeleteMessage) => void;
+  handleMessageEdited: (payload: EditMessage) => void;
   handleReactionUpdate: (payload: MessageReaction) => void;
   clearActiveChat: () => void;
   dropChatHistory: (chatId: string) => void;
@@ -567,12 +574,35 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return new Date(value).toISOString();
   };
 
+  const normalizeOptionalDate = (
+    value: string | number | Date | null | undefined,
+  ): string | undefined => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === "number") {
+      return new Date(value).toISOString();
+    }
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+    return undefined;
+  };
+
   const mapBackendMessage = (
     message: BackendMessage,
     fallbackChatId: string,
   ): Message => {
     const attachments = mapAttachmentPayloads(message.attachments);
     const reactions = normalizeReactions(message.reactions ?? null);
+    const editedAt = normalizeOptionalDate(message.edited_at ?? message.editedAt);
+    const editedBy = message.edited_by ?? message.editedBy ?? undefined;
     return {
       id: message.id,
       chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
@@ -583,6 +613,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       pending: false,
       attachments: attachments.length > 0 ? attachments : undefined,
       reactions,
+      editedAt: editedAt,
+      editedBy: editedBy ?? undefined,
     };
   };
 
@@ -1167,6 +1199,62 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const editMessage = async (
+    targetChatId: string,
+    messageId: string,
+    content: string,
+  ) => {
+    const me = get(userStore).me;
+    if (!me) {
+      throw new Error("Cannot edit message without a logged in user");
+    }
+
+    const trimmed = content.trim();
+    if (!trimmed) {
+      throw new Error("Message content cannot be empty");
+    }
+
+    const optimisticTimestamp = new Date().toISOString();
+    let previous: Message | undefined;
+    let found = false;
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        found = true;
+        previous = message;
+        return {
+          ...message,
+          content: trimmed,
+          editedAt: optimisticTimestamp,
+          editedBy: me.id,
+        };
+      }),
+    );
+
+    if (!found) {
+      throw new Error("Message not found");
+    }
+
+    try {
+      await invoke("edit_message", {
+        chatId: targetChatId,
+        chat_id: targetChatId,
+        messageId,
+        message_id: messageId,
+        content: trimmed,
+      });
+    } catch (error) {
+      if (previous) {
+        updateMessagesForChat(targetChatId, (existing) =>
+          existing.map((message) => (message.id === messageId ? previous! : message)),
+        );
+      }
+      throw error;
+    }
+  };
+
   const refreshChatMessages = async (chatId: string) => {
     const loadToken = beginLoadingForChat(chatId);
     try {
@@ -1277,6 +1365,38 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (removed.length > 0) {
       revokeAttachmentsForMessages(removed);
     }
+  };
+
+  const handleMessageEdited = (payload: EditMessage) => {
+    const chatId = payload.chat_id ?? payload.chatId;
+    const messageId = payload.message_id ?? payload.messageId;
+    if (!chatId || !messageId) {
+      return;
+    }
+
+    const nextContent = payload.new_content ?? payload.newContent;
+    if (typeof nextContent !== "string" || nextContent.length === 0) {
+      return;
+    }
+
+    const normalizedEditedAt = normalizeOptionalDate(
+      payload.edited_at ?? payload.editedAt ?? null,
+    );
+    const editorId = payload.editor_id ?? payload.editorId;
+
+    updateMessagesForChat(chatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        return {
+          ...message,
+          content: nextContent,
+          editedBy: editorId ?? message.editedBy,
+          editedAt: normalizedEditedAt ?? message.editedAt ?? new Date().toISOString(),
+        };
+      }),
+    );
   };
 
   const dropChatHistory = (chatId: string) => {
@@ -1396,8 +1516,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     sendMessage,
     sendMessageWithAttachments,
     deleteMessage,
+    editMessage,
     handleNewMessageEvent,
     handleMessageDeleted,
+    handleMessageEdited,
     handleReactionUpdate,
     clearActiveChat,
     dropChatHistory,
