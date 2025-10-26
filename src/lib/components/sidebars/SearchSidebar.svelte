@@ -11,6 +11,103 @@
     SidebarGroupContent,
   } from "$lib/components/ui/sidebar";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
+  import { activeChannelId, messagesByChatId } from "$lib/features/chat/stores/chatStore";
+  import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import { userStore } from "$lib/stores/userStore";
+  import type { Message } from "$lib/features/chat/models/Message";
+  import type { User } from "$lib/features/auth/models/User";
+  import {
+    highlightText,
+    type HighlightPart,
+  } from "$lib/features/chat/utils/highlightText";
+
+  type MatchPreview = {
+    id: string;
+    matchIndex: number;
+    messageIndex: number;
+    author: string;
+    timestampLabel: string;
+    timestampIso: string | null;
+    parts: HighlightPart[];
+  };
+
+  const matchButtonBaseClasses =
+    "w-full rounded-lg border px-3 py-2 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  const activeMatchClasses =
+    "border-primary/60 bg-primary/15 text-foreground shadow-sm";
+  const inactiveMatchClasses =
+    "border-transparent bg-muted/30 text-foreground hover:bg-muted/40";
+
+  function formatTimestamp(timestamp: string | undefined): {
+    label: string;
+    iso: string | null;
+  } {
+    if (!timestamp) {
+      return { label: "", iso: null };
+    }
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) {
+      return { label: "", iso: null };
+    }
+    return {
+      label: date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      iso: date.toISOString(),
+    };
+  }
+
+  const memberLookup = $derived(() => {
+    const map = new Map<string, User>();
+    const activeServerId = $serverStore.activeServerId;
+    if (activeServerId) {
+      const server = $serverStore.servers.find((s) => s.id === activeServerId);
+      server?.members?.forEach((member) => {
+        map.set(member.id, member);
+      });
+    }
+    const me = $userStore.me;
+    if (me) {
+      map.set(me.id, me);
+    }
+    return map;
+  });
+
+  const channelMessages = $derived(() => {
+    const channelId = $activeChannelId;
+    if (!channelId) return [] as Message[];
+    return ($messagesByChatId.get(channelId) ?? []) as Message[];
+  });
+
+  const matchPreviews = $derived(() => {
+    const matches = $chatSearchStore.matches;
+    if (!matches.length) return [] as MatchPreview[];
+    const query = $chatSearchStore.query;
+    const messages = channelMessages;
+    const previews: MatchPreview[] = [];
+    matches.forEach((messageIndex, matchIndex) => {
+      const message = messages[messageIndex];
+      if (!message) return;
+      const member = memberLookup.get(message.senderId);
+      const authorName = member?.name ?? `User-${message.senderId.slice(0, 4)}`;
+      const { label, iso } = formatTimestamp(message.timestamp);
+      const content = message.content ?? "";
+      const parts = highlightText(content, query);
+      previews.push({
+        id: message.id,
+        matchIndex,
+        messageIndex,
+        author: authorName,
+        timestampLabel: label,
+        timestampIso: iso,
+        parts,
+      });
+    });
+    return previews;
+  });
 
   function handlePrev() {
     chatSearchStore.jumpToMatch(false);
@@ -22,6 +119,10 @@
 
   function clearSearch() {
     chatSearchStore.clearSearch();
+  }
+
+  function handleMatchSelect(matchIndex: number) {
+    chatSearchStore.focusMatch(matchIndex);
   }
 </script>
 
@@ -103,6 +204,57 @@
               <p class="text-xs text-muted-foreground">
                 Use these controls to jump between matches in the conversation.
               </p>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup class="space-y-3">
+            <SidebarGroupLabel class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Results
+            </SidebarGroupLabel>
+            <SidebarGroupContent class="space-y-2">
+              {#if matchPreviews.length}
+                <div class="space-y-2">
+                  {#each matchPreviews as match (match.id)}
+                    {@const isActive =
+                      match.matchIndex === $chatSearchStore.activeMatchIndex}
+                    <button
+                      type="button"
+                      class={`${matchButtonBaseClasses} ${
+                        isActive ? activeMatchClasses : inactiveMatchClasses
+                      }`}
+                      data-active={isActive ? "true" : undefined}
+                      aria-current={isActive ? "true" : undefined}
+                      onclick={() => handleMatchSelect(match.matchIndex)}
+                    >
+                      <div class="flex items-center justify-between text-xs text-muted-foreground">
+                        <span class="font-semibold text-foreground">
+                          {match.author}
+                        </span>
+                        {#if match.timestampLabel}
+                          <time datetime={match.timestampIso ?? undefined}>
+                            {match.timestampLabel}
+                          </time>
+                        {/if}
+                      </div>
+                      <p class="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+                        {#each match.parts as part, index (index)}
+                          {#if part.match}
+                            <mark class="rounded-sm bg-yellow-500/70 px-0.5 text-foreground">
+                              {part.text}
+                            </mark>
+                          {:else}
+                            {part.text}
+                          {/if}
+                        {/each}
+                      </p>
+                    </button>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-xs text-muted-foreground">
+                  Messages are still loading. Try again in a moment.
+                </p>
+              {/if}
             </SidebarGroupContent>
           </SidebarGroup>
         </div>
