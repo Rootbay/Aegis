@@ -2,7 +2,7 @@
 use sqlx::{Pool, Sqlite};
 use aegis_shared_types::{AppState, IncomingFile};
 use std::path::Path;
-use aegis_protocol::{AepMessage, ChatMessageData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
+use aegis_protocol::{AepMessage, ChatMessageData, DeleteMessageData, MessageDeletionScope, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
 use aegis_core::services;
@@ -240,6 +240,75 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 ReactionAction::Remove => {
                     database::remove_reaction_from_message(db_pool, &message_id, &user_id, &emoji)
                         .await?;
+                }
+            }
+        }
+        AepMessage::DeleteMessage {
+            message_id,
+            chat_id,
+            initiator_id,
+            scope,
+            signature,
+        } => {
+            let deletion_data = DeleteMessageData {
+                message_id: message_id.clone(),
+                chat_id: chat_id.clone(),
+                initiator_id: initiator_id.clone(),
+                scope: scope.clone(),
+            };
+            let deletion_bytes =
+                bincode::serialize(&deletion_data).map_err(AegisError::Serialization)?;
+            let public_key = fetch_public_key_for_user(db_pool, &initiator_id).await?;
+
+            let signature = signature.ok_or_else(|| {
+                AegisError::InvalidInput("Missing signature for delete message.".into())
+            })?;
+
+            if !public_key.verify(&deletion_bytes, &signature) {
+                eprintln!(
+                    "Invalid signature for delete message {} from user {}",
+                    message_id, initiator_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Invalid signature for delete message.".into(),
+                ));
+            }
+
+            let my_id = state.identity.peer_id().to_base58();
+            let should_apply = match &scope {
+                MessageDeletionScope::Everyone => true,
+                MessageDeletionScope::SpecificUsers { user_ids } => {
+                    user_ids.iter().any(|id| id == &my_id)
+                }
+            };
+            if !should_apply {
+                return Ok(());
+            }
+
+            if let Some(metadata) = database::get_message_metadata(db_pool, &message_id).await? {
+                if metadata.chat_id != chat_id {
+                    eprintln!(
+                        "DeleteMessage chat mismatch: expected {}, received {}",
+                        metadata.chat_id, chat_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "DeleteMessage chat mismatch.".into(),
+                    ));
+                }
+                if metadata.sender_id != initiator_id {
+                    eprintln!(
+                        "DeleteMessage sender mismatch for {}: initiator {} is not {}",
+                        message_id, initiator_id, metadata.sender_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "DeleteMessage sender mismatch.".into(),
+                    ));
+                }
+            }
+
+            if let Err(err) = database::delete_message(db_pool, &message_id).await {
+                if !matches!(err, sqlx::Error::RowNotFound) {
+                    return Err(err.into());
                 }
             }
         }

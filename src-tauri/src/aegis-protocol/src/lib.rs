@@ -109,6 +109,13 @@ pub enum AepMessage {
         action: ReactionAction,
         signature: Option<Vec<u8>>,
     },
+    DeleteMessage {
+        message_id: String,
+        chat_id: String,
+        initiator_id: String,
+        scope: MessageDeletionScope,
+        signature: Option<Vec<u8>>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -141,6 +148,21 @@ pub struct DeleteServerData {
 pub struct SendServerInviteData {
     pub server_id: String,
     pub user_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum MessageDeletionScope {
+    Everyone,
+    SpecificUsers { user_ids: Vec<String> },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeleteMessageData {
+    pub message_id: String,
+    pub chat_id: String,
+    pub initiator_id: String,
+    pub scope: MessageDeletionScope,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

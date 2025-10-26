@@ -85,6 +85,13 @@ pub struct Message {
     pub reactions: HashMap<String, Vec<String>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct MessageMetadata {
+    pub id: String,
+    pub chat_id: String,
+    pub sender_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct GroupChat {
     pub id: String,
@@ -619,6 +626,24 @@ pub async fn delete_message(pool: &Pool<Sqlite>, message_id: &str) -> Result<(),
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn get_message_metadata(
+    pool: &Pool<Sqlite>,
+    message_id: &str,
+) -> Result<Option<MessageMetadata>, sqlx::Error> {
+    let record = sqlx::query!(
+        "SELECT id, chat_id, sender_id FROM messages WHERE id = ?",
+        message_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(record.map(|row| MessageMetadata {
+        id: row.id,
+        chat_id: row.chat_id,
+        sender_id: row.sender_id,
+    }))
 }
 
 pub async fn add_reaction_to_message(

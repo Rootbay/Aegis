@@ -370,6 +370,11 @@ export function createAppController(): AppController {
             return;
           }
 
+          if (receivedMessage.DeleteMessage) {
+            chatStore.handleMessageDeleted(receivedMessage.DeleteMessage);
+            return;
+          }
+
           if (receivedMessage.CreateGroupChat) {
             const groupPayload = receivedMessage.CreateGroupChat;
             const groupId =

@@ -1,6 +1,8 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::EncryptedDmSlot;
-use aegis_protocol::{AepMessage, MessageReactionData, ReactionAction};
+use aegis_protocol::{
+    AepMessage, DeleteMessageData, MessageDeletionScope, MessageReactionData, ReactionAction,
+};
 use aegis_shared_types::AppState;
 use aep::database;
 use e2ee;
@@ -130,6 +132,59 @@ async fn persist_and_broadcast_message(
         .map_err(|e| e.to_string())
 }
 
+async fn delete_message_internal(
+    state: AppState,
+    chat_id: String,
+    message_id: String,
+    scope: MessageDeletionScope,
+) -> Result<(), String> {
+    let my_id = state.identity.peer_id().to_base58();
+
+    let metadata = database::get_message_metadata(&state.db_pool, &message_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Message not found".to_string())?;
+
+    if metadata.chat_id != chat_id {
+        return Err("Message does not belong to the provided chat".to_string());
+    }
+
+    if metadata.sender_id != my_id {
+        return Err("You can only delete messages that you sent".to_string());
+    }
+
+    database::delete_message(&state.db_pool, &message_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let deletion_payload = DeleteMessageData {
+        message_id: message_id.clone(),
+        chat_id: chat_id.clone(),
+        initiator_id: my_id.clone(),
+        scope: scope.clone(),
+    };
+    let deletion_bytes = bincode::serialize(&deletion_payload).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&deletion_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let aep_message = AepMessage::DeleteMessage {
+        message_id,
+        chat_id,
+        initiator_id: my_id,
+        scope,
+        signature: Some(signature),
+    };
+    let serialized = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn send_message(
     message: String,
@@ -213,12 +268,146 @@ pub async fn delete_message(
     message_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
-    let _ = chat_id;
-    database::delete_message(&state.db_pool, &message_id)
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    delete_message_internal(state, chat_id, message_id, MessageDeletionScope::Everyone).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aegis_protocol::AepMessage;
+    use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, User};
+    use aep::user_service;
+    use bs58;
+    use chrono::Utc;
+    use crypto::identity::Identity;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use tempfile::tempdir;
+    use tokio::sync::Mutex;
+    use uuid::Uuid;
+
+    fn build_app_state(identity: Identity, db_pool: sqlx::Pool<sqlx::Sqlite>) -> AppState {
+        let (network_tx, _network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        AppState {
+            identity,
+            network_tx,
+            db_pool,
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_message_is_broadcast_and_applied() {
+        let local_dir = tempdir().expect("tempdir");
+        let local_db = aep::database::initialize_db(local_dir.path().join("local.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let user_id = identity.peer_id().to_base58();
+        let public_key_b58 =
+            bs58::encode(identity.keypair().public().to_protobuf_encoding()).into_string();
+
+        let user = User {
+            id: user_id.clone(),
+            username: "Tester".into(),
+            avatar: "avatar.png".into(),
+            is_online: true,
+            public_key: Some(public_key_b58.clone()),
+            bio: None,
+            tag: None,
+        };
+
+        user_service::insert_user(&local_db, &user)
+            .await
+            .expect("insert user");
+
+        let message_id = Uuid::new_v4().to_string();
+        let chat_id = "chat-123".to_string();
+
+        let message = database::Message {
+            id: message_id.clone(),
+            chat_id: chat_id.clone(),
+            sender_id: user_id.clone(),
+            content: "Hello".into(),
+            timestamp: Utc::now(),
+            read: false,
+            attachments: Vec::new(),
+            reactions: HashMap::new(),
+        };
+        database::insert_message(&local_db, &message)
+            .await
+            .expect("insert message");
+
+        let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let local_state = AppState {
+            identity: identity.clone(),
+            network_tx,
+            db_pool: local_db.clone(),
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+        };
+
+        delete_message_internal(
+            local_state,
+            chat_id.clone(),
+            message_id.clone(),
+            MessageDeletionScope::Everyone,
+        )
         .await
-        .map_err(|e| e.to_string())
+        .expect("delete message locally");
+
+        let remaining = database::get_messages_for_chat(&local_db, &chat_id, 10, 0)
+            .await
+            .expect("fetch");
+        assert!(remaining.is_empty(), "message should be deleted locally");
+
+        let serialized = network_rx
+            .recv()
+            .await
+            .expect("delete event should be emitted");
+        let event: AepMessage =
+            bincode::deserialize(&serialized).expect("event deserializes correctly");
+
+        let remote_dir = tempdir().expect("tempdir");
+        let remote_db = aep::database::initialize_db(remote_dir.path().join("remote.db"))
+            .await
+            .expect("init remote db");
+
+        user_service::insert_user(&remote_db, &user)
+            .await
+            .expect("insert remote user");
+
+        database::insert_message(&remote_db, &message)
+            .await
+            .expect("insert remote message");
+
+        let remote_state = build_app_state(Identity::generate(), remote_db.clone());
+
+        aep::handle_aep_message(event, &remote_db, remote_state)
+            .await
+            .expect("remote delete should succeed");
+
+        let remote_remaining = database::get_messages_for_chat(&remote_db, &chat_id, 10, 0)
+            .await
+            .expect("fetch remote");
+        assert!(
+            remote_remaining.is_empty(),
+            "message should be deleted on remote client"
+        );
+    }
 }
 
 #[tauri::command]
