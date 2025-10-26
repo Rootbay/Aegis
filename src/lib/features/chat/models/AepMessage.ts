@@ -27,6 +27,25 @@ export interface MessageReaction {
   signature?: BytePayload;
 }
 
+export type MessageDeletionScope =
+  | { type: "everyone" }
+  | {
+      type: "specific-users";
+      user_ids?: string[];
+      userIds?: string[];
+    };
+
+export interface DeleteMessage {
+  message_id?: string;
+  messageId?: string;
+  chat_id?: string;
+  chatId?: string;
+  initiator_id?: string;
+  initiatorId?: string;
+  scope?: MessageDeletionScope;
+  signature?: BytePayload;
+}
+
 export interface ChatMessage {
   id?: string;
   message_id?: string;

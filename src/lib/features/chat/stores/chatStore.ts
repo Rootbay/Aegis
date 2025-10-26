@@ -6,6 +6,8 @@ import type {
 } from "$lib/features/chat/models/Message";
 import type {
   ChatMessage,
+  DeleteMessage,
+  MessageDeletionScope,
   MessageReaction,
   ReactionAction,
 } from "$lib/features/chat/models/AepMessage";
@@ -84,6 +86,7 @@ interface ChatStore {
   sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   handleNewMessageEvent: (message: ChatMessage) => void;
+  handleMessageDeleted: (payload: DeleteMessage) => void;
   handleReactionUpdate: (payload: MessageReaction) => void;
   clearActiveChat: () => void;
   dropChatHistory: (chatId: string) => void;
@@ -433,6 +436,31 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       map.set(chatId, next);
       return new Map(map);
     });
+  };
+
+  const shouldApplyDeletionForScope = (
+    scope?: MessageDeletionScope,
+  ): boolean => {
+    if (!scope) {
+      return true;
+    }
+    if (scope.type === "everyone") {
+      return true;
+    }
+    if (scope.type === "specific-users") {
+      const targetIds = (scope.user_ids ?? scope.userIds ?? []).filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      );
+      if (targetIds.length === 0) {
+        return false;
+      }
+      const me = get(userStore).me?.id;
+      if (!me) {
+        return false;
+      }
+      return targetIds.includes(me);
+    }
+    return true;
   };
 
   const toAttachmentMeta = (attachment: BackendAttachment): AttachmentMeta => {
@@ -1225,6 +1253,32 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     applyReactionMutation(chatId, messageId, payload.emoji, userId, action);
   };
 
+  const handleMessageDeleted = (payload: DeleteMessage) => {
+    const chatId = payload.chat_id ?? payload.chatId;
+    const messageId = payload.message_id ?? payload.messageId;
+    if (!chatId || !messageId) {
+      return;
+    }
+
+    if (!shouldApplyDeletionForScope(payload.scope)) {
+      return;
+    }
+
+    const removed: Message[] = [];
+    updateMessagesForChat(chatId, (existing) =>
+      existing.filter((message) => {
+        if (message.id === messageId) {
+          removed.push(message);
+          return false;
+        }
+        return true;
+      }),
+    );
+    if (removed.length > 0) {
+      revokeAttachmentsForMessages(removed);
+    }
+  };
+
   const dropChatHistory = (chatId: string) => {
     if (!chatId) return;
     const existing = get(messagesByChatIdStore).get(chatId);
@@ -1343,6 +1397,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     sendMessageWithAttachments,
     deleteMessage,
     handleNewMessageEvent,
+    handleMessageDeleted,
     handleReactionUpdate,
     clearActiveChat,
     dropChatHistory,

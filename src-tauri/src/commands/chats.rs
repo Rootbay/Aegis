@@ -23,8 +23,12 @@ fn normalize_group_name(name: Option<String>, group_id: &str) -> Option<String> 
         } else {
             Some(trimmed)
         }
-    }).or_else(|| {
-        Some(format!("Group {}", &group_id.chars().take(8).collect::<String>()))
+    })
+    .or_else(|| {
+        Some(format!(
+            "Group {}",
+            &group_id.chars().take(8).collect::<String>()
+        ))
     })
 }
 
