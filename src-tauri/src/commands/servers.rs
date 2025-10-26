@@ -1,7 +1,9 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
 use aep::database;
+use aep::database::{ChannelDisplayPreference, ServerInvite};
 use aep::user_service;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -10,6 +12,50 @@ pub struct SendServerInviteResult {
     pub server_id: String,
     pub user_id: String,
     pub already_member: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerInviteResponse {
+    pub id: String,
+    pub server_id: String,
+    pub code: String,
+    pub created_by: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_uses: Option<i64>,
+    pub uses: i64,
+}
+
+impl From<ServerInvite> for ServerInviteResponse {
+    fn from(value: ServerInvite) -> Self {
+        ServerInviteResponse {
+            id: value.id,
+            server_id: value.server_id,
+            code: value.code,
+            created_by: value.created_by,
+            created_at: value.created_at.to_rfc3339(),
+            expires_at: value.expires_at.map(|dt| dt.to_rfc3339()),
+            max_uses: value.max_uses,
+            uses: value.uses,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelDisplayPreferenceResponse {
+    pub channel_id: String,
+    pub hide_member_names: bool,
+}
+
+impl From<ChannelDisplayPreference> for ChannelDisplayPreferenceResponse {
+    fn from(value: ChannelDisplayPreference) -> Self {
+        ChannelDisplayPreferenceResponse {
+            channel_id: value.channel_id,
+            hide_member_names: value.hide_member_names,
+        }
+    }
 }
 
 #[tauri::command]
@@ -21,6 +67,7 @@ pub async fn create_server(
     let state = state.as_ref().ok_or("State not initialized")?.clone();
     let owner_id = state.identity.peer_id().to_base58();
     server.owner_id = owner_id.clone();
+    server.invites = Vec::new();
 
     database::insert_server(&state.db_pool, &server)
         .await
@@ -274,6 +321,92 @@ pub async fn send_server_invite(
         user_id,
         already_member,
     })
+}
+
+#[tauri::command]
+pub async fn generate_server_invite(
+    server_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<ServerInviteResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+
+    let requester_id = state.identity.peer_id().to_base58();
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can generate invites.".into());
+    }
+
+    let code = uuid::Uuid::new_v4().simple().to_string();
+    let created_at = Utc::now();
+
+    let invite = database::create_server_invite(
+        &state.db_pool,
+        &server_id,
+        &requester_id,
+        &code,
+        &created_at,
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(ServerInviteResponse::from(invite))
+}
+
+#[tauri::command]
+pub async fn get_channel_display_preferences(
+    server_id: Option<String>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<ChannelDisplayPreferenceResponse>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+    let user_id = state.identity.peer_id().to_base58();
+
+    let prefs = database::get_channel_display_preferences_for_user(
+        &state.db_pool,
+        &user_id,
+        server_id.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(prefs.into_iter().map(ChannelDisplayPreferenceResponse::from).collect())
+}
+
+#[tauri::command]
+pub async fn set_channel_display_preferences(
+    channel_id: String,
+    hide_member_names: bool,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<ChannelDisplayPreferenceResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+    let user_id = state.identity.peer_id().to_base58();
+
+    let preference = database::upsert_channel_display_preference(
+        &state.db_pool,
+        &user_id,
+        &channel_id,
+        hide_member_names,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(ChannelDisplayPreferenceResponse::from(preference))
 }
 
 #[tauri::command]

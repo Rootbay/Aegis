@@ -4,6 +4,7 @@ import type { Server } from "$lib/features/servers/models/Server";
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import type { Role } from "$lib/features/servers/models/Role";
+import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
 import { userStore } from "$lib/stores/userStore";
 import { serverCache } from "$lib/utils/cache";
 
@@ -19,6 +20,17 @@ type BackendUser = {
   tag?: string;
 };
 
+type BackendServerInvite = {
+  id: string;
+  server_id: string;
+  code: string;
+  created_by: string;
+  created_at: string;
+  expires_at?: string | null;
+  max_uses?: number | null;
+  uses: number;
+};
+
 type BackendServer = {
   id: string;
   name: string;
@@ -32,6 +44,7 @@ type BackendServer = {
   allow_invites?: boolean;
   moderation_level?: "None" | "Low" | "Medium" | "High";
   explicit_content_filter?: boolean;
+  invites?: BackendServerInvite[];
   [key: string]: unknown;
 };
 
@@ -49,6 +62,7 @@ interface ServerStore extends Readable<ServerStoreState> {
   removeServer: (serverId: string) => void;
   fetchServerDetails: (serverId: string) => Promise<void>;
   addChannelToServer: (serverId: string, channel: Channel) => void;
+  addInviteToServer: (serverId: string, invite: ServerInvite) => void;
   updateServer: (serverId: string, patch: Partial<Server>) => void;
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   initialize: () => Promise<void>;
@@ -83,7 +97,7 @@ export function createServerStore(): ServerStore {
   };
 
   const mapServer = (s: BackendServer): Server => {
-    const { members = [], channels = [], roles = [], ...rest } = s;
+    const { members = [], channels = [], roles = [], invites = [], ...rest } = s;
     const normalizedMembers: BackendUser[] = Array.isArray(members)
       ? members
       : [];
@@ -93,6 +107,19 @@ export function createServerStore(): ServerStore {
     const normalizedRoles: Role[] = Array.isArray(roles)
       ? (roles as Role[])
       : [];
+    const normalizedInvites: BackendServerInvite[] = Array.isArray(invites)
+      ? invites
+      : [];
+    const mapInvite = (invite: BackendServerInvite): ServerInvite => ({
+      id: invite.id,
+      serverId: invite.server_id,
+      code: invite.code,
+      createdBy: invite.created_by,
+      createdAt: invite.created_at,
+      expiresAt: invite.expires_at ?? undefined,
+      maxUses: invite.max_uses ?? undefined,
+      uses: invite.uses ?? 0,
+    });
     return {
       ...rest,
       id: s.id,
@@ -102,6 +129,7 @@ export function createServerStore(): ServerStore {
       channels: normalizedChannels,
       members: normalizedMembers.map(fromBackendUser),
       roles: normalizedRoles,
+      invites: normalizedInvites.map(mapInvite),
     } as Server;
   };
 
@@ -149,9 +177,13 @@ export function createServerStore(): ServerStore {
   };
 
   const handleServersUpdate = (updatedServers: Server[]) => {
-    updatedServers.forEach((server) => serverCache.set(server.id, server));
+    const normalized = updatedServers.map((server) => ({
+      ...server,
+      invites: server.invites ?? [],
+    }));
+    normalized.forEach((server) => serverCache.set(server.id, server));
     set({
-      servers: updatedServers,
+      servers: normalized,
       loading: false,
       activeServerId: get({ subscribe }).activeServerId,
     });
@@ -184,8 +216,12 @@ export function createServerStore(): ServerStore {
   };
 
   const addServer = (server: Server) => {
-    update((s) => ({ ...s, servers: [...s.servers, server] }));
-    serverCache.set(server.id, server);
+    const withInvites: Server = {
+      ...server,
+      invites: server.invites ?? [],
+    };
+    update((s) => ({ ...s, servers: [...s.servers, withInvites] }));
+    serverCache.set(withInvites.id, withInvites);
   };
 
   const removeServer = (serverId: string) => {
@@ -256,7 +292,11 @@ export function createServerStore(): ServerStore {
       ...s,
       servers: s.servers.map((server) =>
         server.id === serverId
-          ? { ...server, channels: [...(server.channels || []), channel] }
+          ? {
+              ...server,
+              channels: [...(server.channels || []), channel],
+              invites: server.invites ?? [],
+            }
           : server,
       ),
     }));
@@ -264,10 +304,33 @@ export function createServerStore(): ServerStore {
     if (server) serverCache.set(serverId, server);
   };
 
+  const addInviteToServer = (serverId: string, invite: ServerInvite) => {
+    update((s) => {
+      const servers = s.servers.map((server) => {
+        if (server.id !== serverId) return server;
+        const existingInvites = Array.isArray(server.invites)
+          ? server.invites
+          : [];
+        const filtered = existingInvites.filter(
+          (existing) => existing.id !== invite.id && existing.code !== invite.code,
+        );
+        return {
+          ...server,
+          invites: [...filtered, invite],
+        };
+      });
+      const updated = servers.find((sv) => sv.id === serverId);
+      if (updated) serverCache.set(serverId, updated);
+      return { ...s, servers };
+    });
+  };
+
   const updateServer = (serverId: string, patch: Partial<Server>) => {
     update((s) => {
       const servers = s.servers.map((server) =>
-        server.id === serverId ? { ...server, ...patch } : server,
+        server.id === serverId
+          ? { ...server, ...patch, invites: patch.invites ?? server.invites ?? [] }
+          : server,
       );
       const updated = servers.find((sv) => sv.id === serverId);
       if (updated) serverCache.set(serverId, updated);
@@ -302,6 +365,7 @@ export function createServerStore(): ServerStore {
     removeServer,
     fetchServerDetails,
     addChannelToServer,
+    addInviteToServer,
     updateServer,
     removeChannelFromServer,
     initialize,

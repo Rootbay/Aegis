@@ -5,11 +5,24 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use aegis_types::AegisError;
 
-pub use aegis_shared_types::{User, Server, Channel};
+pub use aegis_shared_types::{User, Server, Channel, ServerInvite};
 
 // Define migrations for the database schema
 // The path is relative to the crate root (src/aep), pointing up two levels to src-tauri/migrations.
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
+
+fn parse_timestamp(value: &str) -> Result<DateTime<Utc>, sqlx::Error> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))
+}
+
+fn parse_optional_timestamp(value: Option<String>) -> Result<Option<DateTime<Utc>>, sqlx::Error> {
+    match value {
+        Some(ts) => parse_timestamp(&ts).map(Some),
+        None => Ok(None),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Friendship {
@@ -372,14 +385,14 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
 
     let channels_map = get_channels_for_servers(pool, &server_ids).await?;
     let members_map = get_members_for_servers(pool, &server_ids).await?;
+    let invites_map = get_invites_for_servers(pool, &server_ids).await?;
 
     let mut servers: Vec<Server> = Vec::new();
     for server_row in server_rows {
-        let created_at = DateTime::parse_from_rfc3339(&server_row.created_at)
-            .map(|dt| dt.with_timezone(&Utc))
-            .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
+        let created_at = parse_timestamp(&server_row.created_at)?;
         let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
         let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
+        let invites = invites_map.get(&server_row.id).cloned().unwrap_or_default();
         servers.push(Server {
             id: server_row.id,
             name: server_row.name,
@@ -387,6 +400,7 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
             created_at,
             channels,
             members,
+            invites,
         });
     }
 
@@ -417,17 +431,17 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
     .fetch_one(pool)
     .await?;
 
-    let created_at = DateTime::parse_from_rfc3339(&server_row.created_at)
-        .map(|dt| dt.with_timezone(&Utc))
-        .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
+    let created_at = parse_timestamp(&server_row.created_at)?;
 
     let server_ids = vec![server_row.id.clone()];
 
     let channels_map = get_channels_for_servers(pool, &server_ids).await?;
     let members_map = get_members_for_servers(pool, &server_ids).await?;
+    let invites_map = get_invites_for_servers(pool, &server_ids).await?;
 
     let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
     let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
+    let invites = invites_map.get(&server_row.id).cloned().unwrap_or_default();
 
     Ok(Server {
         id: server_row.id,
@@ -436,6 +450,7 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         created_at,
         channels,
         members,
+        invites,
     })
 }
 
@@ -1026,4 +1041,153 @@ pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String])
     }
 
     Ok(members_map)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ChannelDisplayPreference {
+    pub user_id: String,
+    pub channel_id: String,
+    pub hide_member_names: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+struct ServerInviteRow {
+    id: String,
+    server_id: String,
+    code: String,
+    created_by: String,
+    created_at: String,
+    expires_at: Option<String>,
+    max_uses: Option<i64>,
+    uses: i64,
+}
+
+impl ServerInviteRow {
+    fn into_invite(self) -> Result<ServerInvite, sqlx::Error> {
+        Ok(ServerInvite {
+            id: self.id,
+            server_id: self.server_id,
+            code: self.code,
+            created_by: self.created_by,
+            created_at: parse_timestamp(&self.created_at)?,
+            expires_at: parse_optional_timestamp(self.expires_at)?,
+            max_uses: self.max_uses,
+            uses: self.uses,
+        })
+    }
+}
+
+pub async fn get_invites_for_servers(
+    pool: &Pool<Sqlite>,
+    server_ids: &[String],
+) -> Result<HashMap<String, Vec<ServerInvite>>, sqlx::Error> {
+    let mut invites_map: HashMap<String, Vec<ServerInvite>> = HashMap::new();
+    if server_ids.is_empty() {
+        return Ok(invites_map);
+    }
+
+    let placeholders = server_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let query = format!(
+        "SELECT id, server_id, code, created_by, created_at, expires_at, max_uses, uses FROM server_invites WHERE server_id IN ({})",
+        placeholders
+    );
+
+    let mut builder = sqlx::query_as::<_, ServerInviteRow>(&query);
+    for id in server_ids {
+        builder = builder.bind(id);
+    }
+
+    let rows = builder.fetch_all(pool).await?;
+
+    for row in rows {
+        let invite = row.into_invite()?;
+        invites_map
+            .entry(invite.server_id.clone())
+            .or_insert_with(Vec::new)
+            .push(invite);
+    }
+
+    Ok(invites_map)
+}
+
+pub async fn create_server_invite(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    created_by: &str,
+    code: &str,
+    created_at: &DateTime<Utc>,
+    expires_at: Option<DateTime<Utc>>,
+    max_uses: Option<i64>,
+) -> Result<ServerInvite, sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO server_invites (id, server_id, code, created_by, created_at, expires_at, max_uses, uses) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+        uuid::Uuid::new_v4().to_string(),
+        server_id,
+        code,
+        created_by,
+        created_at.to_rfc3339(),
+        expires_at.map(|dt| dt.to_rfc3339()),
+        max_uses,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as!(
+        ServerInviteRow,
+        "SELECT id, server_id, code, created_by, created_at, expires_at, max_uses, uses FROM server_invites WHERE code = ?",
+        code
+    )
+    .fetch_one(pool)
+    .await?
+    .into_invite()
+}
+
+pub async fn get_channel_display_preferences_for_user(
+    pool: &Pool<Sqlite>,
+    user_id: &str,
+    server_id: Option<&str>,
+) -> Result<Vec<ChannelDisplayPreference>, sqlx::Error> {
+    if let Some(server_id) = server_id {
+        sqlx::query_as!(
+            ChannelDisplayPreference,
+            "SELECT user_id, channel_id, hide_member_names FROM channel_display_preferences WHERE user_id = ? AND channel_id IN (SELECT id FROM channels WHERE server_id = ?)",
+            user_id,
+            server_id
+        )
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as!(
+            ChannelDisplayPreference,
+            "SELECT user_id, channel_id, hide_member_names FROM channel_display_preferences WHERE user_id = ?",
+            user_id
+        )
+        .fetch_all(pool)
+        .await
+    }
+}
+
+pub async fn upsert_channel_display_preference(
+    pool: &Pool<Sqlite>,
+    user_id: &str,
+    channel_id: &str,
+    hide_member_names: bool,
+) -> Result<ChannelDisplayPreference, sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO channel_display_preferences (user_id, channel_id, hide_member_names) VALUES (?, ?, ?) ON CONFLICT(user_id, channel_id) DO UPDATE SET hide_member_names = excluded.hide_member_names",
+        user_id,
+        channel_id,
+        hide_member_names,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query_as!(
+        ChannelDisplayPreference,
+        "SELECT user_id, channel_id, hide_member_names FROM channel_display_preferences WHERE user_id = ? AND channel_id = ?",
+        user_id,
+        channel_id
+    )
+    .fetch_one(pool)
+    .await
 }

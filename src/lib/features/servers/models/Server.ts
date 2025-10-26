@@ -1,6 +1,7 @@
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import type { Role } from "./Role";
+import type { ServerInvite } from "./ServerInvite";
 
 export interface Server {
   id: string;
@@ -17,4 +18,5 @@ export interface Server {
   allow_invites?: boolean;
   moderation_level?: "None" | "Low" | "Medium" | "High";
   explicit_content_filter?: boolean;
+  invites?: ServerInvite[];
 }

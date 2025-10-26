@@ -25,6 +25,22 @@ pub struct Server {
     pub created_at: DateTime<Utc>,
     pub channels: Vec<Channel>,
     pub members: Vec<User>,
+    #[serde(default)]
+    pub invites: Vec<ServerInvite>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerInvite {
+    pub id: String,
+    pub server_id: String,
+    pub code: String,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_uses: Option<i64>,
+    pub uses: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
