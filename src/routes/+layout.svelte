@@ -14,6 +14,7 @@
   import SearchSidebar from "$lib/components/sidebars/SearchSidebar.svelte";
   import DirectMessageList from "$lib/components/lists/DirectMessageList.svelte";
   import NavigationHeader from "$lib/components/NavigationHeader.svelte";
+  import ConnectivityBanner from "$lib/components/ConnectivityBanner.svelte";
   import AppModals from "$lib/layout/AppModals.svelte";
   import { ChatView } from "$features/chat";
   import { createAppController } from "$lib/layout/createAppController";
@@ -38,7 +39,15 @@
     activeTab,
     modal,
     handlers,
+    connectivity,
   } = appController;
+
+  const {
+    state: connectivityState,
+    statusMessage: connectivityStatusMessage,
+    fallbackMessage: connectivityFallbackMessage,
+    showBridgePrompt,
+  } = connectivity;
 
   const friendsLayoutContext =
     getContext<FriendsLayoutContext | undefined>(
@@ -113,6 +122,12 @@
       {/if}
     {/if}
     <main class="flex-1 min-h-0 flex flex-col">
+      <ConnectivityBanner
+        state={$connectivityState}
+        statusMessage={$connectivityStatusMessage}
+        fallbackMessage={$connectivityFallbackMessage}
+        showBridgePrompt={$showBridgePrompt}
+      />
       {#if $isFriendsOrRootPage}
         <NavigationHeader
           chat={$currentChat}

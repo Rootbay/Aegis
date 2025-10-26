@@ -16,6 +16,49 @@ vi.mock("$services/tauri", () => ({
   getListen: vi.fn(async () => null),
 }));
 
+vi.mock("$lib/stores/connectivityStore", async () => {
+  const { writable } = await vi.importActual<typeof import("svelte/store")>(
+    "svelte/store",
+  );
+  const connectivityState = writable({
+    status: "initializing",
+    internetReachable: false,
+    meshReachable: false,
+    totalPeers: 0,
+    meshPeers: 0,
+    peers: [],
+    links: [],
+    bridgeSuggested: false,
+    fallbackActive: false,
+    fallbackReason: null,
+    lastUpdated: null,
+  });
+  const statusMessage = writable("Waiting for connectivity updates…");
+  const fallbackMessage = writable<string | null>(null);
+
+  return {
+    connectivityStore: {
+      subscribe: connectivityState.subscribe,
+      initialize: vi.fn(async () => {}),
+      teardown: vi.fn(() => {}),
+      handleBackendEvent: vi.fn(),
+      markFallback: vi.fn(),
+      statusMessage: { subscribe: statusMessage.subscribe },
+      fallbackMessage: { subscribe: fallbackMessage.subscribe },
+    },
+  };
+});
+
+vi.mock("$lib/features/settings/stores/settings", async () => {
+  const { writable } = await vi.importActual<typeof import("svelte/store")>(
+    "svelte/store",
+  );
+  const state = writable({ enableBridgeMode: false });
+  return {
+    settings: { subscribe: state.subscribe },
+  };
+});
+
 vi.mock("$lib/features/auth/stores/authStore", async () => {
   const { writable } = await vi.importActual<typeof import("svelte/store")>(
     "svelte/store",
