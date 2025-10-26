@@ -1,6 +1,9 @@
 import { writable, get } from "svelte/store";
 import { toasts } from "$lib/stores/ToastStore";
 import { getInvoke, getListen, type InvokeFn } from "$lib/services/tauri";
+import { groupChats } from "$lib/features/chat/stores/chatStore";
+import { serverStore } from "$lib/features/servers/stores/serverStore";
+import { userStore } from "$lib/stores/userStore";
 
 const isBrowser = typeof window !== "undefined";
 
@@ -14,9 +17,31 @@ export type CallStatus =
   | "ended"
   | "error";
 
+export type ParticipantStatus =
+  | "invited"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "left"
+  | "error";
+
+export interface CallParticipant {
+  userId: string;
+  name?: string;
+  status: ParticipantStatus;
+  remoteStream: MediaStream | null;
+  peerConnection: RTCPeerConnection | null;
+  error?: string;
+  joinedAt: number | null;
+  direction: "incoming" | "outgoing";
+}
+
+export type CallChatType = "dm" | "group" | "channel";
+
 export interface ActiveCall {
   chatId: string;
   chatName: string;
+  chatType: CallChatType;
   type: CallType;
   status: CallStatus;
   startedAt: number;
@@ -25,11 +50,9 @@ export interface ActiveCall {
   endReason?: string;
   error?: string;
   localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
   callId: string;
   direction: "incoming" | "outgoing";
-  peerId: string;
-  peerConnection: RTCPeerConnection | null;
+  participants: Map<string, CallParticipant>;
 }
 
 interface CallState {
@@ -51,6 +74,8 @@ type OfferSignal = {
   sdp: string;
   callType: CallType;
   chatName?: string | null;
+  chatId?: string | null;
+  chatType?: CallChatType | null;
 };
 
 type AnswerSignal = {
@@ -103,9 +128,7 @@ const INITIAL_STATE: CallState = {
 };
 
 const STATUS_CLEAR_DELAY = 6000;
-const ICE_SERVERS: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-];
+const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
 function stopStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => {
@@ -137,21 +160,27 @@ function describeCallStatus(call: ActiveCall | null): string {
   }
 }
 
+type InternalParticipant = CallParticipant & {
+  pendingCandidates: RTCIceCandidateInit[];
+};
+
+interface InviteeInfo {
+  id: string;
+  name?: string;
+}
+
 function createCallStore() {
   const store = writable<CallState>(INITIAL_STATE);
   const { subscribe, update, set } = store;
 
   let initialized = false;
   let activeStream: MediaStream | null = null;
-  let activeRemoteStream: MediaStream | null = null;
-  let activePeerConnection: RTCPeerConnection | null = null;
-  let pendingRemoteCandidates: RTCIceCandidateInit[] = [];
   let signalUnsubscribe: (() => void) | null = null;
   let invokeFn: InvokeFn | null = null;
   let activeCallId: string | null = null;
-  let activePeerId: string | null = null;
   let deviceChangeUnsubscribe: (() => void) | null = null;
   let dismissalTimer: ReturnType<typeof setTimeout> | null = null;
+  let participantStates = new Map<string, InternalParticipant>();
 
   function clearDismissalTimer() {
     if (dismissalTimer) {
@@ -172,29 +201,166 @@ function createCallStore() {
     }, STATUS_CLEAR_DELAY);
   }
 
-  function cleanupPeerConnection() {
-    if (activePeerConnection) {
+  function publishParticipants() {
+    update((state) => {
+      if (!state.activeCall) {
+        return state;
+      }
+      const participants = new Map<string, CallParticipant>();
+      participantStates.forEach((participant, id) => {
+        const { pendingCandidates: _pending, ...rest } = participant;
+        participants.set(id, { ...rest });
+      });
+      return {
+        ...state,
+        activeCall: {
+          ...state.activeCall,
+          participants,
+        },
+      };
+    });
+    syncCallStatus();
+  }
+
+  function mutateParticipant(
+    peerId: string,
+    mutator: (
+      participant: InternalParticipant | null,
+    ) => InternalParticipant | null,
+  ) {
+    const current = participantStates.get(peerId) ?? null;
+    const clone = current
+      ? { ...current, pendingCandidates: [...current.pendingCandidates] }
+      : null;
+    const next = mutator(clone);
+    if (next) {
+      participantStates.set(peerId, next);
+    } else {
+      participantStates.delete(peerId);
+    }
+    publishParticipants();
+  }
+
+  function cleanupParticipant(peerId: string) {
+    const existing = participantStates.get(peerId);
+    if (!existing) {
+      return;
+    }
+    try {
+      if (existing.peerConnection) {
+        existing.peerConnection.onicecandidate = null;
+        existing.peerConnection.ontrack = null;
+        existing.peerConnection.onconnectionstatechange = null;
+        existing.peerConnection.close();
+      }
+    } catch (error) {
+      console.warn("Failed to close peer connection", error);
+    }
+    stopStream(existing.remoteStream);
+    mutateParticipant(peerId, (participant) => {
+      if (!participant) {
+        return participant;
+      }
+      participant.peerConnection = null;
+      participant.remoteStream = null;
+      participant.pendingCandidates = [];
+      return participant;
+    });
+  }
+
+  function cleanupAllParticipants() {
+    participantStates.forEach((participant, peerId) => {
       try {
-        activePeerConnection.onicecandidate = null;
-        activePeerConnection.ontrack = null;
-        activePeerConnection.onconnectionstatechange = null;
-        activePeerConnection.close();
+        if (participant.peerConnection) {
+          participant.peerConnection.onicecandidate = null;
+          participant.peerConnection.ontrack = null;
+          participant.peerConnection.onconnectionstatechange = null;
+          participant.peerConnection.close();
+        }
       } catch (error) {
         console.warn("Failed to close peer connection", error);
       }
-    }
-    activePeerConnection = null;
-    pendingRemoteCandidates = [];
+      stopStream(participant.remoteStream);
+      participantStates.set(peerId, {
+        ...participant,
+        peerConnection: null,
+        remoteStream: null,
+        pendingCandidates: [],
+      });
+    });
+    participantStates.clear();
     activeCallId = null;
-    activePeerId = null;
+    update((state) => {
+      if (!state.activeCall) {
+        return state;
+      }
+      return {
+        ...state,
+        activeCall: {
+          ...state.activeCall,
+          participants: new Map(),
+        },
+      };
+    });
   }
 
-  function cleanupMedia() {
-    stopStream(activeStream);
-    activeStream = null;
-    stopStream(activeRemoteStream);
-    activeRemoteStream = null;
-    cleanupPeerConnection();
+  function hasActiveParticipants() {
+    for (const participant of participantStates.values()) {
+      if (
+        participant.status === "invited" ||
+        participant.status === "connecting" ||
+        participant.status === "connected"
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function syncCallStatus() {
+    update((state) => {
+      const call = state.activeCall;
+      if (!call) {
+        return state;
+      }
+      if (
+        call.status === "ended" ||
+        call.status === "ending" ||
+        call.status === "error"
+      ) {
+        return state;
+      }
+      const participants = Array.from(participantStates.values());
+      const hasConnected = participants.some((p) => p.status === "connected");
+      const hasConnecting = participants.some(
+        (p) => p.status === "connecting" || p.status === "invited",
+      );
+      let nextStatus: CallStatus = call.status;
+      let nextConnectedAt = call.connectedAt;
+      if (hasConnected) {
+        nextStatus = "in-call";
+        if (!nextConnectedAt) {
+          const joinedAt = participants
+            .map((p) => p.joinedAt)
+            .filter((value): value is number => typeof value === "number")
+            .sort((a, b) => a - b)[0];
+          nextConnectedAt = joinedAt ?? Date.now();
+        }
+      } else if (hasConnecting) {
+        nextStatus = "connecting";
+      }
+      if (nextStatus !== call.status || nextConnectedAt !== call.connectedAt) {
+        return {
+          ...state,
+          activeCall: {
+            ...call,
+            status: nextStatus,
+            connectedAt: nextConnectedAt ?? call.connectedAt,
+          },
+        };
+      }
+      return state;
+    });
   }
 
   async function ensureSignalListener() {
@@ -246,17 +412,29 @@ function createCallStore() {
     });
   }
 
-  async function flushPendingCandidates() {
-    if (!activePeerConnection || !activePeerConnection.remoteDescription) {
+  async function flushPendingCandidates(peerId: string) {
+    const participant = participantStates.get(peerId);
+    if (
+      !participant?.peerConnection ||
+      !participant.peerConnection.remoteDescription
+    ) {
       return;
     }
-
-    const candidates = [...pendingRemoteCandidates];
-    pendingRemoteCandidates = [];
+    const candidates = [...participant.pendingCandidates];
+    if (!candidates.length) {
+      return;
+    }
+    mutateParticipant(peerId, (next) => {
+      if (!next) {
+        return next;
+      }
+      next.pendingCandidates = [];
+      return next;
+    });
 
     for (const candidate of candidates) {
       try {
-        await activePeerConnection.addIceCandidate(candidate);
+        await participant.peerConnection.addIceCandidate(candidate);
       } catch (error) {
         console.warn("Failed to add pending ICE candidate", error);
       }
@@ -280,21 +458,24 @@ function createCallStore() {
       return;
     }
 
-    const peerId = current.peerId;
-    const callId = current.callId;
-
-    if (notifyRemote && peerId && callId) {
-      const payload: EndSignal = {
-        type: "end",
-        reason: reason ?? null,
-      };
-      void (async () => {
-        try {
-          await sendSignal(peerId, callId, payload);
-        } catch (err) {
-          console.warn("Failed to notify remote peer about call termination", err);
-        }
-      })();
+    if (notifyRemote) {
+      const callId = current.callId;
+      participantStates.forEach((_participant, peerId) => {
+        const payload: EndSignal = {
+          type: "end",
+          reason: reason ?? null,
+        };
+        void (async () => {
+          try {
+            await sendSignal(peerId, callId, payload);
+          } catch (err) {
+            console.warn(
+              "Failed to notify remote participant about call termination",
+              err,
+            );
+          }
+        })();
+      });
     }
 
     cleanupMedia();
@@ -313,8 +494,7 @@ function createCallStore() {
           error: error,
           endedAt: Date.now(),
           localStream: null,
-          remoteStream: null,
-          peerConnection: null,
+          participants: new Map(),
         },
       };
     });
@@ -328,17 +508,24 @@ function createCallStore() {
     scheduleDismissal();
   }
 
-  function createPeerConnection(peerId: string, callId: string) {
-    cleanupPeerConnection();
+  function createPeerConnectionForParticipant(peerId: string, callId: string) {
+    const participant = participantStates.get(peerId);
+    if (!participant) {
+      throw new Error("Unknown participant for call.");
+    }
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    activePeerConnection = pc;
-    activePeerId = peerId;
-    activeCallId = callId;
-    pendingRemoteCandidates = [];
+    mutateParticipant(peerId, (current) => {
+      if (!current) {
+        return current;
+      }
+      current.peerConnection = pc;
+      current.pendingCandidates = [];
+      return current;
+    });
 
     pc.onicecandidate = (event) => {
-      if (!event.candidate || !activePeerId || !activeCallId) {
+      if (!event.candidate) {
         return;
       }
       const candidateInit = event.candidate.toJSON
@@ -346,7 +533,10 @@ function createCallStore() {
         : {
             candidate: event.candidate.candidate,
             sdpMid: event.candidate.sdpMid ?? null,
-            sdpMLineIndex: event.candidate.sdpMLineIndex ?? null,
+            sdpMLineIndex:
+              event.candidate.sdpMLineIndex === undefined
+                ? null
+                : event.candidate.sdpMLineIndex,
           };
 
       if (!candidateInit.candidate) {
@@ -365,7 +555,7 @@ function createCallStore() {
 
       void (async () => {
         try {
-          await sendSignal(activePeerId!, activeCallId!, payload);
+          await sendSignal(peerId, callId, payload);
         } catch (err) {
           console.warn("Failed to send ICE candidate", err);
         }
@@ -375,89 +565,93 @@ function createCallStore() {
     pc.ontrack = (event) => {
       const [stream] = event.streams;
       const remote = stream ?? new MediaStream([event.track]);
-      activeRemoteStream = remote;
       remote.getTracks().forEach((track) => {
         track.onended = () => {
-          if (activeRemoteStream === remote) {
-            stopStream(activeRemoteStream);
-            activeRemoteStream = null;
-            update((state) => {
-              if (!state.activeCall || state.activeCall.callId !== callId) {
-                return state;
-              }
-              return {
-                ...state,
-                activeCall: {
-                  ...state.activeCall,
-                  remoteStream: null,
-                },
-              };
-            });
-          }
+          mutateParticipant(peerId, (current) => {
+            if (!current) {
+              return current;
+            }
+            if (current.remoteStream === remote) {
+              stopStream(current.remoteStream);
+              current.remoteStream = null;
+            }
+            return current;
+          });
         };
       });
 
-      update((state) => {
-        if (!state.activeCall || state.activeCall.callId !== callId) {
-          return state;
+      mutateParticipant(peerId, (current) => {
+        if (!current) {
+          return current;
         }
-        return {
-          ...state,
-          activeCall: {
-            ...state.activeCall,
-            remoteStream: remote,
-          },
-        };
+        current.remoteStream = remote;
+        return current;
       });
     };
 
     pc.onconnectionstatechange = () => {
       const connectionState = pc.connectionState;
       if (connectionState === "connected") {
-        update((state) => {
-          if (!state.activeCall || state.activeCall.callId !== callId) {
-            return state;
+        mutateParticipant(peerId, (current) => {
+          if (!current) {
+            return current;
           }
-          if (state.activeCall.status === "in-call") {
-            return state;
-          }
-          return {
-            ...state,
-            activeCall: {
-              ...state.activeCall,
-              status: "in-call",
-              connectedAt: state.activeCall.connectedAt ?? Date.now(),
-            },
-          };
+          current.status = "connected";
+          current.joinedAt = current.joinedAt ?? Date.now();
+          current.error = undefined;
+          return current;
         });
       } else if (connectionState === "failed") {
-        completeCall({
-          status: "error",
-          error: "Call connection failed.",
-          reason: "Call connection failed.",
-          notifyRemote: false,
+        mutateParticipant(peerId, (current) => {
+          if (!current) {
+            return current;
+          }
+          current.status = "error";
+          current.error = "Call connection failed.";
+          return current;
         });
+        cleanupParticipant(peerId);
+        if (!hasActiveParticipants()) {
+          completeCall({
+            status: "error",
+            error: "Call connection failed.",
+            reason: "Call connection failed.",
+            notifyRemote: false,
+          });
+        }
       } else if (connectionState === "disconnected") {
-        completeCall({
-          status: "ended",
-          reason: "Call disconnected.",
-          notifyRemote: false,
+        mutateParticipant(peerId, (current) => {
+          if (!current) {
+            return current;
+          }
+          current.status = "disconnected";
+          return current;
         });
+        if (!hasActiveParticipants()) {
+          completeCall({
+            status: "ended",
+            reason: "Call disconnected.",
+            notifyRemote: false,
+          });
+        }
+      } else if (connectionState === "closed") {
+        mutateParticipant(peerId, (current) => {
+          if (!current) {
+            return current;
+          }
+          current.status = "left";
+          return current;
+        });
+        cleanupParticipant(peerId);
+        if (!hasActiveParticipants()) {
+          completeCall({
+            status: "ended",
+            reason: "Call ended.",
+            notifyRemote: false,
+          });
+        }
       }
     };
-
-    update((state) => {
-      if (!state.activeCall || state.activeCall.callId !== callId) {
-        return state;
-      }
-      return {
-        ...state,
-        activeCall: {
-          ...state.activeCall,
-          peerConnection: pc,
-        },
-      };
-    });
 
     return pc;
   }
@@ -536,7 +730,10 @@ function createCallStore() {
       const handleDeviceChange = () => {
         refreshDevices();
       };
-      navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+      navigator.mediaDevices.addEventListener(
+        "devicechange",
+        handleDeviceChange,
+      );
       deviceChangeUnsubscribe = () => {
         navigator.mediaDevices.removeEventListener(
           "devicechange",
@@ -604,9 +801,7 @@ function createCallStore() {
             deviceAvailability: {
               audioInput: false,
               videoInput:
-                type === "video"
-                  ? false
-                  : state.deviceAvailability.videoInput,
+                type === "video" ? false : state.deviceAvailability.videoInput,
             },
           }));
           throw new Error(
@@ -623,14 +818,18 @@ function createCallStore() {
     }
   }
 
-  function canStartCall(type: CallType, chatId: string | null | undefined) {
+  function canStartCall(
+    type: CallType,
+    chatId: string | null | undefined,
+    chatType: CallChatType,
+  ) {
     if (!chatId) return false;
     const state = get(store);
     const { activeCall, deviceAvailability, permissions } = state;
 
     const isActiveElsewhere =
       activeCall &&
-      activeCall.chatId !== chatId &&
+      (activeCall.chatId !== chatId || activeCall.chatType !== chatType) &&
       activeCall.status !== "ended" &&
       activeCall.status !== "error";
 
@@ -662,24 +861,87 @@ function createCallStore() {
     return true;
   }
 
+  function resolveInvitees({
+    chatId,
+    chatName,
+    chatType,
+    serverId,
+    members,
+  }: {
+    chatId: string;
+    chatName: string;
+    chatType: CallChatType;
+    serverId?: string;
+    members?: { id: string; name?: string | null }[];
+  }): InviteeInfo[] {
+    const invitees = new Map<string, InviteeInfo>();
+    const addInvitee = (
+      id: string | null | undefined,
+      name?: string | null,
+    ) => {
+      if (!id) return;
+      const existing = invitees.get(id);
+      if (existing) {
+        if (!existing.name && name) {
+          invitees.set(id, { id, name: name ?? undefined });
+        }
+        return;
+      }
+      invitees.set(id, { id, name: name ?? undefined });
+    };
+
+    members?.forEach((member) => addInvitee(member.id, member.name));
+
+    if (chatType === "dm") {
+      addInvitee(chatId, chatName);
+    }
+
+    if (chatType === "group") {
+      const summary = get(groupChats).get(chatId);
+      summary?.memberIds.forEach((id) => addInvitee(id));
+    }
+
+    if (chatType === "channel" && serverId) {
+      const { servers } = get(serverStore);
+      const server = servers.find((sv) => sv.id === serverId);
+      server?.members.forEach((member) => addInvitee(member.id, member.name));
+    }
+
+    const me = get(userStore).me;
+    if (me) {
+      invitees.delete(me.id);
+    }
+
+    return Array.from(invitees.values());
+  }
+
   async function startCall({
     chatId,
     chatName,
     type,
+    chatType = "dm",
+    serverId,
+    members,
   }: {
     chatId: string;
     chatName: string;
     type: CallType;
+    chatType?: CallChatType;
+    serverId?: string;
+    members?: { id: string; name?: string | null }[];
   }) {
     if (!isBrowser) {
-      toasts.addToast("Calls are only available in the desktop app.", "warning");
+      toasts.addToast(
+        "Calls are only available in the desktop app.",
+        "warning",
+      );
       return false;
     }
 
     await initialize();
     await ensureSignalListener();
 
-    if (!canStartCall(type, chatId)) {
+    if (!canStartCall(type, chatId, chatType)) {
       const state = get(store);
       if (
         state.permissions.audio === "denied" ||
@@ -696,11 +958,15 @@ function createCallStore() {
         toasts.showErrorToast("No camera detected.");
       } else if (
         state.activeCall &&
-        state.activeCall.chatId !== chatId &&
+        (state.activeCall.chatId !== chatId ||
+          state.activeCall.chatType !== chatType) &&
         state.activeCall.status !== "ended" &&
         state.activeCall.status !== "error"
       ) {
-        toasts.addToast("Finish your current call before starting a new one.", "warning");
+        toasts.addToast(
+          "Finish your current call before starting a new one.",
+          "warning",
+        );
       }
       return false;
     }
@@ -710,12 +976,25 @@ function createCallStore() {
       return false;
     }
 
+    const invitees = resolveInvitees({
+      chatId,
+      chatName,
+      chatType,
+      serverId,
+      members,
+    });
+    if (!invitees.length) {
+      toasts.showErrorToast("No participants available to call.");
+      return false;
+    }
+
     clearDismissalTimer();
 
     const state = get(store);
     if (
       state.activeCall &&
       state.activeCall.chatId === chatId &&
+      state.activeCall.chatType === chatType &&
       state.activeCall.status !== "ended" &&
       state.activeCall.status !== "error"
     ) {
@@ -728,12 +1007,15 @@ function createCallStore() {
         ? window.crypto.randomUUID()
         : `${Date.now()}-${Math.random()}`;
 
+    participantStates = new Map();
+
     update((next) => ({
       ...next,
       showCallModal: true,
       activeCall: {
         chatId,
         chatName,
+        chatType,
         type,
         status: "initializing",
         startedAt: Date.now(),
@@ -742,13 +1024,27 @@ function createCallStore() {
         endReason: undefined,
         error: undefined,
         localStream: null,
-        remoteStream: null,
         callId,
         direction: "outgoing",
-        peerId: chatId,
-        peerConnection: null,
+        participants: new Map(),
       },
     }));
+
+    activeCallId = callId;
+
+    invitees.forEach((invitee) => {
+      mutateParticipant(invitee.id, () => ({
+        userId: invitee.id,
+        name: invitee.name ?? invitee.id,
+        status: "invited",
+        remoteStream: null,
+        peerConnection: null,
+        error: undefined,
+        joinedAt: null,
+        direction: "outgoing",
+        pendingCandidates: [],
+      }));
+    });
 
     toasts.addToast(
       type === "video" ? "Starting video call..." : "Starting voice call...",
@@ -758,8 +1054,6 @@ function createCallStore() {
     try {
       const stream = await requestUserMedia(type);
       activeStream = stream;
-
-      const pc = createPeerConnection(chatId, callId);
 
       update((next) => {
         if (!next.activeCall || next.activeCall.callId !== callId) {
@@ -776,26 +1070,69 @@ function createCallStore() {
         };
       });
 
-      stream.getTracks().forEach((track) => {
-        try {
-          pc.addTrack(track, stream);
-        } catch (err) {
-          console.warn("Failed to add track to peer connection", err);
+      const connectionResults = await Promise.allSettled(
+        invitees.map(async (invitee) => {
+          mutateParticipant(invitee.id, (participant) => {
+            if (!participant) {
+              return participant;
+            }
+            participant.status = "connecting";
+            participant.direction = "outgoing";
+            participant.name = invitee.name ?? participant.name;
+            return participant;
+          });
+
+          const pc = createPeerConnectionForParticipant(invitee.id, callId);
+
+          stream.getTracks().forEach((track) => {
+            try {
+              pc.addTrack(track, stream);
+            } catch (err) {
+              console.warn("Failed to add track to peer connection", err);
+            }
+          });
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          if (!offer.sdp) {
+            throw new Error("Failed to generate offer SDP.");
+          }
+
+          await sendSignal(invitee.id, callId, {
+            type: "offer",
+            sdp: offer.sdp,
+            callType: type,
+            chatName,
+            chatId,
+            chatType,
+          });
+        }),
+      );
+
+      let successfulConnections = 0;
+      connectionResults.forEach((result, index) => {
+        const peerId = invitees[index]?.id;
+        if (result.status === "fulfilled") {
+          successfulConnections += 1;
+        } else if (peerId) {
+          const message =
+            result.reason instanceof Error
+              ? result.reason.message
+              : "Unable to reach participant.";
+          mutateParticipant(peerId, (participant) => {
+            if (!participant) {
+              return participant;
+            }
+            participant.status = "error";
+            participant.error = message;
+            return participant;
+          });
         }
       });
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      if (!offer.sdp) {
-        throw new Error("Failed to generate offer SDP.");
+      if (successfulConnections === 0) {
+        throw new Error("Failed to reach any participants.");
       }
-
-      await sendSignal(chatId, callId, {
-        type: "offer",
-        sdp: offer.sdp,
-        callType: type,
-        chatName,
-      });
 
       return true;
     } catch (error) {
@@ -816,8 +1153,7 @@ function createCallStore() {
             endReason: message,
             endedAt: Date.now(),
             localStream: null,
-            remoteStream: null,
-            peerConnection: null,
+            participants: new Map(),
           },
         };
       });
@@ -834,16 +1170,16 @@ function createCallStore() {
         await handleIncomingOffer(senderId, callId, signal);
         break;
       case "answer":
-        await handleAnswerSignal(callId, signal);
+        await handleAnswerSignal(senderId, callId, signal);
         break;
       case "ice-candidate":
-        await handleCandidateSignal(callId, signal);
+        await handleCandidateSignal(senderId, callId, signal);
         break;
       case "end":
-        handleRemoteEnd(callId, signal.reason ?? undefined);
+        handleRemoteEnd(senderId, callId, signal.reason ?? undefined);
         break;
       case "error":
-        handleRemoteError(callId, signal.message);
+        handleRemoteError(senderId, callId, signal.message);
         break;
       default:
         break;
@@ -860,6 +1196,8 @@ function createCallStore() {
     }
 
     const type: CallType = signal.callType === "video" ? "video" : "voice";
+    const chatType: CallChatType = signal.chatType ?? "dm";
+    const chatId = signal.chatId ?? (chatType === "dm" ? senderId : senderId);
     const state = get(store);
     const active = state.activeCall;
 
@@ -888,44 +1226,82 @@ function createCallStore() {
 
     clearDismissalTimer();
 
-    update((next) => ({
-      ...next,
-      showCallModal: true,
-      activeCall: {
-        chatId: senderId,
-        chatName: signal.chatName ?? senderId,
-        type,
-        status: "initializing",
-        startedAt: Date.now(),
-        connectedAt: null,
-        endedAt: null,
-        endReason: undefined,
-        error: undefined,
-        localStream: null,
-        remoteStream: null,
-        callId,
-        direction: "incoming",
-        peerId: senderId,
-        peerConnection: null,
-      },
-    }));
+    const isNewCall = !active || active.callId !== callId;
 
-    toasts.addToast(
-      type === "video"
-        ? `Incoming video call from ${signal.chatName ?? senderId}`
-        : `Incoming voice call from ${signal.chatName ?? senderId}`,
-      "info",
-    );
+    if (isNewCall) {
+      participantStates = new Map();
+      update((next) => ({
+        ...next,
+        showCallModal: true,
+        activeCall: {
+          chatId,
+          chatName: signal.chatName ?? chatId,
+          chatType,
+          type,
+          status: "initializing",
+          startedAt: Date.now(),
+          connectedAt: null,
+          endedAt: null,
+          endReason: undefined,
+          error: undefined,
+          localStream: null,
+          callId,
+          direction: "incoming",
+          participants: new Map(),
+        },
+      }));
+      activeCallId = callId;
+      toasts.addToast(
+        type === "video"
+          ? `Incoming video call from ${signal.chatName ?? senderId}`
+          : `Incoming voice call from ${signal.chatName ?? senderId}`,
+        "info",
+      );
+    } else {
+      update((next) => {
+        if (!next.activeCall) {
+          return next;
+        }
+        return {
+          ...next,
+          showCallModal: true,
+          activeCall: {
+            ...next.activeCall,
+            chatId,
+            chatName: signal.chatName ?? next.activeCall.chatName,
+            chatType,
+          },
+        };
+      });
+    }
+
+    mutateParticipant(senderId, (participant) => {
+      if (participant) {
+        participant.status = "connecting";
+        participant.direction = "incoming";
+        participant.name = signal.chatName ?? participant.name ?? senderId;
+        return participant;
+      }
+      return {
+        userId: senderId,
+        name: signal.chatName ?? senderId,
+        status: "connecting",
+        remoteStream: null,
+        peerConnection: null,
+        error: undefined,
+        joinedAt: null,
+        direction: "incoming",
+        pendingCandidates: [],
+      };
+    });
 
     try {
-      const stream = await requestUserMedia(type);
-      activeStream = stream;
-
-      const pc = createPeerConnection(senderId, callId);
+      if (!activeStream) {
+        activeStream = await requestUserMedia(type);
+      }
 
       update((next) => {
         if (!next.activeCall || next.activeCall.callId !== callId) {
-          stopStream(stream);
           return next;
         }
         return {
@@ -933,22 +1309,28 @@ function createCallStore() {
           activeCall: {
             ...next.activeCall,
             status: "connecting",
-            localStream: stream,
+            localStream: activeStream,
           },
         };
       });
 
-      stream.getTracks().forEach((track) => {
+      const pc = createPeerConnectionForParticipant(senderId, callId);
+      activeStream?.getTracks().forEach((track) => {
         try {
-          pc.addTrack(track, stream);
+          pc.addTrack(track, activeStream!);
         } catch (err) {
           console.warn("Failed to add track to peer connection", err);
         }
       });
 
-      await pc.setRemoteDescription({ type: "offer", sdp: signal.sdp });
+      await pc.setRemoteDescription({
+        type: "offer",
+        sdp: signal.sdp,
+      });
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
+
       if (!answer.sdp) {
         throw new Error("Failed to generate answer SDP.");
       }
@@ -958,7 +1340,7 @@ function createCallStore() {
         sdp: answer.sdp,
       });
 
-      await flushPendingCandidates();
+      await flushPendingCandidates(senderId);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to answer the call.";
@@ -970,68 +1352,81 @@ function createCallStore() {
       } catch (err) {
         console.warn("Failed to send call error response", err);
       }
-      cleanupMedia();
-      update((next) => {
-        if (!next.activeCall || next.activeCall.callId !== callId) {
-          return next;
+      cleanupParticipant(senderId);
+      mutateParticipant(senderId, (participant) => {
+        if (!participant) {
+          return participant;
         }
-        return {
-          ...next,
-          activeCall: {
-            ...next.activeCall,
-            status: "error",
-            error: message,
-            endReason: message,
-            endedAt: Date.now(),
-            localStream: null,
-            remoteStream: null,
-            peerConnection: null,
-          },
-        };
+        participant.status = "error";
+        participant.error = message;
+        return participant;
       });
-      toasts.showErrorToast(message);
-      scheduleDismissal();
+      if (!hasActiveParticipants()) {
+        completeCall({
+          status: "error",
+          error: message,
+          reason: message,
+          notifyRemote: false,
+        });
+      }
     }
   }
 
-  async function handleAnswerSignal(callId: string, signal: AnswerSignal) {
-    if (!activePeerConnection || activeCallId !== callId) {
+  async function handleAnswerSignal(
+    senderId: string,
+    callId: string,
+    signal: AnswerSignal,
+  ) {
+    if (activeCallId !== callId) {
+      return;
+    }
+
+    const participant = participantStates.get(senderId);
+    if (!participant?.peerConnection) {
       return;
     }
 
     try {
-      await activePeerConnection.setRemoteDescription({
+      await participant.peerConnection.setRemoteDescription({
         type: "answer",
         sdp: signal.sdp,
       });
-      await flushPendingCandidates();
-      update((state) => {
-        if (!state.activeCall || state.activeCall.callId !== callId) {
-          return state;
+      mutateParticipant(senderId, (current) => {
+        if (!current) {
+          return current;
         }
-        return {
-          ...state,
-          activeCall: {
-            ...state.activeCall,
-            status: state.activeCall.status === "initializing"
-              ? "connecting"
-              : state.activeCall.status,
-          },
-        };
+        current.status =
+          current.status === "invited" ? "connecting" : current.status;
+        return current;
       });
+      await flushPendingCandidates(senderId);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to process call answer.";
-      completeCall({
-        status: "error",
-        error: message,
-        reason: message,
-        notifyRemote: false,
+        error instanceof Error
+          ? error.message
+          : "Failed to process call answer.";
+      mutateParticipant(senderId, (current) => {
+        if (!current) {
+          return current;
+        }
+        current.status = "error";
+        current.error = message;
+        return current;
       });
+      cleanupParticipant(senderId);
+      if (!hasActiveParticipants()) {
+        completeCall({
+          status: "error",
+          error: message,
+          reason: message,
+          notifyRemote: false,
+        });
+      }
     }
   }
 
   async function handleCandidateSignal(
+    senderId: string,
     callId: string,
     signal: IceCandidateSignal,
   ) {
@@ -1049,42 +1444,96 @@ function createCallStore() {
       sdpMLineIndex: signal.sdpMLineIndex ?? undefined,
     };
 
-    if (activePeerConnection && activePeerConnection.remoteDescription) {
+    const participant = participantStates.get(senderId);
+    if (!participant) {
+      return;
+    }
+
+    if (participant.peerConnection?.remoteDescription) {
       try {
-        await activePeerConnection.addIceCandidate(candidate);
+        await participant.peerConnection.addIceCandidate(candidate);
       } catch (error) {
         console.warn("Failed to add remote ICE candidate", error);
       }
     } else {
-      pendingRemoteCandidates.push(candidate);
+      mutateParticipant(senderId, (current) => {
+        if (!current) {
+          return current;
+        }
+        current.pendingCandidates = [...current.pendingCandidates, candidate];
+        return current;
+      });
     }
   }
 
-  function handleRemoteEnd(callId: string, reason?: string) {
-    const state = get(store);
-    if (!state.activeCall || state.activeCall.callId !== callId) {
+  function handleRemoteEnd(senderId: string, callId: string, reason?: string) {
+    if (activeCallId !== callId) {
       return;
     }
 
-    completeCall({
-      status: "ended",
-      reason: reason ?? "Call ended by remote.",
-      notifyRemote: false,
+    const participant = participantStates.get(senderId);
+    if (!participant) {
+      return;
+    }
+
+    cleanupParticipant(senderId);
+    mutateParticipant(senderId, (current) => {
+      if (!current) {
+        return current;
+      }
+      current.status = "left";
+      current.error = reason ?? undefined;
+      return current;
     });
+
+    if (!hasActiveParticipants()) {
+      completeCall({
+        status: "ended",
+        reason: reason ?? "Call ended by remote participant.",
+        notifyRemote: false,
+      });
+    }
   }
 
-  function handleRemoteError(callId: string, message: string) {
-    const state = get(store);
-    if (!state.activeCall || state.activeCall.callId !== callId) {
+  function handleRemoteError(
+    senderId: string,
+    callId: string,
+    message: string,
+  ) {
+    if (activeCallId !== callId) {
       return;
     }
 
-    completeCall({
-      status: "error",
-      error: message,
-      reason: message,
-      notifyRemote: false,
+    const participant = participantStates.get(senderId);
+    if (!participant) {
+      return;
+    }
+
+    cleanupParticipant(senderId);
+    mutateParticipant(senderId, (current) => {
+      if (!current) {
+        return current;
+      }
+      current.status = "error";
+      current.error = message;
+      return current;
     });
+    toasts.showErrorToast(message);
+
+    if (!hasActiveParticipants()) {
+      completeCall({
+        status: "error",
+        error: message,
+        reason: message,
+        notifyRemote: false,
+      });
+    }
+  }
+
+  function cleanupMedia() {
+    stopStream(activeStream);
+    activeStream = null;
+    cleanupAllParticipants();
   }
 
   function endCall(reason = "Call ended") {
@@ -1125,6 +1574,7 @@ function createCallStore() {
     signalUnsubscribe = null;
     invokeFn = null;
     initialized = false;
+    participantStates = new Map();
     set(INITIAL_STATE);
   }
 
