@@ -715,6 +715,11 @@
             {chat.friend.online ? "Online" : "Offline"}
           </p>
         </div>
+      {:else if chat.type === "group"}
+        <div class="flex items-center gap-2 min-w-0">
+          <Users class="w-4 h-4 text-muted-foreground shrink-0" />
+          <h2 class="font-semibold text-lg truncate">{chat.name}</h2>
+        </div>
       {:else}
         <div class="flex items-center gap-2 min-w-0">
           <Hash class="w-4 h-4 text-muted-foreground shrink-0" />

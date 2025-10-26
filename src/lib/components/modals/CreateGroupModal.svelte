@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Search, X } from "@lucide/svelte";
+  import { Search } from "@lucide/svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import { SvelteSet } from "svelte/reactivity";
   import {
     Dialog,
@@ -13,6 +14,11 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+  import { toasts } from "$lib/stores/ToastStore";
+  import {
+    chatStore,
+    type BackendGroupChat,
+  } from "$lib/features/chat/stores/chatStore";
 
   type Props = {
     onclose: () => void;
@@ -29,6 +35,7 @@
 
   let open = $state(true);
   let searchTerm = $state("");
+  let isSubmitting = $state(false);
   // eslint-disable-next-line svelte/no-unnecessary-state-wrap
   let selectedUserIds = $state(new SvelteSet<string>());
 
@@ -36,6 +43,10 @@
     allUsers.filter((user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()),
     ),
+  );
+
+  let selectedUsers = $derived(
+    allUsers.filter((user) => selectedUserIds.has(user.id)),
   );
 
   let pinnedFriends = $derived(
@@ -54,12 +65,65 @@
     selectedUserIds = next;
   }
 
-  function createGroup() {
-    const selectedUsers = allUsers.filter((user) =>
-      selectedUserIds.has(user.id),
-    );
-    console.log("Creating group with users:", selectedUsers);
-    open = false;
+  function computeGroupName() {
+    if (selectedUsers.length === 0) {
+      return "New Group";
+    }
+    if (selectedUsers.length === 1) {
+      return `${selectedUsers[0].name} & You`;
+    }
+    if (selectedUsers.length === 2) {
+      return `${selectedUsers[0].name}, ${selectedUsers[1].name}`;
+    }
+    const primary = selectedUsers
+      .slice(0, 2)
+      .map((user) => user.name)
+      .join(", ");
+    return `${primary} +${selectedUsers.length - 2}`;
+  }
+
+  async function createGroup() {
+    if (selectedUserIds.size === 0 || isSubmitting) {
+      return;
+    }
+    const memberIds = Array.from(selectedUserIds);
+    const proposedName = computeGroupName();
+    isSubmitting = true;
+    try {
+      const payload = await invoke<BackendGroupChat & {
+        ownerId?: string;
+        owner_id?: string;
+        createdAt?: string;
+        created_at?: string;
+        memberIds?: string[];
+        member_ids?: string[];
+      }>("create_group_dm", {
+        memberIds,
+        member_ids: memberIds,
+        name: proposedName,
+      });
+
+      const summary = chatStore.handleGroupChatCreated({
+        id: payload.id,
+        name: payload.name ?? proposedName,
+        owner_id: payload.owner_id ?? payload.ownerId ?? undefined,
+        created_at: payload.created_at ?? payload.createdAt ?? undefined,
+        member_ids:
+          payload.member_ids ?? payload.memberIds ?? [...memberIds],
+      });
+
+      await chatStore.setActiveChat(summary.id, "group", undefined, {
+        forceRefresh: true,
+      });
+
+      toasts.addToast("Group created.", "success");
+      open = false;
+    } catch (error) {
+      console.error("Failed to create group", error);
+      toasts.addToast("Failed to create group.", "error");
+    } finally {
+      isSubmitting = false;
+    }
   }
 
   $effect(() => {
@@ -167,9 +231,9 @@
       <Button
         class="w-full"
         onclick={createGroup}
-        disabled={selectedUserIds.size === 0}
+        disabled={selectedUserIds.size === 0 || isSubmitting}
       >
-        Create Group
+        {isSubmitting ? "Creating..." : "Create Group"}
       </Button>
     </DialogFooter>
   </DialogContent>

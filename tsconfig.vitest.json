@@ -13,5 +13,5 @@
       "$services/*": ["src/lib/services/*"]
     }
   },
-  "include": ["src", "vitest-setup.ts"]
+  "include": ["src", "tests", "vitest-setup.ts"]
 }

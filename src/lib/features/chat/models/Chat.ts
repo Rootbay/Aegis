@@ -18,4 +18,14 @@ export interface ChannelChat {
   messages: Message[];
 }
 
-export type Chat = DMChat | ChannelChat;
+export interface GroupChat {
+  type: "group";
+  id: string;
+  name: string;
+  ownerId: string;
+  memberIds: string[];
+  members: User[];
+  messages: Message[];
+}
+
+export type Chat = DMChat | ChannelChat | GroupChat;

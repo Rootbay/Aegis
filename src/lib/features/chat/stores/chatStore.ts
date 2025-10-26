@@ -43,18 +43,37 @@ type AttachmentPayload = {
   data: Uint8Array | ArrayBuffer;
 };
 
+export type BackendGroupChat = {
+  id: string;
+  name?: string | null;
+  owner_id?: string;
+  ownerId?: string;
+  created_at?: string | number | Date;
+  createdAt?: string | number | Date;
+  member_ids?: string[];
+  memberIds?: string[];
+};
+
+export interface GroupChatSummary {
+  id: string;
+  name: string;
+  ownerId: string;
+  createdAt: string;
+  memberIds: string[];
+}
+
 interface ChatStore {
   messagesByChatId: Readable<Map<string, Message[]>>;
   hasMoreByChatId: Readable<Map<string, boolean>>;
   activeChatId: Readable<string | null>;
-  activeChatType: Readable<"dm" | "server" | null>;
+  activeChatType: Readable<"dm" | "server" | "group" | null>;
   activeChannelId: Readable<string | null>;
   serverChannelSelections: Readable<Map<string, string>>;
   activeServerChannelId: Readable<string | null>;
   loadingStateByChat: Readable<Map<string, boolean>>;
   setActiveChat: (
     chatId: string,
-    chatType: "dm" | "server",
+    chatType: "dm" | "server" | "group",
     channelId?: string,
     options?: {
       forceRefresh?: boolean;
@@ -84,6 +103,9 @@ interface ChatStore {
     messageId: string,
     emoji: string,
   ) => Promise<void>;
+  handleGroupChatCreated: (chat: BackendGroupChat) => GroupChatSummary;
+  loadGroupChats: () => Promise<void>;
+  groupChats: Readable<Map<string, GroupChatSummary>>;
 }
 
 type ChatStoreOptions = {
@@ -95,6 +117,50 @@ const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
 function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const messagesByChatIdStore = writable<Map<string, Message[]>>(new Map());
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
+  const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
+
+  const fallbackGroupName = (id: string) => `Group ${id.slice(0, 6)}`;
+
+  const normalizeGroupName = (id: string, name: string | null | undefined) => {
+    const trimmed = name?.trim?.() ?? "";
+    return trimmed.length > 0 ? trimmed : fallbackGroupName(id);
+  };
+
+  const normalizeDateInput = (value: string | number | Date | undefined) => {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (typeof value === "number") {
+      return new Date(value).toISOString();
+    }
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString();
+      }
+    }
+    return new Date().toISOString();
+  };
+
+  const mapBackendGroupChat = (chat: BackendGroupChat): GroupChatSummary => {
+    const memberIdsRaw = chat.member_ids ?? chat.memberIds ?? [];
+    const memberIds = Array.from(new Set(memberIdsRaw.filter((id): id is string => typeof id === "string" && id.length > 0)));
+    return {
+      id: chat.id,
+      name: normalizeGroupName(chat.id, chat.name ?? null),
+      ownerId: chat.owner_id ?? chat.ownerId ?? "",
+      createdAt: normalizeDateInput(chat.created_at ?? chat.createdAt),
+      memberIds,
+    };
+  };
+
+  const upsertGroupChat = (summary: GroupChatSummary) => {
+    groupChatsStore.update((map) => {
+      const next = new Map(map);
+      next.set(summary.id, summary);
+      return next;
+    });
+  };
 
   const SERVER_CHANNEL_SELECTIONS_KEY = "serverChannelSelections";
 
@@ -144,13 +210,53 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const handleGroupChatCreated = (chat: BackendGroupChat): GroupChatSummary => {
+    const summary = mapBackendGroupChat(chat);
+    upsertGroupChat(summary);
+    messagesByChatIdStore.update((map) => {
+      if (map.has(summary.id)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.set(summary.id, []);
+      return next;
+    });
+    hasMoreByChatIdStore.update((map) => {
+      if (map.has(summary.id)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.set(summary.id, true);
+      return next;
+    });
+    return summary;
+  };
+
+  const loadGroupChats = async () => {
+    try {
+      const fetched = await invoke<BackendGroupChat[]>("get_group_chats");
+      groupChatsStore.set(new Map());
+      if (Array.isArray(fetched)) {
+        for (const record of fetched) {
+          handleGroupChatCreated(record);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load group chats:", error);
+    }
+  };
+
   const initialActiveChatId =
     typeof localStorage !== "undefined"
       ? localStorage.getItem("activeChatId")
       : null;
   const initialActiveChatType =
     typeof localStorage !== "undefined"
-      ? (localStorage.getItem("activeChatType") as "dm" | "server" | null)
+      ? (localStorage.getItem("activeChatType") as
+          | "dm"
+          | "server"
+          | "group"
+          | null)
       : null;
 
   const initialServerChannelSelections = loadServerChannelSelections();
@@ -176,7 +282,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   }
 
   const activeChatId = writable<string | null>(initialActiveChatId);
-  const activeChatType = writable<"dm" | "server" | null>(
+  const activeChatType = writable<"dm" | "server" | "group" | null>(
     initialActiveChatType,
   );
   const serverChannelSelectionsStore = writable<Map<string, string>>(
@@ -534,7 +640,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
   const setActiveChat = async (
     chatId: string,
-    type: "dm" | "server",
+    type: "dm" | "server" | "group",
     channelId?: string,
     options?: {
       forceRefresh?: boolean;
@@ -1230,6 +1336,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       loadingStateByChatStore,
       ($map) => new Map($map),
     ),
+    groupChats: derived(groupChatsStore, ($map) => new Map($map)),
     setActiveChat,
     handleMessagesUpdate,
     sendMessage,
@@ -1243,6 +1350,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     loadAttachmentForMessage,
     addReaction,
     removeReaction,
+    handleGroupChatCreated,
+    loadGroupChats,
   };
 }
 
@@ -1255,4 +1364,5 @@ export const activeServerChannelId = chatStore.activeServerChannelId;
 export const activeChatId = chatStore.activeChatId;
 export const activeChatType = chatStore.activeChatType;
 export const loadingStateByChat = chatStore.loadingStateByChat;
+export const groupChats = chatStore.groupChats;
 export { createChatStore };

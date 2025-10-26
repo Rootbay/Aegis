@@ -24,6 +24,7 @@ import {
   activeChatType,
   activeServerChannelId,
   chatStore,
+  groupChats,
   messagesByChatId,
 } from "$lib/features/chat/stores/chatStore";
 import {
@@ -38,6 +39,7 @@ import type { Server } from "$lib/features/servers/models/Server";
 import type { Message } from "$lib/features/chat/models/Message";
 import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
+import type { GroupChatSummary } from "$lib/features/chat/stores/chatStore";
 
 export type AppModalType =
   | "createGroup"
@@ -56,6 +58,7 @@ type ProfileModalSource = User & {
 type PageState = {
   readonly friends: Friend[];
   readonly allUsers: Friend[];
+  readonly groupChats: GroupChatSummary[];
   readonly currentChat: Chat | null;
   readonly openModal: (
     modalType: AppModalType,
@@ -82,6 +85,7 @@ type AppController = {
   currentUser: Readable<User | null>;
   currentChat: Readable<Chat | null>;
   allUsers: Readable<Friend[]>;
+  groupChats: Readable<GroupChatSummary[]>;
   isAnySettingsPage: Readable<boolean>;
   isFriendsOrRootPage: Readable<boolean>;
   activeTab: Readable<string>;
@@ -92,7 +96,10 @@ type AppController = {
     handleFriendsTabSelect: (tab: string) => void;
     handleFriendsAddClick: () => void;
     handleSelectChannel: (serverId: string, channelId: string | null) => void;
-    handleSelectDirectMessage: (chatId: string | null) => void;
+    handleSelectDirectMessage: (
+      chatId: string | null,
+      type?: "dm" | "group",
+    ) => void;
     openModal: PageState["openModal"];
     closeModal: PageState["closeModal"];
     openDetailedProfileModal: PageState["openDetailedProfileModal"];
@@ -248,9 +255,12 @@ export function createAppController(): AppController {
     }
   };
 
-  const handleSelectDirectMessage = (chatId: string | null) => {
+  const handleSelectDirectMessage = (
+    chatId: string | null,
+    type: "dm" | "group" = "dm",
+  ) => {
     if (chatId) {
-      chatStore.setActiveChat(chatId, "dm");
+      chatStore.setActiveChat(chatId, type);
     }
   };
 
@@ -281,6 +291,8 @@ export function createAppController(): AppController {
     }
 
     clearUnlistenHandlers();
+
+    await chatStore.loadGroupChats();
 
     const storedActiveServerId = localStorage.getItem("activeServerId");
     const storedActiveChatId = localStorage.getItem("activeChatId");
@@ -355,6 +367,25 @@ export function createAppController(): AppController {
 
           if (receivedMessage.MessageReaction) {
             chatStore.handleReactionUpdate(receivedMessage.MessageReaction);
+            return;
+          }
+
+          if (receivedMessage.CreateGroupChat) {
+            const groupPayload = receivedMessage.CreateGroupChat;
+            const groupId =
+              groupPayload.group_id ?? groupPayload.groupId ?? undefined;
+            if (groupId) {
+              chatStore.handleGroupChatCreated({
+                id: groupId,
+                name: groupPayload.name ?? null,
+                owner_id:
+                  groupPayload.creator_id ?? groupPayload.creatorId ?? undefined,
+                created_at:
+                  groupPayload.created_at ?? groupPayload.createdAt ?? undefined,
+                member_ids:
+                  groupPayload.member_ids ?? groupPayload.memberIds ?? [],
+              });
+            }
             return;
           }
 
@@ -577,10 +608,16 @@ export function createAppController(): AppController {
     ...$friendStore.friends,
   ]);
 
+  const groupChatList = derived(groupChats, ($groupChats) =>
+    Array.from($groupChats.values()),
+  );
+
   const currentChat = derived(
     [
       friendStore,
       serverStore,
+      groupChats,
+      currentUser,
       activeChatType,
       activeChatId,
       activeChannelId,
@@ -589,6 +626,8 @@ export function createAppController(): AppController {
     ([
       $friendStore,
       $serverStore,
+      $groupChatsMap,
+      $currentUser,
       $activeChatType,
       $activeChatId,
       $activeChannelId,
@@ -602,6 +641,48 @@ export function createAppController(): AppController {
             id: friend.id,
             friend,
             messages: $messagesByChatId.get(friend.id) || [],
+          } as Chat;
+        }
+      } else if ($activeChatType === "group" && $activeChatId) {
+        const summary = $groupChatsMap.get($activeChatId);
+        if (summary) {
+          const friendMap = new Map(
+            $friendStore.friends.map((friend) => [friend.id, friend] as const),
+          );
+          const seen = new Set<string>();
+          const members: User[] = [];
+          const addMember = (user: User) => {
+            if (seen.has(user.id)) {
+              return;
+            }
+            seen.add(user.id);
+            members.push(user);
+          };
+          for (const memberId of summary.memberIds) {
+            if ($currentUser && memberId === $currentUser.id) {
+              addMember($currentUser);
+              continue;
+            }
+            const friend = friendMap.get(memberId);
+            if (friend) {
+              addMember(friend);
+              continue;
+            }
+            addMember({
+              id: memberId,
+              name: `User-${memberId.slice(0, 4)}`,
+              avatar: `https://api.dicebear.com/8.x/identicon/svg?seed=${memberId}`,
+              online: false,
+            });
+          }
+          return {
+            type: "group",
+            id: summary.id,
+            name: summary.name,
+            ownerId: summary.ownerId,
+            memberIds: summary.memberIds,
+            members,
+            messages: $messagesByChatId.get(summary.id) || [],
           } as Chat;
         }
       } else if ($activeChatType === "server") {
@@ -658,6 +739,9 @@ export function createAppController(): AppController {
     get allUsers() {
       return get(allUsers);
     },
+    get groupChats() {
+      return get(groupChatList);
+    },
     get currentChat() {
       return get(currentChat);
     },
@@ -689,6 +773,7 @@ export function createAppController(): AppController {
     currentUser,
     currentChat,
     allUsers,
+    groupChats: groupChatList,
     isAnySettingsPage,
     isFriendsOrRootPage,
     activeTab,

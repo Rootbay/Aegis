@@ -32,6 +32,7 @@
     currentUser,
     currentChat,
     allUsers,
+    groupChats,
     isAnySettingsPage,
     isFriendsOrRootPage,
     activeTab,
@@ -99,7 +100,13 @@
       {:else}
         <DirectMessageList
           friends={$allUsers}
-          activeFriendId={$currentChat?.type === "dm" ? $currentChat.id : null}
+          groupChats={$groupChats}
+          activeFriendId={
+            $currentChat &&
+            ($currentChat.type === "dm" || $currentChat.type === "group")
+              ? $currentChat.id
+              : null
+          }
           onSelect={handleSelectDirectMessage}
           onCreateGroupClick={() => openModal("createGroup")}
         />
