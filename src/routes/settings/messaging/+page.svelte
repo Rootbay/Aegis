@@ -1,9 +1,34 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import { Label } from "$lib/components/ui/label/index.js";
   import { Switch } from "$lib/components/ui/switch/index.js";
+  import {
+    settings,
+    setShowMessageAvatars,
+    setShowMessageTimestamps,
+  } from "$lib/features/settings/stores/settings";
 
-  let showAvatars = $state(true);
-  let showTimestamps = $state(true);
+  let showAvatars = $state(get(settings).showMessageAvatars);
+  let showTimestamps = $state(get(settings).showMessageTimestamps);
+
+  $effect(() => {
+    const unsubscribe = settings.subscribe((value) => {
+      showAvatars = value.showMessageAvatars;
+      showTimestamps = value.showMessageTimestamps;
+    });
+
+    return () => unsubscribe();
+  });
+
+  $effect(() => {
+    const current = get(settings);
+    if (current.showMessageAvatars !== showAvatars) {
+      setShowMessageAvatars(showAvatars);
+    }
+    if (current.showMessageTimestamps !== showTimestamps) {
+      setShowMessageTimestamps(showTimestamps);
+    }
+  });
 </script>
 
 <h1 class="text-2xl font-semibold text-zinc-50">Messaging Settings</h1>

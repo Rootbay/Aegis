@@ -1,5 +1,6 @@
 pub mod calls;
 pub mod chats;
+pub mod data_privacy;
 pub mod files;
 pub mod friends;
 pub mod identity;
