@@ -30,6 +30,7 @@
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
+  import { SvelteURLSearchParams } from "svelte/reactivity";
   import { v4 as uuidv4 } from "uuid";
   import {
     DropdownMenu,
@@ -116,6 +117,17 @@
   function gotoResolved(path: string) {
     // eslint-disable-next-line svelte/no-navigation-without-resolve
     gotoUnsafe(path);
+  }
+
+  function gotoServerSettings(serverId: string, tab?: string) {
+    const params = new SvelteURLSearchParams();
+    if (tab) params.set("tab", tab);
+
+    const query = params.toString();
+    const href = query
+      ? `/channels/${serverId}/settings?${query}`
+      : `/channels/${serverId}/settings`;
+    gotoResolved(href);
   }
 
   function slugifyChannelName(name: string) {
@@ -595,7 +607,8 @@
           break;
         }
         case "invite_people": {
-          toasts.addToast("Invites not implemented yet.", "info");
+          await handleInviteToServerClick();
+          showChannelContextMenu = false;
           break;
         }
         default: {
@@ -613,10 +626,11 @@
         showCreateChannelModal = true;
         break;
       case "create_category":
-        toasts.addToast("Create category not implemented yet.", "info");
+        gotoServerSettings(server.id, "channels");
+        toasts.addToast("Manage categories from the Channels tab.", "info");
         break;
       case "invite_people":
-        handleInviteToServerClick();
+        void handleInviteToServerClick();
         break;
       case "hide_muted_channels": {
         const key = "serverSidebar.hideMuted";
