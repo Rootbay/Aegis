@@ -44,6 +44,11 @@ import type {
   GroupModalOptions,
   ReportUserModalPayload,
 } from "$lib/features/chat/utils/contextMenu";
+import {
+  connectivityStore,
+  type ConnectivityState,
+} from "$lib/stores/connectivityStore";
+import { settings } from "$lib/features/settings/stores/settings";
 
 export type AppModalType =
   | "createGroup"
@@ -87,6 +92,13 @@ type ModalState = {
   modalProps: Readable<Record<string, unknown>>;
 };
 
+type ConnectivityBindings = {
+  state: Readable<ConnectivityState>;
+  statusMessage: Readable<string>;
+  fallbackMessage: Readable<string | null>;
+  showBridgePrompt: Readable<boolean>;
+};
+
 type AppController = {
   authState: Readable<AuthState>;
   currentUser: Readable<User | null>;
@@ -98,6 +110,7 @@ type AppController = {
   activeTab: Readable<string>;
   modal: ModalState;
   pageState: PageState;
+  connectivity: ConnectivityBindings;
   handlers: {
     handleKeydown: (event: KeyboardEvent) => void;
     handleFriendsTabSelect: (tab: string) => void;
@@ -192,6 +205,16 @@ export function createAppController(): AppController {
   const activeModal = writable<AppModalType | null>(null);
   const modalProps = writable<Record<string, unknown>>({});
   const postAuthInitialized = writable(false);
+  const connectivityState: Readable<ConnectivityState> = {
+    subscribe: connectivityStore.subscribe,
+  };
+  const connectivityStatusMessage = connectivityStore.statusMessage;
+  const connectivityFallbackMessage = connectivityStore.fallbackMessage;
+  const connectivityBridgePrompt = derived(
+    [connectivityState, settings],
+    ([state, appSettings]) =>
+      state.bridgeSuggested && appSettings.enableBridgeMode === false,
+  );
   let unlistenHandlers: Array<() => void> = [];
 
   const clearUnlistenHandlers = () => {
@@ -624,6 +647,7 @@ export function createAppController(): AppController {
   });
 
   onMount(() => {
+    void connectivityStore.initialize();
     authStore.bootstrap();
   });
 
@@ -633,6 +657,7 @@ export function createAppController(): AppController {
     unsubscribeAuthState();
     unsubscribeActiveServer();
     clearUnlistenHandlers();
+    connectivityStore.teardown();
   });
 
   const allUsers = derived(friendStore, ($friendStore) => [
@@ -814,6 +839,12 @@ export function createAppController(): AppController {
     modal: {
       activeModal,
       modalProps,
+    },
+    connectivity: {
+      state: connectivityState,
+      statusMessage: connectivityStatusMessage,
+      fallbackMessage: connectivityFallbackMessage,
+      showBridgePrompt: connectivityBridgePrompt,
     },
     pageState,
     handlers: {

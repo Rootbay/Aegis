@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { Home, Plus, Settings } from "@lucide/svelte";
+  import { Home, Plus, RadioTower, Settings } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import { page } from "$app/stores";
@@ -424,6 +424,20 @@
 
     <SidebarFooter class="w-full border-0 px-0 pt-0 p-0">
       <div class="flex flex-col items-center gap-3">
+        <Tooltip>
+          <TooltipTrigger>
+            <Button
+              size="icon"
+              variant="ghost"
+              class="rounded-xl cursor-pointer"
+              aria-label="Mesh Explorer"
+              onclick={() => gotoResolved("/mesh")}
+            >
+              <RadioTower class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Mesh Explorer</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger>
             <Button
