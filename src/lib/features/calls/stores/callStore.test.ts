@@ -1,29 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 
-const {
-  invokeMock,
-  listenMock,
-  listenHandlers,
-  addToastMock,
-  showErrorToastMock,
-} = vi.hoisted(() => {
-  const handlers = new Map<string, (event: { payload: unknown }) => void>();
-  const invoke = vi.fn(async () => undefined);
-  const listen = vi.fn(async (event: string, handler: (event: { payload: unknown }) => void) => {
-    handlers.set(event, handler);
-    return () => handlers.delete(event);
-  });
-  const addToast = vi.fn();
-  const showErrorToast = vi.fn();
-  return {
-    invokeMock: invoke,
-    listenMock: listen,
-    listenHandlers: handlers,
-    addToastMock: addToast,
-    showErrorToastMock: showErrorToast,
-  };
+const listenHandlers = new Map<string, (event: { payload: unknown }) => void>();
+const invokeMock = vi.fn(async () => undefined);
+const listenMock = vi.fn(
+  async (event: string, handler: (event: { payload: unknown }) => void) => {
+    listenHandlers.set(event, handler);
+    return () => listenHandlers.delete(event);
+  },
+);
+const addToastMock = vi.fn();
+const showErrorToastMock = vi.fn();
+const groupChatsStore = writable(new Map());
+const serverStoreState = writable({
+  servers: [],
+  loading: false,
+  activeServerId: null,
 });
+const userStoreState = writable({
+  me: {
+    id: "self-user",
+    name: "Self User",
+    avatar: "",
+    online: true,
+  },
+});
+const getUserMock = vi.fn(async () => null);
 
 class MockMediaStream {
   private tracks: MediaStreamTrack[];
@@ -39,6 +41,7 @@ class MockMediaStream {
 
 class MockRTCPeerConnection {
   static lastInstance: MockRTCPeerConnection | null = null;
+  static instances: MockRTCPeerConnection[] = [];
 
   localDescription: RTCSessionDescriptionInit | null = null;
   remoteDescription: RTCSessionDescriptionInit | null = null;
@@ -62,6 +65,7 @@ class MockRTCPeerConnection {
 
   constructor() {
     MockRTCPeerConnection.lastInstance = this;
+    MockRTCPeerConnection.instances.push(this);
   }
 }
 
@@ -79,26 +83,62 @@ vi.mock("$lib/services/tauri", () => ({
 
 vi.mock("$lib/stores/ToastStore", () => ({
   toasts: {
-    addToast: (...args: Parameters<typeof addToastMock>) => addToastMock(...args),
+    addToast: (...args: Parameters<typeof addToastMock>) =>
+      addToastMock(...args),
     showErrorToast: (...args: Parameters<typeof showErrorToastMock>) =>
       showErrorToastMock(...args),
   },
 }));
 
+vi.mock("$lib/features/chat/stores/chatStore", () => ({
+  groupChats: {
+    subscribe: groupChatsStore.subscribe,
+  },
+}));
+
+vi.mock("$lib/features/servers/stores/serverStore", () => ({
+  serverStore: {
+    subscribe: serverStoreState.subscribe,
+  },
+}));
+
+vi.mock("$lib/stores/userStore", () => ({
+  userStore: {
+    subscribe: userStoreState.subscribe,
+    getUser: (...args: Parameters<typeof getUserMock>) => getUserMock(...args),
+  },
+}));
+
 describe("callStore signaling", () => {
-  const audioTrack = { stop: vi.fn(), kind: "audio" } as unknown as MediaStreamTrack;
+  const audioTrack = {
+    stop: vi.fn(),
+    kind: "audio",
+  } as unknown as MediaStreamTrack;
 
   beforeEach(() => {
-    vi.restoreAllMocks();
     vi.resetModules();
     invokeMock.mockReset();
     listenMock.mockReset();
     listenHandlers.clear();
     addToastMock.mockReset();
     showErrorToastMock.mockReset();
+    getUserMock.mockReset();
 
+    groupChatsStore.set(new Map());
+    serverStoreState.set({ servers: [], loading: false, activeServerId: null });
+    userStoreState.set({
+      me: {
+        id: "self-user",
+        name: "Self User",
+        avatar: "",
+        online: true,
+      },
+    });
+
+    MockRTCPeerConnection.instances = [];
     globalThis.MediaStream = MockMediaStream;
-    globalThis.RTCPeerConnection = MockRTCPeerConnection as unknown as typeof RTCPeerConnection;
+    globalThis.RTCPeerConnection =
+      MockRTCPeerConnection as unknown as typeof RTCPeerConnection;
 
     Object.defineProperty(window, "RTCPeerConnection", {
       value: MockRTCPeerConnection as unknown as typeof RTCPeerConnection,
@@ -138,48 +178,65 @@ describe("callStore signaling", () => {
     });
   });
 
-  it("creates an offer and sends it via the signaling channel", async () => {
+  it("creates offers for every invitee in a group call", async () => {
     const { callStore } = await import("$lib/features/calls/stores/callStore");
 
+    groupChatsStore.set(
+      new Map([
+        [
+          "group-1",
+          {
+            id: "group-1",
+            name: "Study Group",
+            ownerId: "owner-1",
+            createdAt: new Date().toISOString(),
+            memberIds: ["peer-a", "peer-b", "self-user"],
+          },
+        ],
+      ]),
+    );
+
     const started = await callStore.startCall({
-      chatId: "peer-1",
-      chatName: "Peer One",
+      chatId: "group-1",
+      chatName: "Study Group",
+      chatType: "group",
       type: "voice",
+      members: [
+        { id: "peer-a", name: "Peer A" },
+        { id: "peer-b", name: "Peer B" },
+      ],
     });
 
     expect(started).toBe(true);
-    expect(invokeMock).toHaveBeenCalledWith(
-      "send_call_signal",
-      expect.objectContaining({
-        recipientId: "peer-1",
-        callId: "test-call-id",
-        signal: expect.objectContaining({
-          type: "offer",
-          sdp: "offer-sdp",
-          callType: "voice",
-          chatName: "Peer One",
-        }),
-      }),
+
+    const signalCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "send_call_signal",
     );
-    expect(MockRTCPeerConnection.lastInstance?.createOffer).toHaveBeenCalled();
+    expect(signalCalls).toHaveLength(2);
+    expect(signalCalls.map(([, payload]) => payload.recipientId)).toEqual(
+      expect.arrayContaining(["peer-a", "peer-b"]),
+    );
+    expect(MockRTCPeerConnection.instances).toHaveLength(2);
 
     callStore.reset();
   });
 
-  it("applies remote answers and pending ICE candidates", async () => {
+  it("applies remote answers and pending ICE candidates per participant", async () => {
     const { callStore } = await import("$lib/features/calls/stores/callStore");
 
     await callStore.startCall({
       chatId: "peer-2",
       chatName: "Peer Two",
+      chatType: "dm",
       type: "voice",
+      members: [{ id: "peer-2", name: "Peer Two" }],
     });
 
-    const payload = invokeMock.mock.calls[0]?.[1] as {
-      callId: string;
-    };
-    expect(payload).toBeTruthy();
-    const callId = payload.callId;
+    const signalCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "send_call_signal",
+    );
+    const callId = signalCalls[0]?.[1]?.callId as string;
+    expect(callId).toBeDefined();
 
     const handler = listenHandlers.get("call-signal");
     expect(handler).toBeTypeOf("function");
@@ -198,7 +255,9 @@ describe("callStore signaling", () => {
     });
 
     await Promise.resolve();
-    expect(MockRTCPeerConnection.lastInstance?.addIceCandidate).not.toHaveBeenCalled();
+
+    const peer = MockRTCPeerConnection.instances[0];
+    expect(peer.addIceCandidate).not.toHaveBeenCalled();
 
     handler?.({
       payload: {
@@ -214,11 +273,11 @@ describe("callStore signaling", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(MockRTCPeerConnection.lastInstance?.setRemoteDescription).toHaveBeenCalledWith({
+    expect(peer.setRemoteDescription).toHaveBeenCalledWith({
       type: "answer",
       sdp: "answer-sdp",
     });
-    expect(MockRTCPeerConnection.lastInstance?.addIceCandidate).toHaveBeenCalledWith({
+    expect(peer.addIceCandidate).toHaveBeenCalledWith({
       candidate: "candidate-1",
       sdpMid: "0",
       sdpMLineIndex: 0,
@@ -227,37 +286,142 @@ describe("callStore signaling", () => {
     callStore.reset();
   });
 
-  it("marks the call ended when the remote peer hangs up", async () => {
+  it("marks participants as left and ends when the last peer departs", async () => {
     const { callStore } = await import("$lib/features/calls/stores/callStore");
 
+    groupChatsStore.set(
+      new Map([
+        [
+          "group-2",
+          {
+            id: "group-2",
+            name: "Raid Team",
+            ownerId: "owner-2",
+            createdAt: new Date().toISOString(),
+            memberIds: ["peer-a", "peer-b", "self-user"],
+          },
+        ],
+      ]),
+    );
+
     await callStore.startCall({
-      chatId: "peer-3",
-      chatName: "Peer Three",
+      chatId: "group-2",
+      chatName: "Raid Team",
+      chatType: "group",
       type: "voice",
+      members: [
+        { id: "peer-a", name: "Peer A" },
+        { id: "peer-b", name: "Peer B" },
+      ],
     });
 
-    const payload = invokeMock.mock.calls[0]?.[1] as {
-      callId: string;
-    };
-    const callId = payload.callId;
+    const signalCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "send_call_signal",
+    );
+    const callId = signalCalls[0]?.[1]?.callId as string;
     const handler = listenHandlers.get("call-signal");
+    expect(handler).toBeTypeOf("function");
 
     handler?.({
       payload: {
-        senderId: "peer-3",
+        senderId: "peer-a",
         callId,
         signal: {
           type: "end",
-          reason: "Remote ended",
+          reason: "Left the call",
         },
       },
     });
 
     await Promise.resolve();
+    let state = get(callStore);
+    expect(state.activeCall?.participants.get("peer-a")?.status).toBe("left");
+    expect(state.activeCall?.status).not.toBe("ended");
 
-    const state = get(callStore);
+    handler?.({
+      payload: {
+        senderId: "peer-b",
+        callId,
+        signal: {
+          type: "end",
+          reason: "Left the call",
+        },
+      },
+    });
+
+    await Promise.resolve();
+    state = get(callStore);
     expect(state.activeCall?.status).toBe("ended");
-    expect(state.activeCall?.endReason).toBe("Remote ended");
+
+    callStore.reset();
+  });
+
+  it("handles remote errors by ending the call", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+
+    await callStore.startCall({
+      chatId: "peer-error",
+      chatName: "Peer Error",
+      chatType: "dm",
+      type: "voice",
+      members: [{ id: "peer-error", name: "Peer Error" }],
+    });
+
+    const signalCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "send_call_signal",
+    );
+    const callId = signalCalls[0]?.[1]?.callId as string;
+    const handler = listenHandlers.get("call-signal");
+    expect(handler).toBeTypeOf("function");
+
+    handler?.({
+      payload: {
+        senderId: "peer-error",
+        callId,
+        signal: {
+          type: "error",
+          message: "Remote failure",
+        },
+      },
+    });
+
+    await Promise.resolve();
+    const state = get(callStore);
+    expect(state.activeCall?.status).toBe("error");
+    expect(showErrorToastMock).toHaveBeenCalledWith("Remote failure");
+
+    callStore.reset();
+  });
+
+  it("rejects calls with no available participants", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+
+    groupChatsStore.set(
+      new Map([
+        [
+          "group-empty",
+          {
+            id: "group-empty",
+            name: "Solo Group",
+            ownerId: "owner-3",
+            createdAt: new Date().toISOString(),
+            memberIds: ["self-user"],
+          },
+        ],
+      ]),
+    );
+
+    const started = await callStore.startCall({
+      chatId: "group-empty",
+      chatName: "Solo Group",
+      chatType: "group",
+      type: "voice",
+    });
+
+    expect(started).toBe(false);
+    expect(showErrorToastMock).toHaveBeenCalledWith(
+      "No participants available to call.",
+    );
 
     callStore.reset();
   });

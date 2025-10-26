@@ -16,6 +16,7 @@
     callStore,
     describeCallStatus,
     type ActiveCall,
+    type CallParticipant,
   } from "$lib/features/calls/stores/callStore";
 
   const state = $callStore;
@@ -24,8 +25,43 @@
   let duration = $state(0);
   let interval: ReturnType<typeof setInterval> | null = null;
   let localVideoEl: HTMLVideoElement | null = null;
-  let remoteVideoEl: HTMLVideoElement | null = null;
-  let remoteAudioEl: HTMLAudioElement | null = null;
+  function mediaStream(node: HTMLMediaElement, stream: MediaStream | null) {
+    const apply = (value: MediaStream | null) => {
+      if (node.srcObject !== value) {
+        node.srcObject = value;
+      }
+      if (value && typeof node.play === "function") {
+        node.play().catch(() => {});
+      }
+      if (!value && node.srcObject) {
+        node.srcObject = null;
+      }
+    };
+
+    apply(stream);
+
+    return {
+      update(value: MediaStream | null) {
+        apply(value);
+      },
+      destroy() {
+        apply(null);
+      },
+    };
+  }
+
+  const participants = $derived(() => {
+    const call = $callStore.activeCall;
+    if (!call) {
+      return [] as (CallParticipant & { userId: string })[];
+    }
+    return Array.from(call.participants.entries()).map(
+      ([userId, participant]) => ({
+        ...participant,
+        userId,
+      }),
+    );
+  });
 
   function beginTimer(call: ActiveCall | null) {
     if (!call?.connectedAt) {
@@ -82,43 +118,30 @@
         activeCall.status === "connecting" ||
         activeCall.status === "initializing"),
   );
-  const hasRemoteStream = $derived(Boolean(activeCall?.remoteStream));
-
-  $effect(() => {
-    const stream = activeCall?.localStream ?? null;
-    if (localVideoEl) {
-      if (stream) {
-        localVideoEl.srcObject = stream;
-        localVideoEl.muted = true;
-        localVideoEl.play().catch(() => {});
-      } else {
-        localVideoEl.srcObject = null;
-      }
+  function describeParticipant(participant: CallParticipant) {
+    switch (participant.status) {
+      case "invited":
+        return "Invited";
+      case "connecting":
+        return "Connecting";
+      case "connected":
+        return "Connected";
+      case "disconnected":
+        return "Disconnected";
+      case "left":
+        return "Left";
+      case "error":
+        return participant.error ?? "Error";
+      default:
+        return participant.status;
     }
-  });
-
-  $effect(() => {
-    const stream = activeCall?.remoteStream ?? null;
-    if (remoteVideoEl) {
-      if (stream) {
-        remoteVideoEl.srcObject = stream;
-        remoteVideoEl.play().catch(() => {});
-      } else {
-        remoteVideoEl.srcObject = null;
-      }
-    }
-    if (remoteAudioEl) {
-      if (stream) {
-        remoteAudioEl.srcObject = stream;
-        remoteAudioEl.play().catch(() => {});
-      } else {
-        remoteAudioEl.srcObject = null;
-      }
-    }
-  });
+  }
 </script>
 
-<Dialog open={state.showCallModal && Boolean(activeCall)} onOpenChange={handleOpenChange}>
+<Dialog
+  open={state.showCallModal && Boolean(activeCall)}
+  onOpenChange={handleOpenChange}
+>
   {#if activeCall}
     <DialogContent class="sm:max-w-md">
       <DialogHeader class="text-left space-y-1">
@@ -135,7 +158,9 @@
             Started {new Date(activeCall.startedAt).toLocaleTimeString()}
           </p>
           {#if activeCall.status === "in-call" && activeCall.connectedAt}
-            <p class="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <p
+              class="mt-2 flex items-center gap-2 text-xs text-muted-foreground"
+            >
               <Timer class="h-3.5 w-3.5" />
               Connected for {formatDuration(duration)}
             </p>
@@ -143,34 +168,94 @@
         </div>
 
         {#if activeCall.type === "video"}
-          <div class="relative h-56 w-full overflow-hidden rounded-md border border-border bg-black">
-            <video
-              bind:this={remoteVideoEl}
-              autoplay
-              playsinline
-              class="h-full w-full object-cover"
-            />
-            {#if !hasRemoteStream}
-              <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-xs text-muted-foreground">
-                <Video class="h-6 w-6" />
-                <span>Waiting for remote video...</span>
+          <div class="space-y-3">
+            <div class="grid gap-3 sm:grid-cols-2">
+              {#if participants.length === 0}
+                <div
+                  class="flex h-40 items-center justify-center rounded-md border border-border bg-muted/40 text-sm text-muted-foreground"
+                >
+                  Waiting for participants...
+                </div>
+              {/if}
+              {#each participants as participant (participant.userId)}
+                <div
+                  class="relative h-40 overflow-hidden rounded-md border border-border bg-black"
+                >
+                  <video
+                    use:mediaStream={participant.remoteStream}
+                    autoplay
+                    playsinline
+                    class="h-full w-full object-cover"
+                  />
+                  <div
+                    class="absolute top-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
+                  >
+                    {describeParticipant(participant)}
+                  </div>
+                  {#if !participant.remoteStream}
+                    <div
+                      class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-xs text-muted-foreground"
+                    >
+                      <Video class="h-6 w-6" />
+                      <span>{participant.name ?? participant.userId}</span>
+                    </div>
+                  {/if}
+                  <div
+                    class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
+                  >
+                    {participant.name ?? participant.userId}
+                  </div>
+                </div>
+              {/each}
+            </div>
+            <div
+              class="relative h-24 w-full rounded-md border border-border bg-black/80"
+            >
+              <video
+                use:mediaStream={activeCall.localStream ?? null}
+                bind:this={localVideoEl}
+                autoplay
+                playsinline
+                muted
+                class="absolute inset-0 h-full w-full object-cover"
+              />
+              <div
+                class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
+              >
+                You
               </div>
-            {/if}
-            <video
-              bind:this={localVideoEl}
-              autoplay
-              playsinline
-              muted
-              class="absolute bottom-3 right-3 h-20 w-28 rounded-md border border-white/30 object-cover shadow-lg"
-            />
+            </div>
           </div>
         {:else}
           <div class="flex flex-col gap-3">
-            <div class="flex items-center gap-3 rounded-md border border-border bg-background/80 px-3 py-2 text-sm">
-              <Mic class="h-4 w-4 text-muted-foreground" />
-              <span>{hasRemoteStream ? "Audio connected" : "Connecting audio..."}</span>
-            </div>
-            <audio bind:this={remoteAudioEl} autoplay playsinline class="sr-only" />
+            {#if participants.length === 0}
+              <div
+                class="flex items-center gap-3 rounded-md border border-border bg-background/80 px-3 py-2 text-sm text-muted-foreground"
+              >
+                <Mic class="h-4 w-4" />
+                Waiting for others to join...
+              </div>
+            {/if}
+            {#each participants as participant (participant.userId)}
+              <div
+                class="flex items-center justify-between rounded-md border border-border bg-background/80 px-3 py-2 text-sm"
+              >
+                <div>
+                  <p class="font-medium text-foreground">
+                    {participant.name ?? participant.userId}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {describeParticipant(participant)}
+                  </p>
+                </div>
+                <audio
+                  use:mediaStream={participant.remoteStream}
+                  autoplay
+                  playsinline
+                  class="sr-only"
+                />
+              </div>
+            {/each}
           </div>
         {/if}
       </div>

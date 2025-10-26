@@ -536,16 +536,27 @@
   let activeCallForChat = $derived(() => {
     if (!chat?.id) return null;
     const active = $callStore.activeCall;
-    return active && active.chatId === chat.id ? active : null;
+    return active && active.chatId === chat.id && active.chatType === chat.type
+      ? active
+      : null;
+  });
+
+  const isCallEligible = $derived(() => {
+    if (!chat) {
+      return false;
+    }
+    return (
+      chat.type === "dm" || chat.type === "group" || chat.type === "channel"
+    );
   });
 
   let voiceButtonDisabled = $derived(() => {
-    if (!chat?.id) return true;
+    if (!chat?.id || !isCallEligible) return true;
     const state = $callStore;
     const active = state.activeCall;
     if (
       active &&
-      active.chatId !== chat.id &&
+      (active.chatId !== chat.id || active.chatType !== chat.type) &&
       active.status !== "ended" &&
       active.status !== "error"
     ) {
@@ -564,12 +575,12 @@
   });
 
   let videoButtonDisabled = $derived(() => {
-    if (!chat?.id) return true;
+    if (!chat?.id || !isCallEligible) return true;
     const state = $callStore;
     const active = state.activeCall;
     if (
       active &&
-      active.chatId !== chat.id &&
+      (active.chatId !== chat.id || active.chatType !== chat.type) &&
       active.status !== "ended" &&
       active.status !== "error"
     ) {
@@ -611,12 +622,40 @@
     ),
   );
 
+  function getCallMembers() {
+    if (!chat) return [] as { id: string; name?: string }[];
+    if (chat.type === "dm") {
+      return [
+        {
+          id: chat.friend.id,
+          name: chat.friend.name,
+        },
+      ];
+    }
+    if (chat.type === "group" || chat.type === "channel") {
+      return chat.members.map((member) => ({
+        id: member.id,
+        name: member.name,
+      }));
+    }
+    return [];
+  }
+
+  function getChatDisplayName() {
+    if (!chat) return "";
+    if (chat.type === "dm") {
+      return chat.friend.name;
+    }
+    return chat.name;
+  }
+
   async function startVoiceCall() {
-    if (!chat || chat.type !== "dm") return;
+    if (!chat || !isCallEligible) return;
     const active = $callStore.activeCall;
     if (
       active &&
       active.chatId === chat.id &&
+      active.chatType === chat.type &&
       active.status !== "ended" &&
       active.status !== "error"
     ) {
@@ -625,17 +664,21 @@
     }
     await callStore.startCall({
       chatId: chat.id,
-      chatName: chat.friend.name,
+      chatName: getChatDisplayName(),
+      chatType: chat.type,
       type: "voice",
+      serverId: chat.type === "channel" ? chat.serverId : undefined,
+      members: getCallMembers(),
     });
   }
 
   async function startVideoCall() {
-    if (!chat || chat.type !== "dm") return;
+    if (!chat || !isCallEligible) return;
     const active = $callStore.activeCall;
     if (
       active &&
       active.chatId === chat.id &&
+      active.chatType === chat.type &&
       active.status !== "ended" &&
       active.status !== "error"
     ) {
@@ -644,8 +687,11 @@
     }
     await callStore.startCall({
       chatId: chat.id,
-      chatName: chat.friend.name,
+      chatName: getChatDisplayName(),
+      chatType: chat.type,
       type: "video",
+      serverId: chat.type === "channel" ? chat.serverId : undefined,
+      members: getCallMembers(),
     });
   }
 
@@ -729,13 +775,10 @@
     </div>
 
     <div class="flex items-center gap-2">
-      {#if chat.type === "dm"}
+      {#if isCallEligible}
         <Button
           variant="ghost"
-          class={cn(
-            "cursor-pointer",
-            voiceCallActive ? "text-cyan-400" : "",
-          )}
+          class={cn("cursor-pointer", voiceCallActive ? "text-cyan-400" : "")}
           size="icon"
           aria-label="Start voice call"
           onclick={startVoiceCall}
@@ -746,10 +789,7 @@
         </Button>
         <Button
           variant="ghost"
-          class={cn(
-            "cursor-pointer",
-            videoCallActive ? "text-cyan-400" : "",
-          )}
+          class={cn("cursor-pointer", videoCallActive ? "text-cyan-400" : "")}
           size="icon"
           aria-label="Start video call"
           onclick={startVideoCall}
@@ -758,7 +798,8 @@
         >
           <Video class="w-4 h-4" />
         </Button>
-      {:else}
+      {/if}
+      {#if chat.type !== "dm"}
         <Button
           variant="ghost"
           class="cursor-pointer"
