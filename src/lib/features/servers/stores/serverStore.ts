@@ -68,6 +68,7 @@ interface ServerStore extends Readable<ServerStoreState> {
   fetchServerDetails: (serverId: string) => Promise<void>;
   addChannelToServer: (serverId: string, channel: Channel) => void;
   addInviteToServer: (serverId: string, invite: ServerInvite) => void;
+  removeMemberFromServer: (serverId: string, memberId: string) => void;
   updateServer: (
     serverId: string,
     patch: Partial<Server>,
@@ -397,6 +398,32 @@ export function createServerStore(): ServerStore {
     });
   };
 
+  const removeMemberFromServer = (serverId: string, memberId: string) => {
+    update((s) => {
+      const servers = s.servers.map((server) => {
+        if (server.id !== serverId) return server;
+        const existingMembers = Array.isArray(server.members)
+          ? server.members
+          : [];
+        const filteredMembers = existingMembers.filter(
+          (member) => member.id !== memberId,
+        );
+        const nextServer = {
+          ...server,
+          members: filteredMembers,
+        };
+        serverCache.set(serverId, nextServer);
+        return nextServer;
+      });
+
+      if (!servers.some((srv) => srv.id === serverId)) {
+        serverCache.delete(serverId);
+      }
+
+      return { ...s, servers };
+    });
+  };
+
   const updateServer = async (
     serverId: string,
     patch: Partial<Server>,
@@ -585,6 +612,7 @@ export function createServerStore(): ServerStore {
     fetchServerDetails,
     addChannelToServer,
     addInviteToServer,
+    removeMemberFromServer,
     updateServer,
     removeChannelFromServer,
     initialize,

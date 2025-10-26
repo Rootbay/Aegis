@@ -176,6 +176,36 @@ pub async fn leave_server(
 }
 
 #[tauri::command]
+pub async fn remove_server_member(
+    server_id: String,
+    member_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+    let requester_id = state.identity.peer_id().to_base58();
+
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can remove members.".into());
+    }
+
+    if member_id == server.owner_id {
+        return Err("Server owners cannot remove themselves.".into());
+    }
+
+    database::remove_server_member(&state.db_pool, &server_id, &member_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn create_channel(
     channel: database::Channel,
     state_container: State<'_, AppStateContainer>,

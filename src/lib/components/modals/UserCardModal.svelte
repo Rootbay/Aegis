@@ -106,7 +106,9 @@
     </p>
 
     {#if isServerMemberContext}
-      <Button variant="secondary" class="w-full mt-auto">Add Role</Button>
+      <p class="text-sm text-muted-foreground mt-4">
+        Role assignment controls are not available yet.
+      </p>
     {/if}
   </CardContent>
 
