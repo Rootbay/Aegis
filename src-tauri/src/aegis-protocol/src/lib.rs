@@ -116,6 +116,14 @@ pub enum AepMessage {
         scope: MessageDeletionScope,
         signature: Option<Vec<u8>>,
     },
+    EditMessage {
+        message_id: String,
+        chat_id: String,
+        editor_id: String,
+        new_content: String,
+        edited_at: DateTime<Utc>,
+        signature: Option<Vec<u8>>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -163,6 +171,15 @@ pub struct DeleteMessageData {
     pub chat_id: String,
     pub initiator_id: String,
     pub scope: MessageDeletionScope,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MessageEditData {
+    pub message_id: String,
+    pub chat_id: String,
+    pub editor_id: String,
+    pub new_content: String,
+    pub edited_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

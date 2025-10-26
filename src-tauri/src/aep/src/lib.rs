@@ -2,7 +2,7 @@
 use sqlx::{Pool, Sqlite};
 use aegis_shared_types::{AppState, IncomingFile};
 use std::path::Path;
-use aegis_protocol::{AepMessage, ChatMessageData, DeleteMessageData, MessageDeletionScope, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
+use aegis_protocol::{AepMessage, ChatMessageData, DeleteMessageData, MessageDeletionScope, MessageEditData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
 use aegis_core::services;
@@ -197,6 +197,8 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 read: false,
                 attachments: attachments_for_db,
                 reactions: std::collections::HashMap::new(),
+                edited_at: None,
+                edited_by: None,
             };
             database::insert_message(db_pool, &new_message).await?;
         }
@@ -311,6 +313,68 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                     return Err(err.into());
                 }
             }
+        }
+        AepMessage::EditMessage {
+            message_id,
+            chat_id,
+            editor_id,
+            new_content,
+            edited_at,
+            signature,
+        } => {
+            let edit_data = MessageEditData {
+                message_id: message_id.clone(),
+                chat_id: chat_id.clone(),
+                editor_id: editor_id.clone(),
+                new_content: new_content.clone(),
+                edited_at,
+            };
+            let edit_bytes = bincode::serialize(&edit_data).map_err(AegisError::Serialization)?;
+            let public_key = fetch_public_key_for_user(db_pool, &editor_id).await?;
+
+            let signature = signature.ok_or_else(|| {
+                AegisError::InvalidInput("Missing signature for edit message.".into())
+            })?;
+
+            if !public_key.verify(&edit_bytes, &signature) {
+                eprintln!(
+                    "Invalid signature for edit message {} from user {}",
+                    message_id, editor_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Invalid signature for edit message.".into(),
+                ));
+            }
+
+            if let Some(metadata) = database::get_message_metadata(db_pool, &message_id).await? {
+                if metadata.chat_id != chat_id {
+                    eprintln!(
+                        "EditMessage chat mismatch: expected {}, received {}",
+                        metadata.chat_id, chat_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "EditMessage chat mismatch.".into(),
+                    ));
+                }
+                if metadata.sender_id != editor_id {
+                    eprintln!(
+                        "EditMessage editor mismatch for {}: editor {} is not {}",
+                        message_id, editor_id, metadata.sender_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "EditMessage editor mismatch.".into(),
+                    ));
+                }
+            }
+
+            database::update_message_content(
+                db_pool,
+                &message_id,
+                &new_content,
+                edited_at,
+                &editor_id,
+            )
+            .await?;
         }
         AepMessage::EncryptedChatMessage { .. } => {
             // handled in bootstrap for E2EE flow

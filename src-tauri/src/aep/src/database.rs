@@ -83,6 +83,10 @@ pub struct Message {
     pub read: bool,
     pub attachments: Vec<Attachment>,
     pub reactions: HashMap<String, Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edited_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edited_by: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -438,14 +442,17 @@ pub async fn delete_channel(pool: &Pool<Sqlite>, channel_id: &str) -> Result<(),
 pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let timestamp_str = message.timestamp.to_rfc3339();
+    let edited_at_str = message.edited_at.map(|value| value.to_rfc3339());
     sqlx::query!(
-        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         message.id,
         message.chat_id,
         message.sender_id,
         message.content,
         timestamp_str,
         message.read,
+        edited_at_str,
+        message.edited_by,
     )
     .execute(&mut *tx)
     .await?;
@@ -628,6 +635,26 @@ pub async fn delete_message(pool: &Pool<Sqlite>, message_id: &str) -> Result<(),
     Ok(())
 }
 
+pub async fn update_message_content(
+    pool: &Pool<Sqlite>,
+    message_id: &str,
+    new_content: &str,
+    edited_at: DateTime<Utc>,
+    edited_by: &str,
+) -> Result<(), sqlx::Error> {
+    let edited_at_str = edited_at.to_rfc3339();
+    sqlx::query!(
+        "UPDATE messages SET content = ?, edited_at = ?, edited_by = ? WHERE id = ?",
+        new_content,
+        edited_at_str,
+        edited_by,
+        message_id,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn get_message_metadata(
     pool: &Pool<Sqlite>,
     message_id: &str,
@@ -696,11 +723,13 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         content: String,
         timestamp: String,
         read: bool,
+        edited_at: Option<String>,
+        edited_by: Option<String>,
     }
 
     let messages_raw = sqlx::query_as!(
         MessageRaw,
-        "SELECT * FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        "SELECT id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         chat_id,
         limit,
         offset
@@ -714,6 +743,18 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         let timestamp = DateTime::parse_from_rfc3339(&m_raw.timestamp)
             .map(|dt| dt.with_timezone(&Utc))
             .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
+        let edited_at = match m_raw.edited_at {
+            Some(value) => Some(
+                DateTime::parse_from_rfc3339(&value)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| {
+                        sqlx::Error::Decode(
+                            format!("Failed to parse edited_at timestamp: {}", e).into(),
+                        )
+                    })?,
+            ),
+            None => None,
+        };
         message_ids.push(m_raw.id.clone());
         messages.push(Message {
             id: m_raw.id,
@@ -724,6 +765,8 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             read: m_raw.read,
             attachments: Vec::new(),
             reactions: HashMap::new(),
+            edited_at,
+            edited_by: m_raw.edited_by,
         });
     }
 
