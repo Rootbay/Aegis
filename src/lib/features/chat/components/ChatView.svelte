@@ -35,6 +35,7 @@
   import { callStore } from "$lib/features/calls/stores/callStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import MessageAuthorName from "$lib/features/chat/components/MessageAuthorName.svelte";
+  import { highlightText } from "$lib/features/chat/utils/highlightText";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -189,6 +190,7 @@
     const unregisterSearchHandlers = chatSearchStore.registerHandlers({
       jumpToMatch,
       clearSearch,
+      focusMatch,
     });
     return () => {
       detachViewportListener?.();
@@ -254,41 +256,27 @@
   const myId = $userStore.me?.id;
   const chatSearchQueryStore = derived(chatSearchStore, (state) => state.query);
 
-  function jumpToMatch(next = true) {
-    const { matches, activeMatchIndex } = get(chatSearchStore);
+  function focusMatch(index: number) {
+    const { matches } = get(chatSearchStore);
     if (!matches.length) return;
-    const count = matches.length;
-    const nextIndex = (activeMatchIndex + (next ? 1 : -1) + count) % count;
-    chatSearchStore.setActiveMatchIndex(nextIndex);
-    const msgIndex = matches[nextIndex];
+    const safeIndex = Math.max(0, Math.min(index, matches.length - 1));
+    chatSearchStore.setActiveMatchIndex(safeIndex);
+    const msgIndex = matches[safeIndex];
     if (listRef && typeof listRef.scroll === "function") {
       listRef.scroll({ index: msgIndex, align: "center", smoothScroll: true });
     }
   }
 
-  function clearSearch() {
-    chatSearchStore.reset();
+  function jumpToMatch(next = true) {
+    const { matches, activeMatchIndex } = get(chatSearchStore);
+    if (!matches.length) return;
+    const count = matches.length;
+    const nextIndex = (activeMatchIndex + (next ? 1 : -1) + count) % count;
+    focusMatch(nextIndex);
   }
 
-  function highlightText(
-    text: string,
-    query: string,
-  ): { text: string; match: boolean }[] {
-    if (!query) return [{ text, match: false }];
-    const q = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(q, "ig");
-    const parts: { text: string; match: boolean }[] = [];
-    let lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null) {
-      if (m.index > lastIndex)
-        parts.push({ text: text.slice(lastIndex, m.index), match: false });
-      parts.push({ text: m[0], match: true });
-      lastIndex = m.index + m[0].length;
-    }
-    if (lastIndex < text.length)
-      parts.push({ text: text.slice(lastIndex), match: false });
-    return parts.length ? parts : [{ text, match: false }];
+  function clearSearch() {
+    chatSearchStore.reset();
   }
 
   type ContextMenuEntry = {

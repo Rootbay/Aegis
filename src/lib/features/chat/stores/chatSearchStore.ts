@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 
 export interface ChatSearchState {
   open: boolean;
@@ -13,6 +13,7 @@ export interface ChatSearchState {
 interface ChatSearchHandlers {
   jumpToMatch?: (next: boolean) => void;
   clearSearch?: () => void;
+  focusMatch?: (index: number) => void;
 }
 
 const BASE_STATE = {
@@ -41,7 +42,8 @@ function arraysEqual(a: number[], b: number[]) {
 }
 
 function createChatSearchStore() {
-  const { subscribe, set, update } = writable<ChatSearchState>(initialState);
+  const store = writable<ChatSearchState>(initialState);
+  const { subscribe, set, update } = store;
   let handlers: ChatSearchHandlers = {};
 
   return {
@@ -93,6 +95,18 @@ function createChatSearchStore() {
           ? state
           : { ...state, activeMatchIndex: index },
       );
+    },
+    focusMatch(index: number) {
+      const state = get(store);
+      const { matches } = state;
+      if (!matches.length) {
+        return;
+      }
+      const clampedIndex = Math.max(0, Math.min(index, matches.length - 1));
+      if (state.activeMatchIndex !== clampedIndex) {
+        set({ ...state, activeMatchIndex: clampedIndex });
+      }
+      handlers.focusMatch?.(clampedIndex);
     },
     setDropdownOpen(open: boolean) {
       update((state) =>
