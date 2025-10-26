@@ -1,13 +1,15 @@
 import { persistentStore } from "$lib/stores/persistentStore";
 
-interface UserSettings {
+export interface UserSettings {
   name: string;
   avatar: string;
   publicKey: string;
   status: string;
 }
 
-interface AppSettings {
+export type MessageDensity = "cozy" | "compact";
+
+export interface AppSettings {
   user: UserSettings;
   enableCommandPalette: boolean;
   enableBatteryAware: boolean;
@@ -17,10 +19,19 @@ interface AppSettings {
   enableIntelligentMeshRouting: boolean;
   enablePanicButton: boolean;
   enableSpamPrevention: boolean;
+  enableReadReceipts: boolean;
+  enableTypingIndicators: boolean;
+  showMessageAvatars: boolean;
+  showMessageTimestamps: boolean;
+  allowDataCollection: boolean;
+  personalizeExperience: boolean;
+  shareOnlineStatus: boolean;
+  shareUsageAnalytics: boolean;
+  shareCrashReports: boolean;
   ephemeralMessageDuration: number;
   enableDarkMode: boolean;
   fontSize: number;
-  messageDensity: "cozy" | "compact";
+  messageDensity: MessageDensity;
   customTheme: boolean;
   enableLinkPreviews: boolean;
   enableResilientFileTransfer: boolean;
@@ -51,6 +62,15 @@ const defaultSettings: AppSettings = {
   enableIntelligentMeshRouting: true,
   enablePanicButton: false,
   enableSpamPrevention: true,
+  enableReadReceipts: true,
+  enableTypingIndicators: true,
+  showMessageAvatars: true,
+  showMessageTimestamps: true,
+  allowDataCollection: true,
+  personalizeExperience: true,
+  shareOnlineStatus: true,
+  shareUsageAnalytics: true,
+  shareCrashReports: true,
   ephemeralMessageDuration: 60,
   enableDarkMode: true,
   fontSize: 16,
@@ -73,3 +93,83 @@ export const settings = persistentStore<AppSettings>(
   "settings",
   defaultSettings,
 );
+
+type AppSettingsKey = keyof AppSettings;
+
+export function updateAppSetting<Key extends AppSettingsKey>(
+  key: Key,
+  value: AppSettings[Key],
+) {
+  settings.update((current) => {
+    if (current[key] === value) {
+      return current;
+    }
+
+    return {
+      ...current,
+      [key]: value,
+    };
+  });
+}
+
+export function updateSettings(partial: Partial<AppSettings>) {
+  settings.update((current) => ({
+    ...current,
+    ...partial,
+  }));
+}
+
+function createBooleanSetter<Key extends AppSettingsKey>(key: Key) {
+  return (value: Extract<AppSettings[Key], boolean>) => {
+    updateAppSetting(key, value as AppSettings[Key]);
+  };
+}
+
+export const setReadReceiptsEnabled = createBooleanSetter(
+  "enableReadReceipts",
+);
+export const setTypingIndicatorsEnabled = createBooleanSetter(
+  "enableTypingIndicators",
+);
+export const setShowMessageAvatars = createBooleanSetter(
+  "showMessageAvatars",
+);
+export const setShowMessageTimestamps = createBooleanSetter(
+  "showMessageTimestamps",
+);
+export const setAllowDataCollection = createBooleanSetter(
+  "allowDataCollection",
+);
+export const setPersonalizeExperience = createBooleanSetter(
+  "personalizeExperience",
+);
+export const setShareOnlineStatus = createBooleanSetter(
+  "shareOnlineStatus",
+);
+export const setShareUsageAnalytics = createBooleanSetter(
+  "shareUsageAnalytics",
+);
+export const setShareCrashReports = createBooleanSetter(
+  "shareCrashReports",
+);
+export const setLinkPreviewsEnabled = createBooleanSetter(
+  "enableLinkPreviews",
+);
+export const setResilientFileTransferEnabled = createBooleanSetter(
+  "enableResilientFileTransfer",
+);
+export const setWalkieTalkieVoiceMemosEnabled = createBooleanSetter(
+  "enableWalkieTalkieVoiceMemos",
+);
+export const setAutoDownloadMediaEnabled = createBooleanSetter(
+  "autoDownloadMedia",
+);
+
+export const setMessageDensity = (density: MessageDensity) => {
+  updateAppSetting("messageDensity", density);
+};
+
+export const setEphemeralMessageDuration = (durationMinutes: number) => {
+  const normalized = Math.max(0, Math.round(durationMinutes));
+  updateAppSetting("ephemeralMessageDuration", normalized);
+};

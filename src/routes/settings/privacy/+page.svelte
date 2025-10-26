@@ -1,9 +1,38 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import { Label } from "$lib/components/ui/label/index.js";
   import { Switch } from "$lib/components/ui/switch/index.js";
+  import {
+    settings,
+    setReadReceiptsEnabled,
+    setTypingIndicatorsEnabled,
+  } from "$lib/features/settings/stores/settings";
 
-  let enableReadReceipts = $state(true);
-  let enableTypingIndicators = $state(true);
+  let enableReadReceipts = $state(
+    get(settings).enableReadReceipts,
+  );
+  let enableTypingIndicators = $state(
+    get(settings).enableTypingIndicators,
+  );
+
+  $effect(() => {
+    const unsubscribe = settings.subscribe((value) => {
+      enableReadReceipts = value.enableReadReceipts;
+      enableTypingIndicators = value.enableTypingIndicators;
+    });
+
+    return () => unsubscribe();
+  });
+
+  $effect(() => {
+    const current = get(settings);
+    if (current.enableReadReceipts !== enableReadReceipts) {
+      setReadReceiptsEnabled(enableReadReceipts);
+    }
+    if (current.enableTypingIndicators !== enableTypingIndicators) {
+      setTypingIndicatorsEnabled(enableTypingIndicators);
+    }
+  });
 </script>
 
 <h1 class="text-2xl font-semibold text-zinc-50">Privacy Settings</h1>

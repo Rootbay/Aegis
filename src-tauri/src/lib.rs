@@ -64,7 +64,9 @@ pub async fn run() {
             commands::files::reject_file_transfer,
             commands::calls::send_call_signal,
             commands::settings::get_file_acl_policy,
-            commands::settings::set_file_acl_policy
+            commands::settings::set_file_acl_policy,
+            commands::data_privacy::export_user_data,
+            commands::data_privacy::request_account_deletion
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
