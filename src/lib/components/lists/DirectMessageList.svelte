@@ -4,7 +4,7 @@
   import { browser } from "$app/environment";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
-  import { Plus, X } from "@lucide/svelte";
+  import { Plus, Users, X } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
@@ -31,17 +31,21 @@
     AvatarFallback,
   } from "$lib/components/ui/avatar";
 
-  type SelectFriendHandler = (...args: [string | null]) => void; // eslint-disable-line no-unused-vars
+  import type { GroupChatSummary } from "$lib/features/chat/stores/chatStore";
+
+  type SelectChatHandler = (chatId: string | null, type?: "dm" | "group") => void;
 
   let {
     friends = [],
+    groupChats = [],
     activeFriendId = null,
     onSelect,
     onCreateGroupClick,
   }: {
     friends?: Friend[];
+    groupChats?: GroupChatSummary[];
     activeFriendId?: string | null;
-    onSelect: SelectFriendHandler;
+    onSelect: SelectChatHandler;
     onCreateGroupClick: () => void;
   } = $props();
 
@@ -50,6 +54,12 @@
   let searchResults = $derived(
     friends.filter((friend) =>
       friend.name.toLowerCase().includes(searchTerm.toLowerCase()),
+    ),
+  );
+
+  let sortedGroupChats = $derived(
+    [...groupChats].sort((a, b) =>
+      a.createdAt.localeCompare(b.createdAt),
     ),
   );
 
@@ -150,70 +160,113 @@
   </div>
 
   <ScrollArea class="flex-1 px-2">
-    {#if !friends || friends.length === 0}
+    {#if (!friends || friends.length === 0) && sortedGroupChats.length === 0}
       <div class="text-center p-6 text-muted-foreground">
-        <p>No direct messages.</p>
+        <p>No conversations yet.</p>
         <p class="text-sm">
           Click the ‘+’ icon to create a group or start a new conversation.
         </p>
       </div>
     {:else}
-      {#each friends as friend (friend.id)}
-        <ContextMenu>
-          <ContextMenuTrigger>
-            <Button
-              variant="ghost"
-              class="w-full justify-start gap-3 py-1 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
-              data-active={activeFriendId === friend.id}
-              onclick={() => onSelect(friend.id)}
-            >
-              <div class="relative">
-                <Avatar class="h-10 w-10">
-                  <AvatarImage src={friend.avatar} alt={friend.name} />
-                  <AvatarFallback class="uppercase"
-                    >{friend.name?.[0]}</AvatarFallback
-                  >
-                </Avatar>
-                {#if friend.online}
-                  <span
-                    class="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background"
-                  ></span>
-                {/if}
-              </div>
-
-              <div class="min-w-0 flex-1">
-                <div class="flex items-baseline justify-between gap-2">
-                  <p class="font-semibold truncate">{friend.name}</p>
-                  {@const timestampLabel = formatTimestamp(friend.timestamp)}
-                  {#if timestampLabel}
-                    <p class="shrink-0 text-xs text-muted-foreground">
-                      {timestampLabel}
-                    </p>
-                  {/if}
+      <div class="space-y-4 pb-4">
+        {#if sortedGroupChats.length > 0}
+          <section class="space-y-1">
+            <p class="px-2 text-xs font-semibold uppercase text-muted-foreground">
+              Group Chats
+            </p>
+            {#each sortedGroupChats as group (group.id)}
+              <Button
+                variant="ghost"
+                class="w-full justify-start gap-3 py-1 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
+                data-active={activeFriendId === group.id}
+                onclick={() => onSelect(group.id, "group")}
+              >
+                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <Users size={16} />
                 </div>
-              </div>
-            </Button>
-          </ContextMenuTrigger>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-baseline justify-between gap-2">
+                    <p class="font-semibold truncate">{group.name}</p>
+                    {@const createdLabel = formatTimestamp(group.createdAt)}
+                    {#if createdLabel}
+                      <p class="shrink-0 text-xs text-muted-foreground">
+                        {createdLabel}
+                      </p>
+                    {/if}
+                  </div>
+                  <p class="text-xs text-muted-foreground truncate">
+                    {group.memberIds.length} member{group.memberIds.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+              </Button>
+            {/each}
+          </section>
+        {/if}
 
-          <ContextMenuContent class="w-48">
-            <ContextMenuItem
-              onselect={() => handleContextItem("open", friend.id)}
-              >Open Chat</ContextMenuItem
-            >
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              onselect={() => handleContextItem("mute", friend.id)}
-              >Mute</ContextMenuItem
-            >
-            <ContextMenuItem
-              onselect={() => handleContextItem("remove", friend.id)}
-              class="text-destructive"
-            >
-              Remove
-            </ContextMenuItem>
-          </ContextMenuContent>
-        </ContextMenu>
-      {/each}
+        {#if friends && friends.length > 0}
+          <section class="space-y-1">
+            <p class="px-2 text-xs font-semibold uppercase text-muted-foreground">
+              Direct Messages
+            </p>
+            {#each friends as friend (friend.id)}
+              <ContextMenu>
+                <ContextMenuTrigger>
+                  <Button
+                    variant="ghost"
+                    class="w-full justify-start gap-3 py-1 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
+                    data-active={activeFriendId === friend.id}
+                    onclick={() => onSelect(friend.id)}
+                  >
+                    <div class="relative">
+                      <Avatar class="h-10 w-10">
+                        <AvatarImage src={friend.avatar} alt={friend.name} />
+                        <AvatarFallback class="uppercase"
+                          >{friend.name?.[0]}</AvatarFallback
+                        >
+                      </Avatar>
+                      {#if friend.online}
+                        <span
+                          class="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background"
+                        ></span>
+                      {/if}
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-baseline justify-between gap-2">
+                        <p class="font-semibold truncate">{friend.name}</p>
+                        {@const timestampLabel = formatTimestamp(friend.timestamp)}
+                        {#if timestampLabel}
+                          <p class="shrink-0 text-xs text-muted-foreground">
+                            {timestampLabel}
+                          </p>
+                        {/if}
+                      </div>
+                    </div>
+                  </Button>
+                </ContextMenuTrigger>
+
+                <ContextMenuContent class="w-48">
+                  <ContextMenuItem
+                    onselect={() => handleContextItem("open", friend.id)}
+                    >Open Chat</ContextMenuItem
+                  >
+                  <ContextMenuSeparator />
+                  <ContextMenuItem
+                    onselect={() => handleContextItem("mute", friend.id)}
+                    >Mute</ContextMenuItem
+                  >
+                  <ContextMenuItem
+                    onselect={() => handleContextItem("remove", friend.id)}
+                    class="text-destructive"
+                  >
+                    Remove
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            {/each}
+          </section>
+        {/if}
+      </div>
     {/if}
   </ScrollArea>
 

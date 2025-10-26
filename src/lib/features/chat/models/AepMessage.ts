@@ -131,6 +131,19 @@ export interface RemoveFriendship {
   signature?: BytePayload;
 }
 
+export interface CreateGroupChat {
+  group_id?: string;
+  groupId?: string;
+  name?: string | null;
+  creator_id?: string;
+  creatorId?: string;
+  member_ids?: string[];
+  memberIds?: string[];
+  created_at?: string | number | Date;
+  createdAt?: string | number | Date;
+  signature?: BytePayload;
+}
+
 export interface CreateServer {
   server: Server;
   signature?: BytePayload;
@@ -218,4 +231,5 @@ export interface AepMessage {
   FileTransferComplete?: FileTransferComplete;
   FileTransferError?: FileTransferError;
   MessageReaction?: MessageReaction;
+  CreateGroupChat?: CreateGroupChat;
 }

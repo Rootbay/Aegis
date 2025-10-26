@@ -1,4 +1,5 @@
 pub mod calls;
+pub mod chats;
 pub mod files;
 pub mod friends;
 pub mod identity;

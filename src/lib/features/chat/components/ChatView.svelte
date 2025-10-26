@@ -202,7 +202,10 @@
   });
 
   $effect(() => {
-    if (chat?.type === "channel" && chat.members) {
+    if (
+      (chat?.type === "channel" || chat?.type === "group") &&
+      chat.members
+    ) {
       memberById = new Map(chat.members.map((member) => [member.id, member]));
     } else {
       memberById = new Map();
@@ -969,9 +972,13 @@
         </button>
         <textarea
           rows="1"
-          placeholder="Message {chat.type === 'dm'
-            ? '@' + chat.friend.name
-            : '#' + chat.name}"
+          placeholder={`Message ${
+            chat.type === "dm"
+              ? `@${chat.friend.name}`
+              : chat.type === "group"
+                ? chat.name
+                : `#${chat.name}`
+          }`}
           class="flex-grow bg-transparent resize-none focus:outline-none mx-2 text-white placeholder-zinc-400"
           bind:value={messageInput}
           bind:this={textareaRef}

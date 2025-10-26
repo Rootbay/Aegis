@@ -55,6 +55,14 @@ pub enum AepMessage {
     BlockUser { blocker_id: String, blocked_id: String, signature: Option<Vec<u8>> },
     UnblockUser { unblocker_id: String, unblocked_id: String, signature: Option<Vec<u8>> },
     RemoveFriendship { remover_id: String, removed_id: String, signature: Option<Vec<u8>> },
+    CreateGroupChat {
+        group_id: String,
+        name: Option<String>,
+        creator_id: String,
+        member_ids: Vec<String>,
+        created_at: DateTime<Utc>,
+        signature: Option<Vec<u8>>,
+    },
     CreateServer { server: Server, signature: Option<Vec<u8>> },
     JoinServer { server_id: String, user_id: String, signature: Option<Vec<u8>> },
     CreateChannel { channel: Channel, signature: Option<Vec<u8>> },
@@ -133,6 +141,15 @@ pub struct DeleteServerData {
 pub struct SendServerInviteData {
     pub server_id: String,
     pub user_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateGroupChatData {
+    pub group_id: String,
+    pub name: Option<String>,
+    pub creator_id: String,
+    pub member_ids: Vec<String>,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

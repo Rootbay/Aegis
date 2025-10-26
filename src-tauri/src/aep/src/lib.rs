@@ -2,7 +2,7 @@
 use sqlx::{Pool, Sqlite};
 use aegis_shared_types::{AppState, IncomingFile};
 use std::path::Path;
-use aegis_protocol::{AepMessage, ChatMessageData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
+use aegis_protocol::{AepMessage, ChatMessageData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
 use aegis_core::services;
@@ -603,6 +603,67 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             if let Some(friendship) = database::get_friendship(db_pool, &remover_id, &removed_id).await? {
                 database::delete_friendship(db_pool, &friendship.id).await?;
             }
+        }
+        AepMessage::CreateGroupChat {
+            group_id,
+            name,
+            creator_id,
+            member_ids,
+            created_at,
+            signature,
+        } => {
+            let payload = CreateGroupChatData {
+                group_id: group_id.clone(),
+                name: name.clone(),
+                creator_id: creator_id.clone(),
+                member_ids: member_ids.clone(),
+                created_at: created_at.clone(),
+            };
+            let payload_bytes =
+                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+            let public_key = fetch_public_key_for_user(db_pool, &creator_id).await?;
+
+            if let Some(sig) = signature {
+                if !public_key.verify(&payload_bytes, &sig) {
+                    eprintln!(
+                        "Invalid signature for group chat creation from user: {}",
+                        creator_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "Invalid signature for group chat creation.".to_string(),
+                    ));
+                }
+            } else {
+                eprintln!(
+                    "Missing signature for group chat creation message from user: {}",
+                    creator_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Missing signature for group chat creation message.".to_string(),
+                ));
+            }
+
+            let my_id = state.identity.peer_id().to_base58();
+            if !member_ids.iter().any(|member| member == &my_id) {
+                return Ok(());
+            }
+
+            let chat = database::GroupChat {
+                id: group_id.clone(),
+                name: name.clone(),
+                owner_id: creator_id.clone(),
+                created_at: created_at.clone(),
+            };
+            let members: Vec<database::GroupChatMember> = member_ids
+                .iter()
+                .map(|member_id| database::GroupChatMember {
+                    group_chat_id: group_id.clone(),
+                    user_id: member_id.clone(),
+                    added_at: created_at.clone(),
+                })
+                .collect();
+
+            database::upsert_group_chat(db_pool, &chat, &members).await?;
         }
         AepMessage::CreateServer { server, signature } => {
             let create_server_data = CreateServerData { server: server.clone() };
