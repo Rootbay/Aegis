@@ -156,3 +156,57 @@ describe("chatStore message editing", () => {
     expect(message.editedAt).toBe(new Date(editedAt).toISOString());
   });
 });
+
+describe("chatStore metadata derivations", () => {
+  beforeEach(() => {
+    createObjectURLSpy = vi.fn(
+      () => `blob:mock-${Math.random().toString(16).slice(2)}`,
+    );
+    revokeObjectURLSpy = vi.fn();
+    vi.stubGlobal(
+      "URL",
+      {
+        createObjectURL: createObjectURLSpy,
+        revokeObjectURL: revokeObjectURLSpy,
+      } as unknown as typeof URL,
+    );
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("tracks last activity and unread counts for chats", () => {
+    const store = createChatStore();
+    const timestamp1 = "2024-01-01T10:00:00.000Z";
+    const timestamp2 = "2024-01-01T12:00:00.000Z";
+    store.handleMessagesUpdate("chat-1", [
+      {
+        id: "msg-1",
+        chatId: "chat-1",
+        senderId: "user-999",
+        content: "Hello there",
+        timestamp: timestamp1,
+        read: true,
+      },
+      {
+        id: "msg-2",
+        chatId: "chat-1",
+        senderId: "user-123",
+        content: "Reply",
+        timestamp: timestamp2,
+        read: false,
+      },
+    ]);
+
+    const metadata = get(store.metadataByChatId).get("chat-1");
+    expect(metadata).toBeDefined();
+    expect(metadata?.lastMessage?.id).toBe("msg-2");
+    expect(metadata?.lastActivityAt).toBe(new Date(timestamp2).toISOString());
+    expect(metadata?.unreadCount).toBe(1);
+  });
+});

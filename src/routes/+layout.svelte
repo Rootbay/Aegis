@@ -34,6 +34,7 @@
     currentChat,
     allUsers,
     groupChats,
+    directMessages,
     isAnySettingsPage,
     isFriendsOrRootPage,
     activeTab,
@@ -108,9 +109,8 @@
         />
       {:else}
         <DirectMessageList
-          friends={$allUsers}
-          groupChats={$groupChats}
-          activeFriendId={
+          entries={$directMessages}
+          activeChatId={
             $currentChat &&
             ($currentChat.type === "dm" || $currentChat.type === "group")
               ? $currentChat.id

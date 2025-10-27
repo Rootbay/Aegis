@@ -30,6 +30,10 @@ import {
   type TypingIndicatorEvent,
 } from "$lib/features/chat/stores/chatStore";
 import {
+  directMessageRoster,
+  type DirectMessageListEntry,
+} from "$lib/features/chat/stores/directMessageRoster";
+import {
   CREATE_GROUP_CONTEXT_KEY,
   FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
 } from "$lib/contextKeys";
@@ -71,6 +75,7 @@ type PageState = {
   readonly friends: Friend[];
   readonly allUsers: Friend[];
   readonly groupChats: GroupChatSummary[];
+  readonly directMessages: DirectMessageListEntry[];
   readonly currentChat: Chat | null;
   readonly openModal: (
     modalType: AppModalType,
@@ -101,12 +106,13 @@ type ConnectivityBindings = {
   showBridgePrompt: Readable<boolean>;
 };
 
-type AppController = {
+export type AppController = {
   authState: Readable<AuthState>;
   currentUser: Readable<User | null>;
   currentChat: Readable<Chat | null>;
   allUsers: Readable<Friend[]>;
   groupChats: Readable<GroupChatSummary[]>;
+  directMessages: Readable<DirectMessageListEntry[]>;
   isAnySettingsPage: Readable<boolean>;
   isFriendsOrRootPage: Readable<boolean>;
   activeTab: Readable<string>;
@@ -815,6 +821,9 @@ export function createAppController(): AppController {
     get groupChats() {
       return get(groupChatList);
     },
+    get directMessages() {
+      return get(directMessageRoster);
+    },
     get currentChat() {
       return get(currentChat);
     },
@@ -849,6 +858,7 @@ export function createAppController(): AppController {
     currentChat,
     allUsers,
     groupChats: groupChatList,
+    directMessages: directMessageRoster,
     isAnySettingsPage,
     isFriendsOrRootPage,
     activeTab,

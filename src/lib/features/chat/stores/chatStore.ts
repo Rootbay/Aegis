@@ -90,9 +90,17 @@ export interface GroupChatSummary {
   memberIds: string[];
 }
 
+export interface ChatMetadata {
+  chatId: string;
+  lastMessage: Message | null;
+  lastActivityAt: string | null;
+  unreadCount: number;
+}
+
 interface ChatStore {
   messagesByChatId: Readable<Map<string, Message[]>>;
   hasMoreByChatId: Readable<Map<string, boolean>>;
+  metadataByChatId: Readable<Map<string, ChatMetadata>>;
   activeChatId: Readable<string | null>;
   activeChatType: Readable<"dm" | "server" | "group" | null>;
   activeChannelId: Readable<string | null>;
@@ -164,6 +172,67 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
   const typingByChatIdStore = writable<Map<string, string[]>>(new Map());
+  const metadataByChatIdReadable = derived(
+    messagesByChatIdStore,
+    ($messages): Map<string, ChatMetadata> => {
+      const metadata = new Map<string, ChatMetadata>();
+      for (const [chatId, messages] of $messages.entries()) {
+        if (!messages || messages.length === 0) {
+          metadata.set(chatId, {
+            chatId,
+            lastMessage: null,
+            lastActivityAt: null,
+            unreadCount: 0,
+          });
+          continue;
+        }
+
+        let latestTimestamp = Number.NEGATIVE_INFINITY;
+        let lastMessage: Message | null = null;
+        let fallbackTimestamp: string | null = null;
+        let unreadCount = 0;
+
+        for (const message of messages) {
+          const candidateTimestamp =
+            message.editedAt ?? message.timestamp ?? null;
+          if (candidateTimestamp) {
+            fallbackTimestamp = candidateTimestamp;
+            const parsed = Date.parse(candidateTimestamp);
+            if (!Number.isNaN(parsed) && parsed >= latestTimestamp) {
+              latestTimestamp = parsed;
+              lastMessage = message;
+            }
+          }
+
+          if (!message.read) {
+            unreadCount += 1;
+          }
+        }
+
+        const normalizedActivity = (() => {
+          if (Number.isFinite(latestTimestamp) && latestTimestamp > 0) {
+            return new Date(latestTimestamp).toISOString();
+          }
+          if (lastMessage?.editedAt) {
+            return lastMessage.editedAt;
+          }
+          if (lastMessage?.timestamp) {
+            return lastMessage.timestamp;
+          }
+          return fallbackTimestamp;
+        })();
+
+        metadata.set(chatId, {
+          chatId,
+          lastMessage,
+          lastActivityAt: normalizedActivity ?? null,
+          unreadCount,
+        });
+      }
+
+      return metadata;
+    },
+  );
 
   const typingTimeouts = new Map<string, Map<string, ReturnType<typeof setTimeout>>>();
   const typingDispatchState = new Map<string, boolean>();
@@ -1998,6 +2067,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   return {
     messagesByChatId: derived(messagesByChatIdStore, ($map) => $map),
     hasMoreByChatId: derived(hasMoreByChatIdStore, ($map) => $map),
+    metadataByChatId: derived(metadataByChatIdReadable, ($map) => new Map($map)),
     activeChatId: derived(activeChatId, ($id) => $id),
     activeChatType: derived(activeChatType, ($type) => $type),
     activeChannelId: derived(activeChannelId, ($id) => $id),
@@ -2053,6 +2123,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 export const chatStore = createChatStore();
 export const messagesByChatId = chatStore.messagesByChatId;
 export const hasMoreByChatId = chatStore.hasMoreByChatId;
+export const chatMetadataByChatId = chatStore.metadataByChatId;
 export const activeChannelId = chatStore.activeChannelId;
 export const serverChannelSelections = chatStore.serverChannelSelections;
 export const activeServerChannelId = chatStore.activeServerChannelId;
@@ -2063,3 +2134,4 @@ export const typingByChatId = chatStore.typingByChatId;
 export const activeChatTypingUsers = chatStore.activeChatTypingUsers;
 export const groupChats = chatStore.groupChats;
 export { createChatStore };
+export type { ChatMetadata };
