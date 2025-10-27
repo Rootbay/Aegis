@@ -1,10 +1,65 @@
+use chrono::{DateTime, Utc};
+use crypto::identity::Identity;
 use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
-use sqlx::{Pool, Sqlite};
-use chrono::{DateTime, Utc};
-use crypto::identity::Identity;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectivityPeer {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hop_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_seen: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_gateway: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectivityLink {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub medium: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectivityEventPayload {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub internet_reachable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mesh_reachable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_peers: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mesh_peers: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peers: Option<Vec<ConnectivityPeer>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub links: Option<Vec<ConnectivityLink>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bridge_suggested: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct User {
@@ -86,6 +141,7 @@ pub struct AppState {
     pub incoming_files: Arc<Mutex<HashMap<String, IncomingFile>>>, // Key is "<sender_id>:<file_name>"
     pub file_cmd_tx: mpsc::Sender<FileTransferCommand>,
     pub file_acl_policy: Arc<Mutex<FileAclPolicy>>, // dynamic, shared across clones
+    pub connectivity_snapshot: Arc<Mutex<Option<ConnectivityEventPayload>>>,
 }
 
 #[derive(Clone)]

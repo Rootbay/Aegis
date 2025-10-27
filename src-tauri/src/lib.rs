@@ -1,5 +1,6 @@
 pub mod bootstrap;
 pub mod commands;
+pub mod connectivity;
 
 use crate::commands::state::AppStateContainer;
 
@@ -72,7 +73,8 @@ pub async fn run() {
             commands::settings::set_file_acl_policy,
             commands::data_privacy::export_user_data,
             commands::data_privacy::request_account_deletion,
-            commands::moderation::submit_user_report
+            commands::moderation::submit_user_report,
+            commands::connectivity::get_connectivity_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
