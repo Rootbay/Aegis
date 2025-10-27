@@ -11,6 +11,7 @@
   import { Label } from "$lib/components/ui/label/index.js";
   import SettingsList from "$lib/features/settings/components/SettingsList.svelte";
   import SearchResultsList from "$lib/features/settings/components/SearchResultsList.svelte";
+  import { authStore } from "$lib/features/auth/stores/authStore";
 
   type SettingsSection = "user" | "app" | "info";
 
@@ -176,6 +177,11 @@
     navigateTo(lastVisited ? `/channels/${lastVisited}` : "/");
   }
 
+  function handleLogout() {
+    authStore.logout();
+    navigateTo("/");
+  }
+
   async function copyAppInfo() {
     if (!browser || !navigator.clipboard) return;
     const info = ["Tauri: 2", "Svelte: 5.0.0", "TypeScript: 5.6.2"].join("\n");
@@ -260,7 +266,7 @@
             <Button
               variant="destructive"
               class="w-full justify-start"
-              onclick={() => console.log("Log Out clicked")}
+              onclick={handleLogout}
             >
               Log Out
             </Button>
