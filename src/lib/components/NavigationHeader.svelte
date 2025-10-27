@@ -13,6 +13,7 @@
   import { cn } from "$lib/utils";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { userStore } from "$lib/stores/userStore";
+  import { activeChatTypingUsers } from "$lib/features/chat/stores/chatStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { Chat } from "$lib/features/chat/models/Chat";
@@ -212,6 +213,42 @@
       default:
         return "Value...";
     }
+  });
+
+  const typingStatusLabel = $derived(() => {
+    const ids = $activeChatTypingUsers;
+    if (!chat || ids.length === 0) {
+      return "";
+    }
+
+    const lookup = new Map<string, string>();
+    if (chat.type === "dm" && chat.friend) {
+      lookup.set(chat.friend.id, chat.friend.name ?? chat.friend.id);
+    }
+    if ((chat.type === "group" || chat.type === "channel") && chat.members) {
+      chat.members.forEach((member: User) => {
+        lookup.set(member.id, member.name ?? member.id);
+      });
+    }
+    const currentUser = $userStore.me;
+    if (currentUser) {
+      lookup.set(currentUser.id, currentUser.name ?? currentUser.id);
+    }
+
+    const names = ids
+      .map((id) => lookup.get(id) ?? "Someone")
+      .filter((name, index, array) => array.indexOf(name) === index);
+
+    if (names.length === 0) {
+      return "";
+    }
+    if (names.length === 1) {
+      return `${names[0]} is typing...`;
+    }
+    if (names.length === 2) {
+      return `${names[0]} and ${names[1]} are typing...`;
+    }
+    return `${names[0]}, ${names[1]}, and ${names.length - 2} others are typing...`;
   });
 
   $effect(() => {
@@ -760,17 +797,26 @@
           <p class="text-xs text-muted-foreground whitespace-nowrap">
             {chat.friend.online ? "Online" : "Offline"}
           </p>
+          {#if typingStatusLabel}
+            <p class="text-xs text-cyan-400 whitespace-nowrap">{typingStatusLabel}</p>
+          {/if}
         </div>
       {:else if chat.type === "group"}
         <div class="flex items-center gap-2 min-w-0">
           <Users class="w-4 h-4 text-muted-foreground shrink-0" />
           <h2 class="font-semibold text-lg truncate">{chat.name}</h2>
         </div>
+        {#if typingStatusLabel}
+          <p class="text-xs text-cyan-400 truncate">{typingStatusLabel}</p>
+        {/if}
       {:else}
         <div class="flex items-center gap-2 min-w-0">
           <Hash class="w-4 h-4 text-muted-foreground shrink-0" />
           <h2 class="font-semibold text-lg truncate">{chat.name}</h2>
         </div>
+        {#if typingStatusLabel}
+          <p class="text-xs text-cyan-400 truncate">{typingStatusLabel}</p>
+        {/if}
       {/if}
     </div>
 

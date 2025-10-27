@@ -22,6 +22,8 @@ pub async fn run() {
             commands::messages::add_reaction,
             commands::messages::remove_reaction,
             commands::messages::send_encrypted_dm,
+            commands::messages::send_read_receipt,
+            commands::messages::send_typing_indicator,
             commands::messages::rotate_group_key,
             commands::messages::send_encrypted_group_message,
             commands::chats::create_group_dm,
