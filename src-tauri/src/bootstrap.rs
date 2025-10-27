@@ -362,6 +362,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 read: false,
                                                                 attachments: Vec::new(),
                                                                 reactions: std::collections::HashMap::new(),
+                                                                expires_at: None,
                                                             };
                                                                 if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                             }
@@ -425,6 +426,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 read: false,
                                                                 attachments: Vec::new(),
                                                                 reactions: std::collections::HashMap::new(),
+                                                                expires_at: None,
                                                             };
                                                             if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                         }

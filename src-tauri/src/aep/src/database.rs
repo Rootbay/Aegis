@@ -101,6 +101,8 @@ pub struct Message {
     pub edited_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub edited_by: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
@@ -675,8 +677,9 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
     let mut tx = pool.begin().await?;
     let timestamp_str = message.timestamp.to_rfc3339();
     let edited_at_str = message.edited_at.map(|value| value.to_rfc3339());
+    let expires_at_str = message.expires_at.map(|value| value.to_rfc3339());
     sqlx::query!(
-        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         message.id,
         message.chat_id,
         message.sender_id,
@@ -685,6 +688,7 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
         message.read,
         edited_at_str,
         message.edited_by,
+        expires_at_str,
     )
     .execute(&mut *tx)
     .await?;
@@ -957,11 +961,12 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         read: bool,
         edited_at: Option<String>,
         edited_by: Option<String>,
+        expires_at: Option<String>,
     }
 
     let messages_raw = sqlx::query_as!(
         MessageRaw,
-        "SELECT id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        "SELECT id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         chat_id,
         limit,
         offset
@@ -987,6 +992,18 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             ),
             None => None,
         };
+        let expires_at = match m_raw.expires_at {
+            Some(value) => Some(
+                DateTime::parse_from_rfc3339(&value)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| {
+                        sqlx::Error::Decode(
+                            format!("Failed to parse expires_at timestamp: {}", e).into(),
+                        )
+                    })?,
+            ),
+            None => None,
+        };
         message_ids.push(m_raw.id.clone());
         messages.push(Message {
             id: m_raw.id,
@@ -999,6 +1016,7 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             reactions: HashMap::new(),
             edited_at,
             edited_by: m_raw.edited_by,
+            expires_at,
         });
     }
 

@@ -129,6 +129,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             server_id,
             conversation_id,
             attachments,
+            expires_at,
             signature,
         } => {
             let chat_message_data = ChatMessageData {
@@ -140,6 +141,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 server_id: server_id.clone(),
                 conversation_id: conversation_id.clone(),
                 attachments: attachments.clone(),
+                expires_at: expires_at,
             };
             let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &sender).await?;
@@ -199,6 +201,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 reactions: std::collections::HashMap::new(),
                 edited_at: None,
                 edited_by: None,
+                expires_at,
             };
             database::insert_message(db_pool, &new_message).await?;
         }

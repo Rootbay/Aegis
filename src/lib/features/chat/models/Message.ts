@@ -21,4 +21,5 @@ export interface Message {
   pending?: boolean;
   editedAt?: string;
   editedBy?: string;
+  expiresAt?: string;
 }

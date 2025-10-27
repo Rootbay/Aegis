@@ -12,6 +12,7 @@ pub enum AepMessage {
         server_id: Option<String>,
         conversation_id: Option<String>,
         attachments: Vec<AttachmentPayload>,
+        expires_at: Option<DateTime<Utc>>,
         signature: Option<Vec<u8>>,
     },
     // Signal-style E2EE payload for direct messages
@@ -201,6 +202,7 @@ pub struct ChatMessageData {
     pub server_id: Option<String>,
     pub conversation_id: Option<String>,
     pub attachments: Vec<AttachmentPayload>,
+    pub expires_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

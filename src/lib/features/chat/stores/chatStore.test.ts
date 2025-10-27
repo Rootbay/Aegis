@@ -2,6 +2,7 @@ import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
 import { get } from "svelte/store";
 import { createChatStore } from "./chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
+import { settings } from "$lib/features/settings/stores/settings";
 
 const invokeMock = vi.fn();
 
@@ -35,9 +36,15 @@ describe("chatStore attachment lifecycle", () => {
   beforeEach(() => {
     createdUrls = [];
     invokeMock.mockReset();
+    invokeMock.mockImplementation(() => Promise.resolve(undefined));
     localStorage.clear();
     serverStore.handleServersUpdate([]);
     serverStore.setActiveServer(null);
+    settings.update((current) => ({
+      ...current,
+      user: { ...current.user },
+      ephemeralMessageDuration: 60,
+    }));
     const createSpy = vi.fn(() => {
       const url = `blob:${createdUrls.length}`;
       createdUrls.push(url);
@@ -51,6 +58,7 @@ describe("chatStore attachment lifecycle", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     localStorage.clear();
     serverStore.handleServersUpdate([]);
@@ -377,5 +385,86 @@ describe("chatStore attachment lifecycle", () => {
     const finalMessages = get(store.messagesByChatId).get("chat-1") ?? [];
     expect(finalMessages.map((msg) => msg.id)).toEqual(["msg-new"]);
     expect(get(store.loadingStateByChat).get("chat-1")).toBe(false);
+  });
+
+  it("removes expired messages and requests backend deletion", async () => {
+    vi.useFakeTimers();
+    const base = new Date("2025-01-01T00:00:00.000Z");
+    vi.setSystemTime(base);
+    settings.update((current) => ({
+      ...current,
+      user: { ...current.user },
+      ephemeralMessageDuration: 1,
+    }));
+
+    const timestamp = base.toISOString();
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: "msg-expire",
+        content: "soon gone",
+        timestamp,
+      },
+    ]);
+
+    const store = createChatStore();
+    await store.setActiveChat("chat-expire", "dm");
+
+    const stored = get(store.messagesByChatId).get("chat-expire") ?? [];
+    expect(stored).toHaveLength(1);
+    const expectedExpiry = new Date(base.getTime() + 60_000).toISOString();
+    expect(stored[0]?.expiresAt).toBe(expectedExpiry);
+
+    vi.advanceTimersByTime(60_000);
+    await Promise.resolve();
+    vi.advanceTimersByTime(5_000);
+    await Promise.resolve();
+
+    const remaining = get(store.messagesByChatId).get("chat-expire") ?? [];
+    expect(remaining).toHaveLength(0);
+
+    const deleteCall = invokeMock.mock.calls.find(
+      ([command]) => command === "delete_message",
+    );
+    expect(deleteCall?.[1]).toMatchObject({
+      chatId: "chat-expire",
+      messageId: "msg-expire",
+    });
+  });
+
+  it("recomputes expiry timestamps when ephemeral duration changes", async () => {
+    const baseTimestamp = "2025-01-02T12:00:00.000Z";
+    settings.update((current) => ({
+      ...current,
+      user: { ...current.user },
+      ephemeralMessageDuration: 5,
+    }));
+
+    invokeMock.mockResolvedValueOnce([
+      {
+        id: "msg-rolling",
+        content: "hello",
+        timestamp: baseTimestamp,
+      },
+    ]);
+
+    const store = createChatStore();
+    await store.setActiveChat("chat-rolling", "dm");
+
+    const initial = get(store.messagesByChatId).get("chat-rolling") ?? [];
+    expect(initial[0]?.expiresAt).toBe(
+      new Date(new Date(baseTimestamp).getTime() + 5 * 60_000).toISOString(),
+    );
+
+    settings.update((current) => ({
+      ...current,
+      user: { ...current.user },
+      ephemeralMessageDuration: 10,
+    }));
+    await Promise.resolve();
+
+    const updated = get(store.messagesByChatId).get("chat-rolling") ?? [];
+    expect(updated[0]?.expiresAt).toBe(
+      new Date(new Date(baseTimestamp).getTime() + 10 * 60_000).toISOString(),
+    );
   });
 });
