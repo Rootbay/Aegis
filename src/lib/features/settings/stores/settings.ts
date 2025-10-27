@@ -164,6 +164,21 @@ export const setWalkieTalkieVoiceMemosEnabled = createBooleanSetter(
 export const setAutoDownloadMediaEnabled = createBooleanSetter(
   "autoDownloadMedia",
 );
+export const setEnableNewMessageNotifications = createBooleanSetter(
+  "enableNewMessageNotifications",
+);
+export const setEnableGroupMessageNotifications = createBooleanSetter(
+  "enableGroupMessageNotifications",
+);
+export const setEnableCrossDeviceSync = createBooleanSetter(
+  "enableCrossDeviceSync",
+);
+export const setPreferWifiDirect = createBooleanSetter("preferWifiDirect");
+export const setEnableBridgeMode = createBooleanSetter("enableBridgeMode");
+export const setEnableIntelligentMeshRouting = createBooleanSetter(
+  "enableIntelligentMeshRouting",
+);
+export const setEnableDarkMode = createBooleanSetter("enableDarkMode");
 
 export const setMessageDensity = (density: MessageDensity) => {
   updateAppSetting("messageDensity", density);
@@ -172,4 +187,13 @@ export const setMessageDensity = (density: MessageDensity) => {
 export const setEphemeralMessageDuration = (durationMinutes: number) => {
   const normalized = Math.max(0, Math.round(durationMinutes));
   updateAppSetting("ephemeralMessageDuration", normalized);
+};
+
+export const setNotificationSound = (sound: string) => {
+  updateAppSetting("notificationSound", sound.trim());
+};
+
+export const setFontSize = (size: number) => {
+  const normalized = Math.max(8, Math.min(36, Math.round(size)));
+  updateAppSetting("fontSize", normalized);
 };

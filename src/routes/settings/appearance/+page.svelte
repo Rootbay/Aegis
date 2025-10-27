@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import { theme } from "$lib/stores/theme";
   import { Label } from "$lib/components/ui/label/index.js";
   import {
@@ -8,20 +9,59 @@
     SelectTrigger,
   } from "$lib/components/ui/select/index.js";
   import { Slider } from "$lib/components/ui/slider/index.js";
+  import {
+    settings,
+    setFontSize,
+    setEnableDarkMode,
+  } from "$lib/features/settings/stores/settings";
 
-  let currentTheme = $state<"light" | "dark">("light");
-  let fontSize = $state<[number]>([16]);
+  let currentTheme = $state<"light" | "dark">(get(theme));
+  let fontSize = $state<[number]>([get(settings).fontSize]);
 
   const fontSizeValue = $derived(fontSize[0]);
 
   $effect(() => {
-    const unsubscribe = theme.subscribe((value) => (currentTheme = value));
+    const unsubscribe = theme.subscribe((value) => {
+      currentTheme = value;
+      const currentSettings = get(settings);
+      const shouldEnableDarkMode = value === "dark";
+
+      if (currentSettings.enableDarkMode !== shouldEnableDarkMode) {
+        setEnableDarkMode(shouldEnableDarkMode);
+      }
+    });
+
     return () => unsubscribe();
+  });
+
+  $effect(() => {
+    const unsubscribe = settings.subscribe((value) => {
+      if (fontSize[0] !== value.fontSize) {
+        fontSize = [value.fontSize];
+      }
+      const desiredTheme = value.enableDarkMode ? "dark" : "light";
+      if (currentTheme !== desiredTheme) {
+        currentTheme = desiredTheme;
+        theme.set(desiredTheme);
+      }
+    });
+
+    return () => unsubscribe();
+  });
+
+  $effect(() => {
+    const current = get(settings);
+    const desiredFontSize = fontSize[0];
+
+    if (current.fontSize !== desiredFontSize) {
+      setFontSize(desiredFontSize);
+    }
   });
 
   function handleThemeChange(value: string) {
     if (value === "light" || value === "dark") {
       currentTheme = value;
+      setEnableDarkMode(value === "dark");
       theme.set(value);
     }
   }
