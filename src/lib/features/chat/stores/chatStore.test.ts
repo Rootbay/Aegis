@@ -2,9 +2,13 @@ import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
 import { get } from "svelte/store";
 import { createChatStore } from "./chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
+import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
+import type { Friend } from "$lib/features/friends/models/Friend";
+import type { Server } from "$lib/features/servers/models/Server";
 
 const invokeMock = vi.fn();
+const showNativeNotificationMock = vi.fn(() => Promise.resolve());
 
 const createDeferred = <T>() => {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -20,6 +24,11 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
+vi.mock("$lib/utils/nativeNotification", () => ({
+  showNativeNotification: (payload: unknown) =>
+    showNativeNotificationMock(payload),
+}));
+
 vi.mock("$lib/stores/userStore", () => ({
   userStore: {
     subscribe: (run: (value: { me: { id: string } | null }) => void) => {
@@ -32,19 +41,31 @@ vi.mock("$lib/stores/userStore", () => ({
 describe("chatStore attachment lifecycle", () => {
   let createdUrls: string[];
   let revokeSpy: ReturnType<typeof vi.fn>;
+  let focusSpy: ReturnType<typeof vi.spyOn> | undefined;
 
   beforeEach(() => {
     createdUrls = [];
     invokeMock.mockReset();
     invokeMock.mockImplementation(() => Promise.resolve(undefined));
+    showNativeNotificationMock.mockReset();
     localStorage.clear();
     serverStore.handleServersUpdate([]);
     serverStore.setActiveServer(null);
+    friendStore.handleFriendsUpdate([]);
     settings.update((current) => ({
       ...current,
       user: { ...current.user },
       ephemeralMessageDuration: 60,
+      enableNewMessageNotifications: true,
+      enableGroupMessageNotifications: true,
+      notificationSound: "Default Silent Chime",
     }));
+    focusSpy?.mockRestore();
+    focusSpy = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    Object.defineProperty(document, "visibilityState", {
+      value: "visible",
+      configurable: true,
+    });
     const createSpy = vi.fn(() => {
       const url = `blob:${createdUrls.length}`;
       createdUrls.push(url);
@@ -63,6 +84,8 @@ describe("chatStore attachment lifecycle", () => {
     localStorage.clear();
     serverStore.handleServersUpdate([]);
     serverStore.setActiveServer(null);
+    friendStore.handleFriendsUpdate([]);
+    focusSpy?.mockRestore();
   });
 
   it("revokes object URLs when messages are replaced", async () => {
@@ -466,5 +489,156 @@ describe("chatStore attachment lifecycle", () => {
     expect(updated[0]?.expiresAt).toBe(
       new Date(new Date(baseTimestamp).getTime() + 10 * 60_000).toISOString(),
     );
+  });
+
+  it("sends a direct message notification when enabled and chat inactive", async () => {
+    const timestamp = new Date().toISOString();
+    const friend: Friend = {
+      id: "friend-2",
+      name: "Charlie",
+      avatar: "https://example.com/charlie.png",
+      online: true,
+      status: "Online",
+      timestamp,
+      messages: [],
+    };
+    friendStore.handleFriendsUpdate([friend]);
+
+    const store = createChatStore();
+    await store.setActiveChat("friend-1", "dm");
+
+    await store.handleNewMessageEvent({
+      sender: "friend-2",
+      content: "Hey there!",
+      conversation_id: "friend-2",
+      timestamp,
+    });
+
+    expect(showNativeNotificationMock).toHaveBeenCalledTimes(1);
+    expect(showNativeNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Direct message from Charlie",
+        body: "Hey there!",
+      }),
+    );
+  });
+
+  it("suppresses direct message notifications when disabled", async () => {
+    const timestamp = new Date().toISOString();
+    const friend: Friend = {
+      id: "friend-2",
+      name: "Charlie",
+      avatar: "https://example.com/charlie.png",
+      online: true,
+      status: "Online",
+      timestamp,
+      messages: [],
+    };
+    friendStore.handleFriendsUpdate([friend]);
+    settings.update((current) => ({
+      ...current,
+      enableNewMessageNotifications: false,
+    }));
+
+    const store = createChatStore();
+
+    await store.handleNewMessageEvent({
+      sender: "friend-2",
+      content: "Hey there!",
+      conversation_id: "friend-2",
+      timestamp,
+    });
+
+    expect(showNativeNotificationMock).not.toHaveBeenCalled();
+  });
+
+  it("respects group notification settings for server messages", async () => {
+    const timestamp = new Date().toISOString();
+    const server: Server = {
+      id: "server-1",
+      name: "Beacon",
+      owner_id: "owner-1",
+      channels: [
+        {
+          id: "channel-1",
+          name: "general",
+          server_id: "server-1",
+          channel_type: "text",
+          private: false,
+        },
+      ],
+      members: [
+        {
+          id: "friend-3",
+          name: "Dana",
+          avatar: "https://example.com/dana.png",
+          online: true,
+        },
+      ],
+      roles: [],
+    };
+    serverStore.handleServersUpdate([server]);
+
+    const store = createChatStore();
+
+    await store.handleNewMessageEvent({
+      sender: "friend-3",
+      content: "Server ping",
+      channel_id: "channel-1",
+      server_id: "server-1",
+      timestamp,
+    });
+
+    expect(showNativeNotificationMock).toHaveBeenCalledTimes(1);
+    expect(showNativeNotificationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "#general — Beacon",
+        body: "Dana: Server ping",
+      }),
+    );
+  });
+
+  it("suppresses group notifications when disabled", async () => {
+    const timestamp = new Date().toISOString();
+    const server: Server = {
+      id: "server-1",
+      name: "Beacon",
+      owner_id: "owner-1",
+      channels: [
+        {
+          id: "channel-1",
+          name: "general",
+          server_id: "server-1",
+          channel_type: "text",
+          private: false,
+        },
+      ],
+      members: [
+        {
+          id: "friend-3",
+          name: "Dana",
+          avatar: "https://example.com/dana.png",
+          online: true,
+        },
+      ],
+      roles: [],
+    };
+    serverStore.handleServersUpdate([server]);
+    settings.update((current) => ({
+      ...current,
+      enableGroupMessageNotifications: false,
+    }));
+
+    const store = createChatStore();
+
+    await store.handleNewMessageEvent({
+      sender: "friend-3",
+      content: "Server ping",
+      channel_id: "channel-1",
+      server_id: "server-1",
+      timestamp,
+    });
+
+    expect(showNativeNotificationMock).not.toHaveBeenCalled();
   });
 });
