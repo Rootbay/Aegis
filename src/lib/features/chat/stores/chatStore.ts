@@ -89,7 +89,7 @@ interface ChatStore {
   sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   editMessage: (chatId: string, messageId: string, content: string) => Promise<void>;
-  handleNewMessageEvent: (message: ChatMessage) => void;
+  handleNewMessageEvent: (message: ChatMessage) => Promise<void>;
   handleMessageDeleted: (payload: DeleteMessage) => void;
   handleMessageEdited: (payload: EditMessage) => void;
   handleReactionUpdate: (payload: MessageReaction) => void;
@@ -593,11 +593,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return undefined;
   };
 
-  const mapBackendMessage = (
+  const mapBackendMessage = async (
     message: BackendMessage,
     fallbackChatId: string,
-  ): Message => {
-    const decoded = decodeIncomingMessagePayload({
+  ): Promise<Message> => {
+    const decoded = await decodeIncomingMessagePayload({
       content: message.content,
       attachments: message.attachments,
     });
@@ -768,9 +768,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         if (!isCurrentLoad(messageChatId, loadToken)) {
           return;
         }
-        const mapped = fetched
-          .map((m: BackendMessage) => mapBackendMessage(m, messageChatId))
-          .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        const mapped = (await Promise.all(
+          fetched.map((m: BackendMessage) =>
+            mapBackendMessage(m, messageChatId),
+          ),
+        )).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
         handleMessagesUpdate(messageChatId, mapped);
         const updatedMessages =
           get(messagesByChatIdStore).get(messageChatId) || [];
@@ -856,9 +858,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       if (!isCurrentLoad(targetChatId, loadToken)) {
         return;
       }
-      const mapped = fetched
-        .map((m: BackendMessage) => mapBackendMessage(m, targetChatId))
-        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const mapped = (await Promise.all(
+        fetched.map((m: BackendMessage) => mapBackendMessage(m, targetChatId)),
+      )).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       let newAdds = 0;
       const selfId = get(userStore).me?.id;
       updateMessagesForChat(targetChatId, (existing) => {
@@ -1061,16 +1063,32 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     ]);
 
     let encryptedFailed = false;
+    let backendContent = content;
+    try {
+      const encrypted = await encryptOutgoingMessagePayload({
+        content,
+        attachments: [],
+        chatType: type,
+        chatId,
+        channelId: channelId,
+        senderId: me.id,
+        recipientId: type === "dm" ? chatId : null,
+      });
+      backendContent = encrypted.wasEncrypted ? encrypted.content : content;
+    } catch (error) {
+      console.warn("Message content encryption failed, using plaintext", error);
+      backendContent = content;
+    }
     try {
       if (type === "dm") {
         await invoke("send_encrypted_dm", {
-          message: content,
+          message: backendContent,
           recipientId: chatId,
           recipient_id: chatId,
         });
       } else {
         await invoke("send_encrypted_group_message", {
-          message: content,
+          message: backendContent,
           channelId: channelId,
           channel_id: channelId,
           serverId: chatId,
@@ -1083,13 +1101,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       try {
         if (type === "dm") {
           await invoke("send_direct_message", {
-            message: content,
+            message: backendContent,
             recipientId: chatId,
             recipient_id: chatId,
           });
         } else {
           await invoke("send_message", {
-            message: content,
+            message: backendContent,
             channelId: channelId,
             channel_id: channelId,
             serverId: chatId,
@@ -1179,13 +1197,17 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         senderId: me.id,
         recipientId: type === "dm" ? chatId : null,
       });
+      if (!encrypted.wasEncrypted) {
+        throw new Error("Attachment payload returned without encryption");
+      }
       contentForSend = encrypted.content;
       attachmentsForSend = encrypted.attachments;
     } catch (error) {
-      console.warn(
-        "Attachment encryption failed, sending plaintext payloads",
-        error,
+      console.error("Attachment encryption failed", error);
+      updateMessagesForChat(messageChatId, (existing) =>
+        existing.filter((msg) => msg.id !== tempId),
       );
+      throw error instanceof Error ? error : new Error(String(error));
     }
     const optimisticAttachments = attachmentsCombined.map((entry) => entry.ui);
 
@@ -1315,9 +1337,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       if (!isCurrentLoad(chatId, loadToken)) {
         return;
       }
-      const mapped = fetched
-        .map((m: BackendMessage) => mapBackendMessage(m, chatId))
-        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const mapped = (await Promise.all(
+        fetched.map((m: BackendMessage) => mapBackendMessage(m, chatId)),
+      )).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       handleMessagesUpdate(chatId, mapped);
       hasMoreByChatIdStore.update((map) => {
         map.set(chatId, fetched.length >= PAGE_LIMIT);
@@ -1330,9 +1352,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
-  const handleNewMessageEvent = (message: ChatMessage) => {
+  const handleNewMessageEvent = async (message: ChatMessage) => {
     const { sender } = message;
-    const decoded = decodeIncomingMessagePayload({
+    const decoded = await decodeIncomingMessagePayload({
       content: message.content,
       attachments: message.attachments,
     });

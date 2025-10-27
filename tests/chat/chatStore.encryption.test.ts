@@ -20,19 +20,36 @@ vi.mock("$lib/features/servers/stores/serverStore", () => {
 });
 
 const encryptionMocks = vi.hoisted(() => {
-  const encryptMock = vi.fn(async (params: {
-    content: string;
-    attachments: unknown[];
-  }) => ({
-    content: params.content,
-    attachments: params.attachments,
-    wasEncrypted: false,
-  }));
+  const toUint8Array = (input: unknown): Uint8Array => {
+    if (input instanceof Uint8Array) return input;
+    if (input instanceof ArrayBuffer) return new Uint8Array(input);
+    if (Array.isArray(input)) return new Uint8Array(input);
+    return new Uint8Array();
+  };
+
+  const encryptMock = vi.fn(
+    async (params: { content: string; attachments: unknown[] }) => ({
+      content: `cipher:${params.content}`,
+      attachments: params.attachments.map((attachment: any) => {
+        const bytes = toUint8Array(attachment.data);
+        const mutated = new Uint8Array(bytes.length);
+        mutated.set(bytes.map((value) => value ^ 0xff));
+        return {
+          ...attachment,
+          data: mutated,
+        };
+      }),
+      wasEncrypted: true,
+      metadata: { algorithm: "mock", version: 1 },
+    }),
+  );
   const decodeMock = vi.fn(
-    (params: { content: string; attachments?: unknown[] | null }) => ({
-      content: params.content,
+    async (params: { content: string; attachments?: unknown[] | null }) => ({
+      content: params.content.startsWith("cipher:")
+        ? params.content.slice(7)
+        : params.content,
       attachments: params.attachments ?? undefined,
-      wasEncrypted: false,
+      wasEncrypted: params.content.startsWith("cipher:"),
     }),
   );
   return { encryptMock, decodeMock };
@@ -49,14 +66,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { createChatStore } from "../../src/lib/features/chat/stores/chatStore";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  encryptOutgoingMessagePayload,
-  decodeIncomingMessagePayload,
-} from "../../src/lib/features/chat/services/chatEncryptionService";
 
 const invokeMock = vi.mocked(invoke);
-const encryptOutgoingMock = vi.mocked(encryptOutgoingMessagePayload);
-const decodeIncomingMock = vi.mocked(decodeIncomingMessagePayload);
 
 const createLocalStorageMock = () => {
   const storage = new Map<string, string>();
@@ -110,18 +121,8 @@ describe("chatStore encrypted messaging", () => {
     );
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
-    encryptionMocks.encryptMock.mockReset();
-    encryptionMocks.encryptMock.mockImplementation(async (params) => ({
-      content: params.content,
-      attachments: params.attachments,
-      wasEncrypted: false,
-    }));
-    encryptionMocks.decodeMock.mockReset();
-    encryptionMocks.decodeMock.mockImplementation((params) => ({
-      content: params.content,
-      attachments: params.attachments ?? undefined,
-      wasEncrypted: false,
-    }));
+    encryptionMocks.encryptMock.mockClear();
+    encryptionMocks.decodeMock.mockClear();
   });
 
   afterEach(() => {
@@ -136,6 +137,9 @@ describe("chatStore encrypted messaging", () => {
         return [];
       }
       if (command === "send_encrypted_dm") {
+        return undefined;
+      }
+      if (command === "send_direct_message_with_attachments") {
         return undefined;
       }
       throw new Error(`Unexpected command: ${command}`);
@@ -153,16 +157,16 @@ describe("chatStore encrypted messaging", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0].pending).toBe(true);
     expect(invokeMock).toHaveBeenCalledWith("send_encrypted_dm", {
-      message: "Hello secure",
+      message: "cipher:Hello secure",
       recipientId: "friend-1",
       recipient_id: "friend-1",
     });
 
     const timestamp = new Date().toISOString();
-    store.handleNewMessageEvent({
+    await store.handleNewMessageEvent({
       id: "remote-1",
       sender: "user-123",
-      content: "Hello secure",
+      content: "cipher:Hello secure",
       timestamp,
       conversation_id: "friend-1",
     });
@@ -193,7 +197,7 @@ describe("chatStore encrypted messaging", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("send_encrypted_dm", expect.anything());
     expect(invokeMock).toHaveBeenCalledWith("send_direct_message", {
-      message: "Fallback message",
+      message: "cipher:Fallback message",
       recipientId: "friend-2",
       recipient_id: "friend-2",
     });
@@ -203,84 +207,37 @@ describe("chatStore encrypted messaging", () => {
     expect(messages[0].pending).toBe(true);
   });
 
-  it("encrypts attachments before sending payloads", async () => {
-    const store = createChatStore();
-    invokeMock.mockImplementation(async (command) => {
-      if (command === "get_messages") {
-        return [];
-      }
-      if (command === "send_direct_message_with_attachments") {
-        return undefined;
-      }
-      throw new Error(`Unexpected command: ${command}`);
-    });
-    await store.setActiveChat("friend-attachments", "dm");
+  it("encrypts attachments before invoking backend commands", async () => {
+    const store = await setupDmStore();
+    const originalBytes = new Uint8Array([1, 2, 3, 4]);
+    const file = createMockFile(originalBytes, "secret.txt", "text/plain");
 
-    const encryptedData = new Uint8Array([9, 9, 9]);
-    encryptOutgoingMock.mockResolvedValueOnce({
-      content: "cipher-content",
-      attachments: [
-        {
-          name: "secret.txt",
-          type: "text/plain",
-          size: 3,
-          data: encryptedData,
-        },
-      ],
-      wasEncrypted: true,
-    });
+    await store.sendMessageWithAttachments("Encrypted file", [file]);
 
-    const file = createMockFile([1, 2, 3], "secret.txt", "text/plain");
-
-    await store.sendMessageWithAttachments("payload", [file]);
-
-    expect(encryptOutgoingMock).toHaveBeenCalled();
-    expect(invokeMock).toHaveBeenCalledWith(
-      "send_direct_message_with_attachments",
-      expect.objectContaining({
-        message: "cipher-content",
-        attachments: [
-          expect.objectContaining({
-            name: "secret.txt",
-            data: encryptedData,
-          }),
-        ],
-      }),
+    const attachmentCall = invokeMock.mock.calls.find(
+      ([command]) => command === "send_direct_message_with_attachments",
+    );
+    expect(attachmentCall).toBeTruthy();
+    const payload = attachmentCall?.[1] as {
+      message: string;
+      attachments: Array<{ data: Uint8Array }>;
+    };
+    expect(payload.message).toBe("cipher:Encrypted file");
+    expect(Array.from(payload.attachments[0].data)).not.toEqual(
+      Array.from(originalBytes),
     );
   });
 
-  it("decodes encrypted payloads when mapping backend messages", async () => {
-    const store = createChatStore();
-    const decodedContent = "decrypted text";
-    decodeIncomingMock.mockImplementationOnce((params) => ({
-      content: decodedContent,
-      attachments: params.attachments ?? undefined,
-      wasEncrypted: true,
-    }));
+  it("removes optimistic entries when attachment encryption fails", async () => {
+    const store = await setupDmStore();
+    const file = createMockFile([9, 9, 9], "boom.bin", "application/octet-stream");
+    encryptionMocks.encryptMock.mockRejectedValueOnce(new Error("boom"));
 
-    const now = new Date().toISOString();
-    invokeMock.mockImplementation(async (command) => {
-      if (command === "get_messages") {
-        return [
-          {
-            id: "msg-encoded",
-            chat_id: "friend-3",
-            sender_id: "friend",
-            content: "cipher",
-            timestamp: now,
-          },
-        ];
-      }
-      if (command === "send_encrypted_dm") {
-        return undefined;
-      }
-      throw new Error(`Unexpected command: ${command}`);
-    });
+    await expect(
+      store.sendMessageWithAttachments("Failure", [file]),
+    ).rejects.toThrow("boom");
 
-    await store.setActiveChat("friend-3", "dm");
-
-    const messages = get(store.messagesByChatId).get("friend-3") ?? [];
-    expect(messages).toHaveLength(1);
-    expect(messages[0].content).toBe(decodedContent);
+    const messages = get(store.messagesByChatId).get("friend-1") ?? [];
+    expect(messages).toHaveLength(0);
   });
 });

@@ -67,6 +67,16 @@ describe("chatStore message editing", () => {
     );
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "decrypt_chat_payload") {
+        return {
+          content: payload?.content ?? "",
+          attachments: payload?.attachments ?? [],
+          wasEncrypted: true,
+        };
+      }
+      return undefined;
+    });
   });
 
   afterEach(() => {
@@ -74,9 +84,9 @@ describe("chatStore message editing", () => {
     vi.clearAllMocks();
   });
 
-  const seedMessage = (content = "Original message") => {
+  const seedMessage = async (content = "Original message") => {
     const store = createChatStore();
-    store.handleNewMessageEvent({
+    await store.handleNewMessageEvent({
       id: "msg-1",
       sender: "user-123",
       content,
@@ -87,7 +97,7 @@ describe("chatStore message editing", () => {
   };
 
   it("optimistically updates content and metadata when editing", async () => {
-    const store = seedMessage();
+    const store = await seedMessage();
     invokeMock.mockResolvedValue(undefined);
 
     await store.editMessage("chat-1", "msg-1", "Updated content");
@@ -109,7 +119,7 @@ describe("chatStore message editing", () => {
   });
 
   it("reverts the optimistic edit when the backend call fails", async () => {
-    const store = seedMessage();
+    const store = await seedMessage();
     invokeMock.mockRejectedValue(new Error("boom"));
 
     await expect(
@@ -124,8 +134,8 @@ describe("chatStore message editing", () => {
     expect(message.editedBy).toBeUndefined();
   });
 
-  it("applies remote edit events", () => {
-    const store = seedMessage();
+  it("applies remote edit events", async () => {
+    const store = await seedMessage();
     const editedAt = new Date().toISOString();
     const payload: EditMessage = {
       message_id: "msg-1",

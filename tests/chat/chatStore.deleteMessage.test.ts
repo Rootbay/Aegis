@@ -23,6 +23,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
+import { invoke } from "@tauri-apps/api/core";
 import { createChatStore } from "../../src/lib/features/chat/stores/chatStore";
 import type { DeleteMessage } from "../../src/lib/features/chat/models/AepMessage";
 
@@ -48,6 +49,7 @@ const createLocalStorageMock = () => {
 
 let createObjectURLSpy: ReturnType<typeof vi.fn>;
 let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
+const invokeMock = vi.mocked(invoke);
 
 describe("chatStore.handleMessageDeleted", () => {
   beforeEach(() => {
@@ -61,6 +63,17 @@ describe("chatStore.handleMessageDeleted", () => {
       } as unknown as typeof URL,
     );
     vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "decrypt_chat_payload") {
+        return {
+          content: payload?.content ?? "",
+          attachments: payload?.attachments ?? [],
+          wasEncrypted: true,
+        };
+      }
+      return undefined;
+    });
   });
 
   afterEach(() => {
@@ -68,8 +81,11 @@ describe("chatStore.handleMessageDeleted", () => {
     vi.clearAllMocks();
   });
 
-  const seedMessage = (store = createChatStore(), messageId = "msg-1") => {
-    store.handleNewMessageEvent({
+  const seedMessage = async (
+    store = createChatStore(),
+    messageId = "msg-1",
+  ) => {
+    await store.handleNewMessageEvent({
       id: messageId,
       sender: "user-123",
       content: "Hello world",
@@ -88,8 +104,8 @@ describe("chatStore.handleMessageDeleted", () => {
     return store;
   };
 
-  it("removes the targeted message for everyone", () => {
-    const store = seedMessage();
+  it("removes the targeted message for everyone", async () => {
+    const store = await seedMessage();
     const before = get(store.messagesByChatId).get("chat-1") ?? [];
     expect(before).toHaveLength(1);
 
@@ -106,8 +122,8 @@ describe("chatStore.handleMessageDeleted", () => {
     expect(revokeObjectURLSpy).toHaveBeenCalled();
   });
 
-  it("ignores deletions that target other users", () => {
-    const store = seedMessage(undefined, "msg-2");
+  it("ignores deletions that target other users", async () => {
+    const store = await seedMessage(undefined, "msg-2");
     const before = get(store.messagesByChatId).get("chat-1") ?? [];
     expect(before).toHaveLength(1);
 
@@ -124,8 +140,8 @@ describe("chatStore.handleMessageDeleted", () => {
     expect(revokeObjectURLSpy).not.toHaveBeenCalled();
   });
 
-  it("respects specific user scopes that include the current user", () => {
-    const store = seedMessage(undefined, "msg-3");
+  it("respects specific user scopes that include the current user", async () => {
+    const store = await seedMessage(undefined, "msg-3");
     const before = get(store.messagesByChatId).get("chat-1") ?? [];
     expect(before).toHaveLength(1);
 
