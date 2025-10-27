@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { tick, getContext, onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
   import {
     Avatar,
@@ -14,6 +15,7 @@
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { userStore } from "$lib/stores/userStore";
   import { activeChatTypingUsers } from "$lib/features/chat/stores/chatStore";
+  import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { Chat } from "$lib/features/chat/models/Chat";
@@ -38,6 +40,8 @@
   } from "$lib/components/ui/popover";
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
+
+  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
   type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -142,6 +146,8 @@
     onFriendsAddClick?: () => void;
   }>();
 
+  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+
   const context = getContext<CreateGroupContext | undefined>(
     CREATE_GROUP_CONTEXT_KEY,
   );
@@ -153,6 +159,13 @@
   let freeText = $state("");
   let activeTokenIndex = $state<number | null>(null);
   let suppressStoreSync = false;
+
+  const hideMemberNamesActive = $derived(() => {
+    if (!chat?.id) return false;
+    return (
+      $channelDisplayPreferencesStore.get(chat.id)?.hideMemberNames ?? false
+    );
+  });
 
   const activeToken = $derived(() =>
     activeTokenIndex !== null ? (tokens[activeTokenIndex] ?? null) : null,
@@ -499,6 +512,32 @@
   function clearSearchHistory() {
     chatSearchStore.clearHistory();
     maintainDropdown();
+  }
+
+  function openNotificationSettings() {
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
+    gotoUnsafe("/settings/notifications");
+  }
+
+  function openPinnedMessages() {
+    if (!chat?.id) return;
+    const pinnedToken: SearchToken = { key: "pinned", value: "true" };
+    tokens = [pinnedToken];
+    freeText = "";
+    activeTokenIndex = null;
+    pushQueryUpdate(tokens, freeText);
+    chatSearchStore.open();
+    chatSearchStore.executeSearch();
+    chatSearchStore.setDropdownOpen(false);
+  }
+
+  async function toggleHideMemberList() {
+    if (!chat?.id) return;
+    try {
+      await channelDisplayPreferencesStore.toggleHideMemberNames(chat.id);
+    } catch (error) {
+      console.error("Failed to toggle hide member names:", error);
+    }
   }
 
   function createUserTokenValue(user: User) {
@@ -851,6 +890,7 @@
           class="cursor-pointer"
           size="icon"
           aria-label="Notification Settings"
+          onclick={openNotificationSettings}
         >
           <Bell class="w-4 h-4" />
         </Button>
@@ -859,14 +899,20 @@
           class="cursor-pointer"
           size="icon"
           aria-label="Pinned Messages"
+          onclick={openPinnedMessages}
         >
           <Pin class="w-4 h-4" />
         </Button>
         <Button
           variant="ghost"
-          class="cursor-pointer"
+          class={cn(
+            "cursor-pointer",
+            hideMemberNamesActive ? "text-cyan-400" : "",
+          )}
           size="icon"
           aria-label="Hide Member List"
+          aria-pressed={hideMemberNamesActive ? "true" : "false"}
+          onclick={toggleHideMemberList}
         >
           <Users class="w-4 h-4" />
         </Button>
