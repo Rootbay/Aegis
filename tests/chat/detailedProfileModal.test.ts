@@ -1,5 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CREATE_GROUP_CONTEXT_KEY } from "../../src/lib/contextKeys";
 
 const mocks = vi.hoisted(() => {
   const invoke = vi.fn(async (command: string) => {
@@ -21,6 +22,32 @@ const mocks = vi.hoisted(() => {
   });
 
   const addToast = vi.fn();
+
+  const openCreateGroupModal = vi.fn();
+  const openReportUserModal = vi.fn();
+
+  const currentChat = {
+    id: "chat-789",
+    type: "dm" as const,
+    friend: {
+      id: "user-123",
+      name: "Alice",
+      avatar: "https://example.com/alice.png",
+      online: true,
+      status: "Online" as const,
+      timestamp: "2024-01-01T00:00:00.000Z",
+      messages: [],
+    },
+    messages: [],
+  };
+
+  const createGroupContext = {
+    currentChat,
+    openCreateGroupModal,
+    openReportUserModal,
+    openUserCardModal: vi.fn(),
+    openDetailedProfileModal: vi.fn(),
+  };
 
   const userStoreValue = {
     me: {
@@ -111,6 +138,9 @@ const mocks = vi.hoisted(() => {
     mutedFriendsStoreMock,
     serverStoreMock,
     chatStoreMock,
+    openCreateGroupModal,
+    openReportUserModal,
+    createGroupContext,
   };
 });
 
@@ -150,8 +180,21 @@ vi.mock("$app/paths", () => ({
   resolve: vi.fn((path: string) => path),
 }));
 
-import AppModals from "$lib/layout/AppModals.svelte";
-import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
+vi.mock("svelte", async () => {
+  const actual = await vi.importActual<typeof import("svelte")>("svelte");
+  const actualGetContext = actual.getContext;
+  return {
+    ...actual,
+    getContext: vi.fn((key: unknown) =>
+      key === CREATE_GROUP_CONTEXT_KEY
+        ? mocks.createGroupContext
+        : actualGetContext(key),
+    ),
+  };
+});
+
+import AppModals from "../../src/lib/layout/AppModals.svelte";
+import UserCardModal from "../../src/lib/components/modals/UserCardModal.svelte";
 
 describe("Detailed profile modal integration", () => {
   const profileUser = {
@@ -171,20 +214,23 @@ describe("Detailed profile modal integration", () => {
   it("renders DetailedProfileModal via AppModals and handles actions", async () => {
     const closeModal = vi.fn();
 
-    const { getByLabelText, getByText, findByText } = render(AppModals, {
-      props: {
-        activeModal: "detailedProfile",
-        modalProps: {
-          profileUser,
-          mutualFriends: [],
-          mutualServers: [],
-          mutualGroups: [],
-          isFriend: false,
-          isMyProfile: false,
+    const { getByLabelText, getByText, findByText, queryByText } = render(
+      AppModals,
+      {
+        props: {
+          activeModal: "detailedProfile",
+          modalProps: {
+            profileUser,
+            mutualFriends: [],
+            mutualServers: [],
+            mutualGroups: [],
+            isFriend: false,
+            isMyProfile: false,
+          },
+          closeModal,
         },
-        closeModal,
       },
-    });
+    );
 
     await findByText("Add Friend");
 
@@ -206,6 +252,43 @@ describe("Detailed profile modal integration", () => {
         "dm",
       );
       expect(closeModal).toHaveBeenCalled();
+    });
+
+    await fireEvent.click(getByLabelText("More options"));
+    expect(queryByText("View Reviews")).toBeNull();
+    await fireEvent.click(getByText("Add to Group"));
+
+    await waitFor(() => {
+      expect(mocks.openCreateGroupModal).toHaveBeenCalledWith({
+        preselectedUserIds: [profileUser.id],
+        additionalUsers: [
+          {
+            id: profileUser.id,
+            name: profileUser.name,
+            avatar: profileUser.avatar,
+            isFriend: false,
+            isPinned: false,
+          },
+        ],
+      });
+    });
+
+    await fireEvent.click(getByLabelText("More options"));
+    await fireEvent.click(getByText("Report"));
+
+    await waitFor(() => {
+      expect(mocks.openReportUserModal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetUser: expect.objectContaining({
+            id: profileUser.id,
+            name: profileUser.name,
+          }),
+          sourceChatId: mocks.createGroupContext.currentChat.id,
+          sourceChatType: "dm",
+          sourceChatName:
+            mocks.createGroupContext.currentChat.friend.name,
+        }),
+      );
     });
 
     await fireEvent.click(getByLabelText("Close"));

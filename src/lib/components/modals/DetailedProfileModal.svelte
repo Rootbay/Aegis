@@ -14,7 +14,7 @@
   import type { User } from "$lib/features/auth/models/User";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { onDestroy } from "svelte";
+  import { getContext, onDestroy } from "svelte";
   import {
     Dialog,
     DialogContent,
@@ -48,6 +48,12 @@
     Trash,
     Ellipsis,
   } from "@lucide/svelte";
+  import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
+  import type { CreateGroupContext } from "$lib/contextTypes";
+  import {
+    buildGroupModalOptions,
+    buildReportUserPayload,
+  } from "$lib/features/chat/utils/contextMenu";
 
   type MutualGroup = {
     serverId: string;
@@ -116,6 +122,13 @@
   let selectedServerId = $state<string | undefined>(undefined);
   let servers = $derived<Server[]>($serverStore.servers ?? []);
   let sendingInvite = $state(false);
+
+  const createGroupContext = getContext<CreateGroupContext | undefined>(
+    CREATE_GROUP_CONTEXT_KEY,
+  );
+  const openCreateGroupModal = createGroupContext?.openCreateGroupModal;
+  const openReportUserModal = createGroupContext?.openReportUserModal;
+  const getCurrentChat = () => createGroupContext?.currentChat ?? null;
 
   async function computeMutualServers() {
     if (!profileUser?.id) {
@@ -317,8 +330,15 @@
     showUserOptionsMenu = true;
   }
 
-  async function handleUserOptionAction(event: CustomEvent<UserOptionsEvent>) {
-    const action = event.detail.action as string;
+  async function handleUserOptionAction(
+    payload: CustomEvent<UserOptionsEvent> | UserOptionsEvent,
+  ) {
+    const detail = "detail" in payload ? payload.detail : payload;
+    const action = detail?.action as string | undefined;
+    if (!action) {
+      console.warn("Missing user option action payload", payload);
+      return;
+    }
     try {
       switch (action) {
         case "copy_user_id":
@@ -371,10 +391,26 @@
           toasts.addToast("Reviews not implemented yet.", "info");
           break;
         case "add_to_group":
-          toasts.addToast("Add to group not implemented yet.", "info");
+          if (openCreateGroupModal && profileUser) {
+            openCreateGroupModal(buildGroupModalOptions(profileUser));
+          } else {
+            toasts.addToast(
+              "Group creation is unavailable right now.",
+              "error",
+            );
+          }
           break;
         case "report":
-          toasts.addToast("Report submitted.", "success");
+          if (openReportUserModal && profileUser) {
+            openReportUserModal(
+              buildReportUserPayload(getCurrentChat(), profileUser),
+            );
+          } else {
+            toasts.addToast(
+              "Unable to open the report flow at this time.",
+              "error",
+            );
+          }
           break;
         default:
           console.log("Unhandled action:", action);
@@ -544,8 +580,12 @@
               <Button onclick={addFriend}><Plus class="mr-2 h-4 w-4" /> Add Friend</Button>
               <Button onclick={sendMessage}><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
             {/if}
-            <Button variant="ghost" size="icon" onclick={handleMoreOptions}
-              ><Ellipsis class="h-4 w-4" /></Button
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="More options"
+              onclick={handleMoreOptions}
+            ><Ellipsis class="h-4 w-4" /></Button
             >
           </div>
 
