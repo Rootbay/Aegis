@@ -7,11 +7,19 @@ use aegis_protocol::{
 use aegis_shared_types::AppState;
 use aep::database;
 use e2ee;
-use serde::Deserialize;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
+use chacha20poly1305::aead::{Aead, KeyInit};
+use chacha20poly1305::ChaCha20Poly1305;
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::State;
 
-#[derive(Debug, Clone, Deserialize)]
+const ENVELOPE_VERSION: u8 = 1;
+const ENVELOPE_ALGORITHM: &str = "chacha20poly1305";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AttachmentDescriptor {
     pub name: String,
     #[serde(rename = "type")]
@@ -19,6 +27,261 @@ pub struct AttachmentDescriptor {
     pub size: u64,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MessageEnvelope {
+    version: u8,
+    algorithm: String,
+    nonce: String,
+    key: String,
+    ciphertext: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct AttachmentEnvelope {
+    version: u8,
+    algorithm: String,
+    nonce: String,
+    key: String,
+    ciphertext: String,
+    original_size: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EncryptChatPayloadResponse {
+    pub content: String,
+    pub attachments: Vec<AttachmentDescriptor>,
+    pub metadata: EncryptMetadata,
+    #[serde(rename = "wasEncrypted")]
+    pub was_encrypted: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EncryptMetadata {
+    pub algorithm: String,
+    pub version: u8,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DecryptChatPayloadResponse {
+    pub content: String,
+    pub attachments: Vec<AttachmentDescriptor>,
+    #[serde(rename = "wasEncrypted")]
+    pub was_encrypted: bool,
+}
+
+fn encrypt_bytes(data: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String> {
+    let mut key = [0u8; 32];
+    rand::rngs::OsRng
+        .try_fill_bytes(&mut key)
+        .map_err(|e| format!("Failed to generate key: {e}"))?;
+    let cipher = ChaCha20Poly1305::new_from_slice(&key)
+        .map_err(|e| format!("Failed to initialise cipher: {e}"))?;
+    let mut nonce = [0u8; 12];
+    rand::rngs::OsRng
+        .try_fill_bytes(&mut nonce)
+        .map_err(|e| format!("Failed to generate nonce: {e}"))?;
+    let ciphertext = cipher
+        .encrypt(chacha20poly1305::Nonce::from_slice(&nonce), data)
+        .map_err(|e| format!("Encryption error: {e}"))?;
+    Ok((ciphertext, key.to_vec(), nonce.to_vec()))
+}
+
+fn decrypt_bytes(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> Result<Vec<u8>, String> {
+    if key.len() != 32 {
+        return Err("Invalid key length".to_string());
+    }
+    if nonce.len() != 12 {
+        return Err("Invalid nonce length".to_string());
+    }
+    let cipher = ChaCha20Poly1305::new_from_slice(key)
+        .map_err(|e| format!("Failed to initialise cipher: {e}"))?;
+    cipher
+        .decrypt(chacha20poly1305::Nonce::from_slice(nonce), ciphertext)
+        .map_err(|_| "Failed to decrypt payload".to_string())
+}
+
+fn serialize_message_envelope(ciphertext: Vec<u8>, key: Vec<u8>, nonce: Vec<u8>) -> Result<String, String> {
+    let envelope = MessageEnvelope {
+        version: ENVELOPE_VERSION,
+        algorithm: ENVELOPE_ALGORITHM.to_string(),
+        nonce: BASE64.encode(&nonce),
+        key: BASE64.encode(&key),
+        ciphertext: BASE64.encode(&ciphertext),
+    };
+    serde_json::to_string(&envelope).map_err(|e| format!("Failed to serialize envelope: {e}"))
+}
+
+fn serialize_attachment_envelope(
+    ciphertext: Vec<u8>,
+    key: Vec<u8>,
+    nonce: Vec<u8>,
+    original_size: u64,
+) -> Result<Vec<u8>, String> {
+    let envelope = AttachmentEnvelope {
+        version: ENVELOPE_VERSION,
+        algorithm: ENVELOPE_ALGORITHM.to_string(),
+        nonce: BASE64.encode(&nonce),
+        key: BASE64.encode(&key),
+        ciphertext: BASE64.encode(&ciphertext),
+        original_size,
+    };
+    serde_json::to_vec(&envelope).map_err(|e| format!("Failed to serialize attachment envelope: {e}"))
+}
+
+fn deserialize_message_envelope(content: &str) -> Result<Option<MessageEnvelope>, String> {
+    if content.trim().is_empty() {
+        return Ok(None);
+    }
+    match serde_json::from_str::<MessageEnvelope>(content) {
+        Ok(env) if env.version == ENVELOPE_VERSION => Ok(Some(env)),
+        Ok(_) => Ok(None),
+        Err(_) => Ok(None),
+    }
+}
+
+fn deserialize_attachment_envelope(data: &[u8]) -> Option<AttachmentEnvelope> {
+    serde_json::from_slice::<AttachmentEnvelope>(data)
+        .ok()
+        .filter(|env| env.version == ENVELOPE_VERSION)
+}
+
+#[tauri::command]
+pub async fn encrypt_chat_payload(
+    content: String,
+    attachments: Vec<AttachmentDescriptor>,
+) -> Result<EncryptChatPayloadResponse, String> {
+    let (ciphertext, key, nonce) = encrypt_bytes(content.as_bytes())?;
+    let serialized_content = serialize_message_envelope(ciphertext, key, nonce)?;
+
+    let mut encrypted_attachments = Vec::new();
+    for descriptor in attachments.into_iter() {
+        let AttachmentDescriptor {
+            name,
+            content_type,
+            size,
+            data,
+        } = descriptor;
+
+        if data.is_empty() {
+            return Err(format!("Attachment '{name}' is missing binary data"));
+        }
+
+        let effective_size = if size == 0 {
+            data.len() as u64
+        } else {
+            size
+        };
+        let sanitized_size = if effective_size == data.len() as u64 {
+            effective_size
+        } else {
+            data.len() as u64
+        };
+
+        let (attachment_ciphertext, key, nonce) = encrypt_bytes(&data)?;
+        let envelope_bytes = serialize_attachment_envelope(
+            attachment_ciphertext,
+            key,
+            nonce,
+            sanitized_size,
+        )?;
+
+        encrypted_attachments.push(AttachmentDescriptor {
+            name,
+            content_type,
+            size: sanitized_size,
+            data: envelope_bytes,
+        });
+    }
+
+    Ok(EncryptChatPayloadResponse {
+        content: serialized_content,
+        attachments: encrypted_attachments,
+        metadata: EncryptMetadata {
+            algorithm: ENVELOPE_ALGORITHM.to_string(),
+            version: ENVELOPE_VERSION,
+        },
+        was_encrypted: true,
+    })
+}
+
+#[tauri::command]
+pub async fn decrypt_chat_payload(
+    content: String,
+    attachments: Option<Vec<AttachmentDescriptor>>,
+) -> Result<DecryptChatPayloadResponse, String> {
+    let mut decrypted_content = content.clone();
+    let mut any_decrypted = false;
+
+    if let Some(envelope) = deserialize_message_envelope(&content)? {
+        if let (Ok(ciphertext), Ok(key), Ok(nonce)) = (
+            BASE64.decode(envelope.ciphertext),
+            BASE64.decode(envelope.key),
+            BASE64.decode(envelope.nonce),
+        ) {
+            if let Ok(bytes) = decrypt_bytes(&ciphertext, &key, &nonce) {
+                if let Ok(text) = String::from_utf8(bytes) {
+                    decrypted_content = text;
+                    any_decrypted = true;
+                }
+            }
+        }
+    }
+
+    let mut decrypted_attachments = Vec::new();
+    if let Some(items) = attachments {
+        for descriptor in items.into_iter() {
+            let AttachmentDescriptor {
+                name,
+                content_type,
+                size,
+                data,
+            } = descriptor;
+
+            if data.is_empty() {
+                decrypted_attachments.push(AttachmentDescriptor {
+                    name,
+                    content_type,
+                    size,
+                    data,
+                });
+                continue;
+            }
+
+            if let Some(env) = deserialize_attachment_envelope(&data) {
+                if let (Ok(ciphertext), Ok(key), Ok(nonce)) = (
+                    BASE64.decode(env.ciphertext),
+                    BASE64.decode(env.key),
+                    BASE64.decode(env.nonce),
+                ) {
+                    if let Ok(bytes) = decrypt_bytes(&ciphertext, &key, &nonce) {
+                        decrypted_attachments.push(AttachmentDescriptor {
+                            name,
+                            content_type,
+                            size: env.original_size,
+                            data: bytes,
+                        });
+                        any_decrypted = true;
+                        continue;
+                    }
+                }
+            }
+
+            decrypted_attachments.push(AttachmentDescriptor {
+                name,
+                content_type,
+                size,
+                data,
+            });
+        }
+    }
+
+    Ok(DecryptChatPayloadResponse {
+        content: decrypted_content,
+        attachments: decrypted_attachments,
+        was_encrypted: any_decrypted,
+    })
 }
 
 async fn persist_and_broadcast_message(

@@ -401,7 +401,7 @@ export function createAppController(): AppController {
           }
 
           if (receivedMessage.ChatMessage) {
-            chatStore.handleNewMessageEvent(receivedMessage.ChatMessage);
+            void chatStore.handleNewMessageEvent(receivedMessage.ChatMessage);
             return;
           }
 
