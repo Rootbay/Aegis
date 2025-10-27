@@ -14,12 +14,14 @@ import type {
 } from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
+import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
 import {
   decodeIncomingMessagePayload,
   encryptOutgoingMessagePayload,
   type MessageAttachmentPayload,
 } from "$lib/features/chat/services/chatEncryptionService";
+import { showNativeNotification } from "$lib/utils/nativeNotification";
 
 type BackendMessage = {
   id: string;
@@ -121,7 +123,11 @@ interface ChatStore {
   sendMessage: (content: string) => Promise<void>;
   sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
-  editMessage: (chatId: string, messageId: string, content: string) => Promise<void>;
+  editMessage: (
+    chatId: string,
+    messageId: string,
+    content: string,
+  ) => Promise<void>;
   handleNewMessageEvent: (message: ChatMessage) => Promise<void>;
   handleMessageDeleted: (payload: DeleteMessage) => void;
   handleMessageEdited: (payload: EditMessage) => void;
@@ -234,7 +240,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     },
   );
 
-  const typingTimeouts = new Map<string, Map<string, ReturnType<typeof setTimeout>>>();
+  const typingTimeouts = new Map<
+    string,
+    Map<string, ReturnType<typeof setTimeout>>
+  >();
   const typingDispatchState = new Map<string, boolean>();
   const lastDispatchedReceiptByChatId = new Map<string, string>();
 
@@ -280,7 +289,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
   const mapBackendGroupChat = (chat: BackendGroupChat): GroupChatSummary => {
     const memberIdsRaw = chat.member_ids ?? chat.memberIds ?? [];
-    const memberIds = Array.from(new Set(memberIdsRaw.filter((id): id is string => typeof id === "string" && id.length > 0)));
+    const memberIds = Array.from(
+      new Set(
+        memberIdsRaw.filter(
+          (id): id is string => typeof id === "string" && id.length > 0,
+        ),
+      ),
+    );
     return {
       id: chat.id,
       name: normalizeGroupName(chat.id, chat.name ?? null),
@@ -772,7 +787,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
     if (scope.type === "specific-users") {
       const targetIds = (scope.user_ids ?? scope.userIds ?? []).filter(
-        (value): value is string => typeof value === "string" && value.length > 0,
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
       );
       if (targetIds.length === 0) {
         return false;
@@ -921,7 +937,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     });
     const attachments = mapAttachmentPayloads(decoded.attachments);
     const reactions = normalizeReactions(message.reactions ?? null);
-    const editedAt = normalizeOptionalDate(message.edited_at ?? message.editedAt);
+    const editedAt = normalizeOptionalDate(
+      message.edited_at ?? message.editedAt,
+    );
     const editedBy = message.edited_by ?? message.editedBy ?? undefined;
     const timestamp = normalizeTimestamp(message.timestamp);
     const backendExpires = normalizeOptionalDate(
@@ -1095,11 +1113,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         if (!isCurrentLoad(messageChatId, loadToken)) {
           return;
         }
-        const mapped = (await Promise.all(
-          fetched.map((m: BackendMessage) =>
-            mapBackendMessage(m, messageChatId),
-          ),
-        )).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+        const mapped = (
+          await Promise.all(
+            fetched.map((m: BackendMessage) =>
+              mapBackendMessage(m, messageChatId),
+            ),
+          )
+        ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
         handleMessagesUpdate(messageChatId, mapped);
         const updatedMessages =
           get(messagesByChatIdStore).get(messageChatId) || [];
@@ -1185,9 +1205,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       if (!isCurrentLoad(targetChatId, loadToken)) {
         return;
       }
-      const mapped = (await Promise.all(
-        fetched.map((m: BackendMessage) => mapBackendMessage(m, targetChatId)),
-      )).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const mapped = (
+        await Promise.all(
+          fetched.map((m: BackendMessage) =>
+            mapBackendMessage(m, targetChatId),
+          ),
+        )
+      ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       let newAdds = 0;
       const selfId = get(userStore).me?.id;
       updateMessagesForChat(targetChatId, (existing) => {
@@ -1431,7 +1455,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       }
     } catch (error) {
       encryptedFailed = true;
-      console.warn("Encrypted send failed, attempting plaintext fallback", error);
+      console.warn(
+        "Encrypted send failed, attempting plaintext fallback",
+        error,
+      );
       try {
         if (type === "dm") {
           await invoke("send_direct_message", {
@@ -1462,7 +1489,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
 
     if (encryptedFailed) {
-      console.info("Sent plaintext message after encryption fallback for", messageChatId);
+      console.info(
+        "Sent plaintext message after encryption fallback for",
+        messageChatId,
+      );
     }
   };
 
@@ -1664,7 +1694,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     } catch (error) {
       if (previous) {
         updateMessagesForChat(targetChatId, (existing) =>
-          existing.map((message) => (message.id === messageId ? previous! : message)),
+          existing.map((message) =>
+            message.id === messageId ? previous! : message,
+          ),
         );
       }
       throw error;
@@ -1683,9 +1715,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       if (!isCurrentLoad(chatId, loadToken)) {
         return;
       }
-      const mapped = (await Promise.all(
-        fetched.map((m: BackendMessage) => mapBackendMessage(m, chatId)),
-      )).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      const mapped = (
+        await Promise.all(
+          fetched.map((m: BackendMessage) => mapBackendMessage(m, chatId)),
+        )
+      ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       handleMessagesUpdate(chatId, mapped);
       hasMoreByChatIdStore.update((map) => {
         map.set(chatId, fetched.length >= PAGE_LIMIT);
@@ -1698,14 +1732,129 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const normalizeWindowFocus = () => {
+    if (typeof document === "undefined") {
+      return true;
+    }
+
+    try {
+      if (typeof document.hasFocus === "function") {
+        return document.hasFocus();
+      }
+    } catch (error) {
+      console.debug("document.hasFocus() threw", error);
+    }
+
+    const anyDocument = document as Document & {
+      visibilityState?: string;
+      hidden?: boolean;
+    };
+
+    if (typeof anyDocument.visibilityState === "string") {
+      return anyDocument.visibilityState === "visible";
+    }
+
+    if (typeof anyDocument.hidden === "boolean") {
+      return !anyDocument.hidden;
+    }
+
+    return true;
+  };
+
+  const buildNotificationPreview = (
+    content: string,
+    attachments?: BackendAttachment[] | null,
+  ): string => {
+    const normalized = content.replace(/\s+/g, " ").trim();
+    if (normalized.length > 0) {
+      return normalized;
+    }
+
+    const attachmentCount = attachments?.length ?? 0;
+    if (attachmentCount === 0) {
+      return "New message";
+    }
+
+    if (attachmentCount === 1) {
+      const attachmentName = attachments?.[0]?.name?.trim();
+      if (attachmentName && attachmentName.length > 0) {
+        return `Sent an attachment (${attachmentName})`;
+      }
+      return "Sent an attachment";
+    }
+
+    return `Sent ${attachmentCount} attachments`;
+  };
+
+  const resolveSenderLabel = (senderId: string): string => {
+    const friendsState = get(friendStore);
+    const friendMatch = friendsState.friends?.find(
+      (friend) => friend.id === senderId,
+    );
+    if (friendMatch?.name) {
+      return friendMatch.name;
+    }
+
+    const servers = get(serverStore).servers ?? [];
+    for (const server of servers) {
+      const memberMatch = server.members?.find(
+        (member) => member.id === senderId,
+      );
+      if (memberMatch?.name) {
+        return memberMatch.name;
+      }
+    }
+
+    return senderId && senderId.length > 0 ? senderId : "Unknown sender";
+  };
+
+  const formatChatLabel = (
+    targetChatId: string,
+    channelIdFromPayload: string | null,
+    serverIdFromPayload: string | null,
+  ): { label: string; type: "direct" | "group" | "server" } => {
+    const servers = get(serverStore).servers ?? [];
+    const groups = get(groupChatsStore);
+    const groupSummary = groups.get(targetChatId);
+    const server = serverIdFromPayload
+      ? servers.find((entry) => entry.id === serverIdFromPayload)
+      : undefined;
+
+    if (serverIdFromPayload && (channelIdFromPayload || targetChatId)) {
+      const channelIdentifier = channelIdFromPayload ?? targetChatId;
+      const channel = server?.channels?.find(
+        (entry) => entry.id === channelIdentifier,
+      );
+      const channelName = channel?.name ?? channelIdentifier ?? "channel";
+      const normalizedChannelName = channelName.startsWith("#")
+        ? channelName
+        : `#${channelName}`;
+      if (server?.name) {
+        return {
+          label: `${normalizedChannelName} — ${server.name}`,
+          type: "server",
+        };
+      }
+      return { label: normalizedChannelName, type: "server" };
+    }
+
+    if (groupSummary) {
+      return { label: groupSummary.name, type: "group" };
+    }
+
+    return { label: "Direct message", type: "direct" };
+  };
+
   const handleNewMessageEvent = async (message: ChatMessage) => {
     const { sender } = message;
     const decoded = await decodeIncomingMessagePayload({
       content: message.content,
       attachments: message.attachments,
     });
-    const channelIdFromPayload = message.channel_id ?? message.channelId;
+    const channelIdFromPayload =
+      message.channel_id ?? message.channelId ?? null;
     const conversationId = message.conversation_id ?? message.conversationId;
+    const serverIdFromPayload = message.server_id ?? message.serverId ?? null;
     const me = get(userStore).me;
 
     let targetChatId: string | null = null;
@@ -1717,33 +1866,87 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       targetChatId = sender;
     }
 
-    if (targetChatId) {
-      const messageIdFromPayload =
-        message.id ?? message.message_id ?? message.messageId;
-      const timestampFromPayload = message.timestamp;
-      const isMissingMetadata = !messageIdFromPayload || !timestampFromPayload;
+    if (!targetChatId) {
+      return;
+    }
 
-      const newMessage: Message = {
-        id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
-        chatId: targetChatId,
-        senderId: sender,
-        content: decoded.content,
-        timestamp: normalizeTimestamp(timestampFromPayload),
-        read: sender === me?.id,
-        attachments:
-          decoded.attachments && decoded.attachments.length > 0
-            ? mapAttachmentPayloads(decoded.attachments)
-            : undefined,
-        reactions: normalizeReactions(message.reactions ?? null),
-        expiresAt: undefined,
-      };
-      newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
-      updateMessagesForChat(targetChatId, (existing) =>
-        insertRealtimeMessage(existing, newMessage, me?.id),
+    const messageIdFromPayload =
+      message.id ?? message.message_id ?? message.messageId;
+    const timestampFromPayload = message.timestamp;
+    const isMissingMetadata = !messageIdFromPayload || !timestampFromPayload;
+    const isSelfAuthored = sender === me?.id;
+
+    const newMessage: Message = {
+      id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
+      chatId: targetChatId,
+      senderId: sender,
+      content: decoded.content,
+      timestamp: normalizeTimestamp(timestampFromPayload),
+      read: sender === me?.id,
+      attachments:
+        decoded.attachments && decoded.attachments.length > 0
+          ? mapAttachmentPayloads(decoded.attachments)
+          : undefined,
+      reactions: normalizeReactions(message.reactions ?? null),
+      expiresAt: undefined,
+    };
+    newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
+    updateMessagesForChat(targetChatId, (existing) =>
+      insertRealtimeMessage(existing, newMessage, me?.id),
+    );
+
+    if (!isSelfAuthored) {
+      const currentSettings = get(settings);
+      const { label, type } = formatChatLabel(
+        targetChatId,
+        channelIdFromPayload,
+        serverIdFromPayload,
       );
-      if (isMissingMetadata) {
-        void refreshChatMessages(targetChatId);
+      const notificationsEnabled =
+        type === "direct"
+          ? currentSettings.enableNewMessageNotifications
+          : currentSettings.enableGroupMessageNotifications;
+
+      if (notificationsEnabled) {
+        const activeType = get(activeChatType);
+        const activeId = get(activeChatId);
+        const activeChannel = get(activeChannelId);
+        const activeMessageChatId =
+          activeType === "server" ? activeChannel : activeId;
+        const isSameChat = activeMessageChatId === targetChatId;
+        const windowFocused = normalizeWindowFocus();
+
+        if (!isSameChat || !windowFocused) {
+          const preview = buildNotificationPreview(
+            decoded.content,
+            decoded.attachments,
+          );
+          const senderLabel = resolveSenderLabel(sender);
+          const soundSetting = currentSettings.notificationSound?.trim();
+          const sound =
+            soundSetting && soundSetting.toLowerCase() !== "none"
+              ? soundSetting
+              : undefined;
+
+          if (type === "direct") {
+            void showNativeNotification({
+              title: `${label} from ${senderLabel}`,
+              body: preview,
+              sound,
+            });
+          } else {
+            void showNativeNotification({
+              title: label,
+              body: `${senderLabel}: ${preview}`,
+              sound,
+            });
+          }
+        }
       }
+    }
+
+    if (isMissingMetadata) {
+      void refreshChatMessages(targetChatId);
     }
   };
 
@@ -1971,7 +2174,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           ...message,
           content: nextContent,
           editedBy: editorId ?? message.editedBy,
-          editedAt: normalizedEditedAt ?? message.editedAt ?? new Date().toISOString(),
+          editedAt:
+            normalizedEditedAt ?? message.editedAt ?? new Date().toISOString(),
         };
       }),
     );
@@ -2067,7 +2271,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   return {
     messagesByChatId: derived(messagesByChatIdStore, ($map) => $map),
     hasMoreByChatId: derived(hasMoreByChatIdStore, ($map) => $map),
-    metadataByChatId: derived(metadataByChatIdReadable, ($map) => new Map($map)),
+    metadataByChatId: derived(
+      metadataByChatIdReadable,
+      ($map) => new Map($map),
+    ),
     activeChatId: derived(activeChatId, ($id) => $id),
     activeChatType: derived(activeChatType, ($type) => $type),
     activeChannelId: derived(activeChannelId, ($id) => $id),
@@ -2090,10 +2297,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       ($map) => new Map($map),
     ),
     typingByChatId: typingByChatIdReadable,
-    activeChatTypingUsers: derived(
-      activeChatTypingUsersReadable,
-      ($users) => [...$users],
-    ),
+    activeChatTypingUsers: derived(activeChatTypingUsersReadable, ($users) => [
+      ...$users,
+    ]),
     groupChats: derived(groupChatsStore, ($map) => new Map($map)),
     setActiveChat,
     handleMessagesUpdate,
