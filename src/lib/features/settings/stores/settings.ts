@@ -44,6 +44,9 @@ export interface AppSettings {
   keepMediaDuration: number;
   clearCacheOnExit: boolean;
   enableTwoFactorAuth: boolean;
+  audioInputDeviceId: string;
+  videoInputDeviceId: string;
+  audioOutputDeviceId: string;
 }
 
 const defaultSettings: AppSettings = {
@@ -87,6 +90,9 @@ const defaultSettings: AppSettings = {
   keepMediaDuration: 30,
   clearCacheOnExit: false,
   enableTwoFactorAuth: false,
+  audioInputDeviceId: "",
+  videoInputDeviceId: "",
+  audioOutputDeviceId: "",
 };
 
 export const settings = persistentStore<AppSettings>(
@@ -196,4 +202,16 @@ export const setNotificationSound = (sound: string) => {
 export const setFontSize = (size: number) => {
   const normalized = Math.max(8, Math.min(36, Math.round(size)));
   updateAppSetting("fontSize", normalized);
+};
+
+export const setAudioInputDeviceId = (deviceId: string) => {
+  updateAppSetting("audioInputDeviceId", deviceId.trim());
+};
+
+export const setVideoInputDeviceId = (deviceId: string) => {
+  updateAppSetting("videoInputDeviceId", deviceId.trim());
+};
+
+export const setAudioOutputDeviceId = (deviceId: string) => {
+  updateAppSetting("audioOutputDeviceId", deviceId.trim());
 };
