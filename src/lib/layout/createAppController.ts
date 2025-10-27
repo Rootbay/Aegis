@@ -26,6 +26,8 @@ import {
   chatStore,
   groupChats,
   messagesByChatId,
+  type MessageReadReceiptEvent,
+  type TypingIndicatorEvent,
 } from "$lib/features/chat/stores/chatStore";
 import {
   CREATE_GROUP_CONTEXT_KEY,
@@ -568,6 +570,18 @@ export function createAppController(): AppController {
         },
       );
 
+      const unlistenReadReceipts = await listen<{
+        payload: MessageReadReceiptEvent;
+      }>("message-read", (event) => {
+        chatStore.handleReadReceipt(event.payload);
+      });
+
+      const unlistenTypingIndicators = await listen<{
+        payload: TypingIndicatorEvent;
+      }>("typing-indicator", (event) => {
+        chatStore.handleTypingIndicator(event.payload);
+      });
+
       unlistenHandlers.push(
         unlistenFriends,
         unlistenServers,
@@ -576,6 +590,8 @@ export function createAppController(): AppController {
         unlistenFileTransferRequest,
         unlistenFileTransferDenied,
         unlistenFileReceived,
+        unlistenReadReceipts,
+        unlistenTypingIndicators,
       );
     }
   };

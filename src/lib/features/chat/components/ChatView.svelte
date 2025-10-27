@@ -79,6 +79,9 @@
   let sending = $state(false);
   let isAtBottom = $state(true);
   let unseenCount = $state(0);
+  let typingActive = $state(false);
+  let typingResetTimer: ReturnType<typeof setTimeout> | null = null;
+  const TYPING_IDLE_TIMEOUT_MS = 2_500;
 
   const supportsVoiceRecording =
     typeof window !== "undefined" && "MediaRecorder" in window;
@@ -105,6 +108,53 @@
   let editingSaving = $state(false);
   let editingTextarea: HTMLTextAreaElement | null = $state(null);
 
+  const notifyMessagesViewed = () => {
+    if (!chat) return;
+    void chatStore.markActiveChatViewed();
+  };
+
+  const resetTypingTimer = () => {
+    if (typingResetTimer) {
+      clearTimeout(typingResetTimer);
+      typingResetTimer = null;
+    }
+  };
+
+  const scheduleTypingStop = () => {
+    resetTypingTimer();
+    typingResetTimer = setTimeout(() => {
+      typingResetTimer = null;
+      if (typingActive) {
+        typingActive = false;
+        void chatStore.sendTypingIndicator(false);
+      }
+    }, TYPING_IDLE_TIMEOUT_MS);
+  };
+
+  const handleComposerFocus = () => {
+    if (!typingActive) {
+      typingActive = true;
+      void chatStore.sendTypingIndicator(true);
+    }
+    scheduleTypingStop();
+  };
+
+  const handleComposerInput = () => {
+    if (!typingActive) {
+      typingActive = true;
+      void chatStore.sendTypingIndicator(true);
+    }
+    scheduleTypingStop();
+  };
+
+  const handleComposerBlur = () => {
+    if (typingActive) {
+      typingActive = false;
+      void chatStore.sendTypingIndicator(false);
+    }
+    resetTypingTimer();
+  };
+
   const onScroll = () => {
     const el = viewportEl;
     if (!el) return;
@@ -113,7 +163,10 @@
     const atBottom =
       el.scrollHeight - (el.scrollTop + el.clientHeight) <= bottomThreshold;
     isAtBottom = atBottom;
-    if (atBottom) unseenCount = 0;
+    if (atBottom) {
+      unseenCount = 0;
+      notifyMessagesViewed();
+    }
 
     const topThreshold = 24;
     const hasMore = chat?.id ? ($hasMoreByChatId.get(chat.id) ?? true) : false;
@@ -205,11 +258,19 @@
     if (isRecording || mediaRecorder || recordingStream) {
       stopRecording({ save: false, silent: true });
     }
+    resetTypingTimer();
+    if (typingActive) {
+      typingActive = false;
+      void chatStore.sendTypingIndicator(false);
+    }
   });
 
   afterUpdate(() => {
     if (viewportEl && !viewportEl.isConnected) {
       attachViewportElement(null);
+    }
+    if (isAtBottom) {
+      notifyMessagesViewed();
     }
   });
 
@@ -674,6 +735,11 @@
       messageInput = "";
       attachedFiles = [];
       adjustTextareaHeight();
+      if (typingActive) {
+        typingActive = false;
+        void chatStore.sendTypingIndicator(false);
+      }
+      resetTypingTimer();
     } catch (e) {
       console.error("Failed to send message", e);
       toasts.addToast("Failed to send message.", "error");
@@ -705,6 +771,7 @@
       listRef.scroll({ index: count - 1, align: "bottom", smoothScroll: true });
       unseenCount = 0;
       isAtBottom = true;
+      notifyMessagesViewed();
     }
   }
 
@@ -1158,6 +1225,17 @@
                       {/each}
                     </div>
                   {/if}
+                  {#if !msg.pending}
+                    <p class="mt-1 text-[0.625rem] uppercase tracking-wide text-muted-foreground/80">
+                      {isMe
+                        ? msg.read
+                          ? "Read by recipient"
+                          : "Not read yet"
+                        : msg.read
+                          ? "Read"
+                          : "Unread"}
+                    </p>
+                  {/if}
                 </div>
               </div>
             </div>
@@ -1229,8 +1307,15 @@
             class="flex-grow bg-transparent resize-none focus:outline-none mx-2 text-white placeholder-zinc-400"
             bind:value={messageInput}
             bind:this={textareaRef}
-            oninput={adjustTextareaHeight}
-            onfocus={adjustTextareaHeight}
+            oninput={(event) => {
+              adjustTextareaHeight(event);
+              handleComposerInput();
+            }}
+            onfocus={(event) => {
+              adjustTextareaHeight(event);
+              handleComposerFocus();
+            }}
+            onblur={handleComposerBlur}
             title="Press Enter to send. Use Shift+Enter for a newline."
             onkeydown={(e) => {
               if (e.key !== "Enter") {

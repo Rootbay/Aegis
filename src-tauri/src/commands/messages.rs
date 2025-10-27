@@ -10,6 +10,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::ChaCha20Poly1305;
+use chrono::Utc;
 use e2ee;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -69,6 +70,28 @@ pub struct DecryptChatPayloadResponse {
     pub attachments: Vec<AttachmentDescriptor>,
     #[serde(rename = "wasEncrypted")]
     pub was_encrypted: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReadReceiptEventPayload {
+    #[serde(rename = "chatId")]
+    pub chat_id: String,
+    #[serde(rename = "messageId")]
+    pub message_id: String,
+    #[serde(rename = "readerId")]
+    pub reader_id: String,
+    pub timestamp: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TypingIndicatorEventPayload {
+    #[serde(rename = "chatId")]
+    pub chat_id: String,
+    #[serde(rename = "userId")]
+    pub user_id: String,
+    #[serde(rename = "isTyping")]
+    pub is_typing: bool,
+    pub timestamp: String,
 }
 
 fn encrypt_bytes(data: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String> {
@@ -1017,6 +1040,58 @@ pub async fn send_encrypted_dm(
         .network_tx
         .send(serialized_message)
         .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_read_receipt(
+    app: tauri::AppHandle,
+    chat_id: String,
+    message_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let reader_id = state.identity.peer_id().to_base58();
+    let payload = ReadReceiptEventPayload {
+        chat_id,
+        message_id,
+        reader_id,
+        timestamp: Utc::now().to_rfc3339(),
+    };
+
+    app.emit("message-read", payload)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_typing_indicator(
+    app: tauri::AppHandle,
+    chat_id: String,
+    is_typing: bool,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let user_id = state.identity.peer_id().to_base58();
+    let payload = TypingIndicatorEventPayload {
+        chat_id,
+        user_id,
+        is_typing,
+        timestamp: Utc::now().to_rfc3339(),
+    };
+
+    app.emit("typing-indicator", payload)
         .map_err(|e| e.to_string())
 }
 

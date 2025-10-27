@@ -40,6 +40,26 @@ type BackendMessage = {
   expiresAt?: string | number | Date | null;
 };
 
+export type MessageReadReceiptEvent = {
+  chat_id?: string;
+  chatId?: string;
+  message_id?: string;
+  messageId?: string;
+  reader_id?: string;
+  readerId?: string;
+  timestamp?: string | number | Date;
+};
+
+export type TypingIndicatorEvent = {
+  chat_id?: string;
+  chatId?: string;
+  user_id?: string;
+  userId?: string;
+  is_typing?: boolean;
+  isTyping?: boolean;
+  timestamp?: string | number | Date;
+};
+
 type BackendAttachment = {
   id: string;
   message_id?: string;
@@ -79,6 +99,8 @@ interface ChatStore {
   serverChannelSelections: Readable<Map<string, string>>;
   activeServerChannelId: Readable<string | null>;
   loadingStateByChat: Readable<Map<string, boolean>>;
+  typingByChatId: Readable<Map<string, string[]>>;
+  activeChatTypingUsers: Readable<string[]>;
   setActiveChat: (
     chatId: string,
     chatType: "dm" | "server" | "group",
@@ -96,6 +118,10 @@ interface ChatStore {
   handleMessageDeleted: (payload: DeleteMessage) => void;
   handleMessageEdited: (payload: EditMessage) => void;
   handleReactionUpdate: (payload: MessageReaction) => void;
+  handleReadReceipt: (payload: MessageReadReceiptEvent) => void;
+  handleTypingIndicator: (payload: TypingIndicatorEvent) => void;
+  markActiveChatViewed: () => Promise<void>;
+  sendTypingIndicator: (isTyping: boolean) => Promise<void>;
   clearActiveChat: () => void;
   dropChatHistory: (chatId: string) => void;
   loadMoreMessages: (targetChatId: string) => Promise<void>;
@@ -124,11 +150,24 @@ type ChatStoreOptions = {
 };
 
 const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
+const TYPING_INDICATOR_TIMEOUT_MS = 4_000;
+
+const normalizeEventId = (value?: string | null) => {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  return null;
+};
 
 function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const messagesByChatIdStore = writable<Map<string, Message[]>>(new Map());
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
+  const typingByChatIdStore = writable<Map<string, string[]>>(new Map());
+
+  const typingTimeouts = new Map<string, Map<string, ReturnType<typeof setTimeout>>>();
+  const typingDispatchState = new Map<string, boolean>();
+  const lastDispatchedReceiptByChatId = new Map<string, string>();
 
   const computeEphemeralDurationMs = (
     minutes: number | undefined | null,
@@ -191,6 +230,48 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const SERVER_CHANNEL_SELECTIONS_KEY = "serverChannelSelections";
+
+  const mutateTypingUsers = (
+    chatId: string,
+    mutator: (current: Set<string>) => void,
+  ) => {
+    typingByChatIdStore.update((map) => {
+      const next = new Map(map);
+      const existing = new Set(next.get(chatId) ?? []);
+      mutator(existing);
+      if (existing.size === 0) {
+        next.delete(chatId);
+      } else {
+        next.set(chatId, Array.from(existing));
+      }
+      return next;
+    });
+  };
+
+  const clearTypingTimeout = (chatId: string, userId: string) => {
+    const timers = typingTimeouts.get(chatId);
+    const timeout = timers?.get(userId);
+    if (timeout) {
+      clearTimeout(timeout);
+      timers?.delete(userId);
+    }
+    if (timers && timers.size === 0) {
+      typingTimeouts.delete(chatId);
+    }
+  };
+
+  const scheduleTypingTimeout = (chatId: string, userId: string) => {
+    clearTypingTimeout(chatId, userId);
+    const timeout = setTimeout(() => {
+      clearTypingTimeout(chatId, userId);
+      mutateTypingUsers(chatId, (set) => {
+        set.delete(userId);
+      });
+    }, TYPING_INDICATOR_TIMEOUT_MS);
+    const timers = typingTimeouts.get(chatId) ?? new Map();
+    timers.set(userId, timeout);
+    typingTimeouts.set(chatId, timers);
+  };
 
   const loadServerChannelSelections = (): Map<string, string> => {
     if (typeof localStorage === "undefined") {
@@ -318,6 +399,20 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   );
   const activeChannelId = writable<string | null>(initialActiveChannelId);
   const loadingStateByChatStore = writable<Map<string, boolean>>(new Map());
+  const typingByChatIdReadable = derived(
+    typingByChatIdStore,
+    ($map) => new Map($map),
+  );
+  const activeChatTypingUsersReadable = derived(
+    [activeChatType, activeChatId, activeChannelId, typingByChatIdStore],
+    ([$type, $chatId, $channelId, $typing]) => {
+      const key = $type === "server" ? $channelId : $chatId;
+      if (!key) {
+        return [] as string[];
+      }
+      return $typing.get(key) ?? [];
+    },
+  );
   const loadSequenceNumbers = new Map<string, number>();
   const updateLoadingStateForChat = (chatId: string, isLoading: boolean) => {
     if (!chatId) return;
@@ -896,6 +991,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       localStorage.removeItem("activeChannelId");
     }
     const messageChatId = type === "server" ? resolvedChannelId : chatId;
+    if (messageChatId) {
+      typingDispatchState.delete(messageChatId);
+    }
     if (messageChatId) {
       const existingMessages =
         get(messagesByChatIdStore).get(messageChatId) || [];
@@ -1596,6 +1694,162 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     applyReactionMutation(chatId, messageId, payload.emoji, userId, action);
   };
 
+  const handleReadReceipt = (payload: MessageReadReceiptEvent) => {
+    const chatId = normalizeEventId(payload.chat_id ?? payload.chatId);
+    const messageId = normalizeEventId(payload.message_id ?? payload.messageId);
+    if (!chatId || !messageId) {
+      return;
+    }
+
+    updateMessagesForChat(chatId, (existing) => {
+      let mutated = false;
+      const next = existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        if (message.read) {
+          return message;
+        }
+        mutated = true;
+        return { ...message, read: true };
+      });
+      return mutated ? next : existing;
+    });
+  };
+
+  const handleTypingIndicator = (payload: TypingIndicatorEvent) => {
+    const chatId = normalizeEventId(payload.chat_id ?? payload.chatId);
+    const userId = normalizeEventId(payload.user_id ?? payload.userId);
+    if (!chatId || !userId) {
+      return;
+    }
+    const isTyping = Boolean(payload.is_typing ?? payload.isTyping);
+    const meId = get(userStore).me?.id;
+    if (meId && userId === meId) {
+      return;
+    }
+
+    if (isTyping) {
+      mutateTypingUsers(chatId, (set) => {
+        set.add(userId);
+      });
+      scheduleTypingTimeout(chatId, userId);
+    } else {
+      clearTypingTimeout(chatId, userId);
+      mutateTypingUsers(chatId, (set) => {
+        set.delete(userId);
+      });
+    }
+  };
+
+  const markActiveChatViewed = async () => {
+    const type = get(activeChatType);
+    const chatIdValue = get(activeChatId);
+    const channelIdValue = get(activeChannelId);
+    const currentSettings = get(settings);
+    const meId = get(userStore).me?.id ?? null;
+    if (!type || !chatIdValue) {
+      return;
+    }
+
+    const messageChatId = type === "server" ? channelIdValue : chatIdValue;
+    if (!messageChatId) {
+      return;
+    }
+
+    const existingMessages =
+      get(messagesByChatIdStore).get(messageChatId) ?? [];
+    if (existingMessages.length === 0) {
+      return;
+    }
+
+    updateMessagesForChat(messageChatId, (existing) => {
+      let mutated = false;
+      const next = existing.map((message) => {
+        if (meId && message.senderId === meId) {
+          return message;
+        }
+        if (message.read) {
+          return message;
+        }
+        mutated = true;
+        return { ...message, read: true };
+      });
+      return mutated ? next : existing;
+    });
+
+    if (!currentSettings.enableReadReceipts) {
+      return;
+    }
+
+    const updatedMessages =
+      get(messagesByChatIdStore).get(messageChatId) ?? existingMessages;
+    const lastReadable = [...updatedMessages]
+      .filter((message) => (meId ? message.senderId !== meId : true))
+      .pop();
+    if (!lastReadable) {
+      return;
+    }
+
+    if (lastDispatchedReceiptByChatId.get(messageChatId) === lastReadable.id) {
+      return;
+    }
+
+    lastDispatchedReceiptByChatId.set(messageChatId, lastReadable.id);
+
+    try {
+      await invoke("send_read_receipt", {
+        chatId: messageChatId,
+        chat_id: messageChatId,
+        messageId: lastReadable.id,
+        message_id: lastReadable.id,
+        timestamp: lastReadable.timestamp,
+      });
+    } catch (error) {
+      lastDispatchedReceiptByChatId.delete(messageChatId);
+      console.debug("Failed to send read receipt", error);
+    }
+  };
+
+  const sendTypingIndicator = async (isTyping: boolean) => {
+    const currentSettings = get(settings);
+    if (!currentSettings.enableTypingIndicators) {
+      return;
+    }
+
+    const type = get(activeChatType);
+    const chatIdValue = get(activeChatId);
+    const channelIdValue = get(activeChannelId);
+    if (!type || !chatIdValue) {
+      return;
+    }
+
+    const messageChatId = type === "server" ? channelIdValue : chatIdValue;
+    if (!messageChatId) {
+      return;
+    }
+
+    const previousState = typingDispatchState.get(messageChatId);
+    if (previousState === isTyping) {
+      return;
+    }
+
+    typingDispatchState.set(messageChatId, isTyping);
+
+    try {
+      await invoke("send_typing_indicator", {
+        chatId: messageChatId,
+        chat_id: messageChatId,
+        isTyping,
+        is_typing: isTyping,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      typingDispatchState.delete(messageChatId);
+      console.debug("Failed to send typing indicator", error);
+    }
+  };
+
   const handleMessageDeleted = (payload: DeleteMessage) => {
     const chatId = payload.chat_id ?? payload.chatId;
     const messageId = payload.message_id ?? payload.messageId;
@@ -1765,6 +2019,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       loadingStateByChatStore,
       ($map) => new Map($map),
     ),
+    typingByChatId: typingByChatIdReadable,
+    activeChatTypingUsers: derived(
+      activeChatTypingUsersReadable,
+      ($users) => [...$users],
+    ),
     groupChats: derived(groupChatsStore, ($map) => new Map($map)),
     setActiveChat,
     handleMessagesUpdate,
@@ -1776,6 +2035,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleMessageDeleted,
     handleMessageEdited,
     handleReactionUpdate,
+    handleReadReceipt,
+    handleTypingIndicator,
+    markActiveChatViewed,
+    sendTypingIndicator,
     clearActiveChat,
     dropChatHistory,
     loadMoreMessages,
@@ -1796,5 +2059,7 @@ export const activeServerChannelId = chatStore.activeServerChannelId;
 export const activeChatId = chatStore.activeChatId;
 export const activeChatType = chatStore.activeChatType;
 export const loadingStateByChat = chatStore.loadingStateByChat;
+export const typingByChatId = chatStore.typingByChatId;
+export const activeChatTypingUsers = chatStore.activeChatTypingUsers;
 export const groupChats = chatStore.groupChats;
 export { createChatStore };
