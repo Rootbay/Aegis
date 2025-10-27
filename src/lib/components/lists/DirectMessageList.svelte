@@ -6,7 +6,7 @@
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import { userStore } from "$lib/stores/userStore";
-  import { Plus, Users, X } from "@lucide/svelte";
+  import { Plus, Users } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
@@ -25,46 +25,64 @@
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogFooter,
-    DialogClose,
   } from "$lib/components/ui/dialog";
   import {
     Avatar,
     AvatarImage,
     AvatarFallback,
   } from "$lib/components/ui/avatar";
-
-  import type { GroupChatSummary } from "$lib/features/chat/stores/chatStore";
+  import { Badge } from "$lib/components/ui/badge";
+  import type { DirectMessageListEntry } from "$lib/features/chat/stores/directMessageRoster";
 
   type SelectChatHandler = (chatId: string | null, type?: "dm" | "group") => void;
 
   let {
-    friends = [],
-    groupChats = [],
-    activeFriendId = null,
+    entries = [],
+    activeChatId = null,
     onSelect,
     onCreateGroupClick,
   }: {
-    friends?: Friend[];
-    groupChats?: GroupChatSummary[];
-    activeFriendId?: string | null;
+    entries?: DirectMessageListEntry[];
+    activeChatId?: string | null;
     onSelect: SelectChatHandler;
     onCreateGroupClick: () => void;
   } = $props();
 
   let showSearch = $state(false);
   let searchTerm = $state("");
-  let searchResults = $derived(
-    friends.filter((friend) =>
-      friend.name.toLowerCase().includes(searchTerm.toLowerCase()),
-    ),
+  const timestampToNumber = (value: string | null | undefined) => {
+    if (!value) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+  };
+
+  let sortedEntries = $derived(() => {
+    const list = [...entries];
+    list.sort((a, b) => {
+      const diff = timestampToNumber(b.lastActivityAt) - timestampToNumber(a.lastActivityAt);
+      if (diff !== 0) {
+        return diff;
+      }
+      return a.name.localeCompare(b.name);
+    });
+    return list;
+  });
+
+  let dmEntries = $derived(
+    sortedEntries.filter((entry) => entry.type === "dm" && entry.friend),
   );
 
-  let sortedGroupChats = $derived(
-    [...groupChats].sort((a, b) =>
-      a.createdAt.localeCompare(b.createdAt),
-    ),
-  );
+  let searchResults = $derived(() => {
+    if (!searchTerm) {
+      return dmEntries;
+    }
+    const lowered = searchTerm.toLowerCase();
+    return dmEntries.filter((entry) =>
+      entry.name.toLowerCase().includes(lowered),
+    );
+  });
 
   function handleKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -78,11 +96,11 @@
 
   function handleContextItem(
     action: "open" | "mute" | "remove",
-    friendId: string,
+    entryId: string,
   ) {
-    const item = friends.find((f) => f.id === friendId);
+    const item = dmEntries.find((entry) => entry.id === entryId)?.friend;
     if (!item) return;
-    if (action === "open") onSelect(friendId);
+    if (action === "open") onSelect(entryId, "dm");
     if (action === "mute") {
       toggleMute(item);
     }
@@ -195,7 +213,7 @@
   </div>
 
   <ScrollArea class="flex-1 px-2">
-    {#if (!friends || friends.length === 0) && sortedGroupChats.length === 0}
+    {#if sortedEntries.length === 0}
       <div class="text-center p-6 text-muted-foreground">
         <p>No conversations yet.</p>
         <p class="text-sm">
@@ -203,104 +221,116 @@
         </p>
       </div>
     {:else}
-      <div class="space-y-4 pb-4">
-        {#if sortedGroupChats.length > 0}
-          <section class="space-y-1">
-            <p class="px-2 text-xs font-semibold uppercase text-muted-foreground">
-              Group Chats
-            </p>
-            {#each sortedGroupChats as group (group.id)}
-              <Button
-                variant="ghost"
-                class="w-full justify-start gap-3 py-1 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
-                data-active={activeFriendId === group.id}
-                onclick={() => onSelect(group.id, "group")}
-              >
-                <div class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Users size={16} />
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-baseline justify-between gap-2">
-                    <p class="font-semibold truncate">{group.name}</p>
-                    {@const createdLabel = formatTimestamp(group.createdAt)}
-                    {#if createdLabel}
-                      <p class="shrink-0 text-xs text-muted-foreground">
-                        {createdLabel}
-                      </p>
+      <div class="space-y-1 pb-4">
+        {#each sortedEntries as entry (entry.id)}
+          {#if entry.type === "dm" && entry.friend}
+            <ContextMenu>
+              <ContextMenuTrigger>
+                <Button
+                  variant="ghost"
+                  class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
+                  data-active={activeChatId === entry.id}
+                  onclick={() => onSelect(entry.id, "dm")}
+                >
+                  <div class="relative">
+                    <Avatar class="h-10 w-10">
+                      <AvatarImage src={entry.avatar} alt={entry.name} />
+                      <AvatarFallback class="uppercase"
+                        >{entry.name?.[0]}</AvatarFallback
+                      >
+                    </Avatar>
+                    {#if entry.friend.online}
+                      <span
+                        class="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background"
+                      ></span>
                     {/if}
                   </div>
-                  <p class="text-xs text-muted-foreground truncate">
-                    {group.memberIds.length} member{group.memberIds.length === 1 ? "" : "s"}
-                  </p>
-                </div>
-              </Button>
-            {/each}
-          </section>
-        {/if}
 
-        {#if friends && friends.length > 0}
-          <section class="space-y-1">
-            <p class="px-2 text-xs font-semibold uppercase text-muted-foreground">
-              Direct Messages
-            </p>
-            {#each friends as friend (friend.id)}
-              <ContextMenu>
-                <ContextMenuTrigger>
-                  <Button
-                    variant="ghost"
-                    class="w-full justify-start gap-3 py-1 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
-                    data-active={activeFriendId === friend.id}
-                    onclick={() => onSelect(friend.id)}
-                  >
-                    <div class="relative">
-                      <Avatar class="h-10 w-10">
-                        <AvatarImage src={friend.avatar} alt={friend.name} />
-                        <AvatarFallback class="uppercase"
-                          >{friend.name?.[0]}</AvatarFallback
-                        >
-                      </Avatar>
-                      {#if friend.online}
-                        <span
-                          class="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background"
-                        ></span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline justify-between gap-2">
+                      <p class="font-semibold truncate">{entry.name}</p>
+                      {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
+                        fallback: null,
+                      })}
+                      {#if timestampLabel}
+                        <p class="shrink-0 text-xs text-muted-foreground">
+                          {timestampLabel}
+                        </p>
                       {/if}
                     </div>
-
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-baseline justify-between gap-2">
-                        <p class="font-semibold truncate">{friend.name}</p>
-                        {@const timestampLabel = formatTimestamp(friend.timestamp)}
-                        {#if timestampLabel}
-                          <p class="shrink-0 text-xs text-muted-foreground">
-                            {timestampLabel}
-                          </p>
-                        {/if}
-                      </div>
+                    <div class="mt-1 flex items-center gap-2">
+                      <p class="text-xs text-muted-foreground truncate flex-1">
+                        {entry.lastMessageText ?? "No messages yet"}
+                      </p>
+                      {#if entry.unreadCount > 0}
+                        <Badge
+                          class="ml-auto shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                        >
+                          {entry.unreadCount > 99 ? "99+" : entry.unreadCount}
+                        </Badge>
+                      {/if}
                     </div>
-                  </Button>
-                </ContextMenuTrigger>
+                  </div>
+                </Button>
+              </ContextMenuTrigger>
 
-                <ContextMenuContent class="w-48">
-                  <ContextMenuItem
-                    onselect={() => handleContextItem("open", friend.id)}
-                    >Open Chat</ContextMenuItem
-                  >
-                  <ContextMenuSeparator />
-                  <ContextMenuItem
-                    onselect={() => handleContextItem("mute", friend.id)}
-                    >Mute</ContextMenuItem
-                  >
-                  <ContextMenuItem
-                    onselect={() => handleContextItem("remove", friend.id)}
-                    class="text-destructive"
-                  >
-                    Remove
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            {/each}
-          </section>
-        {/if}
+              <ContextMenuContent class="w-48">
+                <ContextMenuItem
+                  onselect={() => handleContextItem("open", entry.id)}
+                  >Open Chat</ContextMenuItem
+                >
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onselect={() => handleContextItem("mute", entry.id)}
+                  >Mute</ContextMenuItem
+                >
+                <ContextMenuItem
+                  onselect={() => handleContextItem("remove", entry.id)}
+                  class="text-destructive"
+                >
+                  Remove
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          {:else if entry.type === "group"}
+            <Button
+              variant="ghost"
+              class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
+              data-active={activeChatId === entry.id}
+              onclick={() => onSelect(entry.id, "group")}
+            >
+              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Users size={16} />
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline justify-between gap-2">
+                  <p class="font-semibold truncate">{entry.name}</p>
+                  {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
+                    fallback: null,
+                  })}
+                  {#if timestampLabel}
+                    <p class="shrink-0 text-xs text-muted-foreground">
+                      {timestampLabel}
+                    </p>
+                  {/if}
+                </div>
+                <div class="mt-1 flex items-center gap-2">
+                  {@const memberCount = entry.memberCount ?? entry.memberIds?.length ?? 0}
+                  <p class="text-xs text-muted-foreground truncate flex-1">
+                    {entry.lastMessageText ?? `${memberCount} member${memberCount === 1 ? "" : "s"}`}
+                  </p>
+                  {#if entry.unreadCount > 0}
+                    <Badge
+                      class="ml-auto shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                    >
+                      {entry.unreadCount > 99 ? "99+" : entry.unreadCount}
+                    </Badge>
+                  {/if}
+                </div>
+              </div>
+            </Button>
+          {/if}
+        {/each}
       </div>
     {/if}
   </ScrollArea>
@@ -318,33 +348,36 @@
           {#if searchResults.length > 0}
             <div class="space-y-2">
               {#each searchResults as item (item.id)}
-                <Button
-                  variant="ghost"
-                  class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
-                  onclick={() => {
-                    onSelect(item.id);
-                    showSearch = false;
-                    searchTerm = "";
-                  }}
-                >
-                  <div class="relative">
-                    <Avatar class="h-10 w-10">
-                      <AvatarImage src={item.avatar} alt={item.name} />
-                      <AvatarFallback class="uppercase"
-                        >{item.name?.[0]}</AvatarFallback
-                      >
-                    </Avatar>
-                    {#if item.online}
-                      <span
-                        class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background"
-                      ></span>
-                    {/if}
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="font-semibold truncate">{item.name}</p>
-                    <p class="text-xs text-muted-foreground">Friend</p>
-                  </div>
-                </Button>
+                {@const friend = item.friend}
+                {#if friend}
+                  <Button
+                    variant="ghost"
+                    class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
+                    onclick={() => {
+                      onSelect(item.id, "dm");
+                      showSearch = false;
+                      searchTerm = "";
+                    }}
+                  >
+                    <div class="relative">
+                      <Avatar class="h-10 w-10">
+                        <AvatarImage src={friend.avatar} alt={friend.name} />
+                        <AvatarFallback class="uppercase"
+                          >{friend.name?.[0]}</AvatarFallback
+                        >
+                      </Avatar>
+                      {#if friend.online}
+                        <span
+                          class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background"
+                        ></span>
+                      {/if}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="font-semibold truncate">{friend.name}</p>
+                      <p class="text-xs text-muted-foreground">Direct Message</p>
+                    </div>
+                  </Button>
+                {/if}
               {/each}
             </div>
           {:else if searchTerm.length > 0}
