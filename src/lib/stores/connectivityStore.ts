@@ -1,6 +1,6 @@
 import { browser } from "$app/environment";
 import { derived, writable, type Readable } from "svelte/store";
-import { getListen } from "$services/tauri";
+import { getInvoke, getListen } from "$services/tauri";
 
 export type ConnectivityStatus =
   | "initializing"
@@ -435,6 +435,21 @@ export function createConnectivityStore(): ConnectivityStore {
       } catch (error) {
         console.error("Failed to subscribe to connectivity events", error);
         markFallback("Failed to subscribe to connectivity events; using demo data.");
+        return;
+      }
+
+      const invoke = await getInvoke();
+      if (invoke) {
+        try {
+          const snapshot = await invoke<ConnectivityEventPayload | null>(
+            "get_connectivity_snapshot",
+          );
+          if (snapshot) {
+            handleBackendEvent(snapshot);
+          }
+        } catch (error) {
+          console.warn("Failed to fetch initial connectivity snapshot", error);
+        }
       }
     })()
       .catch((error) => {

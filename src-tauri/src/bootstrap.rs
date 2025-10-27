@@ -14,6 +14,8 @@ use e2ee;
 use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
 use tokio::sync::mpsc::Sender as TokioSender;
 
+use crate::connectivity::spawn_connectivity_task;
+
 const MAX_OUTBOX_MESSAGES: usize = 256;
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
 const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
@@ -60,6 +62,8 @@ pub async fn initialize_app_state<R: Runtime>(
         .await
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
+    let connectivity_snapshot = Arc::new(Mutex::new(None));
+
     let new_state = AppState {
         identity: identity.clone(),
         network_tx: net_tx,
@@ -67,9 +71,17 @@ pub async fn initialize_app_state<R: Runtime>(
         incoming_files: Arc::new(Mutex::new(HashMap::new())),
         file_cmd_tx: file_tx,
         file_acl_policy: Arc::new(Mutex::new(initial_acl)),
+        connectivity_snapshot: connectivity_snapshot.clone(),
     };
 
     *state_container.0.lock().await = Some(new_state.clone());
+
+    spawn_connectivity_task(
+        app.clone(),
+        shared_swarm.clone(),
+        identity.peer_id(),
+        connectivity_snapshot,
+    );
 
     let my_peer_id = identity.peer_id().to_base58();
     let my_pubkey_b58 = bs58::encode(identity.public_key_protobuf_bytes()).into_string();
