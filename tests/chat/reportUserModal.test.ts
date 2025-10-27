@@ -62,4 +62,48 @@ describe("ReportUserModal", () => {
       expect(onclose).toHaveBeenCalled();
     });
   });
+
+  it("shows an error toast when the backend invocation fails", async () => {
+    const onclose = vi.fn();
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("backend down"));
+
+    const payload = {
+      targetUser: {
+        id: "user-2",
+        name: "Error User",
+        avatar: "avatar.png",
+        online: true,
+      },
+      sourceChatId: undefined,
+      sourceChatType: undefined,
+      sourceChatName: undefined,
+    };
+
+    const { getByLabelText, getByText } = render(ReportUserModal, {
+      props: {
+        onclose,
+        payload,
+      },
+    });
+
+    const detailsField = getByLabelText("Details") as HTMLTextAreaElement;
+    await fireEvent.input(detailsField, { target: { value: "harassment" } });
+
+    await fireEvent.click(getByText("Submit report"));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("submit_user_report", {
+        target_user_id: payload.targetUser.id,
+        reason: "harassment",
+        description: "harassment",
+        source_chat_id: payload.sourceChatId,
+        source_chat_type: payload.sourceChatType,
+      });
+      expect(toasts.addToast).toHaveBeenCalledWith(
+        "Failed to submit report. Please try again.",
+        "error",
+      );
+      expect(onclose).not.toHaveBeenCalled();
+    });
+  });
 });

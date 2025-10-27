@@ -1065,8 +1065,7 @@ pub async fn send_read_receipt(
         timestamp: Utc::now().to_rfc3339(),
     };
 
-    app.emit("message-read", payload)
-        .map_err(|e| e.to_string())
+    app.emit("message-read", payload).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

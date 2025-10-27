@@ -5,6 +5,7 @@ pub mod files;
 pub mod friends;
 pub mod identity;
 pub mod messages;
+pub mod moderation;
 pub mod presence;
 pub mod servers;
 pub mod settings;

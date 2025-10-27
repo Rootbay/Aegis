@@ -61,23 +61,28 @@
   async function submitReport() {
     if (submitting) return;
     submitting = true;
+    const trimmedDescription = description.trim();
+    const payloadToSend = {
+      target_user_id: payload.targetUser.id,
+      reason,
+      description: trimmedDescription,
+      source_chat_id: payload.sourceChatId,
+      source_chat_type: payload.sourceChatType,
+    } satisfies Parameters<typeof invoke>[1];
+
     try {
-      await invoke("submit_user_report", {
-        target_user_id: payload.targetUser.id,
-        reason,
-        description,
-        source_chat_id: payload.sourceChatId,
-        source_chat_type: payload.sourceChatType,
-      });
+      await invoke("submit_user_report", payloadToSend);
       toasts.addToast(
         "Report submitted. Thank you for helping keep the community safe.",
         "success",
       );
       open = false;
-    } catch (error: any) {
-      console.warn("Failed to send report to backend, storing locally.", error);
-      toasts.addToast("Report recorded. We'll review it soon.", "success");
-      open = false;
+    } catch (error: unknown) {
+      console.error("Failed to send report to backend.", error);
+      toasts.addToast(
+        "Failed to submit report. Please try again.",
+        "error",
+      );
     } finally {
       submitting = false;
     }
