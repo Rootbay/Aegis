@@ -6,11 +6,11 @@ use aegis_protocol::{
 };
 use aegis_shared_types::AppState;
 use aep::database;
-use e2ee;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::ChaCha20Poly1305;
+use e2ee;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -102,7 +102,11 @@ fn decrypt_bytes(ciphertext: &[u8], key: &[u8], nonce: &[u8]) -> Result<Vec<u8>,
         .map_err(|_| "Failed to decrypt payload".to_string())
 }
 
-fn serialize_message_envelope(ciphertext: Vec<u8>, key: Vec<u8>, nonce: Vec<u8>) -> Result<String, String> {
+fn serialize_message_envelope(
+    ciphertext: Vec<u8>,
+    key: Vec<u8>,
+    nonce: Vec<u8>,
+) -> Result<String, String> {
     let envelope = MessageEnvelope {
         version: ENVELOPE_VERSION,
         algorithm: ENVELOPE_ALGORITHM.to_string(),
@@ -127,7 +131,8 @@ fn serialize_attachment_envelope(
         ciphertext: BASE64.encode(&ciphertext),
         original_size,
     };
-    serde_json::to_vec(&envelope).map_err(|e| format!("Failed to serialize attachment envelope: {e}"))
+    serde_json::to_vec(&envelope)
+        .map_err(|e| format!("Failed to serialize attachment envelope: {e}"))
 }
 
 fn deserialize_message_envelope(content: &str) -> Result<Option<MessageEnvelope>, String> {
@@ -145,6 +150,17 @@ fn deserialize_attachment_envelope(data: &[u8]) -> Option<AttachmentEnvelope> {
     serde_json::from_slice::<AttachmentEnvelope>(data)
         .ok()
         .filter(|env| env.version == ENVELOPE_VERSION)
+}
+
+fn parse_optional_datetime(input: Option<String>) -> Result<Option<chrono::DateTime<Utc>>, String> {
+    match input {
+        Some(value) => {
+            let parsed = chrono::DateTime::parse_from_rfc3339(&value)
+                .map_err(|e| format!("Invalid expires_at timestamp: {e}"))?;
+            Ok(Some(parsed.with_timezone(&chrono::Utc)))
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -168,11 +184,7 @@ pub async fn encrypt_chat_payload(
             return Err(format!("Attachment '{name}' is missing binary data"));
         }
 
-        let effective_size = if size == 0 {
-            data.len() as u64
-        } else {
-            size
-        };
+        let effective_size = if size == 0 { data.len() as u64 } else { size };
         let sanitized_size = if effective_size == data.len() as u64 {
             effective_size
         } else {
@@ -180,12 +192,8 @@ pub async fn encrypt_chat_payload(
         };
 
         let (attachment_ciphertext, key, nonce) = encrypt_bytes(&data)?;
-        let envelope_bytes = serialize_attachment_envelope(
-            attachment_ciphertext,
-            key,
-            nonce,
-            sanitized_size,
-        )?;
+        let envelope_bytes =
+            serialize_attachment_envelope(attachment_ciphertext, key, nonce, sanitized_size)?;
 
         encrypted_attachments.push(AttachmentDescriptor {
             name,
@@ -291,6 +299,7 @@ async fn persist_and_broadcast_message(
     conversation_id: Option<String>,
     channel_id: Option<String>,
     server_id: Option<String>,
+    expires_at: Option<chrono::DateTime<Utc>>,
 ) -> Result<(), String> {
     let peer_id = state.identity.peer_id().to_base58();
 
@@ -357,6 +366,7 @@ async fn persist_and_broadcast_message(
         reactions: HashMap::new(),
         edited_at: None,
         edited_by: None,
+        expires_at: expires_at.clone(),
     };
     database::insert_message(&state.db_pool, &new_local_message)
         .await
@@ -371,6 +381,7 @@ async fn persist_and_broadcast_message(
         server_id: server_id.clone(),
         conversation_id: payload_conversation_id.clone(),
         attachments: protocol_attachments.clone(),
+        expires_at: expires_at.clone(),
     };
     let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
     let signature = state
@@ -388,6 +399,7 @@ async fn persist_and_broadcast_message(
         server_id,
         conversation_id: payload_conversation_id,
         attachments: protocol_attachments,
+        expires_at,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
@@ -518,12 +530,24 @@ pub async fn send_message(
     message: String,
     channel_id: Option<String>,
     server_id: Option<String>,
+    expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, Vec::new(), None, channel_id, server_id).await
+    let expires_at = parse_optional_datetime(expires_at)?;
+
+    persist_and_broadcast_message(
+        state,
+        message,
+        Vec::new(),
+        None,
+        channel_id,
+        server_id,
+        expires_at,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -532,24 +556,48 @@ pub async fn send_message_with_attachments(
     attachments: Vec<AttachmentDescriptor>,
     channel_id: Option<String>,
     server_id: Option<String>,
+    expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, attachments, None, channel_id, server_id).await
+    let expires_at = parse_optional_datetime(expires_at)?;
+
+    persist_and_broadcast_message(
+        state,
+        message,
+        attachments,
+        None,
+        channel_id,
+        server_id,
+        expires_at,
+    )
+    .await
 }
 
 #[tauri::command]
 pub async fn send_direct_message(
     recipient_id: String,
     message: String,
+    expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, Vec::new(), Some(recipient_id), None, None).await
+    let expires_at = parse_optional_datetime(expires_at)?;
+
+    persist_and_broadcast_message(
+        state,
+        message,
+        Vec::new(),
+        Some(recipient_id),
+        None,
+        None,
+        expires_at,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -557,12 +605,24 @@ pub async fn send_direct_message_with_attachments(
     recipient_id: String,
     message: String,
     attachments: Vec<AttachmentDescriptor>,
+    expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
 
-    persist_and_broadcast_message(state, message, attachments, Some(recipient_id), None, None).await
+    let expires_at = parse_optional_datetime(expires_at)?;
+
+    persist_and_broadcast_message(
+        state,
+        message,
+        attachments,
+        Some(recipient_id),
+        None,
+        None,
+        expires_at,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -691,6 +751,7 @@ mod tests {
             reactions: HashMap::new(),
             edited_at: None,
             edited_by: None,
+            expires_at: None,
         };
         database::insert_message(&local_db, &message)
             .await
@@ -796,6 +857,7 @@ mod tests {
             reactions: HashMap::new(),
             edited_at: None,
             edited_by: None,
+            expires_at: None,
         };
         database::insert_message(&local_db, &message)
             .await
@@ -892,11 +954,14 @@ mod tests {
 pub async fn send_encrypted_dm(
     recipient_id: String,
     message: String,
+    expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
     let my_id = state.identity.peer_id().to_base58();
+
+    let expires_at = parse_optional_datetime(expires_at)?;
 
     // Insert locally for UX
     let new_local_message = database::Message {
@@ -910,6 +975,7 @@ pub async fn send_encrypted_dm(
         reactions: HashMap::new(),
         edited_at: None,
         edited_by: None,
+        expires_at,
     };
     database::insert_message(&state.db_pool, &new_local_message)
         .await
@@ -1026,10 +1092,12 @@ pub async fn send_encrypted_group_message(
     server_id: String,
     channel_id: Option<String>,
     message: String,
+    expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let _ = parse_optional_datetime(expires_at)?;
     // Encrypt using group key
     let (epoch, nonce, ciphertext) = {
         let arc = e2ee::init_global_manager();

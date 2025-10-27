@@ -182,10 +182,7 @@ pub async fn remove_server_member(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or("State not initialized")?
-        .clone();
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)

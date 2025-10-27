@@ -14,6 +14,7 @@ import type {
 } from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
+import { settings } from "$lib/features/settings/stores/settings";
 import {
   decodeIncomingMessagePayload,
   encryptOutgoingMessagePayload,
@@ -35,6 +36,8 @@ type BackendMessage = {
   editedAt?: string | number | Date | null;
   edited_by?: string | null;
   editedBy?: string | null;
+  expires_at?: string | number | Date | null;
+  expiresAt?: string | number | Date | null;
 };
 
 type BackendAttachment = {
@@ -126,6 +129,23 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const messagesByChatIdStore = writable<Map<string, Message[]>>(new Map());
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
+
+  const computeEphemeralDurationMs = (
+    minutes: number | undefined | null,
+  ): number => {
+    if (minutes === null || minutes === undefined) {
+      return 0;
+    }
+    const numeric = Number(minutes);
+    if (!Number.isFinite(numeric) || numeric <= 0) {
+      return 0;
+    }
+    return Math.floor(numeric) * 60_000;
+  };
+
+  let ephemeralDurationMs = computeEphemeralDurationMs(
+    get(settings).ephemeralMessageDuration,
+  );
 
   const fallbackGroupName = (id: string) => `Group ${id.slice(0, 6)}`;
 
@@ -380,6 +400,28 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const computeExpiryForTimestamp = (timestamp: string): string | undefined => {
+    if (ephemeralDurationMs <= 0) {
+      return undefined;
+    }
+    const timestampMs = Date.parse(timestamp);
+    if (Number.isNaN(timestampMs)) {
+      return undefined;
+    }
+    return new Date(timestampMs + ephemeralDurationMs).toISOString();
+  };
+
+  const ensureMessageExpiry = (message: Message): Message => {
+    const computed = computeExpiryForTimestamp(message.timestamp);
+    if (computed === message.expiresAt) {
+      return message;
+    }
+    if (!computed && message.expiresAt === undefined) {
+      return message;
+    }
+    return { ...message, expiresAt: computed };
+  };
+
   const enforceRetention = (messages: Message[]): Message[] => {
     if (maxMessagesPerChat <= 0) {
       return messages;
@@ -407,6 +449,80 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return messages.filter((msg) => msg.pending || !toRemoveIds.has(msg.id));
   };
 
+  const pendingExpiryDeletes = new Set<string>();
+
+  const scheduleExpiryDeletion = (chatId: string, messageId: string) => {
+    const key = `${chatId}:${messageId}`;
+    if (pendingExpiryDeletes.has(key)) {
+      return;
+    }
+    pendingExpiryDeletes.add(key);
+    void invoke("delete_message", {
+      chatId,
+      chat_id: chatId,
+      messageId,
+      message_id: messageId,
+    })
+      .catch((error) => {
+        console.warn("Failed to delete expired message:", error);
+      })
+      .finally(() => {
+        pendingExpiryDeletes.delete(key);
+      });
+  };
+
+  const applyPoliciesForChat = (
+    candidate: Message[],
+  ): { messages: Message[]; expired: Message[] } => {
+    if (candidate.length === 0) {
+      return { messages: candidate, expired: [] };
+    }
+
+    let mutated = false;
+    const withExpiry = candidate.map((message) => {
+      const next = ensureMessageExpiry(message);
+      if (next !== message) {
+        mutated = true;
+      }
+      return next;
+    });
+
+    const now = Date.now();
+    const expired: Message[] = [];
+    const filtered: Message[] = [];
+
+    for (const message of withExpiry) {
+      const expiresAt = message.expiresAt;
+      if (message.pending || !expiresAt) {
+        filtered.push(message);
+        continue;
+      }
+
+      const expiryMs = Date.parse(expiresAt);
+      if (!Number.isNaN(expiryMs) && expiryMs <= now) {
+        expired.push(message);
+        mutated = true;
+        continue;
+      }
+
+      filtered.push(message);
+    }
+
+    if (expired.length > 0) {
+      revokeAttachmentsForMessages(expired);
+    }
+
+    const retained = enforceRetention(filtered);
+    if (retained !== filtered) {
+      mutated = true;
+    }
+
+    return {
+      messages: mutated ? retained : candidate,
+      expired,
+    };
+  };
+
   const collectAttachmentUrlsFromMessages = (
     messages: Message[],
   ): Set<string> => {
@@ -426,9 +542,17 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     chatId: string,
     updater: (existing: Message[]) => Message[],
   ) => {
+    let expired: Message[] = [];
     messagesByChatIdStore.update((map) => {
       const existing = map.get(chatId) || [];
-      const next = enforceRetention(updater(existing));
+      const candidate = updater(existing);
+      const { messages: next, expired: expiredMessages } =
+        applyPoliciesForChat(candidate);
+      expired = expiredMessages;
+
+      if (next === existing) {
+        return map;
+      }
 
       const existingUrls = collectAttachmentUrlsFromMessages(existing);
       const nextUrls = collectAttachmentUrlsFromMessages(next);
@@ -438,10 +562,40 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         }
       }
 
-      map.set(chatId, next);
-      return new Map(map);
+      const nextMap = new Map(map);
+      nextMap.set(chatId, next);
+      return nextMap;
     });
+
+    if (expired.length > 0) {
+      for (const message of expired) {
+        scheduleExpiryDeletion(message.chatId, message.id);
+      }
+    }
   };
+
+  const sweepExpiredMessages = () => {
+    const snapshot = get(messagesByChatIdStore);
+    for (const chatId of snapshot.keys()) {
+      updateMessagesForChat(chatId, (existing) => existing);
+    }
+  };
+
+  if (typeof setInterval === "function") {
+    const SWEEP_INTERVAL_MS = 5_000;
+    setInterval(sweepExpiredMessages, SWEEP_INTERVAL_MS);
+  }
+
+  settings.subscribe((value) => {
+    const nextDuration = computeEphemeralDurationMs(
+      value.ephemeralMessageDuration,
+    );
+    if (nextDuration === ephemeralDurationMs) {
+      return;
+    }
+    ephemeralDurationMs = nextDuration;
+    sweepExpiredMessages();
+  });
 
   const shouldApplyDeletionForScope = (
     scope?: MessageDeletionScope,
@@ -605,19 +759,25 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const reactions = normalizeReactions(message.reactions ?? null);
     const editedAt = normalizeOptionalDate(message.edited_at ?? message.editedAt);
     const editedBy = message.edited_by ?? message.editedBy ?? undefined;
-    return {
+    const timestamp = normalizeTimestamp(message.timestamp);
+    const backendExpires = normalizeOptionalDate(
+      message.expires_at ?? message.expiresAt,
+    );
+    const normalized: Message = {
       id: message.id,
       chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
       senderId: message.sender_id ?? message.senderId ?? "",
       content: decoded.content,
-      timestamp: normalizeTimestamp(message.timestamp),
+      timestamp,
       read: message.read ?? true,
       pending: false,
       attachments: attachments.length > 0 ? attachments : undefined,
       reactions,
       editedAt: editedAt,
       editedBy: editedBy ?? undefined,
+      expiresAt: backendExpires ?? computeExpiryForTimestamp(timestamp),
     };
+    return ensureMessageExpiry(normalized);
   };
 
   const isOptimisticMatch = (
@@ -671,7 +831,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     incoming: Message,
     selfId?: string,
   ) => {
-    const normalized = { ...incoming, pending: false };
+    const normalized = ensureMessageExpiry({ ...incoming, pending: false });
     const updated = [...existing];
 
     const existingIndex = updated.findIndex(
@@ -1047,14 +1207,17 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (!messageChatId) return;
 
     const tempId = Date.now().toString();
+    const timestamp = new Date().toISOString();
+    const optimisticExpiresAt = computeExpiryForTimestamp(timestamp);
     const newMessage: Message = {
       id: tempId,
       chatId: messageChatId,
       senderId: me.id,
       content: content,
-      timestamp: new Date().toISOString(),
+      timestamp,
       read: true,
       pending: true,
+      expiresAt: optimisticExpiresAt,
     };
 
     updateMessagesForChat(messageChatId, (existing) => [
@@ -1085,6 +1248,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           message: backendContent,
           recipientId: chatId,
           recipient_id: chatId,
+          expiresAt: optimisticExpiresAt,
+          expires_at: optimisticExpiresAt,
         });
       } else {
         await invoke("send_encrypted_group_message", {
@@ -1093,6 +1258,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           channel_id: channelId,
           serverId: chatId,
           server_id: chatId,
+          expiresAt: optimisticExpiresAt,
+          expires_at: optimisticExpiresAt,
         });
       }
     } catch (error) {
@@ -1104,6 +1271,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             message: backendContent,
             recipientId: chatId,
             recipient_id: chatId,
+            expiresAt: optimisticExpiresAt,
+            expires_at: optimisticExpiresAt,
           });
         } else {
           await invoke("send_message", {
@@ -1112,6 +1281,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             channel_id: channelId,
             serverId: chatId,
             server_id: chatId,
+            expiresAt: optimisticExpiresAt,
+            expires_at: optimisticExpiresAt,
           });
         }
       } catch (fallbackError) {
@@ -1146,6 +1317,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (!messageChatId) return;
 
     const tempId = Date.now().toString() + "-a";
+    const timestamp = new Date().toISOString();
 
     const attachmentsCombined = await Promise.all(
       files.map(
@@ -1211,16 +1383,19 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
     const optimisticAttachments = attachmentsCombined.map((entry) => entry.ui);
 
+    const newMessageTimestamp = timestamp;
+    const optimisticExpiresAt = computeExpiryForTimestamp(newMessageTimestamp);
     const newMessage: Message = {
       id: tempId,
       chatId: messageChatId,
       senderId: me.id,
       content: content,
-      timestamp: new Date().toISOString(),
+      timestamp: newMessageTimestamp,
       read: true,
       attachments:
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
+      expiresAt: optimisticExpiresAt,
     };
     updateMessagesForChat(messageChatId, (existing) => [
       ...existing,
@@ -1233,6 +1408,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           message: contentForSend,
           recipientId: chatId,
           recipient_id: chatId,
+          expiresAt: optimisticExpiresAt,
+          expires_at: optimisticExpiresAt,
           attachments: attachmentsForSend,
         });
       } else {
@@ -1243,6 +1420,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           channel_id: channelId,
           serverId: chatId,
           server_id: chatId,
+          expiresAt: optimisticExpiresAt,
+          expires_at: optimisticExpiresAt,
         });
       }
     } catch (error) {
@@ -1389,7 +1568,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             ? mapAttachmentPayloads(decoded.attachments)
             : undefined,
         reactions: normalizeReactions(message.reactions ?? null),
+        expiresAt: undefined,
       };
+      newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
       updateMessagesForChat(targetChatId, (existing) =>
         insertRealtimeMessage(existing, newMessage, me?.id),
       );
