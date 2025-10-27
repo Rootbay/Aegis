@@ -18,7 +18,6 @@
     { label: "Report", action: "report", isDestructive: true },
     { isSeparator: true },
     { label: "Copy User ID", action: "copy_user_id" },
-    { label: "View Reviews", action: "view_reviews" },
     { label: "Add to Group", action: "add_to_group" },
   ];
 </script>
