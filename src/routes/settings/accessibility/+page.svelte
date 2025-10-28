@@ -99,7 +99,10 @@
 
     <div class="flex items-center justify-between gap-4">
       <div>
-        <Label for="toggle-reduced-motion" class="text-sm font-medium text-zinc-200">
+        <Label
+          for="toggle-reduced-motion"
+          class="text-sm font-medium text-zinc-200"
+        >
           Reduce motion
         </Label>
         <p class="text-xs text-muted-foreground">
@@ -144,11 +147,9 @@
       >
       <Select bind:value={screenReaderVerbosity}>
         <SelectTrigger class="w-full">
-          {
-            screenReaderVerbosityOptions.find(
-              (option) => option.value === screenReaderVerbosity,
-            )?.label ?? "Concise"
-          }
+          {screenReaderVerbosityOptions.find(
+            (option) => option.value === screenReaderVerbosity,
+          )?.label ?? "Concise"}
         </SelectTrigger>
         <SelectContent>
           {#each screenReaderVerbosityOptions as option (option.value)}

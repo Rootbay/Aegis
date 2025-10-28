@@ -438,8 +438,6 @@ pub async fn initialize_app_state<R: Runtime>(
                                                 "size": size,
                                             }),
                                         );
-                                        resumed = false;
-
                                         if size == 0 {
                                             let mut swarm = shared_swarm_task.lock().await;
                                             let _ = swarm.behaviour_mut().req_res.send_request(
@@ -483,7 +481,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                             }
                                             let chunk = buf[..n].to_vec();
                                             let mut swarm = shared_swarm_task.lock().await;
-                                            let result = swarm.behaviour_mut().req_res.send_request(
+                                            let _request_id = swarm.behaviour_mut().req_res.send_request(
                                                 &peer,
                                                 network::FileTransferRequest::Chunk {
                                                     filename: filename.clone(),
@@ -492,77 +490,39 @@ pub async fn initialize_app_state<R: Runtime>(
                                                 },
                                             );
                                             drop(swarm);
-                                            match result {
-                                                Ok(_) => {
-                                                    bytes_sent = bytes_sent.saturating_add(n as u64);
-                                                    if let Some(path) = meta_path.as_ref() {
-                                                        metadata.next_index = index + 1;
-                                                        metadata.bytes_sent = bytes_sent;
-                                                        metadata.chunk_size = DEFAULT_CHUNK_SIZE;
-                                                        metadata.file_size = size;
-                                                        if let Err(e) = persist_outgoing_metadata(path, &metadata) {
-                                                            eprintln!(
-                                                                "Failed to update outgoing metadata: {}",
-                                                                e
-                                                            );
-                                                        }
-                                                    }
-                                                    let progress = if size == 0 {
-                                                        1.0
-                                                    } else {
-                                                        (bytes_sent as f64 / size as f64).min(1.0)
-                                                    };
-                                                    let _ = app_for_emit.emit(
-                                                        "file-transfer-progress",
-                                                        serde_json::json!({
-                                                            "direction": "outgoing",
-                                                            "peer_id": recipient_peer_id,
-                                                            "filename": filename.clone(),
-                                                            "safe_filename": safe_filename.clone(),
-                                                            "mode": mode_label,
-                                                            "status": "transferring",
-                                                            "progress": progress,
-                                                            "resumed": false,
-                                                            "size": size,
-                                                        }),
+                                            bytes_sent = bytes_sent.saturating_add(n as u64);
+                                            if let Some(path) = meta_path.as_ref() {
+                                                metadata.next_index = index + 1;
+                                                metadata.bytes_sent = bytes_sent;
+                                                metadata.chunk_size = DEFAULT_CHUNK_SIZE;
+                                                metadata.file_size = size;
+                                                if let Err(e) = persist_outgoing_metadata(path, &metadata) {
+                                                    eprintln!(
+                                                        "Failed to update outgoing metadata: {}",
+                                                        e
                                                     );
-                                                    index += 1;
-                                                }
-                                                Err(e) => {
-                                                    eprintln!("Failed to queue file chunk: {}", e);
-                                                    if let Some(path) = meta_path.as_ref() {
-                                                        metadata.next_index = index;
-                                                        metadata.chunk_size = DEFAULT_CHUNK_SIZE;
-                                                        metadata.file_size = size;
-                                                        if let Err(err) = persist_outgoing_metadata(path, &metadata) {
-                                                            eprintln!(
-                                                                "Failed to persist retry metadata: {}",
-                                                                err
-                                                            );
-                                                        }
-                                                    }
-                                                    let progress = if size == 0 {
-                                                        0.0
-                                                    } else {
-                                                        (bytes_sent as f64 / size as f64).min(1.0)
-                                                    };
-                                                    let _ = app_for_emit.emit(
-                                                        "file-transfer-progress",
-                                                        serde_json::json!({
-                                                            "direction": "outgoing",
-                                                            "peer_id": recipient_peer_id,
-                                                            "filename": filename.clone(),
-                                                            "safe_filename": safe_filename.clone(),
-                                                            "mode": mode_label,
-                                                            "status": "retrying",
-                                                            "progress": progress,
-                                                            "resumed": true,
-                                                            "size": size,
-                                                        }),
-                                                    );
-                                                    break;
                                                 }
                                             }
+                                            let progress = if size == 0 {
+                                                1.0
+                                            } else {
+                                                (bytes_sent as f64 / size as f64).min(1.0)
+                                            };
+                                            let _ = app_for_emit.emit(
+                                                "file-transfer-progress",
+                                                serde_json::json!({
+                                                    "direction": "outgoing",
+                                                    "peer_id": recipient_peer_id,
+                                                    "filename": filename.clone(),
+                                                    "safe_filename": safe_filename.clone(),
+                                                    "mode": mode_label,
+                                                    "status": "transferring",
+                                                    "progress": progress,
+                                                    "resumed": false,
+                                                    "size": size,
+                                                }),
+                                            );
+                                            index += 1;
                                         }
 
                                         if bytes_sent >= size {
@@ -702,6 +662,8 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                     read: false,
                                                                     attachments: db_attachments,
                                                                     reactions: std::collections::HashMap::new(),
+                                                                    edited_at: None,
+                                                                    edited_by: None,
                                                                     expires_at: None,
                                                                 };
                                                                 if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
@@ -926,6 +888,8 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 read: false,
                                                                 attachments: Vec::new(),
                                                                 reactions: std::collections::HashMap::new(),
+                                                                edited_at: None,
+                                                                edited_by: None,
                                                                 expires_at: None,
                                                             };
                                                             if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
@@ -1078,7 +1042,7 @@ pub async fn initialize_app_state<R: Runtime>(
 
                                                         let safe_name = sanitize_filename(&file.name);
                                                         let mode_label = mode_to_str(file.mode);
-                                                        let mut resumed_flag = file.resumed || replaced_bytes > 0;
+                                                        let resumed_flag = file.resumed || replaced_bytes > 0;
 
                                                         if file.mode == FileTransferMode::Resilient {
                                                             if let Some(staging_path) = file.staging_path.clone() {
@@ -1113,6 +1077,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             (new_total as f64 / file.size as f64).min(1.0)
                                                         };
                                                         file.resumed = false;
+                                                        let total_size = file.size;
                                                         inc.insert(key, file);
                                                         drop(inc);
                                                         let mut swarm = shared_swarm_task.lock().await;
@@ -1134,7 +1099,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 "status": status,
                                                                 "progress": progress,
                                                                 "resumed": resumed_flag,
-                                                                "size": file.size,
+                                                                "size": total_size,
                                                             }),
                                                         );
                                                     } else {

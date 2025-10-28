@@ -11,7 +11,10 @@
     SidebarGroupContent,
   } from "$lib/components/ui/sidebar";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
-  import { activeChannelId, messagesByChatId } from "$lib/features/chat/stores/chatStore";
+  import {
+    activeChannelId,
+    messagesByChatId,
+  } from "$lib/features/chat/stores/chatStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { userStore } from "$lib/stores/userStore";
   import type { Message } from "$lib/features/chat/models/Message";
@@ -208,7 +211,9 @@
           </SidebarGroup>
 
           <SidebarGroup class="space-y-3">
-            <SidebarGroupLabel class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <SidebarGroupLabel
+              class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
               Results
             </SidebarGroupLabel>
             <SidebarGroupContent class="space-y-2">
@@ -226,7 +231,9 @@
                       aria-current={isActive ? "true" : undefined}
                       onclick={() => handleMatchSelect(match.matchIndex)}
                     >
-                      <div class="flex items-center justify-between text-xs text-muted-foreground">
+                      <div
+                        class="flex items-center justify-between text-xs text-muted-foreground"
+                      >
                         <span class="font-semibold text-foreground">
                           {match.author}
                         </span>
@@ -236,10 +243,14 @@
                           </time>
                         {/if}
                       </div>
-                      <p class="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+                      <p
+                        class="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground"
+                      >
                         {#each match.parts as part, index (index)}
                           {#if part.match}
-                            <mark class="rounded-sm bg-yellow-500/70 px-0.5 text-foreground">
+                            <mark
+                              class="rounded-sm bg-yellow-500/70 px-0.5 text-foreground"
+                            >
                               {part.text}
                             </mark>
                           {:else}

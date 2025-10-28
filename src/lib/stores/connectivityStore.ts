@@ -321,7 +321,9 @@ function normalizeLink(link: PartialMeshLink): MeshLink | null {
   };
 }
 
-function normalizeGatewayStatus(status?: PartialGatewayStatus | null): GatewayStatus {
+function normalizeGatewayStatus(
+  status?: PartialGatewayStatus | null,
+): GatewayStatus {
   if (!status) {
     return { ...defaultGatewayStatus };
   }
@@ -356,7 +358,10 @@ function normalizeGatewayStatus(status?: PartialGatewayStatus | null): GatewaySt
   };
 }
 
-function computeStatus(state: ConnectivityState, payload: ConnectivityEventPayload) {
+function computeStatus(
+  state: ConnectivityState,
+  payload: ConnectivityEventPayload,
+) {
   if (payload.internetReachable || payload.gatewayStatus?.forwarding) {
     return "online" as const;
   }
@@ -475,7 +480,8 @@ export function createConnectivityStore(): ConnectivityStore {
     }));
 
     const emitSnapshot = () => {
-      const snapshot = fallbackSnapshots[fallbackIndex % fallbackSnapshots.length];
+      const snapshot =
+        fallbackSnapshots[fallbackIndex % fallbackSnapshots.length];
       fallbackIndex += 1;
       applyPayload(snapshot);
     };
@@ -514,7 +520,9 @@ export function createConnectivityStore(): ConnectivityStore {
         );
       } catch (error) {
         console.error("Failed to subscribe to connectivity events", error);
-        markFallback("Failed to subscribe to connectivity events; using demo data.");
+        markFallback(
+          "Failed to subscribe to connectivity events; using demo data.",
+        );
         return;
       }
 
@@ -561,7 +569,9 @@ export function createConnectivityStore(): ConnectivityStore {
   const statusMessage = derived({ subscribe }, describeStatus);
 
   const fallbackMessage = derived({ subscribe }, (state) =>
-    state.fallbackActive ? state.fallbackReason ?? "Connectivity telemetry unavailable." : null,
+    state.fallbackActive
+      ? (state.fallbackReason ?? "Connectivity telemetry unavailable.")
+      : null,
   );
 
   return {

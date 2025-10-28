@@ -208,7 +208,7 @@
             variant="ghost"
             size="sm"
             class="text-xs"
-            on:click={() => dismissEntry(entry.id)}
+            onclick={() => dismissEntry(entry.id)}
           >
             Dismiss
           </Button>

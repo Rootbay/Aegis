@@ -48,7 +48,10 @@ describe("BanList", () => {
     mocks.fetchBansMock.mockReset();
     mocks.unbanMemberMock.mockReset();
     mocks.addToastMock.mockReset();
-    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
   });
 
   afterEach(() => {
@@ -63,7 +66,9 @@ describe("BanList", () => {
     });
 
     await findByText("Alice");
-    expect(mocks.fetchBansMock).toHaveBeenCalledWith("server-123", { force: false });
+    expect(mocks.fetchBansMock).toHaveBeenCalledWith("server-123", {
+      force: false,
+    });
   });
 
   it("confirms and unbans a member, refreshing the list", async () => {
@@ -82,14 +87,24 @@ describe("BanList", () => {
     await fireEvent.click(unbanButton);
 
     await waitFor(() => {
-      expect(mocks.unbanMemberMock).toHaveBeenCalledWith("server-123", "user-1");
+      expect(mocks.unbanMemberMock).toHaveBeenCalledWith(
+        "server-123",
+        "user-1",
+      );
     });
 
-    expect(mocks.fetchBansMock).toHaveBeenNthCalledWith(1, "server-123", { force: false });
-    expect(mocks.fetchBansMock).toHaveBeenNthCalledWith(2, "server-123", { force: true });
+    expect(mocks.fetchBansMock).toHaveBeenNthCalledWith(1, "server-123", {
+      force: false,
+    });
+    expect(mocks.fetchBansMock).toHaveBeenNthCalledWith(2, "server-123", {
+      force: true,
+    });
 
     await waitFor(() => {
-      expect(mocks.addToastMock).toHaveBeenCalledWith("Alice was unbanned.", "success");
+      expect(mocks.addToastMock).toHaveBeenCalledWith(
+        "Alice was unbanned.",
+        "success",
+      );
     });
 
     await waitFor(() => {

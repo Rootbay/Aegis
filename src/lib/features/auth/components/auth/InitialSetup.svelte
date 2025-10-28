@@ -11,13 +11,13 @@
     Scan,
     KeySquare,
     QrCode,
-    Lock
+    Lock,
   } from "@lucide/svelte";
   import {
     authStore,
     authPersistenceStore,
     MIN_PASSWORD_LENGTH,
-    validatePassword
+    validatePassword,
   } from "$lib/features/auth/stores/authStore";
   import type { SecurityQuestion } from "$lib/features/auth/stores/authStore";
   import RecoveryQrScanner from "./RecoveryQrScanner.svelte";
@@ -26,20 +26,20 @@
   import {
     Alert,
     AlertTitle,
-    AlertDescription
+    AlertDescription,
   } from "$lib/components/ui/alert/index.js";
   import {
     Select,
     SelectTrigger,
     SelectContent,
-    SelectItem
+    SelectItem,
   } from "$lib/components/ui/select/index.js";
   import {
     Card,
     CardHeader,
     CardTitle,
     CardDescription,
-    CardContent
+    CardContent,
   } from "$lib/components/ui/card/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
   import {
@@ -48,7 +48,7 @@
     DialogContent,
     DialogTitle,
     DialogDescription,
-    DialogFooter
+    DialogFooter,
   } from "$lib/components/ui/dialog/index.js";
   import { Progress } from "$lib/components/ui/progress/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
@@ -337,9 +337,7 @@
         answerHash: item.answer.trim().toLowerCase(),
       }));
 
-      await authStore.configureSecurityQuestions(
-        normalizedQuestions,
-      );
+      await authStore.configureSecurityQuestions(normalizedQuestions);
 
       onboardingStep = "backup_codes";
     } catch (error) {

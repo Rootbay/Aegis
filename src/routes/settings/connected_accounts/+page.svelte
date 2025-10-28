@@ -103,9 +103,7 @@
   >
     <div class="flex items-center justify-between gap-4">
       <div class="space-y-1">
-        <Label class="text-sm font-medium text-zinc-200"
-          >Provider</Label
-        >
+        <Label class="text-sm font-medium text-zinc-200">Provider</Label>
         <select
           class="w-40 rounded-md border border-zinc-700 bg-zinc-950/80 px-2 py-1 text-sm text-zinc-100"
           bind:value={selectedProvider}
@@ -119,9 +117,7 @@
         </p>
       </div>
       <div class="flex-1 space-y-1">
-        <Label class="text-sm font-medium text-zinc-200"
-          >Account handle</Label
-        >
+        <Label class="text-sm font-medium text-zinc-200">Account handle</Label>
         <Input
           placeholder="@username or user@example.com"
           bind:value={handle}
@@ -154,8 +150,8 @@
 
     {#if connectedAccounts.length === 0}
       <p class="text-sm text-muted-foreground">
-        No external accounts are connected yet. Link one to display cross-network
-        badges on your profile.
+        No external accounts are connected yet. Link one to display
+        cross-network badges on your profile.
       </p>
     {:else}
       <ul class="space-y-3">

@@ -22,10 +22,7 @@ export default defineConfig({
         projectRootDir,
         "tests/mocks/app-environment",
       ),
-      "$app/navigation": resolve(
-        projectRootDir,
-        "tests/shims/app-navigation",
-      ),
+      "$app/navigation": resolve(projectRootDir, "tests/shims/app-navigation"),
       "$app/stores": resolve(projectRootDir, "tests/shims/app-stores"),
       "$app/paths": resolve(projectRootDir, "tests/shims/app-paths"),
       "@tauri-apps/api/notification": resolve(

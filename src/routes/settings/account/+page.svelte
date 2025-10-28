@@ -225,7 +225,7 @@
           inputmode="numeric"
           pattern="[0-9]*"
           value={totpCode}
-          on:input={(event) => {
+          oninput={(event) => {
             const target = event.currentTarget as HTMLInputElement;
             totpCode = sanitizeCode(target.value);
           }}
@@ -310,7 +310,7 @@
           inputmode="numeric"
           pattern="[0-9]*"
           value={deviceTotp}
-          on:input={(event) => {
+          oninput={(event) => {
             const target = event.currentTarget as HTMLInputElement;
             deviceTotp = sanitizeCode(target.value);
           }}

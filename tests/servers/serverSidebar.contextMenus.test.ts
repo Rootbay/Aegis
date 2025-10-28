@@ -63,9 +63,12 @@ vi.mock("$lib/components/context-menus/ChannelContextMenu.svelte", () => ({
   default: ChannelContextMenuMock,
 }));
 
-vi.mock("$lib/components/context-menus/ServerBackgroundContextMenu.svelte", () => ({
-  default: ServerBackgroundContextMenuMock,
-}));
+vi.mock(
+  "$lib/components/context-menus/ServerBackgroundContextMenu.svelte",
+  () => ({
+    default: ServerBackgroundContextMenuMock,
+  }),
+);
 
 vi.mock("$lib/components/context-menus/CategoryContextMenu.svelte", () => ({
   default: CategoryContextMenuMock,
@@ -196,7 +199,10 @@ describe("ServerSidebar context menus", () => {
         "server-1",
         expect.objectContaining({ code: invite.code }),
       );
-      expect(addToastMock).toHaveBeenCalledWith("Invite link copied.", "success");
+      expect(addToastMock).toHaveBeenCalledWith(
+        "Invite link copied.",
+        "success",
+      );
       expect((navigator as any).clipboard.writeText).toHaveBeenCalledWith(
         expect.stringContaining("/inv/"),
       );
@@ -232,7 +238,9 @@ describe("ServerSidebar context menus", () => {
 
     await fireEvent.click(createCategoryButton!);
 
-    expect(mockGoto).toHaveBeenCalledWith("/channels/server-1/settings?tab=channels");
+    expect(mockGoto).toHaveBeenCalledWith(
+      "/channels/server-1/settings?tab=channels",
+    );
     expect(addToastMock).toHaveBeenCalledWith(
       "Manage categories from the Channels tab.",
       "info",

@@ -7,7 +7,11 @@
 </script>
 
 <div data-testid="category-context-menu">
-  <button type="button" data-testid="category-context-close" onclick={() => onclose?.()}>
+  <button
+    type="button"
+    data-testid="category-context-close"
+    onclick={() => onclose?.()}
+  >
     Close
   </button>
 </div>

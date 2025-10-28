@@ -108,15 +108,15 @@ export function createWebhookService(
   return {
     async fetchWebhooks(serverId) {
       try {
-        const response = await client<BackendWebhook[]>("list_server_webhooks", {
-          server_id: serverId,
-        });
+        const response = await client<BackendWebhook[]>(
+          "list_server_webhooks",
+          {
+            server_id: serverId,
+          },
+        );
         return { success: true, data: response.map(mapWebhook) };
       } catch (error) {
-        const message = extractErrorMessage(
-          error,
-          "Failed to load webhooks.",
-        );
+        const message = extractErrorMessage(error, "Failed to load webhooks.");
         toasts.showErrorToast(message);
         return { success: false, error: message };
       }
@@ -125,14 +125,17 @@ export function createWebhookService(
     async createWebhook(input, options) {
       return withOptimistic(
         async () => {
-          const response = await client<BackendWebhook>("create_server_webhook", {
-            request: {
-              server_id: input.serverId,
-              name: input.name,
-              url: input.url,
-              channel_id: input.channelId ?? null,
+          const response = await client<BackendWebhook>(
+            "create_server_webhook",
+            {
+              request: {
+                server_id: input.serverId,
+                name: input.name,
+                url: input.url,
+                channel_id: input.channelId ?? null,
+              },
             },
-          });
+          );
           return mapWebhook(response);
         },
         {
@@ -159,9 +162,12 @@ export function createWebhookService(
           if (input.channelId !== undefined) {
             payload.channel_id = input.channelId;
           }
-          const response = await client<BackendWebhook>("update_server_webhook", {
-            request: payload,
-          });
+          const response = await client<BackendWebhook>(
+            "update_server_webhook",
+            {
+              request: payload,
+            },
+          );
           return mapWebhook(response);
         },
         {

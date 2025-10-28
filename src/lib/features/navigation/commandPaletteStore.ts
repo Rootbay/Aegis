@@ -43,7 +43,11 @@ interface CommandPaletteStore {
 }
 
 const MAX_RECENT_CHATS = 8;
-const SETTINGS_SECTIONS: Array<{ path: string; label: string; description?: string }> = [
+const SETTINGS_SECTIONS: Array<{
+  path: string;
+  label: string;
+  description?: string;
+}> = [
   { path: "/settings", label: "Settings Home" },
   { path: "/settings/account", label: "Account" },
   { path: "/settings/advanced", label: "Advanced" },
@@ -145,7 +149,8 @@ function buildServerCommands(
         id: `server:${server.id}:${channel.id}`,
         section: "Servers",
         label: `${server.name} #${channel.name}`,
-        description: description && description.length > 0 ? description : "Open channel",
+        description:
+          description && description.length > 0 ? description : "Open channel",
         keywords: [server.name, channel.name],
         sortKey: meta?.lastActivityAt ?? null,
         perform: () => {
@@ -249,10 +254,7 @@ function createCommandPaletteStore(): CommandPaletteStore {
         })
         .map((entry) => entry.command);
       highlightedIndexStore.set(
-        Math.min(
-          get(highlightedIndexStore),
-          Math.max(scored.length - 1, 0),
-        ),
+        Math.min(get(highlightedIndexStore), Math.max(scored.length - 1, 0)),
       );
       return scored;
     },
@@ -286,8 +288,8 @@ function createCommandPaletteStore(): CommandPaletteStore {
       highlightedIndexStore.set(0);
       return;
     }
-    const nextIndex = (get(highlightedIndexStore) + delta + commands.length) %
-      commands.length;
+    const nextIndex =
+      (get(highlightedIndexStore) + delta + commands.length) % commands.length;
     highlightedIndexStore.set(nextIndex);
   };
 

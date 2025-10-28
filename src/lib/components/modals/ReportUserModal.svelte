@@ -79,10 +79,7 @@
       open = false;
     } catch (error: unknown) {
       console.error("Failed to send report to backend.", error);
-      toasts.addToast(
-        "Failed to submit report. Please try again.",
-        "error",
-      );
+      toasts.addToast("Failed to submit report. Please try again.", "error");
     } finally {
       submitting = false;
     }

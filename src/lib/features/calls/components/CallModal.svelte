@@ -186,7 +186,7 @@
                     autoplay
                     playsinline
                     class="h-full w-full object-cover"
-                  />
+                  ></video>
                   <div
                     class="absolute top-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
                   >
@@ -218,7 +218,7 @@
                 playsinline
                 muted
                 class="absolute inset-0 h-full w-full object-cover"
-              />
+              ></video>
               <div
                 class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
               >
@@ -253,7 +253,7 @@
                   autoplay
                   playsinline
                   class="sr-only"
-                />
+                ></audio>
               </div>
             {/each}
           </div>

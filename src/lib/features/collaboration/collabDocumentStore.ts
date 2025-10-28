@@ -41,7 +41,9 @@ interface InternalSession {
   doc: Y.Doc;
   text: Y.Text;
   contentStore: ReturnType<typeof writable<string>>;
-  participantsStore: ReturnType<typeof writable<Map<string, CollaborationParticipant>>>;
+  participantsStore: ReturnType<
+    typeof writable<Map<string, CollaborationParticipant>>
+  >;
   connectedStore: ReturnType<typeof writable<boolean>>;
   cleanup: () => void;
   view: CollaborationSessionView;
@@ -53,7 +55,10 @@ interface StartSessionOptions {
   participants?: CollaborationParticipant[];
 }
 
-const invokeCache: { current: InvokeFn | null; inflight: Promise<InvokeFn | null> | null } = {
+const invokeCache: {
+  current: InvokeFn | null;
+  inflight: Promise<InvokeFn | null> | null;
+} = {
   current: null,
   inflight: null,
 };
@@ -120,7 +125,9 @@ function createInternalSession(
   const doc = new Y.Doc();
   const text = doc.getText("content");
   const contentStore = writable("");
-  const participantsStore = writable<Map<string, CollaborationParticipant>>(new Map());
+  const participantsStore = writable<Map<string, CollaborationParticipant>>(
+    new Map(),
+  );
   const connectedStore = writable(false);
   const localParticipant = getLocalParticipant();
 
@@ -245,7 +252,8 @@ function createInternalSession(
         id: participant.id,
         displayName: participant.displayName ?? existing?.displayName,
         avatarUrl: participant.avatarUrl ?? existing?.avatarUrl,
-        lastActiveAt: participant.lastActiveAt ?? existing?.lastActiveAt ?? Date.now(),
+        lastActiveAt:
+          participant.lastActiveAt ?? existing?.lastActiveAt ?? Date.now(),
       });
       return next;
     });
@@ -348,12 +356,18 @@ function createCollaborationStore() {
       }
       return next;
     });
-    activeSessionId.update((current) => (current === documentId ? null : current));
+    activeSessionId.update((current) =>
+      current === documentId ? null : current,
+    );
   };
 
   const receiveRemoteUpdate = (payload: CollaborationUpdatePayload) => {
     const { documentId, kind } = payload;
-    const session = ensureSession(documentId, payload.kind ?? kind ?? "document", {});
+    const session = ensureSession(
+      documentId,
+      payload.kind ?? kind ?? "document",
+      {},
+    );
     session.applyRemoteUpdate(payload);
   };
 
@@ -365,9 +379,11 @@ function createCollaborationStore() {
       const next = new Map(current);
       const target = next.get(documentId);
       if (target && "setParticipants" in target) {
-        (target as SessionRecord & { setParticipants: (ids: Iterable<string>) => void }).setParticipants(
-          participants,
-        );
+        (
+          target as SessionRecord & {
+            setParticipants: (ids: Iterable<string>) => void;
+          }
+        ).setParticipants(participants);
       }
       return next;
     });
@@ -381,9 +397,13 @@ function createCollaborationStore() {
       const next = new Map(current);
       const target = next.get(documentId);
       if (target && "annotateParticipant" in target) {
-        (target as SessionRecord & {
-          annotateParticipant: (participant: CollaborationParticipant) => void;
-        }).annotateParticipant(participant);
+        (
+          target as SessionRecord & {
+            annotateParticipant: (
+              participant: CollaborationParticipant,
+            ) => void;
+          }
+        ).annotateParticipant(participant);
       }
       return next;
     });
@@ -397,10 +417,13 @@ function createCollaborationStore() {
     return next;
   });
 
-  const activeSession = derived([sessionsView, activeSessionId], ([map, activeId]) => {
-    if (!activeId) return null;
-    return map.get(activeId) ?? null;
-  });
+  const activeSession = derived(
+    [sessionsView, activeSessionId],
+    ([map, activeId]) => {
+      if (!activeId) return null;
+      return map.get(activeId) ?? null;
+    },
+  );
 
   return {
     sessions: { subscribe: sessionsView.subscribe } as Readable<
@@ -419,12 +442,13 @@ function createCollaborationStore() {
 export const collaborationStore = createCollaborationStore();
 
 export function generateCollaborationDocumentId(prefix = "collab") {
-  const sanitizedPrefix = prefix
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .trim() || "collab";
+  const sanitizedPrefix =
+    prefix
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/-{2,}/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .trim() || "collab";
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return `${sanitizedPrefix}-${crypto.randomUUID()}`;
   }

@@ -12,7 +12,10 @@
     DialogTitle,
   } from "$lib/components/ui/dialog";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
-  import { collaborationStore, generateCollaborationDocumentId } from "../collabDocumentStore";
+  import {
+    collaborationStore,
+    generateCollaborationDocumentId,
+  } from "../collabDocumentStore";
   import type {
     CollaborationParticipant,
     CollaborationSessionView,
@@ -37,7 +40,9 @@
   let open = $state(true);
   let session: CollaborationSessionView | null = null;
   let isConnected = $state(false);
-  let participantDisplay = $state<Array<{ id: string; name: string; avatar: string }>>([]);
+  let participantDisplay = $state<
+    Array<{ id: string; name: string; avatar: string }>
+  >([]);
 
   let canvas: HTMLCanvasElement | null = null;
   let strokes: Stroke[] = [];
@@ -69,7 +74,9 @@
     const display: Array<{ id: string; name: string; avatar: string }> = [];
 
     for (const participant of list) {
-      const friendMatch = friends.find((friend) => friend.id === participant.id);
+      const friendMatch = friends.find(
+        (friend) => friend.id === participant.id,
+      );
       if (friendMatch) {
         session.annotateParticipant({
           id: friendMatch.id,
@@ -77,7 +84,11 @@
           avatarUrl: friendMatch.avatar,
           lastActiveAt: participant.lastActiveAt,
         });
-        display.push({ id: friendMatch.id, name: friendMatch.name, avatar: friendMatch.avatar });
+        display.push({
+          id: friendMatch.id,
+          name: friendMatch.name,
+          avatar: friendMatch.avatar,
+        });
         continue;
       }
 
@@ -92,9 +103,15 @@
         continue;
       }
 
-      const fallbackName = participant.displayName ?? `Guest ${participant.id.slice(0, 6)}`;
-      const fallbackAvatar = participant.avatarUrl ?? FALLBACK_AVATAR(participant.id);
-      display.push({ id: participant.id, name: fallbackName, avatar: fallbackAvatar });
+      const fallbackName =
+        participant.displayName ?? `Guest ${participant.id.slice(0, 6)}`;
+      const fallbackAvatar =
+        participant.avatarUrl ?? FALLBACK_AVATAR(participant.id);
+      display.push({
+        id: participant.id,
+        name: fallbackName,
+        avatar: fallbackAvatar,
+      });
     }
 
     participantDisplay = display;
@@ -318,28 +335,34 @@
 <Dialog bind:open>
   <DialogContent class="max-w-5xl gap-6">
     <DialogHeader class="text-left space-y-2">
-      <DialogTitle class="flex items-center gap-2 text-xl font-semibold text-foreground">
+      <DialogTitle
+        class="flex items-center gap-2 text-xl font-semibold text-foreground"
+      >
         <Paintbrush size={18} class="text-muted-foreground" /> Collaborative Whiteboard
       </DialogTitle>
       <DialogDescription class="text-xs text-muted-foreground">
         Board ID: <span class="font-mono">{documentId}</span>
       </DialogDescription>
       <p class="text-sm text-muted-foreground">
-        {isConnected ? "Sketch with teammates in real time." : "Connecting to peers..."}
+        {isConnected
+          ? "Sketch with teammates in real time."
+          : "Connecting to peers..."}
       </p>
     </DialogHeader>
 
     <div class="flex flex-col gap-6 md:flex-row">
       <div class="flex-1 space-y-4">
-        <div class="relative aspect-video w-full overflow-hidden rounded-lg border border-border/80 bg-muted/40">
+        <div
+          class="relative aspect-video w-full overflow-hidden rounded-lg border border-border/80 bg-muted/40"
+        >
           <canvas
             bind:this={canvas}
             class="h-full w-full touch-none"
-            on:pointerdown={pointerDown}
-            on:pointermove={pointerMove}
-            on:pointerup={pointerUp}
-            on:pointercancel={pointerUp}
-          />
+            onpointerdown={pointerDown}
+            onpointermove={pointerMove}
+            onpointerup={pointerUp}
+            onpointercancel={pointerUp}
+          ></canvas>
         </div>
         <div class="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" onclick={clearBoard}>
@@ -354,23 +377,31 @@
         </div>
       </div>
       <aside class="w-full md:w-64">
-        <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+        <h3
+          class="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground"
+        >
           <Users size={16} /> Participants
         </h3>
         <ScrollArea class="max-h-80 pr-1">
           <div class="space-y-2">
             {#if participantDisplay.length === 0}
-              <p class="text-xs text-muted-foreground">No active collaborators yet.</p>
+              <p class="text-xs text-muted-foreground">
+                No active collaborators yet.
+              </p>
             {:else}
               {#each participantDisplay as participant (participant.id)}
-                <div class="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                <div
+                  class="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2"
+                >
                   <img
                     src={participant.avatar}
                     alt={participant.name}
                     class="h-8 w-8 rounded-full object-cover"
                   />
                   <div class="flex flex-col">
-                    <span class="text-sm font-medium text-foreground">{participant.name}</span>
+                    <span class="text-sm font-medium text-foreground"
+                      >{participant.name}</span
+                    >
                     <span class="text-xs text-muted-foreground font-mono">
                       {participant.id}
                     </span>

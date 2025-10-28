@@ -9,6 +9,7 @@ pub async fn run() {
     tauri::Builder::default()
         .manage(AppStateContainer::default())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             commands::identity::get_peer_id,
             commands::identity::get_public_key,

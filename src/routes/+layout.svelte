@@ -7,7 +7,6 @@
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import InitialSetup from "$lib/features/auth/components/auth/InitialSetup.svelte";
-  import LoadingOverlay from "$lib/components/LoadingOverlay.svelte";
   import Sidebar from "$lib/components/sidebars/Sidebar.svelte";
   import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
   import MemberSidebar from "$lib/components/sidebars/MemberSidebar.svelte";
@@ -51,14 +50,11 @@
     showBridgePrompt,
   } = connectivity;
 
-  const friendsLayoutContext =
-    getContext<FriendsLayoutContext | undefined>(
-      FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
-    );
-
-  const friendsLoading = $derived(
-    () => friendsLayoutContext?.loading ?? false,
+  const friendsLayoutContext = getContext<FriendsLayoutContext | undefined>(
+    FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
   );
+
+  const friendsLoading = $derived(() => friendsLayoutContext?.loading ?? false);
 
   const {
     handleKeydown,
@@ -91,7 +87,6 @@
   class="flex h-screen bg-base-100 text-foreground"
   data-friends-loading={friendsLoading ? "true" : undefined}
 >
-  <LoadingOverlay show={$authState.loading} />
   {#if $authState.status !== "authenticated" || !$currentUser}
     <InitialSetup />
   {:else}
@@ -112,12 +107,10 @@
       {:else}
         <DirectMessageList
           entries={$directMessages}
-          activeChatId={
-            $currentChat &&
-            ($currentChat.type === "dm" || $currentChat.type === "group")
-              ? $currentChat.id
-              : null
-          }
+          activeChatId={$currentChat &&
+          ($currentChat.type === "dm" || $currentChat.type === "group")
+            ? $currentChat.id
+            : null}
           onSelect={handleSelectDirectMessage}
           onCreateGroupClick={() => openModal("createGroup")}
         />
@@ -156,7 +149,7 @@
                 <SearchSidebar />
               {:else}
                 <MemberSidebar
-                  members={($currentChat.members as MemberWithRoles[])}
+                  members={$currentChat.members as MemberWithRoles[]}
                   {openDetailedProfileModal}
                 />
               {/if}

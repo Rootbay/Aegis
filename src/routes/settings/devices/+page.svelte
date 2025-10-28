@@ -80,9 +80,7 @@
   >
     <div class="grid gap-3 md:grid-cols-2">
       <div class="space-y-1">
-        <Label class="text-sm font-medium text-zinc-200"
-          >Device name</Label
-        >
+        <Label class="text-sm font-medium text-zinc-200">Device name</Label>
         <Input
           placeholder="Raspberry Pi relay"
           bind:value={newDeviceName}
@@ -120,7 +118,9 @@
               </Badge>
             </div>
             <p class="text-xs text-muted-foreground">
-              {device.platform} · Last seen {new Date(device.lastSeen).toLocaleString()}
+              {device.platform} · Last seen {new Date(
+                device.lastSeen,
+              ).toLocaleString()}
             </p>
           </div>
           <div class="flex items-center gap-2">

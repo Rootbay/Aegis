@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const hashStringMock = vi.fn<(value: string) => Promise<string>>();
 const derivePasswordKeyMock = vi.fn<(phrase: string) => Promise<string>>();
-const encryptWithSecretMock = vi.fn<
-  (secret: string, plain: string) => Promise<{ cipherText: string; iv: string; salt: string }>
->();
+const encryptWithSecretMock =
+  vi.fn<
+    (
+      secret: string,
+      plain: string,
+    ) => Promise<{ cipherText: string; iv: string; salt: string }>
+  >();
 const generateRecoveryPhraseMock = vi.fn<() => string[]>();
-const normalizeRecoveryPhraseMock = vi.fn<(phrase: string[] | string) => string>();
-const verifyTotpMock = vi.fn<(secret: string, token: string) => Promise<boolean>>();
+const normalizeRecoveryPhraseMock =
+  vi.fn<(phrase: string[] | string) => string>();
+const verifyTotpMock =
+  vi.fn<(secret: string, token: string) => Promise<boolean>>();
 
 vi.mock("$lib/utils/security", () => ({
   hashString: (...args: Parameters<typeof hashStringMock>) =>
@@ -16,8 +22,9 @@ vi.mock("$lib/utils/security", () => ({
     derivePasswordKeyMock(...args),
   encryptWithSecret: (...args: Parameters<typeof encryptWithSecretMock>) =>
     encryptWithSecretMock(...args),
-  generateRecoveryPhrase: (...args: Parameters<typeof generateRecoveryPhraseMock>) =>
-    generateRecoveryPhraseMock(...args),
+  generateRecoveryPhrase: (
+    ...args: Parameters<typeof generateRecoveryPhraseMock>
+  ) => generateRecoveryPhraseMock(...args),
   normalizeRecoveryPhrase: (
     ...args: Parameters<typeof normalizeRecoveryPhraseMock>
   ) => normalizeRecoveryPhraseMock(...args),
@@ -97,11 +104,7 @@ describe("securityService", () => {
     }));
 
     generateRecoveryPhraseMock.mockReset();
-    generateRecoveryPhraseMock.mockReturnValue([
-      "alpha",
-      "beta",
-      "gamma",
-    ]);
+    generateRecoveryPhraseMock.mockReturnValue(["alpha", "beta", "gamma"]);
 
     normalizeRecoveryPhraseMock.mockReset();
     normalizeRecoveryPhraseMock.mockImplementation((phrase) =>
@@ -109,7 +112,9 @@ describe("securityService", () => {
     );
 
     verifyTotpMock.mockReset();
-    verifyTotpMock.mockImplementation(async (_secret, token) => token === "123456");
+    verifyTotpMock.mockImplementation(
+      async (_secret, token) => token === "123456",
+    );
   });
 
   it("hashes and stores configured security questions", async () => {

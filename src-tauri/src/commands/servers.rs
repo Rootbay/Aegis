@@ -9,7 +9,7 @@ use aep::database::{
 use aep::user_service;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1193,8 +1193,8 @@ pub async fn send_server_invite(
         .map_err(|e| e.to_string())?;
 
     let aep_message = AepMessage::SendServerInvite {
-        server_id,
-        user_id,
+        server_id: server_id.clone(),
+        user_id: user_id.clone(),
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;

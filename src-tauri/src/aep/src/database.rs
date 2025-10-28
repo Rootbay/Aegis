@@ -334,13 +334,13 @@ pub async fn get_friendships_with_profiles(
             f.status,
             f.created_at as "friendship_created_at!: DateTime<Utc>",
             f.updated_at as "friendship_updated_at!: DateTime<Utc>",
-            u.id as counterpart_id,
-            u.username as counterpart_username,
-            u.avatar as counterpart_avatar,
+            u.id as "counterpart_id?",
+            u.username as "counterpart_username?",
+            u.avatar as "counterpart_avatar?",
             u.is_online as "counterpart_is_online?: bool",
-            u.public_key as counterpart_public_key,
-            u.bio as counterpart_bio,
-            u.tag as counterpart_tag
+            u.public_key as "counterpart_public_key?",
+            u.bio as "counterpart_bio?",
+            u.tag as "counterpart_tag?"
         FROM friendships f
         LEFT JOIN users u
             ON u.id = CASE WHEN f.user_a_id = ? THEN f.user_b_id ELSE f.user_a_id END
@@ -403,13 +403,13 @@ pub async fn get_friendship_with_profile_for_user(
             f.status,
             f.created_at as "friendship_created_at!: DateTime<Utc>",
             f.updated_at as "friendship_updated_at!: DateTime<Utc>",
-            u.id as counterpart_id,
-            u.username as counterpart_username,
-            u.avatar as counterpart_avatar,
+            u.id as "counterpart_id?",
+            u.username as "counterpart_username?",
+            u.avatar as "counterpart_avatar?",
             u.is_online as "counterpart_is_online?: bool",
-            u.public_key as counterpart_public_key,
-            u.bio as counterpart_bio,
-            u.tag as counterpart_tag
+            u.public_key as "counterpart_public_key?",
+            u.bio as "counterpart_bio?",
+            u.tag as "counterpart_tag?"
         FROM friendships f
         LEFT JOIN users u
             ON u.id = CASE WHEN f.user_a_id = ? THEN f.user_b_id ELSE f.user_a_id END
@@ -702,6 +702,13 @@ pub async fn insert_server_event(
     pool: &Pool<Sqlite>,
     event: &ServerEvent,
 ) -> Result<(), sqlx::Error> {
+    let scheduled_for = event.scheduled_for.to_rfc3339();
+    let created_at = event.created_at.to_rfc3339();
+    let cancelled_at = event
+        .cancelled_at
+        .as_ref()
+        .map(|dt| dt.to_rfc3339());
+
     sqlx::query!(
         "INSERT INTO server_events (id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         event.id,
@@ -709,11 +716,11 @@ pub async fn insert_server_event(
         event.title,
         event.description,
         event.channel_id,
-        event.scheduled_for.to_rfc3339(),
+        scheduled_for,
         event.created_by,
-        event.created_at.to_rfc3339(),
+        created_at,
         event.status,
-        event.cancelled_at.map(|dt| dt.to_rfc3339()),
+        cancelled_at,
     )
     .execute(pool)
     .await?;
@@ -724,11 +731,10 @@ pub async fn get_server_event_by_id(
     pool: &Pool<Sqlite>,
     event_id: &str,
 ) -> Result<Option<ServerEvent>, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ServerEventRow,
+    let row = sqlx::query_as::<_, ServerEventRow>(
         "SELECT id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at FROM server_events WHERE id = ?",
-        event_id
     )
+    .bind(event_id)
     .fetch_optional(pool)
     .await?;
 
@@ -744,11 +750,10 @@ pub async fn get_server_events(
     pool: &Pool<Sqlite>,
     server_id: &str,
 ) -> Result<Vec<ServerEvent>, sqlx::Error> {
-    let rows = sqlx::query_as!(
-        ServerEventRow,
+    let rows = sqlx::query_as::<_, ServerEventRow>(
         "SELECT id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at FROM server_events WHERE server_id = ? ORDER BY scheduled_for ASC",
-        server_id
     )
+    .bind(server_id)
     .fetch_all(pool)
     .await?;
 
@@ -768,7 +773,7 @@ pub async fn update_server_event(
     let mut builder = QueryBuilder::<Sqlite>::new("UPDATE server_events SET ");
     let mut has_updates = false;
 
-    let mut push_comma = |builder: &mut QueryBuilder<Sqlite>, has_updates: &mut bool| {
+    let push_comma = |builder: &mut QueryBuilder<Sqlite>, has_updates: &mut bool| {
         if *has_updates {
             builder.push(", ");
         }
@@ -843,16 +848,20 @@ pub async fn insert_server_webhook(
     pool: &Pool<Sqlite>,
     webhook: &ServerWebhook,
 ) -> Result<(), sqlx::Error> {
+    let channel_id = webhook.channel_id.clone();
+    let created_at = webhook.created_at.to_rfc3339();
+    let updated_at = webhook.updated_at.to_rfc3339();
+
     sqlx::query!(
         "INSERT INTO server_webhooks (id, server_id, name, url, channel_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         webhook.id,
         webhook.server_id,
         webhook.name,
         webhook.url,
-        webhook.channel_id,
+        channel_id,
         webhook.created_by,
-        webhook.created_at.to_rfc3339(),
-        webhook.updated_at.to_rfc3339(),
+        created_at,
+        updated_at,
     )
     .execute(pool)
     .await?;
@@ -863,11 +872,10 @@ pub async fn get_server_webhook_by_id(
     pool: &Pool<Sqlite>,
     webhook_id: &str,
 ) -> Result<Option<ServerWebhook>, sqlx::Error> {
-    let row = sqlx::query_as!(
-        ServerWebhookRow,
+    let row = sqlx::query_as::<_, ServerWebhookRow>(
         "SELECT id, server_id, name, url, channel_id, created_by, created_at, updated_at FROM server_webhooks WHERE id = ?",
-        webhook_id
     )
+    .bind(webhook_id)
     .fetch_optional(pool)
     .await?;
 
@@ -883,11 +891,10 @@ pub async fn list_server_webhooks(
     pool: &Pool<Sqlite>,
     server_id: &str,
 ) -> Result<Vec<ServerWebhook>, sqlx::Error> {
-    let rows = sqlx::query_as!(
-        ServerWebhookRow,
+    let rows = sqlx::query_as::<_, ServerWebhookRow>(
         "SELECT id, server_id, name, url, channel_id, created_by, created_at, updated_at FROM server_webhooks WHERE server_id = ? ORDER BY name COLLATE NOCASE ASC",
-        server_id
     )
+    .bind(server_id)
     .fetch_all(pool)
     .await?;
 
@@ -1063,19 +1070,14 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
 
     for attachment in &message.attachments {
         if attachment.size > i64::MAX as u64 {
-            return Err(sqlx::Error::Protocol(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "attachment size too large",
-            ))));
+            return Err(sqlx::Error::Protocol("attachment size too large".into()));
         }
         let size_i64 = attachment.size as i64;
 
-        let data = attachment.data.clone().ok_or_else(|| {
-            sqlx::Error::Protocol(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "attachment is missing binary data for insert",
-            )))
-        })?;
+        let data = attachment
+            .data
+            .clone()
+            .ok_or_else(|| sqlx::Error::Protocol("attachment is missing binary data for insert".into()))?;
 
         sqlx::query!(
             "INSERT INTO attachments (id, message_id, name, content_type, size, data) VALUES (?, ?, ?, ?, ?, ?)",
@@ -1548,15 +1550,15 @@ pub async fn server_has_member(
     server_id: &str,
     user_id: &str,
 ) -> Result<bool, sqlx::Error> {
-    let result = sqlx::query!(
-        "SELECT 1 FROM server_members WHERE server_id = ? AND user_id = ? LIMIT 1",
+    let count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(1) as \"count!: i64\" FROM server_members WHERE server_id = ? AND user_id = ?",
         server_id,
         user_id
     )
-    .fetch_optional(pool)
+    .fetch_one(pool)
     .await?;
 
-    Ok(result.is_some())
+    Ok(count > 0)
 }
 
 pub async fn remove_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &str) -> Result<(), sqlx::Error> {
@@ -1825,14 +1827,18 @@ pub async fn create_server_invite(
     expires_at: Option<DateTime<Utc>>,
     max_uses: Option<i64>,
 ) -> Result<ServerInvite, sqlx::Error> {
+    let invite_id = uuid::Uuid::new_v4().to_string();
+    let created_at_str = created_at.to_rfc3339();
+    let expires_at_str = expires_at.map(|dt| dt.to_rfc3339());
+
     sqlx::query!(
         "INSERT INTO server_invites (id, server_id, code, created_by, created_at, expires_at, max_uses, uses) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-        uuid::Uuid::new_v4().to_string(),
+        invite_id,
         server_id,
         code,
         created_by,
-        created_at.to_rfc3339(),
-        expires_at.map(|dt| dt.to_rfc3339()),
+        created_at_str,
+        expires_at_str,
         max_uses,
     )
     .execute(pool)

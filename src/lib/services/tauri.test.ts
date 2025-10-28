@@ -4,7 +4,10 @@ vi.mock("$app/environment", () => ({
   browser: true,
 }));
 
-type ListenFn = <T>(event: string, handler: (payload: T) => void) => Promise<() => void>;
+type ListenFn = <T>(
+  event: string,
+  handler: (payload: T) => void,
+) => Promise<() => void>;
 
 describe("getListen", () => {
   beforeEach(async () => {
@@ -28,7 +31,11 @@ describe("getListen", () => {
     const listenFn: ListenFn = async () => vi.fn();
 
     setTimeout(() => {
-      (window as typeof window & { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__ = {
+      (
+        window as typeof window & {
+          __TAURI__?: { event?: { listen?: ListenFn } };
+        }
+      ).__TAURI__ = {
         event: { listen: listenFn },
       };
     }, 60);
@@ -60,7 +67,11 @@ describe("getListen", () => {
 
     const listenFn: ListenFn = async () => vi.fn();
 
-    (window as typeof window & { __TAURI__?: { event?: { listen?: ListenFn } } }).__TAURI__ = {
+    (
+      window as typeof window & {
+        __TAURI__?: { event?: { listen?: ListenFn } };
+      }
+    ).__TAURI__ = {
       event: { listen: listenFn },
     };
 

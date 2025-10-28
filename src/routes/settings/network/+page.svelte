@@ -72,7 +72,9 @@
       return "success" as const;
     }
     if (currentGatewayStatus.bridgeModeEnabled) {
-      return currentGatewayStatus.lastError ? ("warning" as const) : ("info" as const);
+      return currentGatewayStatus.lastError
+        ? ("warning" as const)
+        : ("info" as const);
     }
     if (bridgeSuggested) {
       return "warning" as const;
@@ -130,7 +132,10 @@
     } catch (error) {
       console.error("Failed to update Bridge Mode", error);
       enableBridgeMode = get(settings).enableBridgeMode;
-      toasts.addToast("Failed to update Bridge Mode. Please try again.", "error");
+      toasts.addToast(
+        "Failed to update Bridge Mode. Please try again.",
+        "error",
+      );
     } finally {
       togglingBridge = false;
     }

@@ -8,12 +8,8 @@
     setTypingIndicatorsEnabled,
   } from "$lib/features/settings/stores/settings";
 
-  let enableReadReceipts = $state(
-    get(settings).enableReadReceipts,
-  );
-  let enableTypingIndicators = $state(
-    get(settings).enableTypingIndicators,
-  );
+  let enableReadReceipts = $state(get(settings).enableReadReceipts);
+  let enableTypingIndicators = $state(get(settings).enableTypingIndicators);
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {

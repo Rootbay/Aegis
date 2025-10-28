@@ -34,7 +34,7 @@ const KEYWORD_WEIGHTS: Record<string, number> = {
   "buy now": 0.32,
   "act now": 0.28,
   "limited offer": 0.26,
-  "click": 0.24,
+  click: 0.24,
   "click here": 0.32,
   urgent: 0.24,
   guarantee: 0.22,
@@ -79,9 +79,7 @@ class MockSpamModel {
     const shortMessagePenalty = features.tokenCount < 3 ? 0.08 : 0;
 
     const contextBoost =
-      context === "friend-request" && features.keywordScore > 0
-        ? 0.08
-        : 0;
+      context === "friend-request" && features.keywordScore > 0 ? 0.08 : 0;
 
     const rawScore =
       base +
@@ -215,9 +213,9 @@ export class SpamClassifier {
       );
     }
     if (features.urlCount > 0) {
-      reasons.push(`Contains ${features.urlCount} link${
-        features.urlCount > 1 ? "s" : ""
-      }`);
+      reasons.push(
+        `Contains ${features.urlCount} link${features.urlCount > 1 ? "s" : ""}`,
+      );
     }
     if (features.uppercaseRatio > 0.6) {
       reasons.push("High uppercase ratio");

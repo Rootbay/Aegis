@@ -5,54 +5,48 @@ import CallModalMock from "../mocks/CallModal.svelte";
 
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 
-const {
-  preferencesState,
-  toggleHideMemberNamesMock,
-  setHideMemberNamesMock,
-} = vi.hoisted(() => {
-  const { writable, get } = require("svelte/store");
-  const state = writable(new Map<string, { hideMemberNames: boolean }>());
-  return {
-    preferencesState: state,
-    toggleHideMemberNamesMock: vi.fn(async (channelId: string) => {
-      const current =
-        get(state).get(channelId)?.hideMemberNames ?? false;
-      state.update((map: Map<string, { hideMemberNames: boolean }>) => {
-        const next = new Map(map);
-        next.set(channelId, { hideMemberNames: !current });
-        return next;
-      });
-      return !current;
-    }),
-    setHideMemberNamesMock: vi.fn(async (channelId: string, hide: boolean) => {
-      state.update((map: Map<string, { hideMemberNames: boolean }>) => {
-        const next = new Map(map);
-        next.set(channelId, { hideMemberNames: hide });
-        return next;
-      });
-    }),
-  };
-});
+const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
+  vi.hoisted(() => {
+    const { writable, get } = require("svelte/store");
+    const state = writable(new Map<string, { hideMemberNames: boolean }>());
+    return {
+      preferencesState: state,
+      toggleHideMemberNamesMock: vi.fn(async (channelId: string) => {
+        const current = get(state).get(channelId)?.hideMemberNames ?? false;
+        state.update((map: Map<string, { hideMemberNames: boolean }>) => {
+          const next = new Map(map);
+          next.set(channelId, { hideMemberNames: !current });
+          return next;
+        });
+        return !current;
+      }),
+      setHideMemberNamesMock: vi.fn(
+        async (channelId: string, hide: boolean) => {
+          state.update((map: Map<string, { hideMemberNames: boolean }>) => {
+            const next = new Map(map);
+            next.set(channelId, { hideMemberNames: hide });
+            return next;
+          });
+        },
+      ),
+    };
+  });
 
-const {
-  callState,
-  initializeCallMock,
-  startCallMock,
-  setCallModalOpenMock,
-} = vi.hoisted(() => {
-  const { writable } = require("svelte/store");
-  return {
-    callState: writable({
-      activeCall: null,
-      deviceAvailability: { audioInput: true, videoInput: true },
-      permissions: { audio: "granted", video: "granted", checking: false },
-      showCallModal: false,
-    }),
-    initializeCallMock: vi.fn(),
-    startCallMock: vi.fn(),
-    setCallModalOpenMock: vi.fn(),
-  };
-});
+const { callState, initializeCallMock, startCallMock, setCallModalOpenMock } =
+  vi.hoisted(() => {
+    const { writable } = require("svelte/store");
+    return {
+      callState: writable({
+        activeCall: null,
+        deviceAvailability: { audioInput: true, videoInput: true },
+        permissions: { audio: "granted", video: "granted", checking: false },
+        showCallModal: false,
+      }),
+      initializeCallMock: vi.fn(),
+      startCallMock: vi.fn(),
+      setCallModalOpenMock: vi.fn(),
+    };
+  });
 
 vi.mock("$app/navigation", () => ({
   goto: gotoMock,
@@ -90,7 +84,9 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
 
 vi.mock("$lib/stores/userStore", () => ({
   userStore: {
-    subscribe: (run: (value: { me: { id: string; name: string } | null }) => void) => {
+    subscribe: (
+      run: (value: { me: { id: string; name: string } | null }) => void,
+    ) => {
       run({ me: { id: "user-1", name: "Test User" } });
       return () => {};
     },

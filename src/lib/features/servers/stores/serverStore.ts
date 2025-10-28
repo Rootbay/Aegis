@@ -77,8 +77,14 @@ interface ServerStore extends Readable<ServerStoreState> {
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   initialize: () => Promise<void>;
   getServer: (serverId: string) => Promise<Server | null>;
-  fetchBans: (serverId: string, options?: { force?: boolean }) => Promise<User[]>;
-  unbanMember: (serverId: string, userId: string) => Promise<ServerUpdateResult>;
+  fetchBans: (
+    serverId: string,
+    options?: { force?: boolean },
+  ) => Promise<User[]>;
+  unbanMember: (
+    serverId: string,
+    userId: string,
+  ) => Promise<ServerUpdateResult>;
 }
 
 export function createServerStore(): ServerStore {
@@ -441,10 +447,13 @@ export function createServerStore(): ServerStore {
     }
 
     try {
-      const backendBans = await invoke<BackendUser[] | null>("list_server_bans", {
-        serverId,
-        server_id: serverId,
-      });
+      const backendBans = await invoke<BackendUser[] | null>(
+        "list_server_bans",
+        {
+          serverId,
+          server_id: serverId,
+        },
+      );
       const bans = Array.isArray(backendBans)
         ? backendBans.map(fromBackendUser)
         : [];

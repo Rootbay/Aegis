@@ -84,7 +84,9 @@ describe("settings pages integrate with store", () => {
 
   it("normalises keybind input", async () => {
     render(KeybindsPage);
-    const input = screen.getByLabelText("Command palette shortcut") as HTMLInputElement;
+    const input = screen.getByLabelText(
+      "Command palette shortcut",
+    ) as HTMLInputElement;
 
     await fireEvent.input(input, { target: { value: " ctrl + k " } });
     await fireEvent.blur(input);
@@ -115,17 +117,24 @@ describe("settings pages integrate with store", () => {
         return [];
       }
       if (cmd === "link_external_account") {
-        expect(args).toEqual({ provider: "matrix", username: linkedAccount.username });
+        expect(args).toEqual({
+          provider: "matrix",
+          username: linkedAccount.username,
+        });
         return linkedAccount;
       }
       return null;
     });
 
     render(ConnectedAccountsPage);
-    const handleInput = screen.getByLabelText("Account handle") as HTMLInputElement;
+    const handleInput = screen.getByLabelText(
+      "Account handle",
+    ) as HTMLInputElement;
     const submitButton = screen.getByRole("button", { name: "Link" });
 
-    await fireEvent.input(handleInput, { target: { value: linkedAccount.username } });
+    await fireEvent.input(handleInput, {
+      target: { value: linkedAccount.username },
+    });
     await fireEvent.click(submitButton);
 
     expect(get(settings).connectedAccounts).toEqual([linkedAccount]);

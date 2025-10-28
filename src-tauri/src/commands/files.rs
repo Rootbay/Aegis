@@ -3,7 +3,7 @@ use aegis_shared_types::FileTransferMode;
 use chrono::Utc;
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri::State;
 
 const INCOMING_STATE_DIR: &str = "incoming_transfers";

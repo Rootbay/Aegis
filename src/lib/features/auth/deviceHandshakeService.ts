@@ -10,10 +10,7 @@ import {
   type DeviceHandshakePayload,
 } from "$lib/utils/security";
 
-import type {
-  AuthPersistence,
-  TrustedDevice,
-} from "./persistenceService";
+import type { AuthPersistence, TrustedDevice } from "./persistenceService";
 
 export const ingestDeviceHandshake = (raw: string): DeviceHandshakePayload => {
   const payload = decodeDeviceHandshake(raw);
@@ -53,7 +50,7 @@ export const approveDeviceHandshake = async ({
   const totpRequirement =
     typeof requireTotpOnUnlock === "boolean"
       ? requireTotpOnUnlock
-      : persisted.requireTotpOnUnlock ?? false;
+      : (persisted.requireTotpOnUnlock ?? false);
 
   return {
     updatedPersistence: {

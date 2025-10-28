@@ -22,7 +22,8 @@
   <button
     type="button"
     data-testid="channel-context-invite"
-    onclick={() => onaction?.({ action: "invite_people", channelId: channel.id })}
+    onclick={() =>
+      onaction?.({ action: "invite_people", channelId: channel.id })}
   >
     Invite People
   </button>

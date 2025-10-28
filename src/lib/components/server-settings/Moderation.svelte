@@ -32,10 +32,7 @@
   <div class="flex items-center justify-between p-4 bg-card rounded-lg">
     <div>
       <h3 class="font-medium">Transparent Message Edits</h3>
-      <p
-        id="transparent-edits-description"
-        class="text-sm text-gray-400"
-      >
+      <p id="transparent-edits-description" class="text-sm text-gray-400">
         Allows server admins to view the edit history of messages.
       </p>
     </div>
@@ -75,7 +72,5 @@
     </div>
   </div>
 
-  <Button class="font-semibold" onclick={saveChanges}>
-    Save Changes
-  </Button>
+  <Button class="font-semibold" onclick={saveChanges}>Save Changes</Button>
 </div>

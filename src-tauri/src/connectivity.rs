@@ -8,10 +8,8 @@ use aegis_shared_types::{
 use chrono::{DateTime, Utc};
 use libp2p::{multiaddr::Protocol, swarm::Swarm, Multiaddr, PeerId};
 use once_cell::sync::{Lazy, OnceCell};
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::Mutex;
-
-use crate::network;
 
 static SWARM_HANDLE: OnceCell<Arc<Mutex<Swarm<network::Behaviour>>>> = OnceCell::new();
 static SNAPSHOT_STORE: OnceCell<Arc<Mutex<Option<ConnectivityEventPayload>>>> = OnceCell::new();
@@ -133,7 +131,7 @@ pub fn spawn_connectivity_task<R: Runtime>(
         if let Some(snapshot) =
             collect_and_store_snapshot(&swarm, &local_peer_id_clone, &snapshot_store).await
         {
-            if let Err(error) = app.emit_all("connectivity-status", snapshot.clone()) {
+            if let Err(error) = app.emit("connectivity-status", snapshot.clone()) {
                 eprintln!("Failed to emit initial connectivity snapshot: {}", error);
             }
         }
@@ -144,7 +142,7 @@ pub fn spawn_connectivity_task<R: Runtime>(
             if let Some(snapshot) =
                 collect_and_store_snapshot(&swarm, &local_peer_id_clone, &snapshot_store).await
             {
-                if let Err(error) = app.emit_all("connectivity-status", snapshot.clone()) {
+                if let Err(error) = app.emit("connectivity-status", snapshot.clone()) {
                     eprintln!("Failed to emit connectivity snapshot: {}", error);
                 }
             }
@@ -191,7 +189,7 @@ async fn refresh_connectivity_snapshot<R: Runtime>(
         .await
         .ok_or_else(|| "Failed to compute connectivity snapshot.".to_string())?;
 
-    if let Err(error) = app.emit_all("connectivity-status", snapshot.clone()) {
+    if let Err(error) = app.emit("connectivity-status", snapshot.clone()) {
         eprintln!("Failed to emit connectivity snapshot: {}", error);
     }
 
@@ -203,7 +201,12 @@ fn compute_snapshot(
     local_peer_id: &PeerId,
     bridge_snapshot: Option<&BridgeSnapshot>,
 ) -> ConnectivityEventPayload {
-    let connected: Vec<_> = swarm.connected_peers().cloned().collect();
+    let connected: Vec<_> = swarm
+        .behaviour()
+        .gossipsub
+        .all_peers()
+        .map(|(peer_id, _)| peer_id.clone())
+        .collect();
     let now = Utc::now().to_rfc3339();
     let local_peer_id_b58 = local_peer_id.to_base58();
 
@@ -350,9 +353,7 @@ pub async fn set_bridge_mode_enabled<R: Runtime>(
     if !enabled && !disconnect_peers.is_empty() {
         let mut swarm_guard = swarm.lock().await;
         for peer in disconnect_peers {
-            if let Err(error) = swarm_guard.disconnect_peer_id(peer) {
-                eprintln!("Failed to disconnect upstream peer {}: {}", peer, error);
-            }
+            let _ = swarm_guard.disconnect_peer_id(peer);
         }
     }
 

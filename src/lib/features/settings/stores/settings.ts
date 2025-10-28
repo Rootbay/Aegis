@@ -207,15 +207,11 @@ function createBooleanSetter<Key extends AppSettingsKey>(key: Key) {
   };
 }
 
-export const setReadReceiptsEnabled = createBooleanSetter(
-  "enableReadReceipts",
-);
+export const setReadReceiptsEnabled = createBooleanSetter("enableReadReceipts");
 export const setTypingIndicatorsEnabled = createBooleanSetter(
   "enableTypingIndicators",
 );
-export const setShowMessageAvatars = createBooleanSetter(
-  "showMessageAvatars",
-);
+export const setShowMessageAvatars = createBooleanSetter("showMessageAvatars");
 export const setShowMessageTimestamps = createBooleanSetter(
   "showMessageTimestamps",
 );
@@ -225,23 +221,19 @@ export const setAllowDataCollection = createBooleanSetter(
 export const setPersonalizeExperience = createBooleanSetter(
   "personalizeExperience",
 );
-export const setShareOnlineStatus = createBooleanSetter(
-  "shareOnlineStatus",
-);
+export const setShareOnlineStatus = createBooleanSetter("shareOnlineStatus");
 export const setShareUsageAnalytics = createBooleanSetter(
   "shareUsageAnalytics",
 );
-export const setShareCrashReports = createBooleanSetter(
-  "shareCrashReports",
-);
-export const setLinkPreviewsEnabled = createBooleanSetter(
-  "enableLinkPreviews",
-);
+export const setShareCrashReports = createBooleanSetter("shareCrashReports");
+export const setLinkPreviewsEnabled = createBooleanSetter("enableLinkPreviews");
 export const setResilientFileTransferEnabled = createBooleanSetter(
   "enableResilientFileTransfer",
 );
 export const setHighContrastEnabled = createBooleanSetter("enableHighContrast");
-export const setReducedMotionEnabled = createBooleanSetter("enableReducedMotion");
+export const setReducedMotionEnabled = createBooleanSetter(
+  "enableReducedMotion",
+);
 export const setLiveCaptionsEnabled = createBooleanSetter("enableLiveCaptions");
 export const setFilterMatureContentEnabled = createBooleanSetter(
   "filterMatureContent",
@@ -259,14 +251,14 @@ export const setAutoApproveKnownContacts = createBooleanSetter(
 export const setSurfaceFriendSuggestions = createBooleanSetter(
   "surfaceFriendSuggestions",
 );
-export const setAutoDownloadUpdates = createBooleanSetter("autoDownloadUpdates");
+export const setAutoDownloadUpdates = createBooleanSetter(
+  "autoDownloadUpdates",
+);
 export const setIncludePreReleaseUpdates = createBooleanSetter(
   "includePreReleaseUpdates",
 );
 export const setRemindAboutUpdates = createBooleanSetter("remindAboutUpdates");
-export async function setWalkieTalkieVoiceMemosEnabled(
-  value: boolean,
-) {
+export async function setWalkieTalkieVoiceMemosEnabled(value: boolean) {
   if (get(settings).enableWalkieTalkieVoiceMemos !== value) {
     updateAppSetting("enableWalkieTalkieVoiceMemos", value);
   }
@@ -283,9 +275,8 @@ export async function setWalkieTalkieVoiceMemosEnabled(
 void setWalkieTalkieVoiceMemosEnabled(
   get(settings).enableWalkieTalkieVoiceMemos,
 );
-export const setAutoDownloadMediaEnabled = createBooleanSetter(
-  "autoDownloadMedia",
-);
+export const setAutoDownloadMediaEnabled =
+  createBooleanSetter("autoDownloadMedia");
 export const setClearCacheOnExit = createBooleanSetter("clearCacheOnExit");
 export const setEnableNewMessageNotifications = createBooleanSetter(
   "enableNewMessageNotifications",
@@ -308,20 +299,32 @@ export async function setEnableBridgeMode(
   const previous = get(settings).enableBridgeMode;
 
   if (!invoke) {
-    updateAppSetting("enableBridgeMode", value as AppSettings["enableBridgeMode"]);
+    updateAppSetting(
+      "enableBridgeMode",
+      value as AppSettings["enableBridgeMode"],
+    );
     return null;
   }
 
   try {
-    const status = await invoke<GatewayStatus | null>("set_bridge_mode_enabled", {
-      enabled: value,
-    });
+    const status = await invoke<GatewayStatus | null>(
+      "set_bridge_mode_enabled",
+      {
+        enabled: value,
+      },
+    );
     const effective = status?.bridgeModeEnabled ?? value;
-    updateAppSetting("enableBridgeMode", effective as AppSettings["enableBridgeMode"]);
+    updateAppSetting(
+      "enableBridgeMode",
+      effective as AppSettings["enableBridgeMode"],
+    );
     return status;
   } catch (error) {
     console.error("Failed to toggle Bridge Mode", error);
-    updateAppSetting("enableBridgeMode", previous as AppSettings["enableBridgeMode"]);
+    updateAppSetting(
+      "enableBridgeMode",
+      previous as AppSettings["enableBridgeMode"],
+    );
     throw error;
   }
 }
@@ -428,8 +431,8 @@ export function revokeTrustedDevice(deviceId: string) {
 export function removeTrustedDevice(deviceId: string) {
   settings.update((current) => ({
     ...current,
-    trustedDevices: current.trustedDevices.filter((device) =>
-      device.id !== deviceId
+    trustedDevices: current.trustedDevices.filter(
+      (device) => device.id !== deviceId,
     ),
   }));
 }
@@ -470,10 +473,7 @@ export async function refreshConnectedAccountsFromBackend() {
   }
 }
 
-export async function linkConnectedAccount(
-  provider: string,
-  username: string,
-) {
+export async function linkConnectedAccount(provider: string, username: string) {
   const normalized = username.trim();
   if (!normalized) {
     throw new Error("Account handle is required.");

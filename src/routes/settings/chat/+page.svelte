@@ -85,9 +85,7 @@
       setResilientFileTransferEnabled(enableResilientFileTransfer);
     }
 
-    if (
-      current.enableWalkieTalkieVoiceMemos !== enableWalkieTalkieVoiceMemos
-    ) {
+    if (current.enableWalkieTalkieVoiceMemos !== enableWalkieTalkieVoiceMemos) {
       void setWalkieTalkieVoiceMemosEnabled(enableWalkieTalkieVoiceMemos);
     }
 
@@ -125,10 +123,7 @@
   </div>
 
   <div class="space-y-2">
-    <Label
-      for="ephemeral-duration"
-      class="text-sm font-medium text-zinc-200"
-    >
+    <Label for="ephemeral-duration" class="text-sm font-medium text-zinc-200">
       Ephemeral message lifetime
     </Label>
     <Slider
@@ -191,10 +186,7 @@
       class="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
     >
       <div class="space-y-1">
-        <Label
-          for="walkie-talkie"
-          class="text-sm font-medium text-zinc-200"
-        >
+        <Label for="walkie-talkie" class="text-sm font-medium text-zinc-200">
           Walkie-talkie voice memos
         </Label>
         <p class="text-xs text-muted-foreground">

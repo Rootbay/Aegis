@@ -123,7 +123,10 @@ describe("serverStore bans helpers", () => {
 
     await serverStore.fetchBans(baseServer.id, { force: true });
 
-    const result = await serverStore.unbanMember(baseServer.id, backendResponse[0].id);
+    const result = await serverStore.unbanMember(
+      baseServer.id,
+      backendResponse[0].id,
+    );
     expect(result.success).toBe(true);
 
     const state = get(serverStore);

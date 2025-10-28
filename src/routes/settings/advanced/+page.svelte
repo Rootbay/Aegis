@@ -43,8 +43,7 @@
     {
       key: "customTheme" as const,
       label: "Allow experimental theming",
-      description:
-        "Enable developer tools for loading custom CSS themes.",
+      description: "Enable developer tools for loading custom CSS themes.",
     },
   ];
 
@@ -105,16 +104,15 @@
     if (current.enableNewMessageNotifications !== enableNewNotifications) {
       setEnableNewMessageNotifications(enableNewNotifications);
     }
-    if (
-      current.enableGroupMessageNotifications !== enableGroupNotifications
-    ) {
+    if (current.enableGroupMessageNotifications !== enableGroupNotifications) {
       setEnableGroupMessageNotifications(enableGroupNotifications);
     }
   });
 
   function resetAdvancedFlags() {
     advancedFlags.forEach((flag) => {
-      const defaultValue = defaultSettings[flag.key as keyof typeof advancedState];
+      const defaultValue =
+        defaultSettings[flag.key as keyof typeof advancedState];
       toggleFlag(flag.key, defaultValue as boolean);
     });
   }
@@ -164,8 +162,8 @@
           Prioritise cross-device sync
         </Label>
         <p class="text-xs text-muted-foreground">
-          Keep preferences synchronised across multiple devices even on
-          metered networks.
+          Keep preferences synchronised across multiple devices even on metered
+          networks.
         </p>
       </div>
       <Switch

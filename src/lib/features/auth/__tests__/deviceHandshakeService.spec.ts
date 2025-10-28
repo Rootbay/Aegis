@@ -19,12 +19,16 @@ const encryptWithSecretMock =
       plain: string,
     ) => Promise<{ cipherText: string; iv: string; salt: string }>
   >();
-const decryptWithSecretMock = vi.fn<
-  (secret: string, envelope: { cipherText: string }) => Promise<string>
->();
-const verifyTotpMock = vi.fn<(secret: string, token: string) => Promise<boolean>>();
-const encodeDeviceHandshakeMock = vi.fn<(payload: DeviceHandshakePayload) => string>();
-const decodeDeviceHandshakeMock = vi.fn<(raw: string) => DeviceHandshakePayload | null>();
+const decryptWithSecretMock =
+  vi.fn<
+    (secret: string, envelope: { cipherText: string }) => Promise<string>
+  >();
+const verifyTotpMock =
+  vi.fn<(secret: string, token: string) => Promise<boolean>>();
+const encodeDeviceHandshakeMock =
+  vi.fn<(payload: DeviceHandshakePayload) => string>();
+const decodeDeviceHandshakeMock =
+  vi.fn<(raw: string) => DeviceHandshakePayload | null>();
 
 vi.mock("$lib/utils/security", () => ({
   hashString: (...args: Parameters<typeof hashStringMock>) =>
@@ -35,10 +39,12 @@ vi.mock("$lib/utils/security", () => ({
     decryptWithSecretMock(...args),
   verifyTotp: (...args: Parameters<typeof verifyTotpMock>) =>
     verifyTotpMock(...args),
-  encodeDeviceHandshake: (...args: Parameters<typeof encodeDeviceHandshakeMock>) =>
-    encodeDeviceHandshakeMock(...args),
-  decodeDeviceHandshake: (...args: Parameters<typeof decodeDeviceHandshakeMock>) =>
-    decodeDeviceHandshakeMock(...args),
+  encodeDeviceHandshake: (
+    ...args: Parameters<typeof encodeDeviceHandshakeMock>
+  ) => encodeDeviceHandshakeMock(...args),
+  decodeDeviceHandshake: (
+    ...args: Parameters<typeof decodeDeviceHandshakeMock>
+  ) => decodeDeviceHandshakeMock(...args),
 }));
 
 describe("deviceHandshakeService", () => {
@@ -71,7 +77,9 @@ describe("deviceHandshakeService", () => {
     decryptWithSecretMock.mockImplementation(async () => "decrypted-password");
 
     verifyTotpMock.mockReset();
-    verifyTotpMock.mockImplementation(async (_secret, token) => token === "123456");
+    verifyTotpMock.mockImplementation(
+      async (_secret, token) => token === "123456",
+    );
 
     encodeDeviceHandshakeMock.mockReset();
     encodeDeviceHandshakeMock.mockImplementation(() => "encoded-handshake");
@@ -163,7 +171,11 @@ describe("deviceHandshakeService", () => {
       persisted: {
         username: "casey",
         totpSecret: "SECRET",
-        passwordEnvelope: { cipherText: "SECRET:decrypted", iv: "iv", salt: "salt" },
+        passwordEnvelope: {
+          cipherText: "SECRET:decrypted",
+          iv: "iv",
+          salt: "salt",
+        },
         recoveryEnvelope: null,
         recoveryHash: null,
         requireTotpOnUnlock: true,

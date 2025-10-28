@@ -138,16 +138,12 @@ function mapFriendshipToFriend(
   const nameFromBackend = counterpart?.username ?? "";
   const trimmedName = nameFromBackend.trim();
   const name =
-    trimmedName.length > 0
-      ? trimmedName
-      : `User-${counterpartId.slice(0, 4)}`;
+    trimmedName.length > 0 ? trimmedName : `User-${counterpartId.slice(0, 4)}`;
 
   const avatarFromBackend = counterpart?.avatar ?? "";
   const trimmedAvatar = avatarFromBackend.trim();
   const avatar =
-    trimmedAvatar.length > 0
-      ? trimmedAvatar
-      : FALLBACK_AVATAR(counterpartId);
+    trimmedAvatar.length > 0 ? trimmedAvatar : FALLBACK_AVATAR(counterpartId);
 
   const baseUser: User = {
     id: counterpartId,
@@ -312,7 +308,9 @@ export function createFriendStore(): FriendStore {
       ),
     );
 
-    const annotatedById = new Map(annotated.map((friend) => [friend.id, friend]));
+    const annotatedById = new Map(
+      annotated.map((friend) => [friend.id, friend]),
+    );
 
     update((state) => ({
       ...state,
@@ -409,7 +407,7 @@ export function createFriendStore(): FriendStore {
               spamDecision:
                 friend.spamDecision === "allowed"
                   ? "muted"
-                  : friend.spamDecision ?? "muted",
+                  : (friend.spamDecision ?? "muted"),
               spamScore: options.score ?? friend.spamScore,
               spamReasons: options.reasons ?? friend.spamReasons,
             })

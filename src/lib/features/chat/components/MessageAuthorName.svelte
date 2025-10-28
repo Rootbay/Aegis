@@ -25,12 +25,13 @@
 
   const hideNames = $derived(
     chatType === "channel" && channelId
-      ? $channelDisplayPreferencesStore.get(channelId)?.hideMemberNames ?? false
+      ? ($channelDisplayPreferencesStore.get(channelId)?.hideMemberNames ??
+          false)
       : false,
   );
 
   const displayName = $derived(
-    hideNames ? hiddenMemberLabel : senderName ?? hiddenMemberLabel,
+    hideNames ? hiddenMemberLabel : (senderName ?? hiddenMemberLabel),
   );
 
   function handleClick(event: MouseEvent) {

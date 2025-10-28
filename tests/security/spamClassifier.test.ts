@@ -37,7 +37,9 @@ describe("SpamClassifier", () => {
       { context: "message" },
     );
 
-    expect(result.autoMuted || result.score >= SPAM_AUTO_MUTE_THRESHOLD).toBe(true);
+    expect(result.autoMuted || result.score >= SPAM_AUTO_MUTE_THRESHOLD).toBe(
+      true,
+    );
   });
 
   it("caches repeated evaluations for identical inputs", async () => {

@@ -55,15 +55,14 @@
   <div>
     <h1 class="text-2xl font-semibold text-zinc-50">Keyboard shortcuts</h1>
     <p class="text-sm text-muted-foreground">
-      Customise high-impact shortcuts. Use modifiers like Ctrl, Alt, Shift, or Cmd.
+      Customise high-impact shortcuts. Use modifiers like Ctrl, Alt, Shift, or
+      Cmd.
     </p>
   </div>
 
   <div class="space-y-4 max-w-lg">
     <div class="space-y-1">
-      <Label class="text-sm font-medium text-zinc-200"
-        >Command palette</Label
-      >
+      <Label class="text-sm font-medium text-zinc-200">Command palette</Label>
       <Input
         bind:value={commandPalette}
         on:blur={() => handleBlur("command")}
@@ -76,9 +75,7 @@
     </div>
 
     <div class="space-y-1">
-      <Label class="text-sm font-medium text-zinc-200"
-        >Push-to-talk</Label
-      >
+      <Label class="text-sm font-medium text-zinc-200">Push-to-talk</Label>
       <Input
         bind:value={pushToTalk}
         on:blur={() => handleBlur("pushToTalk")}
@@ -91,9 +88,7 @@
     </div>
 
     <div class="space-y-1">
-      <Label class="text-sm font-medium text-zinc-200"
-        >Toggle mute</Label
-      >
+      <Label class="text-sm font-medium text-zinc-200">Toggle mute</Label>
       <Input
         bind:value={toggleMute}
         on:blur={() => handleBlur("toggleMute")}

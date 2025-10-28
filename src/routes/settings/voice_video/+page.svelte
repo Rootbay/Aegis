@@ -74,8 +74,10 @@
 
   function resolveDeviceLabel(id: string, devices: DeviceOption[]) {
     if (!id) return DEFAULT_DEVICE_OPTION.label;
-    return devices.find((device) => device.deviceId === id)?.label ??
-      `${DEFAULT_DEVICE_OPTION.label} (${id})`;
+    return (
+      devices.find((device) => device.deviceId === id)?.label ??
+      `${DEFAULT_DEVICE_OPTION.label} (${id})`
+    );
   }
 
   function mapDevices(devices: MediaDeviceInfo[], kind: MediaDeviceKind) {
@@ -142,10 +144,9 @@
       await callStore.refreshDevices();
       const constraints: MediaStreamConstraints = {
         audio: false,
-        video:
-          videoInputId
-            ? { deviceId: { exact: videoInputId } }
-            : { facingMode: "user" },
+        video: videoInputId
+          ? { deviceId: { exact: videoInputId } }
+          : { facingMode: "user" },
       };
       previewStream = await navigator.mediaDevices.getUserMedia(constraints);
       previewActive = true;
@@ -197,10 +198,9 @@
       await callStore.initialize();
       await callStore.refreshDevices();
       micStream = await navigator.mediaDevices.getUserMedia({
-        audio:
-          audioInputId
-            ? { deviceId: { exact: audioInputId } }
-            : { echoCancellation: true },
+        audio: audioInputId
+          ? { deviceId: { exact: audioInputId } }
+          : { echoCancellation: true },
         video: false,
       });
       micContext = new AudioContext();
@@ -251,7 +251,9 @@
       if (audioOutputId && "setSinkId" in audio) {
         try {
           await (
-            audio as HTMLMediaElement & { setSinkId?: (id: string) => Promise<void> }
+            audio as HTMLMediaElement & {
+              setSinkId?: (id: string) => Promise<void>;
+            }
           ).setSinkId?.(audioOutputId);
         } catch (error) {
           console.warn("Failed to route audio to selected output", error);
@@ -302,7 +304,10 @@
     void enumerateDevices();
 
     const handleDeviceChange = () => void enumerateDevices();
-    navigator.mediaDevices?.addEventListener("devicechange", handleDeviceChange);
+    navigator.mediaDevices?.addEventListener(
+      "devicechange",
+      handleDeviceChange,
+    );
 
     return () => {
       unsubscribeSettings();
@@ -349,7 +354,11 @@
   </div>
   <div class="flex items-center gap-2 text-zinc-200">
     <Video class="h-4 w-4" aria-hidden="true" />
-    <span>Cameras: {deviceAvailability.videoInput ? "Detected" : "Unavailable"}</span>
+    <span
+      >Cameras: {deviceAvailability.videoInput
+        ? "Detected"
+        : "Unavailable"}</span
+    >
   </div>
   <div class="flex flex-wrap gap-2">
     <span>Microphone permission: {permissions.audio}</span>
@@ -370,14 +379,22 @@
   >
     <div class="flex items-start justify-between gap-4">
       <div>
-        <Label id="microphone-settings" class="text-sm font-medium text-zinc-200">
+        <Label
+          id="microphone-settings"
+          class="text-sm font-medium text-zinc-200"
+        >
           Input device
         </Label>
         <p class="text-xs text-muted-foreground">
           Choose which microphone Aegis should use during calls.
         </p>
       </div>
-      <Button variant="secondary" size="sm" onclick={() => void enumerateDevices()} disabled={enumerating}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onclick={() => void enumerateDevices()}
+        disabled={enumerating}
+      >
         Refresh
       </Button>
     </div>
@@ -411,7 +428,12 @@
       </Select>
 
       <div class="flex flex-wrap items-center gap-3">
-        <Button variant="default" size="sm" onclick={() => (micTestActive ? stopMicTest() : startMicTest())} disabled={enumerating || (!audioInputDevices.length && !audioInputId)}>
+        <Button
+          variant="default"
+          size="sm"
+          onclick={() => (micTestActive ? stopMicTest() : startMicTest())}
+          disabled={enumerating || (!audioInputDevices.length && !audioInputId)}
+        >
           {micTestActive ? "Stop microphone test" : "Test microphone"}
         </Button>
         {#if micTestActive}
@@ -457,7 +479,9 @@
         type="single"
         value={audioOutputId}
         onValueChange={(value: string) => (audioOutputId = value)}
-        disabled={enumerating || (!navigator.mediaDevices?.selectAudioOutput && audioOutputDevices.length === 0)}
+        disabled={enumerating ||
+          (!navigator.mediaDevices?.selectAudioOutput &&
+            audioOutputDevices.length === 0)}
       >
         <SelectTrigger class="w-full" aria-label="Select speaker">
           <span data-slot="select-value" class="flex-1 text-left">
@@ -486,7 +510,8 @@
         <Button
           variant="default"
           size="sm"
-          disabled={playingTestSound || (audioOutputDevices.length === 0 && !audioOutputId)}
+          disabled={playingTestSound ||
+            (audioOutputDevices.length === 0 && !audioOutputId)}
           onclick={() => void playTestSound()}
         >
           {playingTestSound ? "Playing test sound..." : "Play test sound"}
@@ -550,8 +575,10 @@
         <Button
           variant={previewActive ? "secondary" : "default"}
           size="sm"
-          disabled={enumerating || (videoInputDevices.length === 0 && !videoInputId)}
-          onclick={() => (previewActive ? stopVideoPreview() : startVideoPreview())}
+          disabled={enumerating ||
+            (videoInputDevices.length === 0 && !videoInputId)}
+          onclick={() =>
+            previewActive ? stopVideoPreview() : startVideoPreview()}
         >
           {previewActive ? "Stop preview" : "Preview video"}
         </Button>
@@ -577,4 +604,3 @@
     </div>
   </section>
 </div>
-

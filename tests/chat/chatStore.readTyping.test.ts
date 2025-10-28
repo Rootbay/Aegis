@@ -1,4 +1,12 @@
-import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { get, writable } from "svelte/store";
 
 type AppSettings = {
@@ -103,19 +111,19 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
-type ChatStoreModule = typeof import("../../src/lib/features/chat/stores/chatStore");
+type ChatStoreModule =
+  typeof import("../../src/lib/features/chat/stores/chatStore");
 let createChatStore: ChatStoreModule["createChatStore"];
 
 beforeAll(async () => {
   vi.stubGlobal("localStorage", createLocalStorageMock());
-  vi.stubGlobal(
-    "URL",
-    {
-      createObjectURL: vi.fn(() => "blob:mock"),
-      revokeObjectURL: vi.fn(),
-    } as unknown as typeof URL,
-  );
-  ({ createChatStore } = await import("../../src/lib/features/chat/stores/chatStore"));
+  vi.stubGlobal("URL", {
+    createObjectURL: vi.fn(() => "blob:mock"),
+    revokeObjectURL: vi.fn(),
+  } as unknown as typeof URL);
+  ({ createChatStore } = await import(
+    "../../src/lib/features/chat/stores/chatStore"
+  ));
 });
 import { invoke } from "@tauri-apps/api/core";
 
@@ -190,7 +198,10 @@ describe("chatStore read receipts and typing indicators", () => {
 
     await store.markActiveChatViewed();
 
-    expect(invokeMock).not.toHaveBeenCalledWith("send_read_receipt", expect.anything());
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "send_read_receipt",
+      expect.anything(),
+    );
   });
 
   it("applies read receipt updates to messages", async () => {
@@ -250,7 +261,10 @@ describe("chatStore read receipts and typing indicators", () => {
 
     await store.sendTypingIndicator(true);
 
-    expect(invokeMock).not.toHaveBeenCalledWith("send_typing_indicator", expect.anything());
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "send_typing_indicator",
+      expect.anything(),
+    );
   });
 
   it("tracks typing indicator events for the active chat", async () => {

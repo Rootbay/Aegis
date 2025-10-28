@@ -136,6 +136,11 @@ export const directMessageRoster: Readable<DirectMessageListEntry[]> = derived(
     const friends = $friendStore.friends ?? [];
     const summaries = Array.from($groupChats.values());
     const currentUserId = $userStore.me?.id ?? null;
-    return mergeDirectMessageRoster(friends, summaries, $metadata, currentUserId);
+    return mergeDirectMessageRoster(
+      friends,
+      summaries,
+      $metadata,
+      currentUserId,
+    );
   },
 );

@@ -16,12 +16,14 @@
     {
       version: "2.4.0",
       title: "Mesh-aware notifications",
-      description: "Notifications now route over low-power relays automatically.",
+      description:
+        "Notifications now route over low-power relays automatically.",
     },
     {
       version: "2.3.2",
       title: "Offline message queue",
-      description: "Drafts sync reliably when devices briefly lose connectivity.",
+      description:
+        "Drafts sync reliably when devices briefly lose connectivity.",
     },
     {
       version: "2.3.0",
@@ -38,9 +40,10 @@
   ]);
 
   const reminderLabel = $derived(
-    () => `${Math.round(reminderInterval[0])} day${
-      Math.round(reminderInterval[0]) === 1 ? "" : "s"
-    }`,
+    () =>
+      `${Math.round(reminderInterval[0])} day${
+        Math.round(reminderInterval[0]) === 1 ? "" : "s"
+      }`,
   );
 
   $effect(() => {
@@ -118,8 +121,7 @@
 
     <div class="flex items-center justify-between gap-4">
       <div>
-        <Label class="text-sm font-medium text-zinc-200"
-          >Reminder cadence</Label
+        <Label class="text-sm font-medium text-zinc-200">Reminder cadence</Label
         >
         <p class="text-xs text-muted-foreground">
           Choose how frequently to receive a summary if updates are pending.

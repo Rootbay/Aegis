@@ -15,7 +15,9 @@ function createMutedFriendsStore(): MutedFriendsStore {
   const backing = persistentStore<string[]>(STORAGE_KEY, []);
 
   const deriveSet = (ids: string[]): Set<string> => {
-    const normalized = ids.filter((id) => typeof id === "string" && id.trim().length > 0);
+    const normalized = ids.filter(
+      (id) => typeof id === "string" && id.trim().length > 0,
+    );
     return new Set(normalized);
   };
 

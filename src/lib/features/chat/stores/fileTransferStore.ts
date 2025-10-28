@@ -172,7 +172,7 @@ function createFileTransferStore(): FileTransferStore {
         path: existing?.path,
         status: "accepted",
         direction: "incoming",
-        mode: resilientEnabled ? "resilient" : existing?.mode ?? "basic",
+        mode: resilientEnabled ? "resilient" : (existing?.mode ?? "basic"),
         phase: existing?.phase ?? "awaiting",
         progress: existing?.progress ?? 0,
         resumed: existing?.resumed ?? false,
@@ -323,7 +323,8 @@ function createFileTransferStore(): FileTransferStore {
     path,
   }: FileTransferProgressPayload) {
     const normalizedMode: FileTransferMode =
-      mode ?? (direction === "incoming"
+      mode ??
+      (direction === "incoming"
         ? get(settings).enableResilientFileTransfer
           ? "resilient"
           : "basic"
@@ -354,10 +355,7 @@ function createFileTransferStore(): FileTransferStore {
           return "transferring";
       }
     })();
-    const clampedProgress = Math.min(
-      1,
-      Math.max(progress ?? 0, 0),
-    );
+    const clampedProgress = Math.min(1, Math.max(progress ?? 0, 0));
 
     upsertRecord(direction, peer_id, filename, (existing, now) => {
       const effectiveSafe = safe_filename ?? existing?.safeFilename ?? filename;
@@ -365,9 +363,13 @@ function createFileTransferStore(): FileTransferStore {
         progress ?? existing?.progress ?? clampedProgress;
       const effectiveMode = existing?.mode ?? normalizedMode;
       const effectiveStatus =
-        status === undefined ? existing?.status ?? "transferring" : normalizedStatus;
+        status === undefined
+          ? (existing?.status ?? "transferring")
+          : normalizedStatus;
       const effectivePhase =
-        status === undefined ? existing?.phase ?? "transferring" : normalizedPhase;
+        status === undefined
+          ? (existing?.phase ?? "transferring")
+          : normalizedPhase;
       return {
         id: buildId(direction, peer_id, filename),
         senderId: peer_id,

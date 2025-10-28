@@ -77,7 +77,9 @@
       return "success" as const;
     }
     if (gatewayStatus().bridgeModeEnabled) {
-      return gatewayStatus().lastError ? ("warning" as const) : ("info" as const);
+      return gatewayStatus().lastError
+        ? ("warning" as const)
+        : ("info" as const);
     }
     if (state.bridgeSuggested) {
       return "warning" as const;
@@ -118,18 +120,27 @@
     try {
       const status = await setEnableBridgeMode(true);
       if (status?.forwarding) {
-        toasts.addToast("Bridge Mode active. Traffic is now routed upstream.", "success");
+        toasts.addToast(
+          "Bridge Mode active. Traffic is now routed upstream.",
+          "success",
+        );
       } else if (status?.lastError) {
         toasts.addToast(
           `Bridge Mode enabled but encountered an uplink issue: ${status.lastError}`,
           "warning",
         );
       } else {
-        toasts.addToast("Bridge Mode enabled. Waiting for uplink peers…", "info");
+        toasts.addToast(
+          "Bridge Mode enabled. Waiting for uplink peers…",
+          "info",
+        );
       }
     } catch (error) {
       console.error("Failed to enable Bridge Mode", error);
-      toasts.addToast("Failed to enable Bridge Mode. Check network settings for details.", "error");
+      toasts.addToast(
+        "Failed to enable Bridge Mode. Check network settings for details.",
+        "error",
+      );
     } finally {
       enablingBridge = false;
     }
@@ -141,7 +152,9 @@
   }
 </script>
 
-<div class="flex flex-col gap-2 border-b border-border/60 bg-background/80 px-4 py-3">
+<div
+  class="flex flex-col gap-2 border-b border-border/60 bg-background/80 px-4 py-3"
+>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex flex-wrap items-center gap-3 text-sm">
       <Badge variant={statusVariant()} class="flex items-center gap-1">
@@ -184,7 +197,9 @@
   <p class="text-sm text-foreground">{statusMessage}</p>
 </div>
 {#if fallbackMessage}
-  <Alert class="mx-4 mb-2 mt-2 border-amber-500/40 bg-amber-500/10 text-amber-600">
+  <Alert
+    class="mx-4 mb-2 mt-2 border-amber-500/40 bg-amber-500/10 text-amber-600"
+  >
     <AlertTriangle class="size-4" />
     <AlertDescription class="text-sm">{fallbackMessage}</AlertDescription>
   </Alert>

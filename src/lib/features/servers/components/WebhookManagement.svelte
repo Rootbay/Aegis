@@ -1,13 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import {
-    Loader2,
-    Pencil,
-    Plus,
-    Save,
-    Trash2,
-    X,
-  } from "@lucide/svelte";
+  import { Loader2, Pencil, Plus, Save, Trash2, X } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import type { Webhook } from "$lib/features/servers/models/Webhook";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -32,7 +25,9 @@
   });
 
   const availableChannels = $derived(
-    (server.channels ?? []).slice().sort((a, b) => a.name.localeCompare(b.name)),
+    (server.channels ?? [])
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name)),
   );
 
   const activeWebhooks = $derived(
@@ -178,7 +173,9 @@
       </p>
     </div>
     {#if errorMessage}
-      <div class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      <div
+        class="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+      >
         {errorMessage}
       </div>
     {/if}
@@ -188,7 +185,9 @@
     class="grid gap-3 rounded-lg border border-border/60 bg-muted/40 p-4"
     onsubmit={handleCreate}
   >
-    <h4 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+    <h4
+      class="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+    >
       Create a new webhook
     </h4>
     <div class="grid gap-2 sm:grid-cols-2">
@@ -241,8 +240,12 @@
   </form>
 
   <div class="rounded-lg border border-border/60 bg-muted/30">
-    <div class="flex items-center justify-between border-b border-border/40 px-4 py-3">
-      <h4 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+    <div
+      class="flex items-center justify-between border-b border-border/40 px-4 py-3"
+    >
+      <h4
+        class="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+      >
         Existing webhooks
       </h4>
       {#if isLoading}
@@ -259,7 +262,9 @@
     {:else}
       <div class="overflow-x-auto">
         <table class="w-full min-w-[540px] text-left text-sm">
-          <thead class="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+          <thead
+            class="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground"
+          >
             <tr>
               <th class="px-4 py-3 font-medium">Name</th>
               <th class="px-4 py-3 font-medium">Channel</th>
@@ -281,9 +286,13 @@
                     />
                   {:else}
                     <div class="flex items-center gap-2">
-                      <span class="font-medium text-foreground">{webhook.name}</span>
+                      <span class="font-medium text-foreground"
+                        >{webhook.name}</span
+                      >
                       {#if webhook.pending}
-                        <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300">
+                        <span
+                          class="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300"
+                        >
                           Pending…
                         </span>
                       {/if}
@@ -324,7 +333,10 @@
                 </td>
                 <td class="px-4 py-3 align-top">
                   {#if isEditing(webhook)}
-                    <form class="flex justify-end gap-2" onsubmit={handleUpdate}>
+                    <form
+                      class="flex justify-end gap-2"
+                      onsubmit={handleUpdate}
+                    >
                       <button
                         type="submit"
                         class="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/80 disabled:opacity-70"

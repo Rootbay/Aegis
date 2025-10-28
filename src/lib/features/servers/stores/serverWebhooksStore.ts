@@ -145,9 +145,12 @@ export function createServerWebhooksStore(
     await refreshStateForServer(targetServerId);
   }
 
-  async function createWebhook(
-    input: { name: string; url: string; channelId?: string; serverId?: string },
-  ): Promise<Webhook | null> {
+  async function createWebhook(input: {
+    name: string;
+    url: string;
+    channelId?: string;
+    serverId?: string;
+  }): Promise<Webhook | null> {
     const activeServerId = input.serverId ?? getActiveServerId();
     if (!activeServerId) {
       update((state) => ({
@@ -277,7 +280,7 @@ export function createServerWebhooksStore(
                       channelId:
                         patch.channelId === undefined
                           ? webhook.channelId
-                          : patch.channelId ?? undefined,
+                          : (patch.channelId ?? undefined),
                       pending: true,
                     }
                   : webhook,
@@ -363,8 +366,8 @@ export function createServerWebhooksStore(
             }
             return {
               ...state,
-              webhooks: state.webhooks.filter((webhook) =>
-                webhook.id !== webhookId
+              webhooks: state.webhooks.filter(
+                (webhook) => webhook.id !== webhookId,
               ),
             };
           });

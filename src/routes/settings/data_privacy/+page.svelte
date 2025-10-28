@@ -62,10 +62,7 @@
   async function exportData() {
     try {
       const filePath = await invoke<string>("export_user_data");
-      toasts.addToast(
-        `Personal data export created at ${filePath}`,
-        "success",
-      );
+      toasts.addToast(`Personal data export created at ${filePath}`, "success");
     } catch (error) {
       console.error("Failed to export user data", error);
       toasts.addToast(
@@ -89,14 +86,19 @@
   }
 </script>
 
-<h2 class="text-2xl font-semibold text-zinc-50 mb-4">Data & Privacy Settings</h2>
+<h2 class="text-2xl font-semibold text-zinc-50 mb-4">
+  Data & Privacy Settings
+</h2>
 
 <div class="space-y-6">
   <div
     class="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
   >
     <div class="space-y-1">
-      <Label for="allow-data-collection" class="text-sm font-medium text-zinc-200">
+      <Label
+        for="allow-data-collection"
+        class="text-sm font-medium text-zinc-200"
+      >
         Allow data collection
       </Label>
       <p class="text-xs text-muted-foreground">
@@ -115,7 +117,10 @@
     class="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
   >
     <div class="space-y-1">
-      <Label for="personalize-experience" class="text-sm font-medium text-zinc-200">
+      <Label
+        for="personalize-experience"
+        class="text-sm font-medium text-zinc-200"
+      >
         Personalize my experience
       </Label>
       <p class="text-xs text-muted-foreground">
@@ -153,7 +158,10 @@
     class="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
   >
     <div class="space-y-1">
-      <Label for="share-usage-analytics" class="text-sm font-medium text-zinc-200">
+      <Label
+        for="share-usage-analytics"
+        class="text-sm font-medium text-zinc-200"
+      >
         Share usage analytics
       </Label>
       <p class="text-xs text-muted-foreground">
@@ -172,7 +180,10 @@
     class="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
   >
     <div class="space-y-1">
-      <Label for="share-crash-reports" class="text-sm font-medium text-zinc-200">
+      <Label
+        for="share-crash-reports"
+        class="text-sm font-medium text-zinc-200"
+      >
         Share crash diagnostics
       </Label>
       <p class="text-xs text-muted-foreground">
@@ -192,7 +203,7 @@
     <p class="text-sm text-muted-foreground mt-1">
       Download a copy of your personal data for your records.
     </p>
-    <Button class="mt-4" variant="secondary" on:click={exportData}>
+    <Button class="mt-4" variant="secondary" onclick={exportData}>
       Export my data
     </Button>
   </div>
@@ -202,11 +213,7 @@
     <p class="text-sm text-muted-foreground mt-1">
       Permanently delete your account and all associated data.
     </p>
-    <Button
-      class="mt-4"
-      variant="destructive"
-      on:click={requestAccountDeletion}
-    >
+    <Button class="mt-4" variant="destructive" onclick={requestAccountDeletion}>
       Delete my account
     </Button>
   </div>

@@ -15,7 +15,9 @@
   let errorMessage = $state<string | null>(null);
   let unbanningStates = $state<Record<string, boolean>>({});
 
-  let resolvedServerId = $derived(serverId ?? $serverStore.activeServerId ?? null);
+  let resolvedServerId = $derived(
+    serverId ?? $serverStore.activeServerId ?? null,
+  );
 
   const defaultErrorMessage = "Failed to fetch banned members.";
 
@@ -110,10 +112,14 @@
 
 <div class="space-y-4">
   <h3 class="text-xl font-semibold text-white">Ban List</h3>
-  <p class="text-muted-foreground">View and manage banned users in your server.</p>
+  <p class="text-muted-foreground">
+    View and manage banned users in your server.
+  </p>
   <div class="bg-card/50 p-4 rounded-lg space-y-3">
     {#if !resolvedServerId}
-      <p class="text-muted-foreground">Select a server to view banned members.</p>
+      <p class="text-muted-foreground">
+        Select a server to view banned members.
+      </p>
     {:else}
       {#if errorMessage}
         <p class="text-destructive text-sm">{errorMessage}</p>
@@ -124,7 +130,9 @@
       {:else if bans.length > 0}
         <ul class="space-y-2">
           {#each bans as user (user.id)}
-            <li class="flex items-center justify-between p-2 rounded-md bg-zinc-700">
+            <li
+              class="flex items-center justify-between p-2 rounded-md bg-zinc-700"
+            >
               <span class="text-white">{getDisplayName(user)}</span>
               <button
                 type="button"
@@ -142,7 +150,9 @@
           {/each}
         </ul>
       {:else}
-        <p class="text-muted-foreground">No users are banned from this server.</p>
+        <p class="text-muted-foreground">
+          No users are banned from this server.
+        </p>
       {/if}
     {/if}
   </div>

@@ -47,7 +47,8 @@
   <div>
     <h1 class="text-2xl font-semibold text-zinc-50">Content & social</h1>
     <p class="text-sm text-muted-foreground">
-      Control how others discover you and which content appears in shared spaces.
+      Control how others discover you and which content appears in shared
+      spaces.
     </p>
   </div>
 

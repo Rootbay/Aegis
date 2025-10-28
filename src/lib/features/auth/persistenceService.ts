@@ -48,7 +48,8 @@ export const authPersistenceStore: Readable<AuthPersistence> = {
 
 export const getAuthPersistence = () => get(persistence);
 
-export const setAuthPersistence = (value: AuthPersistence) => persistence.set(value);
+export const setAuthPersistence = (value: AuthPersistence) =>
+  persistence.set(value);
 
 export const updateAuthPersistence = (
   updater: (value: AuthPersistence) => AuthPersistence,

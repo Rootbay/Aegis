@@ -25,8 +25,13 @@
     onaction?: ChannelContextMenuHandler;
   };
 
-  let { x, y, channel, hideNamesEnabled = false, onaction }: ChannelContextMenuProps =
-    $props();
+  let {
+    x,
+    y,
+    channel,
+    hideNamesEnabled = false,
+    onaction,
+  }: ChannelContextMenuProps = $props();
 
   function handleAction(action: string) {
     onaction?.({ action, channelId: channel.id });

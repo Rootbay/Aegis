@@ -14,7 +14,11 @@ const mocks = vi.hoisted(() => {
       case "remove_friendship":
         return null;
       case "send_server_invite":
-        return { server_id: "server-1", user_id: "user-123", already_member: false };
+        return {
+          server_id: "server-1",
+          user_id: "user-123",
+          already_member: false,
+        };
       case "block_user":
       case "mute_user":
         return null;
@@ -254,7 +258,10 @@ describe("Detailed profile modal integration", () => {
         current_user_id: "current-user",
         target_user_id: profileUser.id,
       });
-      expect(mocks.addToast).toHaveBeenCalledWith("Friend request sent!", "success");
+      expect(mocks.addToast).toHaveBeenCalledWith(
+        "Friend request sent!",
+        "success",
+      );
     });
 
     await fireEvent.click(getByText("Message"));
@@ -298,8 +305,7 @@ describe("Detailed profile modal integration", () => {
           }),
           sourceChatId: mocks.createGroupContext.currentChat.id,
           sourceChatType: "dm",
-          sourceChatName:
-            mocks.createGroupContext.currentChat.friend.name,
+          sourceChatName: mocks.createGroupContext.currentChat.friend.name,
         }),
       );
     });

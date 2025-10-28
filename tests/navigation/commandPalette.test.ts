@@ -145,7 +145,8 @@ describe("CommandPalette", () => {
 
   it("filters commands based on the search query", async () => {
     commandPaletteStore.open();
-    const { getByPlaceholderText, queryByText, findByText } = render(CommandPalette);
+    const { getByPlaceholderText, queryByText, findByText } =
+      render(CommandPalette);
 
     const input = getByPlaceholderText("Search commands");
     await fireEvent.input(input, { target: { value: "mesh" } });

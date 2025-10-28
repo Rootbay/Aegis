@@ -81,7 +81,7 @@
     <Button
       type="button"
       variant="secondary"
-      on:click={handleScanQrCode}
+      onclick={handleScanQrCode}
       class="whitespace-nowrap"
     >
       <Scan class="size-4" />

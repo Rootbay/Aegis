@@ -49,7 +49,10 @@ describe("connectivityStore", () => {
 
     const fallbackState = get(connectivityStore);
     expect(fallbackState.fallbackActive).toBe(true);
-    expect(fallbackState.status === "offline" || fallbackState.status === "mesh-only").toBe(true);
+    expect(
+      fallbackState.status === "offline" ||
+        fallbackState.status === "mesh-only",
+    ).toBe(true);
 
     const fallbackMessage = get(connectivityStore.fallbackMessage);
     expect(fallbackMessage).toContain("Demo fallback");

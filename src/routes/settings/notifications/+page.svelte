@@ -22,16 +22,16 @@
     { value: "None", label: "None" },
   ];
 
-  let enableNotifications = $state(
-    get(settings).enableNewMessageNotifications,
-  );
+  let enableNotifications = $state(get(settings).enableNewMessageNotifications);
   let enableGroupNotifications = $state(
     get(settings).enableGroupMessageNotifications,
   );
   let notificationSound = $state(get(settings).notificationSound);
 
   const notificationSoundLabel = $derived(() => {
-    const option = soundOptions.find((item) => item.value === notificationSound);
+    const option = soundOptions.find(
+      (item) => item.value === notificationSound,
+    );
     return option ? option.label : notificationSound;
   });
 
@@ -110,10 +110,7 @@
   </section>
 
   <div class="space-y-2 max-w-xs">
-    <Label
-      for="notification-sound"
-      class="text-sm font-medium text-zinc-200"
-    >
+    <Label for="notification-sound" class="text-sm font-medium text-zinc-200">
       Notification sound
     </Label>
     <Select

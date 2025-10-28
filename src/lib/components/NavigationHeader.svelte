@@ -837,7 +837,9 @@
             {chat.friend.online ? "Online" : "Offline"}
           </p>
           {#if typingStatusLabel}
-            <p class="text-xs text-cyan-400 whitespace-nowrap">{typingStatusLabel}</p>
+            <p class="text-xs text-cyan-400 whitespace-nowrap">
+              {typingStatusLabel}
+            </p>
           {/if}
         </div>
       {:else if chat.type === "group"}

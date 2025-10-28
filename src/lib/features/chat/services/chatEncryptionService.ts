@@ -1,7 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  AttachmentPayload as BackendAttachment,
-} from "$lib/features/chat/models/AepMessage";
+import type { AttachmentPayload as BackendAttachment } from "$lib/features/chat/models/AepMessage";
 
 export interface MessageAttachmentPayload {
   name: string;
@@ -75,9 +73,7 @@ type BackendDecryptResponse = {
   was_encrypted?: boolean;
 };
 
-const ensureUint8Array = (
-  input: Uint8Array | ArrayBuffer,
-): Uint8Array => {
+const ensureUint8Array = (input: Uint8Array | ArrayBuffer): Uint8Array => {
   if (input instanceof Uint8Array) {
     return input;
   }
@@ -108,22 +104,26 @@ export async function encryptOutgoingMessagePayload(
         attachments: params.attachments.map(toSerializableAttachment),
       },
     );
-    const wasEncrypted = Boolean(response.wasEncrypted ?? response.was_encrypted);
-    const attachments = (response.attachments ?? []).map((attachment, index) => {
-      const data =
-        attachment.data && attachment.data.length > 0
-          ? new Uint8Array(attachment.data)
-          : new Uint8Array();
-      return {
-        name: attachment.name,
-        type: attachment.type ?? attachment.content_type,
-        size:
-          attachment.size ??
-          params.attachments[index]?.size ??
-          data.byteLength,
-        data,
-      } satisfies MessageAttachmentPayload;
-    });
+    const wasEncrypted = Boolean(
+      response.wasEncrypted ?? response.was_encrypted,
+    );
+    const attachments = (response.attachments ?? []).map(
+      (attachment, index) => {
+        const data =
+          attachment.data && attachment.data.length > 0
+            ? new Uint8Array(attachment.data)
+            : new Uint8Array();
+        return {
+          name: attachment.name,
+          type: attachment.type ?? attachment.content_type,
+          size:
+            attachment.size ??
+            params.attachments[index]?.size ??
+            data.byteLength,
+          data,
+        } satisfies MessageAttachmentPayload;
+      },
+    );
     return {
       content: response.content,
       attachments,
@@ -174,28 +174,34 @@ export async function decodeIncomingMessagePayload(
       },
     );
 
-    const resultAttachments = (response.attachments ?? []).map((attachment, index) => {
-      const original = attachments?.[index];
-      const bytes =
-        attachment.data && attachment.data.length > 0
-          ? new Uint8Array(attachment.data)
-          : original?.data instanceof Uint8Array
-            ? original.data
-            : original?.data instanceof ArrayBuffer
-              ? new Uint8Array(original.data)
-              : (original?.data as Uint8Array | undefined);
-      return {
-        ...(original ?? { id: undefined }),
-        name: attachment.name ?? original?.name ?? "",
-        content_type: attachment.content_type ?? attachment.type ?? original?.content_type,
-        size: attachment.size ?? original?.size ?? bytes?.byteLength,
-        data: bytes,
-      } as BackendAttachment;
-    });
+    const resultAttachments = (response.attachments ?? []).map(
+      (attachment, index) => {
+        const original = attachments?.[index];
+        const bytes =
+          attachment.data && attachment.data.length > 0
+            ? new Uint8Array(attachment.data)
+            : original?.data instanceof Uint8Array
+              ? original.data
+              : original?.data instanceof ArrayBuffer
+                ? new Uint8Array(original.data)
+                : (original?.data as Uint8Array | undefined);
+        return {
+          ...(original ?? { id: undefined }),
+          name: attachment.name ?? original?.name ?? "",
+          content_type:
+            attachment.content_type ??
+            attachment.type ??
+            original?.content_type,
+          size: attachment.size ?? original?.size ?? bytes?.byteLength,
+          data: bytes,
+        } as BackendAttachment;
+      },
+    );
 
     return {
       content: response.content,
-      attachments: resultAttachments.length > 0 ? resultAttachments : attachments,
+      attachments:
+        resultAttachments.length > 0 ? resultAttachments : attachments,
       wasEncrypted: Boolean(response.wasEncrypted ?? response.was_encrypted),
     };
   } catch (error) {

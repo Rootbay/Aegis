@@ -584,9 +584,10 @@
         }
         case "hide_names": {
           try {
-            const next = await channelDisplayPreferencesStore.toggleHideMemberNames(
-              channelId,
-            );
+            const next =
+              await channelDisplayPreferencesStore.toggleHideMemberNames(
+                channelId,
+              );
             toasts.addToast(
               next
                 ? "Member names hidden for this channel."

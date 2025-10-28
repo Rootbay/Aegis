@@ -50,10 +50,7 @@
     </div>
 
     <div class="space-y-2">
-      <Label
-        for="serverDescription"
-        class="text-sm font-medium text-zinc-300"
-      >
+      <Label for="serverDescription" class="text-sm font-medium text-zinc-300">
         Server Description
       </Label>
       <Textarea
@@ -65,9 +62,7 @@
     </div>
 
     <div class="pt-4 flex justify-end">
-      <Button class="px-5 py-2.5" onclick={saveChanges}>
-        Save Changes
-      </Button>
+      <Button class="px-5 py-2.5" onclick={saveChanges}>Save Changes</Button>
     </div>
   </div>
 </section>

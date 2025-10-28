@@ -16,12 +16,14 @@ vi.mock("$lib/stores/persistentStore", async () => {
 });
 
 const invokeMock = vi.fn<(...args: unknown[]) => unknown>();
-const addToastMock = vi.fn<
-  (msg: string, variant: "success" | "error" | "info" | string) => void
->();
-const initializeMock = vi.fn<
-  (password: string, options: { username?: string }) => Promise<void> | void
->();
+const addToastMock =
+  vi.fn<
+    (msg: string, variant: "success" | "error" | "info" | string) => void
+  >();
+const initializeMock =
+  vi.fn<
+    (password: string, options: { username?: string }) => Promise<void> | void
+  >();
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
@@ -43,30 +45,44 @@ vi.mock("$lib/stores/ToastStore", () => ({
 }));
 
 const ingestDeviceHandshakeMock = vi.fn<(raw: string) => unknown>();
-const approveDeviceHandshakeMock = vi.fn<
-  (options: unknown) => Promise<{ updatedPersistence: Record<string, unknown>; totpRequirement: boolean }>
->();
-const createDeviceHandshakeMock = vi.fn<(options: unknown) => Promise<string>>();
-const getDeviceInfoMock = vi.fn<() => Promise<{ id: string; name: string; lastUsed: string }>>();
+const approveDeviceHandshakeMock =
+  vi.fn<
+    (
+      options: unknown,
+    ) => Promise<{
+      updatedPersistence: Record<string, unknown>;
+      totpRequirement: boolean;
+    }>
+  >();
+const createDeviceHandshakeMock =
+  vi.fn<(options: unknown) => Promise<string>>();
+const getDeviceInfoMock =
+  vi.fn<() => Promise<{ id: string; name: string; lastUsed: string }>>();
 
 vi.mock("$lib/features/auth/deviceHandshakeService", () => ({
-  ingestDeviceHandshake: (...args: Parameters<typeof ingestDeviceHandshakeMock>) =>
-    ingestDeviceHandshakeMock(...args),
-  approveDeviceHandshake: (...args: Parameters<typeof approveDeviceHandshakeMock>) =>
-    approveDeviceHandshakeMock(...args),
-  createDeviceHandshake: (...args: Parameters<typeof createDeviceHandshakeMock>) =>
-    createDeviceHandshakeMock(...args),
+  ingestDeviceHandshake: (
+    ...args: Parameters<typeof ingestDeviceHandshakeMock>
+  ) => ingestDeviceHandshakeMock(...args),
+  approveDeviceHandshake: (
+    ...args: Parameters<typeof approveDeviceHandshakeMock>
+  ) => approveDeviceHandshakeMock(...args),
+  createDeviceHandshake: (
+    ...args: Parameters<typeof createDeviceHandshakeMock>
+  ) => createDeviceHandshakeMock(...args),
   getDeviceInfo: (...args: Parameters<typeof getDeviceInfoMock>) =>
     getDeviceInfoMock(...args),
 }));
 
-const configureSecurityQuestionsMock = vi.fn<(options: unknown) => Promise<void>>();
-const prepareSecurityQuestionRecoveryMock = vi.fn<
-  (options: unknown) => Promise<{ newRecoveryPhrase: string[] }>
->();
-const finalizeSecurityQuestionRecoveryMock = vi.fn<
-  (options: unknown) => Promise<{ requireTotpOnUnlock?: boolean; username?: string }>
->();
+const configureSecurityQuestionsMock =
+  vi.fn<(options: unknown) => Promise<void>>();
+const prepareSecurityQuestionRecoveryMock =
+  vi.fn<(options: unknown) => Promise<{ newRecoveryPhrase: string[] }>>();
+const finalizeSecurityQuestionRecoveryMock =
+  vi.fn<
+    (
+      options: unknown,
+    ) => Promise<{ requireTotpOnUnlock?: boolean; username?: string }>
+  >();
 
 vi.mock("$lib/features/auth/securityService", () => ({
   configureSecurityQuestions: (

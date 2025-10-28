@@ -2,26 +2,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor } from "@testing-library/svelte";
 import { get } from "svelte/store";
 
-const {
-  commandPaletteOpenMock,
-  commandPaletteCloseMock,
-  commandPaletteState,
-} = vi.hoisted(() => {
-  const { writable } = require("svelte/store");
-  const state = writable(false);
-  return {
-    commandPaletteState: state,
-    commandPaletteOpenMock: vi.fn(() => state.set(true)),
-    commandPaletteCloseMock: vi.fn(() => state.set(false)),
-  };
-});
+const { commandPaletteOpenMock, commandPaletteCloseMock, commandPaletteState } =
+  vi.hoisted(() => {
+    const { writable } = require("svelte/store");
+    const state = writable(false);
+    return {
+      commandPaletteState: state,
+      commandPaletteOpenMock: vi.fn(() => state.set(true)),
+      commandPaletteCloseMock: vi.fn(() => state.set(false)),
+    };
+  });
 
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
 vi.mock("$app/stores", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const pageStore = writable({ url: new URL("https://app.local/") });
   return { page: pageStore };
 });
@@ -31,9 +27,8 @@ vi.mock("$services/tauri", () => ({
 }));
 
 vi.mock("$lib/stores/connectivityStore", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const connectivityState = writable({
     status: "initializing",
     internetReachable: false,
@@ -71,9 +66,8 @@ vi.mock("$lib/stores/connectivityStore", async () => {
 });
 
 vi.mock("$lib/features/settings/stores/settings", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const state = writable({ enableBridgeMode: false });
   return {
     settings: { subscribe: state.subscribe },
@@ -89,10 +83,13 @@ vi.mock("$lib/features/navigation/commandPaletteStore", () => ({
 }));
 
 vi.mock("$lib/features/auth/stores/authStore", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
-  const state = writable({ status: "authenticated", loading: false, error: null });
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
+  const state = writable({
+    status: "authenticated",
+    loading: false,
+    error: null,
+  });
   return {
     authStore: {
       subscribe: state.subscribe,
@@ -102,9 +99,8 @@ vi.mock("$lib/features/auth/stores/authStore", async () => {
 });
 
 vi.mock("$lib/features/friends/stores/friendStore", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const state = writable({ friends: [], loading: false });
   return {
     friendStore: {
@@ -117,9 +113,8 @@ vi.mock("$lib/features/friends/stores/friendStore", async () => {
 });
 
 vi.mock("$lib/stores/userStore", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const state = writable({
     me: {
       id: "user-1",
@@ -136,10 +131,13 @@ vi.mock("$lib/stores/userStore", async () => {
 });
 
 vi.mock("$lib/features/servers/stores/serverStore", async () => {
-  const { writable } = await vi.importActual<typeof import("svelte/store")>(
-    "svelte/store",
-  );
-  const initialState = { servers: [], loading: false, activeServerId: null as string | null };
+  const { writable } =
+    await vi.importActual<typeof import("svelte/store")>("svelte/store");
+  const initialState = {
+    servers: [],
+    loading: false,
+    activeServerId: null as string | null,
+  };
   const state = writable(initialState);
   const initialize = vi.fn(async () => {});
   const handleServersUpdate = (servers: unknown[]) => {

@@ -119,14 +119,14 @@
       </div>
       <AlertDialogFooter class="gap-2 sm:gap-0">
         <AlertDialogCancel
-          on:click={handleReject}
+          onclick={handleReject}
           disabled={actionInFlight === "approve"}
         >
           Deny
         </AlertDialogCancel>
         <AlertDialogAction
           class="min-w-[6rem]"
-          on:click={handleApprove}
+          onclick={handleApprove}
           disabled={actionInFlight === "reject"}
         >
           {actionInFlight === "approve" ? "Approving…" : "Approve"}

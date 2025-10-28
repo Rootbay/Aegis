@@ -24,7 +24,10 @@ describe("buildLowercaseContent", () => {
 
     const cachedFirst = cache.get("1");
     const cachedSecond = cache.get("2");
-    expect(cachedFirst).toMatchObject({ original: "Hello World", lower: "hello world" });
+    expect(cachedFirst).toMatchObject({
+      original: "Hello World",
+      lower: "hello world",
+    });
     expect(cachedSecond).toMatchObject({
       original: "Second MESSAGE",
       lower: "second message",
@@ -52,7 +55,10 @@ describe("buildLowercaseContent", () => {
     const normalized = buildLowercaseContent(updated, cache);
     expect(normalized).toEqual(["changed", "new"]);
 
-    expect(cache.get("1")).toMatchObject({ original: "Changed", lower: "changed" });
+    expect(cache.get("1")).toMatchObject({
+      original: "Changed",
+      lower: "changed",
+    });
     expect(cache.has("2")).toBe(false);
     expect(cache.get("3")).toMatchObject({ original: "New", lower: "new" });
   });

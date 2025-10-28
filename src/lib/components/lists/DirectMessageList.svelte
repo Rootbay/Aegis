@@ -34,7 +34,10 @@
   import { Badge } from "$lib/components/ui/badge";
   import type { DirectMessageListEntry } from "$lib/features/chat/stores/directMessageRoster";
 
-  type SelectChatHandler = (chatId: string | null, type?: "dm" | "group") => void;
+  type SelectChatHandler = (
+    chatId: string | null,
+    type?: "dm" | "group",
+  ) => void;
 
   let {
     entries = [],
@@ -61,7 +64,9 @@
   let sortedEntries = $derived(() => {
     const list = [...entries];
     list.sort((a, b) => {
-      const diff = timestampToNumber(b.lastActivityAt) - timestampToNumber(a.lastActivityAt);
+      const diff =
+        timestampToNumber(b.lastActivityAt) -
+        timestampToNumber(a.lastActivityAt);
       if (diff !== 0) {
         return diff;
       }
@@ -132,7 +137,10 @@
       }
     } catch (error: any) {
       console.error("Failed to toggle mute:", error);
-      toasts.addToast(error?.message ?? "Failed to update mute status.", "error");
+      toasts.addToast(
+        error?.message ?? "Failed to update mute status.",
+        "error",
+      );
     }
   }
 
@@ -225,6 +233,9 @@
       <div class="space-y-1 pb-4">
         {#each sortedEntries as entry (entry.id)}
           {#if entry.type === "dm" && entry.friend}
+            {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
+              fallback: null,
+            })}
             <ContextMenu>
               <ContextMenuTrigger>
                 <Button
@@ -250,9 +261,6 @@
                   <div class="min-w-0 flex-1">
                     <div class="flex items-baseline justify-between gap-2">
                       <p class="font-semibold truncate">{entry.name}</p>
-                      {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
-                        fallback: null,
-                      })}
                       {#if timestampLabel}
                         <p class="shrink-0 text-xs text-muted-foreground">
                           {timestampLabel}
@@ -294,21 +302,25 @@
               </ContextMenuContent>
             </ContextMenu>
           {:else if entry.type === "group"}
+            {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
+              fallback: null,
+            })}
+            {@const memberCount =
+              entry.memberCount ?? entry.memberIds?.length ?? 0}
             <Button
               variant="ghost"
               class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
               data-active={activeChatId === entry.id}
               onclick={() => onSelect(entry.id, "group")}
             >
-              <div class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
+              >
                 <Users size={16} />
               </div>
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline justify-between gap-2">
                   <p class="font-semibold truncate">{entry.name}</p>
-                  {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
-                    fallback: null,
-                  })}
                   {#if timestampLabel}
                     <p class="shrink-0 text-xs text-muted-foreground">
                       {timestampLabel}
@@ -316,9 +328,9 @@
                   {/if}
                 </div>
                 <div class="mt-1 flex items-center gap-2">
-                  {@const memberCount = entry.memberCount ?? entry.memberIds?.length ?? 0}
                   <p class="text-xs text-muted-foreground truncate flex-1">
-                    {entry.lastMessageText ?? `${memberCount} member${memberCount === 1 ? "" : "s"}`}
+                    {entry.lastMessageText ??
+                      `${memberCount} member${memberCount === 1 ? "" : "s"}`}
                   </p>
                   {#if entry.unreadCount > 0}
                     <Badge
@@ -375,7 +387,9 @@
                     </div>
                     <div class="min-w-0 flex-1">
                       <p class="font-semibold truncate">{friend.name}</p>
-                      <p class="text-xs text-muted-foreground">Direct Message</p>
+                      <p class="text-xs text-muted-foreground">
+                        Direct Message
+                      </p>
                     </div>
                   </Button>
                 {/if}

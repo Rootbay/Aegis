@@ -23,12 +23,12 @@
     () => props.friends ?? friendsLayoutContext?.friends ?? [],
   );
 
-  const loading = $derived.by(() =>
-    props.loading ?? friendsLayoutContext?.loading ?? false,
+  const loading = $derived.by(
+    () => props.loading ?? friendsLayoutContext?.loading ?? false,
   );
 
-  const activeTab = $derived.by(() =>
-    props.activeTab ?? friendsLayoutContext?.activeTab ?? "All",
+  const activeTab = $derived.by(
+    () => props.activeTab ?? friendsLayoutContext?.activeTab ?? "All",
   );
 
   type FriendsListHeader = { kind: "header"; status: string; count: number };

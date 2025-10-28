@@ -21,7 +21,7 @@
     hasMoreByChatId,
     loadingStateByChat,
   } from "$lib/features/chat/stores/chatStore";
-  import { afterUpdate, getContext, onDestroy, onMount, tick } from "svelte";
+  import { getContext, onDestroy, onMount, tick } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { generateCollaborationDocumentId } from "$lib/features/collaboration/collabDocumentStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
@@ -283,7 +283,7 @@
     }
   });
 
-  afterUpdate(() => {
+  $effect(() => {
     if (viewportEl && !viewportEl.isConnected) {
       attachViewportElement(null);
     }
@@ -387,8 +387,14 @@
       base.push({ label: "Invite to Server", action: "invite_to_server" });
     }
     base.push(
-      { label: "Share Collaborative Document", action: "open_collaboration_document" },
-      { label: "Open Shared Whiteboard", action: "open_collaboration_whiteboard" },
+      {
+        label: "Share Collaborative Document",
+        action: "open_collaboration_document",
+      },
+      {
+        label: "Open Shared Whiteboard",
+        action: "open_collaboration_whiteboard",
+      },
     );
     contextMenuItems = base;
   });
@@ -808,7 +814,10 @@
       return;
     }
 
-    const { files, duplicates } = mergeAttachments(attachedFiles, filesToProcess);
+    const { files, duplicates } = mergeAttachments(
+      attachedFiles,
+      filesToProcess,
+    );
     attachedFiles = files;
 
     if (duplicates > 0) {
@@ -1194,7 +1203,9 @@
                         </span>
                       </p>
                       {#if msg.spamReasons?.length}
-                        <ul class="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                        <ul
+                          class="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground"
+                        >
                           {#each msg.spamReasons as reason, idx (idx)}
                             <li>{reason}</li>
                           {/each}
@@ -1361,7 +1372,9 @@
                     </div>
                   {/if}
                   {#if !msg.pending}
-                    <p class="mt-1 text-[0.625rem] uppercase tracking-wide text-muted-foreground/80">
+                    <p
+                      class="mt-1 text-[0.625rem] uppercase tracking-wide text-muted-foreground/80"
+                    >
                       {isMe
                         ? msg.read
                           ? "Read by recipient"

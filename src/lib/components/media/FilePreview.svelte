@@ -92,7 +92,8 @@
     if (!bytes || Number.isNaN(bytes)) return "";
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    if (bytes < 1024 * 1024 * 1024)
+      return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
   }
 
@@ -241,7 +242,9 @@
         <div class="flex-grow overflow-hidden">
           <p class="text-sm text-white truncate">{attachment.name}</p>
           {#if attachment.size}
-            <p class="text-xs text-muted-foreground">{formatBytes(attachment.size)}</p>
+            <p class="text-xs text-muted-foreground">
+              {formatBytes(attachment.size)}
+            </p>
           {/if}
           {#if attachment.loadError}
             <p class="text-xs text-destructive">

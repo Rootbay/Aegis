@@ -18,7 +18,9 @@
   } = $props();
 
   let removalStates = $state<Record<string, boolean>>({});
-  let resolvedServerId = $derived(serverId ?? $serverStore.activeServerId ?? null);
+  let resolvedServerId = $derived(
+    serverId ?? $serverStore.activeServerId ?? null,
+  );
 
   function openMemberCard(member: User, event: MouseEvent | KeyboardEvent) {
     let x = 0;

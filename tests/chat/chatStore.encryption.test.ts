@@ -112,13 +112,10 @@ describe("chatStore encrypted messaging", () => {
       () => `blob:mock-${Math.random().toString(16).slice(2)}`,
     );
     revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal(
-      "URL",
-      {
-        createObjectURL: createObjectURLSpy,
-        revokeObjectURL: revokeObjectURLSpy,
-      } as unknown as typeof URL,
-    );
+    vi.stubGlobal("URL", {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
     encryptionMocks.encryptMock.mockClear();
@@ -259,7 +256,11 @@ describe("chatStore encrypted messaging", () => {
     });
     await store.setActiveChat("friend-attachments", "dm");
 
-    const file = createMockFile([5, 6], "fallback.bin", "application/octet-stream");
+    const file = createMockFile(
+      [5, 6],
+      "fallback.bin",
+      "application/octet-stream",
+    );
     await store.sendMessageWithAttachments("Attachment fallback", [file]);
 
     expect(invokeMock).toHaveBeenCalledWith(
@@ -274,7 +275,11 @@ describe("chatStore encrypted messaging", () => {
 
   it("removes optimistic entries when attachment encryption fails", async () => {
     const store = await setupDmStore();
-    const file = createMockFile([9, 9, 9], "boom.bin", "application/octet-stream");
+    const file = createMockFile(
+      [9, 9, 9],
+      "boom.bin",
+      "application/octet-stream",
+    );
     encryptionMocks.encryptMock.mockRejectedValueOnce(new Error("boom"));
 
     await expect(

@@ -14,7 +14,8 @@
     execute: { command: CommandPaletteCommand };
   }>();
 
-  const { isOpen, query, filteredCommands, highlightedIndex } = commandPaletteStore;
+  const { isOpen, query, filteredCommands, highlightedIndex } =
+    commandPaletteStore;
 
   let searchInput: HTMLInputElement | null = null;
   let dialogElement: HTMLDivElement | null = null;
@@ -27,7 +28,10 @@
     }> = [];
     const map = new Map<
       CommandPaletteSection,
-      { title: CommandPaletteSection; items: Array<{ command: CommandPaletteCommand; index: number }> }
+      {
+        title: CommandPaletteSection;
+        items: Array<{ command: CommandPaletteCommand; index: number }>;
+      }
     >();
     let index = 0;
     for (const command of commands) {
@@ -140,7 +144,7 @@
   <div
     class="fixed inset-0 z-[60] flex items-start justify-center bg-background/80 backdrop-blur-sm p-4"
     role="presentation"
-    on:click={handleBackdropClick}
+    onclick={handleBackdropClick}
   >
     <div
       bind:this={dialogElement}
@@ -151,12 +155,16 @@
       aria-hidden="true"
       class="w-full max-w-2xl rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
       tabindex="-1"
-      on:keydown={handleDialogKeydown}
+      onkeydown={handleDialogKeydown}
     >
       <div class="flex items-center border-b border-border px-4 py-3">
-        <label class="flex flex-1 items-center gap-2" for="command-palette-search">
+        <label
+          class="flex flex-1 items-center gap-2"
+          for="command-palette-search"
+        >
           <Search class="size-4 text-muted-foreground" aria-hidden="true" />
-          <span id="command-palette-title" class="sr-only">Command palette</span>
+          <span id="command-palette-title" class="sr-only">Command palette</span
+          >
           <input
             bind:this={searchInput}
             id="command-palette-search"
@@ -165,7 +173,7 @@
             placeholder="Search commands"
             autocomplete="off"
             value={$query}
-            on:input={handleInput}
+            oninput={handleInput}
             role="combobox"
             aria-expanded="true"
             aria-autocomplete="list"
@@ -177,7 +185,7 @@
           type="button"
           class="ml-2 inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={$query.length ? "Clear search" : "Close command palette"}
-          on:click={handleClear}
+          onclick={handleClear}
         >
           <X class="size-4" aria-hidden="true" />
         </button>
@@ -186,7 +194,9 @@
         Use arrow keys to navigate, Enter to execute, Escape to close.
       </p>
       {#if groupedCommands.length === 0}
-        <div class="px-4 py-6 text-sm text-muted-foreground">No commands found.</div>
+        <div class="px-4 py-6 text-sm text-muted-foreground">
+          No commands found.
+        </div>
       {:else}
         <div class="max-h-[60vh] overflow-y-auto px-2 py-2" role="presentation">
           <ul
@@ -194,10 +204,11 @@
             role="listbox"
             aria-labelledby="command-palette-title"
             class="flex flex-col gap-2"
-            on:mousedown|preventDefault
           >
             {#each groupedCommands as group (group.title)}
-              <li class="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <li
+                class="px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+              >
                 {group.title}
               </li>
               {#each group.items as item (item.command.id)}
@@ -207,10 +218,12 @@
                     id={toDomId(item.command.id)}
                     role="option"
                     aria-selected={item.index === $highlightedIndex}
-                    data-active={item.index === $highlightedIndex ? "true" : undefined}
+                    data-active={item.index === $highlightedIndex
+                      ? "true"
+                      : undefined}
                     class="flex w-full flex-col items-start gap-1 rounded-lg px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-muted/60 hover:text-foreground data-[active=true]:bg-accent data-[active=true]:text-accent-foreground"
-                    on:click={() => handleOptionClick(item.index)}
-                    on:mouseenter={() => handleOptionMouseEnter(item.index)}
+                    onclick={() => handleOptionClick(item.index)}
+                    onmouseenter={() => handleOptionMouseEnter(item.index)}
                   >
                     <span class="font-medium">{item.command.label}</span>
                     {#if item.command.description}

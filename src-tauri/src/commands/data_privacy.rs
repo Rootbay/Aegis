@@ -1,6 +1,7 @@
 use chrono::Utc;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use tauri::Manager;
 
 #[tauri::command]
 pub async fn export_user_data(app: tauri::AppHandle) -> Result<String, String> {

@@ -102,7 +102,9 @@ type PageState = {
     initialContent?: string;
     kind?: CollaborationSessionKind;
   }) => void;
-  readonly openCollaborativeWhiteboard: (options?: { documentId?: string }) => void;
+  readonly openCollaborativeWhiteboard: (options?: {
+    documentId?: string;
+  }) => void;
   readonly messagesByChatId: typeof messagesByChatId;
 };
 
@@ -303,11 +305,10 @@ export function createAppController(): AppController {
     openModal("collaborationDocument", options);
   };
 
-  const openCollaborativeWhiteboard: PageState["openCollaborativeWhiteboard"] = (
-    options = {},
-  ) => {
-    openModal("collaborationWhiteboard", options);
-  };
+  const openCollaborativeWhiteboard: PageState["openCollaborativeWhiteboard"] =
+    (options = {}) => {
+      openModal("collaborationWhiteboard", options);
+    };
 
   const handleFriendsTabSelect = (tab: string) => {
     const url = new URL(get(page).url);

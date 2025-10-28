@@ -7,12 +7,7 @@
   import type { ActiveCall } from "$lib/features/calls/stores/callStore";
   import { describeCallStatus } from "$lib/features/calls/stores/callStore";
 
-  let {
-    call,
-    onLeave,
-    onDismiss,
-    onOpenModal,
-  } = $props<{
+  let { call, onLeave, onDismiss, onOpenModal } = $props<{
     call: ActiveCall;
     onLeave: () => void;
     onDismiss: () => void;
@@ -63,11 +58,17 @@
 
   const statusLabel = $derived(describeCallStatus(call));
   const isActive = $derived(
-    call.status === "connecting" || call.status === "in-call" || call.status === "initializing",
+    call.status === "connecting" ||
+      call.status === "in-call" ||
+      call.status === "initializing",
   );
   const isError = $derived(call.status === "error");
-  const canDismiss = $derived(call.status === "ended" || call.status === "error");
-  const directionLabel = $derived(call.direction === "incoming" ? "Incoming" : "Outgoing");
+  const canDismiss = $derived(
+    call.status === "ended" || call.status === "error",
+  );
+  const directionLabel = $derived(
+    call.direction === "incoming" ? "Incoming" : "Outgoing",
+  );
 </script>
 
 <div
@@ -81,7 +82,9 @@
       {statusLabel}
     </p>
     {#if call.status === "in-call" && call.connectedAt}
-      <p class="text-xs text-muted-foreground">Duration {formatDuration(duration)}</p>
+      <p class="text-xs text-muted-foreground">
+        Duration {formatDuration(duration)}
+      </p>
     {:else if canDismiss && call.endReason}
       <p class="text-xs text-muted-foreground">{call.endReason}</p>
     {:else if isError && call.error}

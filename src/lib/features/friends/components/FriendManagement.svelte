@@ -19,7 +19,11 @@
 
   function findFriendByFriendship(friendshipId: string) {
     if (!friendshipId) return null;
-    return friendState.friends.find((friend) => friend.friendshipId === friendshipId) ?? null;
+    return (
+      friendState.friends.find(
+        (friend) => friend.friendshipId === friendshipId,
+      ) ?? null
+    );
   }
 
   async function allowFlaggedFriend(friend: Friend) {
@@ -148,7 +152,9 @@
           >
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p class="text-sm font-semibold text-foreground">{friend.name}</p>
+                <p class="text-sm font-semibold text-foreground">
+                  {friend.name}
+                </p>
                 <p class="text-xs text-muted-foreground">
                   Score: {(friend.spamScore ?? 0).toFixed(2)}
                 </p>
@@ -160,7 +166,9 @@
               </span>
             </div>
             {#if friend.spamReasons?.length}
-              <ul class="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+              <ul
+                class="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground"
+              >
                 {#each friend.spamReasons as reason, idx (idx)}
                   <li>{reason}</li>
                 {/each}

@@ -76,7 +76,7 @@
   </div>
 
   <p class="text-xs text-muted-foreground">
-    Current selection: {selectedLabel ?? "System default"}. Some translations may
-    still be in progress across community-provided locales.
+    Current selection: {selectedLabel ?? "System default"}. Some translations
+    may still be in progress across community-provided locales.
   </p>
 </div>

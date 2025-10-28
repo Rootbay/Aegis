@@ -13,7 +13,9 @@ const {
   subscribeToServerStore,
   setActiveServer,
 } = vi.hoisted(() => {
-  const handlers = new Set<(value: { activeServerId: string | null }) => void>();
+  const handlers = new Set<
+    (value: { activeServerId: string | null }) => void
+  >();
   const state = { activeServerId: null as string | null };
   return {
     fetchMock: vi.fn(),
@@ -52,7 +54,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
 
 describe("serverWebhooksStore", () => {
   let store: ServerWebhooksStore;
-  const success = <T,>(data: T) => ({ success: true as const, data });
+  const success = <T>(data: T) => ({ success: true as const, data });
   const failure = (error: string) => ({ success: false as const, error });
 
   beforeEach(() => {

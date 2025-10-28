@@ -58,13 +58,10 @@ describe("chatStore message editing", () => {
       () => `blob:mock-${Math.random().toString(16).slice(2)}`,
     );
     revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal(
-      "URL",
-      {
-        createObjectURL: createObjectURLSpy,
-        revokeObjectURL: revokeObjectURLSpy,
-      } as unknown as typeof URL,
-    );
+    vi.stubGlobal("URL", {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (command, payload) => {
@@ -163,13 +160,10 @@ describe("chatStore metadata derivations", () => {
       () => `blob:mock-${Math.random().toString(16).slice(2)}`,
     );
     revokeObjectURLSpy = vi.fn();
-    vi.stubGlobal(
-      "URL",
-      {
-        createObjectURL: createObjectURLSpy,
-        revokeObjectURL: revokeObjectURLSpy,
-      } as unknown as typeof URL,
-    );
+    vi.stubGlobal("URL", {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
     invokeMock.mockResolvedValue(undefined);

@@ -88,7 +88,7 @@ pub struct DecryptChatPayloadResponse {
     pub was_encrypted: bool,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ReadReceiptEventPayload {
     #[serde(rename = "chatId")]
     pub chat_id: String,
@@ -99,7 +99,7 @@ pub struct ReadReceiptEventPayload {
     pub timestamp: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct TypingIndicatorEventPayload {
     #[serde(rename = "chatId")]
     pub chat_id: String,

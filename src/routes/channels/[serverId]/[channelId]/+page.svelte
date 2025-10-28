@@ -21,7 +21,9 @@
     if ($activeChatType === "server") {
       const server = $serverStore.servers.find((s) => s.id === $activeChatId);
       if (server && server.channels) {
-        const channel = server.channels.find((c) => c.id === $activeServerChannelId);
+        const channel = server.channels.find(
+          (c) => c.id === $activeServerChannelId,
+        );
         if (channel) {
           const messages =
             ($messagesByChatId.get(channel.id) as Message[] | undefined) ?? [];

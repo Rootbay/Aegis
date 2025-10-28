@@ -52,7 +52,9 @@ describe("serverStore invites", () => {
     invites: [],
   };
 
-  const createInvite = (overrides: Partial<ServerInvite> = {}): ServerInvite => ({
+  const createInvite = (
+    overrides: Partial<ServerInvite> = {},
+  ): ServerInvite => ({
     id: "invite-1",
     serverId: baseServer.id,
     code: "code-123",

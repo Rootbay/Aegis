@@ -1955,7 +1955,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         newMessage.spamDecision = newMessage.spamDecision ?? "muted";
       }
 
-      if (typeof decoded.content === "string" && decoded.content.trim().length > 0) {
+      if (
+        typeof decoded.content === "string" &&
+        decoded.content.trim().length > 0
+      ) {
         try {
           const classification = await spamClassifier.scoreText(
             decoded.content,
@@ -1986,7 +1989,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
               }
             }
           } else {
-            if (classification.flagged && newMessage.spamDecision !== "allowed") {
+            if (
+              classification.flagged &&
+              newMessage.spamDecision !== "allowed"
+            ) {
               newMessage.spamDecision =
                 newMessage.spamDecision ?? (existingMute ? "muted" : "flagged");
               suppressedBySpam = true;

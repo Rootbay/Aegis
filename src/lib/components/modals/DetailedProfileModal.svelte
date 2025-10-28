@@ -455,10 +455,13 @@
     if (!selectedServerId || !profileUser?.id) return;
     sendingInvite = true;
     try {
-      const result = await invoke<SendServerInviteResult>("send_server_invite", {
-        server_id: selectedServerId,
-        user_id: profileUser.id,
-      });
+      const result = await invoke<SendServerInviteResult>(
+        "send_server_invite",
+        {
+          server_id: selectedServerId,
+          user_id: profileUser.id,
+        },
+      );
       if (!result.already_member) {
         await serverStore.fetchServerDetails(result.server_id);
       }
@@ -500,7 +503,10 @@
           role="button"
           tabindex={profileUser.bannerUrl ? 0 : -1}
           onclick={(event) => {
-            if (event.target instanceof HTMLElement && event.target.closest("button")) {
+            if (
+              event.target instanceof HTMLElement &&
+              event.target.closest("button")
+            ) {
               return;
             }
             if (profileUser.bannerUrl) {
@@ -530,7 +536,8 @@
             <button
               type="button"
               class="p-0 m-0 border-none bg-transparent cursor-pointer rounded-full focus:outline-none focus:ring-2 focus:ring-primary"
-              onclick={() => profileUser.avatar && openLightbox(profileUser.avatar)}
+              onclick={() =>
+                profileUser.avatar && openLightbox(profileUser.avatar)}
               aria-label={`View ${profileUser.name || "user"}'s avatar`}
             >
               <img
@@ -548,7 +555,9 @@
 
         <div class="px-6 py-8">
           <h2 class="text-xl font-bold">{profileUser.name}</h2>
-          <div class="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+          <div
+            class="flex items-center gap-2 text-sm text-muted-foreground mb-2"
+          >
             <span>{profileUser.tag || `@${profileUser.name}`}</span>
             <Button
               variant="ghost"
@@ -570,22 +579,29 @@
 
           <div class="flex gap-2 mb-4">
             {#if isMyProfile}
-              <Button onclick={editProfile}><Plus class="mr-2 h-4 w-4" /> Edit Profile</Button>
+              <Button onclick={editProfile}
+                ><Plus class="mr-2 h-4 w-4" /> Edit Profile</Button
+              >
             {:else if isFriend}
-              <Button onclick={sendMessage}><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
+              <Button onclick={sendMessage}
+                ><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button
+              >
               <Button variant="destructive" size="icon" onclick={removeFriend}
                 ><Trash class="h-4 w-4" /></Button
               >
             {:else}
-              <Button onclick={addFriend}><Plus class="mr-2 h-4 w-4" /> Add Friend</Button>
-              <Button onclick={sendMessage}><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button>
+              <Button onclick={addFriend}
+                ><Plus class="mr-2 h-4 w-4" /> Add Friend</Button
+              >
+              <Button onclick={sendMessage}
+                ><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button
+              >
             {/if}
             <Button
               variant="ghost"
               size="icon"
               aria-label="More options"
-              onclick={handleMoreOptions}
-            ><Ellipsis class="h-4 w-4" /></Button
+              onclick={handleMoreOptions}><Ellipsis class="h-4 w-4" /></Button
             >
           </div>
 
@@ -623,7 +639,9 @@
 
           <TabsContent value="friends">
             {#if loadingMutualFriends}
-              <p class="text-sm text-muted-foreground">Loading mutual friends...</p>
+              <p class="text-sm text-muted-foreground">
+                Loading mutual friends...
+              </p>
             {:else if mutualFriends.length === 0}
               <p class="text-sm text-muted-foreground">No mutual friends.</p>
             {:else}
@@ -647,7 +665,9 @@
 
           <TabsContent value="servers">
             {#if loadingMutualServers}
-              <p class="text-sm text-muted-foreground">Loading mutual servers...</p>
+              <p class="text-sm text-muted-foreground">
+                Loading mutual servers...
+              </p>
             {:else if mutualServers.length === 0}
               <p class="text-sm text-muted-foreground">No mutual servers.</p>
             {:else}
@@ -668,7 +688,9 @@
 
           <TabsContent value="groups">
             {#if loadingMutualGroups}
-              <p class="text-sm text-muted-foreground">Loading mutual groups...</p>
+              <p class="text-sm text-muted-foreground">
+                Loading mutual groups...
+              </p>
             {:else if mutualGroups.length === 0}
               <p class="text-sm text-muted-foreground">No mutual groups.</p>
             {:else}
@@ -737,14 +759,19 @@
               </Button>
             </DialogFooter>
           {:else}
-            <div class="flex items-start justify-between rounded-lg border border-border p-4 bg-muted/40">
+            <div
+              class="flex items-start justify-between rounded-lg border border-border p-4 bg-muted/40"
+            >
               <div class="pr-4">
                 <h3 class="text-sm font-semibold">Invite to Server</h3>
                 <p class="text-sm text-muted-foreground">
                   Send {profileUser.name} an invite to one of your servers.
                 </p>
               </div>
-              <Button onclick={openInvitePicker} disabled={servers.length === 0}>
+              <Button
+                onclick={openInvitePicker}
+                disabled={servers.length === 0}
+              >
                 Invite
               </Button>
             </div>
