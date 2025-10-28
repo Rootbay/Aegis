@@ -120,6 +120,7 @@ async fn fetch_public_key_for_user(db_pool: &Pool<Sqlite>, user_id: &str) -> Res
 
 pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, state: AppState) -> Result<(), AegisError> {
     match message {
+        AepMessage::CollaborationUpdate { .. } => Ok(()),
         AepMessage::ChatMessage {
             id,
             timestamp,

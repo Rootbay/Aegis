@@ -5,6 +5,7 @@ import type {
   GroupModalOptions,
   ReportUserModalPayload,
 } from "$lib/features/chat/utils/contextMenu";
+import type { CollaborationSessionKind } from "$lib/features/collaboration/collabDocumentStore";
 
 export interface CreateGroupContext {
   currentChat: Chat | null;
@@ -17,6 +18,12 @@ export interface CreateGroupContext {
   openDetailedProfileModal: (user: User) => void;
   openCreateGroupModal: (options?: GroupModalOptions) => void;
   openReportUserModal: (payload: ReportUserModalPayload) => void;
+  openCollaborativeDocumentModal: (options?: {
+    documentId?: string;
+    initialContent?: string;
+    kind?: CollaborationSessionKind;
+  }) => void;
+  openCollaborativeWhiteboard: (options?: { documentId?: string }) => void;
 }
 export interface FriendsLayoutContext {
   friends: Friend[];

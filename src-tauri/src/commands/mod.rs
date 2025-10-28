@@ -1,5 +1,6 @@
 pub mod calls;
 pub mod chats;
+pub mod collaboration;
 pub mod connectivity;
 pub mod data_privacy;
 pub mod files;

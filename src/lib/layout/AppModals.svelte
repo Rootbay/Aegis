@@ -5,6 +5,8 @@
   import ServerManagementModal from "$lib/components/modals/ServerManagementModal.svelte";
   import DetailedProfileModal from "$lib/components/modals/DetailedProfileModal.svelte";
   import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
+  import CollaborativeDocumentModal from "$lib/features/collaboration/components/CollaborativeDocumentModal.svelte";
+  import CollaborativeWhiteboard from "$lib/features/collaboration/components/CollaborativeWhiteboard.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { AppModalType } from "./createAppController";
@@ -66,6 +68,16 @@
       isPinned: Boolean(user.isPinned),
     })),
   );
+
+  const collaborationDocumentProps = modalProps as Partial<{
+    documentId: string;
+    initialContent: string;
+    kind: import("$lib/features/collaboration/collabDocumentStore").CollaborationSessionKind;
+  }>;
+
+  const collaborationWhiteboardProps = modalProps as Partial<{
+    documentId: string;
+  }>;
 </script>
 
 {#if activeModal === "createGroup"}
@@ -110,4 +122,20 @@
 
 {#if activeModal === "reportUser"}
   <ReportUserModal onclose={closeModal} payload={reportUserModalPayload} />
+{/if}
+
+{#if activeModal === "collaborationDocument"}
+  <CollaborativeDocumentModal
+    onclose={closeModal}
+    documentId={collaborationDocumentProps?.documentId}
+    initialContent={collaborationDocumentProps?.initialContent}
+    kind={collaborationDocumentProps?.kind}
+  />
+{/if}
+
+{#if activeModal === "collaborationWhiteboard"}
+  <CollaborativeWhiteboard
+    onclose={closeModal}
+    documentId={collaborationWhiteboardProps?.documentId}
+  />
 {/if}
