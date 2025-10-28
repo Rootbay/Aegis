@@ -16,7 +16,9 @@ use e2ee;
 use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
 use tokio::sync::mpsc::Sender as TokioSender;
 
-use crate::commands::messages::{ReadReceiptEventPayload, TypingIndicatorEventPayload};
+use crate::commands::messages::{
+    EncryptedDmPayload, ReadReceiptEventPayload, TypingIndicatorEventPayload,
+};
 use crate::connectivity::spawn_connectivity_task;
 
 const MAX_OUTBOX_MESSAGES: usize = 256;
@@ -658,17 +660,50 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             };
                                                             if let Some(plaintext) = plaintext_opt {
                                                                 let chat_id = sender.clone();
-                                                            let new_message = database::Message {
-                                                                id: uuid::Uuid::new_v4().to_string(),
-                                                                chat_id,
-                                                                sender_id: sender.clone(),
-                                                                content: String::from_utf8_lossy(&plaintext).to_string(),
-                                                                timestamp: chrono::Utc::now(),
-                                                                read: false,
-                                                                attachments: Vec::new(),
-                                                                reactions: std::collections::HashMap::new(),
-                                                                expires_at: None,
-                                                            };
+                                                                let message_id = uuid::Uuid::new_v4().to_string();
+                                                                let timestamp = chrono::Utc::now();
+                                                                let mut db_attachments = Vec::new();
+                                                                let content = if let Ok(payload) = bincode::deserialize::<EncryptedDmPayload>(&plaintext) {
+                                                                    for descriptor in payload.attachments.into_iter() {
+                                                                        if descriptor.data.is_empty() {
+                                                                            continue;
+                                                                        }
+                                                                        let data_len = descriptor.data.len() as u64;
+                                                                        let effective_size = if descriptor.size == 0 { data_len } else { descriptor.size };
+                                                                        let sanitized_size = if effective_size == data_len {
+                                                                            effective_size
+                                                                        } else {
+                                                                            data_len
+                                                                        };
+                                                                        let attachment_id = uuid::Uuid::new_v4().to_string();
+                                                                        db_attachments.push(database::Attachment {
+                                                                            id: attachment_id,
+                                                                            message_id: message_id.clone(),
+                                                                            name: descriptor.name.clone(),
+                                                                            content_type: descriptor.content_type.clone(),
+                                                                            size: sanitized_size,
+                                                                            data: Some(descriptor.data),
+                                                                        });
+                                                                    }
+                                                                    payload.content
+                                                                } else {
+                                                                    match String::from_utf8(plaintext.clone()) {
+                                                                        Ok(text) => text,
+                                                                        Err(_) => String::from_utf8_lossy(&plaintext).to_string(),
+                                                                    }
+                                                                };
+
+                                                                let new_message = database::Message {
+                                                                    id: message_id,
+                                                                    chat_id,
+                                                                    sender_id: sender.clone(),
+                                                                    content,
+                                                                    timestamp,
+                                                                    read: false,
+                                                                    attachments: db_attachments,
+                                                                    reactions: std::collections::HashMap::new(),
+                                                                    expires_at: None,
+                                                                };
                                                                 if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                             }
                                                         }

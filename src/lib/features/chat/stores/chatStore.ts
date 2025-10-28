@@ -1626,16 +1626,33 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       newMessage,
     ]);
 
+    let encryptedFailed = false;
     try {
       if (type === "dm") {
-        await invoke("send_direct_message_with_attachments", {
-          message: contentForSend,
-          recipientId: chatId,
-          recipient_id: chatId,
-          expiresAt: optimisticExpiresAt,
-          expires_at: optimisticExpiresAt,
-          attachments: attachmentsForSend,
-        });
+        try {
+          await invoke("send_encrypted_dm_with_attachments", {
+            message: contentForSend,
+            recipientId: chatId,
+            recipient_id: chatId,
+            expiresAt: optimisticExpiresAt,
+            expires_at: optimisticExpiresAt,
+            attachments: attachmentsForSend,
+          });
+        } catch (error) {
+          encryptedFailed = true;
+          console.warn(
+            "Encrypted attachment send failed, attempting plaintext fallback",
+            error,
+          );
+          await invoke("send_direct_message_with_attachments", {
+            message: contentForSend,
+            recipientId: chatId,
+            recipient_id: chatId,
+            expiresAt: optimisticExpiresAt,
+            expires_at: optimisticExpiresAt,
+            attachments: attachmentsForSend,
+          });
+        }
       } else {
         await invoke("send_message_with_attachments", {
           message: contentForSend,
@@ -1652,6 +1669,14 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       console.error("Failed to send message with attachments:", error);
       updateMessagesForChat(messageChatId, (existing) =>
         existing.filter((msg) => msg.id !== tempId),
+      );
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
+    if (encryptedFailed) {
+      console.info(
+        "Sent plaintext attachments after encryption fallback for",
+        messageChatId,
       );
     }
   };
