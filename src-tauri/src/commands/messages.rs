@@ -2,7 +2,7 @@ use crate::commands::state::AppStateContainer;
 use aegis_protocol::EncryptedDmSlot;
 use aegis_protocol::{
     AepMessage, DeleteMessageData, MessageDeletionScope, MessageEditData, MessageReactionData,
-    ReactionAction,
+    ReactionAction, ReadReceiptData, TypingIndicatorData,
 };
 use aegis_shared_types::AppState;
 use aep::database;
@@ -102,6 +102,80 @@ pub struct TypingIndicatorEventPayload {
     #[serde(rename = "isTyping")]
     pub is_typing: bool,
     pub timestamp: String,
+}
+
+async fn broadcast_read_receipt(
+    state: AppState,
+    chat_id: String,
+    message_id: String,
+) -> Result<(), String> {
+    let reader_id = state.identity.peer_id().to_base58();
+    let timestamp = Utc::now();
+    let receipt = ReadReceiptData {
+        chat_id: chat_id.clone(),
+        message_id: message_id.clone(),
+        reader_id: reader_id.clone(),
+        timestamp,
+    };
+
+    let receipt_bytes = bincode::serialize(&receipt).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&receipt_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let message = AepMessage::ReadReceipt {
+        chat_id,
+        message_id,
+        reader_id,
+        timestamp,
+        signature: Some(signature),
+    };
+
+    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn broadcast_typing_indicator(
+    state: AppState,
+    chat_id: String,
+    is_typing: bool,
+) -> Result<(), String> {
+    let user_id = state.identity.peer_id().to_base58();
+    let timestamp = Utc::now();
+    let indicator = TypingIndicatorData {
+        chat_id: chat_id.clone(),
+        user_id: user_id.clone(),
+        is_typing,
+        timestamp,
+    };
+
+    let indicator_bytes = bincode::serialize(&indicator).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&indicator_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let message = AepMessage::TypingIndicator {
+        chat_id,
+        user_id,
+        is_typing,
+        timestamp,
+        signature: Some(signature),
+    };
+
+    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn encrypt_bytes(data: &[u8]) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>), String> {
@@ -724,7 +798,7 @@ pub async fn delete_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aegis_protocol::AepMessage;
+    use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};
     use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, User};
     use aep::user_service;
     use bs58;
@@ -752,6 +826,137 @@ mod tests {
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
+    #[tokio::test]
+    async fn send_read_receipt_is_broadcast_and_signed() {
+        let dir = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(dir.path().join("db.sqlite"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let reader_id = identity.peer_id().to_base58();
+
+        let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_state = AppState {
+            identity: identity.clone(),
+            network_tx,
+            db_pool,
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir: temp_dir.into_path(),
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+        };
+
+        let chat_id = "chat-abc".to_string();
+        let message_id = "message-xyz".to_string();
+
+        broadcast_read_receipt(app_state, chat_id.clone(), message_id.clone())
+            .await
+            .expect("receipt broadcast succeeds");
+
+        let raw = network_rx
+            .recv()
+            .await
+            .expect("network channel should receive payload");
+
+        let event: AepMessage = bincode::deserialize(&raw).expect("deserializes AEP");
+
+        match event {
+            AepMessage::ReadReceipt {
+                chat_id: event_chat_id,
+                message_id: event_message_id,
+                reader_id: event_reader_id,
+                timestamp,
+                signature,
+            } => {
+                assert_eq!(event_chat_id, chat_id);
+                assert_eq!(event_message_id, message_id);
+                assert_eq!(event_reader_id, reader_id);
+
+                let sig = signature.expect("signature included");
+                let data = ReadReceiptData {
+                    chat_id: event_chat_id,
+                    message_id: event_message_id,
+                    reader_id: event_reader_id,
+                    timestamp,
+                };
+                let bytes = bincode::serialize(&data).expect("serialize data");
+                let public_key = identity.keypair().public();
+                assert!(public_key.verify(&bytes, &sig));
+            }
+            other => panic!("expected read receipt event, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn send_typing_indicator_is_broadcast_and_signed() {
+        let dir = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(dir.path().join("db.sqlite"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let user_id = identity.peer_id().to_base58();
+
+        let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_state = AppState {
+            identity: identity.clone(),
+            network_tx,
+            db_pool,
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir: temp_dir.into_path(),
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+        };
+
+        let chat_id = "chat-typing".to_string();
+
+        broadcast_typing_indicator(app_state, chat_id.clone(), true)
+            .await
+            .expect("typing indicator broadcast succeeds");
+
+        let raw = network_rx
+            .recv()
+            .await
+            .expect("network channel should receive payload");
+
+        let event: AepMessage = bincode::deserialize(&raw).expect("deserializes AEP");
+
+        match event {
+            AepMessage::TypingIndicator {
+                chat_id: event_chat_id,
+                user_id: event_user_id,
+                is_typing,
+                timestamp,
+                signature,
+            } => {
+                assert_eq!(event_chat_id, chat_id);
+                assert_eq!(event_user_id, user_id);
+                assert!(is_typing);
+
+                let sig = signature.expect("signature included");
+                let data = TypingIndicatorData {
+                    chat_id: event_chat_id,
+                    user_id: event_user_id,
+                    is_typing,
+                    timestamp,
+                };
+                let bytes = bincode::serialize(&data).expect("serialize data");
+                let public_key = identity.keypair().public();
+                assert!(public_key.verify(&bytes, &sig));
+            }
+            other => panic!("expected typing indicator event, got {other:?}"),
         }
     }
 
@@ -1111,7 +1316,7 @@ pub async fn send_encrypted_dm(
 
 #[tauri::command]
 pub async fn send_read_receipt(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     chat_id: String,
     message_id: String,
     state_container: State<'_, AppStateContainer>,
@@ -1123,20 +1328,12 @@ pub async fn send_read_receipt(
         .clone();
     drop(state_guard);
 
-    let reader_id = state.identity.peer_id().to_base58();
-    let payload = ReadReceiptEventPayload {
-        chat_id,
-        message_id,
-        reader_id,
-        timestamp: Utc::now().to_rfc3339(),
-    };
-
-    app.emit("message-read", payload).map_err(|e| e.to_string())
+    broadcast_read_receipt(state, chat_id, message_id).await
 }
 
 #[tauri::command]
 pub async fn send_typing_indicator(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     chat_id: String,
     is_typing: bool,
     state_container: State<'_, AppStateContainer>,
@@ -1148,16 +1345,7 @@ pub async fn send_typing_indicator(
         .clone();
     drop(state_guard);
 
-    let user_id = state.identity.peer_id().to_base58();
-    let payload = TypingIndicatorEventPayload {
-        chat_id,
-        user_id,
-        is_typing,
-        timestamp: Utc::now().to_rfc3339(),
-    };
-
-    app.emit("typing-indicator", payload)
-        .map_err(|e| e.to_string())
+    broadcast_typing_indicator(state, chat_id, is_typing).await
 }
 
 #[tauri::command]

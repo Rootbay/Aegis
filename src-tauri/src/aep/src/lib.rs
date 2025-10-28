@@ -380,6 +380,8 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             )
             .await?;
         }
+        AepMessage::ReadReceipt { .. } => {},
+        AepMessage::TypingIndicator { .. } => {},
         AepMessage::EncryptedChatMessage { .. } => {
             // handled in bootstrap for E2EE flow
         }
