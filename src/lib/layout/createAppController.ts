@@ -57,6 +57,7 @@ import {
   type ConnectivityState,
 } from "$lib/stores/connectivityStore";
 import { settings } from "$lib/features/settings/stores/settings";
+import { commandPaletteStore } from "$lib/features/navigation/commandPaletteStore";
 
 export type AppModalType =
   | "createGroup"
@@ -141,6 +142,8 @@ export type AppController = {
     openModal: PageState["openModal"];
     closeModal: PageState["closeModal"];
     openDetailedProfileModal: PageState["openDetailedProfileModal"];
+    openCommandPalette: () => void;
+    closeCommandPalette: () => void;
   };
 };
 
@@ -335,7 +338,27 @@ export function createAppController(): AppController {
   };
 
   const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === "Escape") {
+    const key = event.key.toLowerCase();
+    if ((event.ctrlKey || event.metaKey) && key === "k") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation();
+      }
+      commandPaletteStore.open();
+      return;
+    }
+
+    if (key === "escape") {
+      if (get(commandPaletteStore.isOpen)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") {
+          event.stopImmediatePropagation();
+        }
+        commandPaletteStore.close();
+        return;
+      }
       closeModal();
     }
   };
@@ -930,6 +953,8 @@ export function createAppController(): AppController {
       openModal,
       closeModal,
       openDetailedProfileModal,
+      openCommandPalette: commandPaletteStore.open,
+      closeCommandPalette: commandPaletteStore.close,
     },
   };
 }
