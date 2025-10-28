@@ -114,6 +114,12 @@ pub struct DeleteServerWebhookResponse {
     pub server_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerBanUpdate {
+    pub server_id: String,
+    pub user_id: String,
+}
+
 impl From<ServerEvent> for ServerEventResponse {
     fn from(value: ServerEvent) -> Self {
         ServerEventResponse {
@@ -221,7 +227,7 @@ async fn ensure_server_owner(state: &AppState, server_id: &str) -> Result<(), St
         .map_err(|e| e.to_string())?;
     let current_user = state.identity.peer_id().to_base58();
     if server.owner_id != current_user {
-        return Err("Only the server owner can manage events.".into());
+        return Err("Only the server owner can manage this resource.".into());
     }
     Ok(())
 }
@@ -636,6 +642,56 @@ pub async fn get_members_for_server(
     database::get_server_members(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_server_bans(
+    server_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<database::User>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    ensure_server_owner(&state, &server_id).await?;
+
+    database::get_server_bans(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn unban_server_member(
+    server_id: String,
+    user_id: String,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ServerBanUpdate, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    ensure_server_owner(&state, &server_id).await?;
+
+    database::remove_server_ban(&state.db_pool, &server_id, &user_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let payload = ServerBanUpdate {
+        server_id: server_id.clone(),
+        user_id: user_id.clone(),
+    };
+
+    app.emit("server-member-unbanned", payload.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(payload)
 }
 
 #[tauri::command]
