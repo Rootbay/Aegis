@@ -16,12 +16,14 @@ import { userStore } from "$lib/stores/userStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
+import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
 import {
   decodeIncomingMessagePayload,
   encryptOutgoingMessagePayload,
   type MessageAttachmentPayload,
 } from "$lib/features/chat/services/chatEncryptionService";
 import { showNativeNotification } from "$lib/utils/nativeNotification";
+import { spamClassifier } from "$lib/features/security/spamClassifier";
 
 type BackendMessage = {
   id: string;
@@ -154,6 +156,11 @@ interface ChatStore {
     messageId: string,
     emoji: string,
   ) => Promise<void>;
+  overrideSpamDecision: (
+    chatId: string,
+    messageId: string,
+    decision: "allow" | "mute",
+  ) => void;
   handleGroupChatCreated: (chat: BackendGroupChat) => GroupChatSummary;
   loadGroupChats: () => Promise<void>;
   groupChats: Readable<Map<string, GroupChatSummary>>;
@@ -1889,8 +1896,68 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           : undefined,
       reactions: normalizeReactions(message.reactions ?? null),
       expiresAt: undefined,
+      isSpamFlagged: false,
+      spamMuted: false,
     };
     newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
+
+    let suppressedBySpam = false;
+
+    if (!isSelfAuthored) {
+      const existingMute = mutedFriendsStore.isMuted(sender);
+      newMessage.spamMuted = existingMute;
+      if (existingMute) {
+        newMessage.spamDecision = newMessage.spamDecision ?? "muted";
+      }
+
+      if (typeof decoded.content === "string" && decoded.content.trim().length > 0) {
+        try {
+          const classification = await spamClassifier.scoreText(
+            decoded.content,
+            {
+              context: "message",
+              subjectId: sender,
+            },
+          );
+          newMessage.spamScore = classification.score;
+          newMessage.isSpamFlagged = classification.flagged;
+          newMessage.spamReasons = classification.reasons;
+
+          if (classification.autoMuted && !existingMute) {
+            mutedFriendsStore.mute(sender);
+            newMessage.spamMuted = true;
+            newMessage.spamDecision = "auto-muted";
+            suppressedBySpam = true;
+            if (me?.id && sender !== me.id) {
+              try {
+                await invoke("mute_user", {
+                  current_user_id: me.id,
+                  target_user_id: sender,
+                  muted: true,
+                  spam_score: classification.score,
+                });
+              } catch (error) {
+                console.warn("Failed to log auto mute", error);
+              }
+            }
+          } else {
+            if (classification.flagged && newMessage.spamDecision !== "allowed") {
+              newMessage.spamDecision =
+                newMessage.spamDecision ?? (existingMute ? "muted" : "flagged");
+              suppressedBySpam = true;
+            } else if (existingMute) {
+              suppressedBySpam = true;
+            }
+          }
+        } catch (error) {
+          console.warn("Failed to score message for spam", error);
+          suppressedBySpam = suppressedBySpam || existingMute;
+        }
+      } else if (existingMute) {
+        suppressedBySpam = true;
+      }
+    }
+
     updateMessagesForChat(targetChatId, (existing) =>
       insertRealtimeMessage(existing, newMessage, me?.id),
     );
@@ -1907,7 +1974,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           ? currentSettings.enableNewMessageNotifications
           : currentSettings.enableGroupMessageNotifications;
 
-      if (notificationsEnabled) {
+      if (notificationsEnabled && !suppressedBySpam) {
         const activeType = get(activeChatType);
         const activeId = get(activeChatId);
         const activeChannel = get(activeChannelId);
@@ -2181,6 +2248,35 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     );
   };
 
+  const overrideSpamDecision = (
+    chatId: string,
+    messageId: string,
+    decision: "allow" | "mute",
+  ) => {
+    if (!chatId || !messageId) return;
+    updateMessagesForChat(chatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        if (decision === "allow") {
+          return {
+            ...message,
+            isSpamFlagged: false,
+            spamMuted: false,
+            spamDecision: "allowed",
+          };
+        }
+        return {
+          ...message,
+          isSpamFlagged: true,
+          spamMuted: true,
+          spamDecision: "muted",
+        };
+      }),
+    );
+  };
+
   const dropChatHistory = (chatId: string) => {
     if (!chatId) return;
     const existing = get(messagesByChatIdStore).get(chatId);
@@ -2321,6 +2417,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     loadAttachmentForMessage,
     addReaction,
     removeReaction,
+    overrideSpamDecision,
     handleGroupChatCreated,
     loadGroupChats,
   };

@@ -3,12 +3,71 @@
   import { invoke } from "@tauri-apps/api/core";
   import { userStore } from "$lib/stores/userStore";
   import { toasts } from "$lib/stores/ToastStore";
+  import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
+  import type { Friend } from "$lib/features/friends/models/Friend";
   import FriendRequestModal from "$lib/components/modals/FriendRequestModal.svelte";
 
   let friendships = $state<any[]>([]);
   let showFriendRequestModal = $state(false);
 
   let currentUser = $derived($userStore.me);
+  let friendState = $derived($friendStore);
+  let flaggedFriends = $derived(
+    friendState.friends.filter((friend) => friend.isSpamFlagged),
+  );
+
+  function findFriendByFriendship(friendshipId: string) {
+    if (!friendshipId) return null;
+    return friendState.friends.find((friend) => friend.friendshipId === friendshipId) ?? null;
+  }
+
+  async function allowFlaggedFriend(friend: Friend) {
+    if (!friend) return;
+    friendStore.markFriendAsTrusted(friend.id);
+    mutedFriendsStore.unmute(friend.id);
+
+    const meId = $userStore.me?.id;
+    if (meId) {
+      try {
+        await invoke("mute_user", {
+          current_user_id: meId,
+          target_user_id: friend.id,
+          muted: false,
+          spam_score: friend.spamScore ?? null,
+        });
+      } catch (error) {
+        console.debug("mute_user logging failed", error);
+      }
+    }
+
+    toasts.addToast(`Allowing messages from ${friend.name}.`, "success");
+  }
+
+  async function keepFriendMuted(friend: Friend) {
+    if (!friend) return;
+    mutedFriendsStore.mute(friend.id);
+    friendStore.markFriendAsSpam(friend.id, {
+      score: friend.spamScore,
+      reasons: friend.spamReasons,
+    });
+
+    const meId = $userStore.me?.id;
+    if (meId) {
+      try {
+        await invoke("mute_user", {
+          current_user_id: meId,
+          target_user_id: friend.id,
+          muted: true,
+          spam_score: friend.spamScore ?? null,
+        });
+      } catch (error) {
+        console.debug("mute_user logging failed", error);
+      }
+    }
+
+    toasts.addToast(`${friend.name} will remain muted.`, "info");
+  }
 
   async function loadFriendships() {
     if (currentUser && currentUser.id) {
@@ -56,6 +115,7 @@
   }
 
   $effect(() => {
+    void friendStore.initialize();
     loadFriendships();
   });
 </script>
@@ -70,6 +130,62 @@
     Send Friend Request
   </button>
 
+  {#if flaggedFriends.length > 0}
+    <section
+      class="mb-6 rounded-lg border border-status-warning/40 bg-status-warning/10 p-4"
+    >
+      <h3 class="text-lg font-semibold text-status-warning-foreground mb-1">
+        Flagged Friend Requests
+      </h3>
+      <p class="text-sm text-muted-foreground mb-3">
+        These requests were muted automatically based on local spam heuristics.
+        Review them to allow or keep them hidden.
+      </p>
+      <ul class="space-y-3">
+        {#each flaggedFriends as friend (friend.id)}
+          <li
+            class="rounded-lg border border-status-warning/30 bg-background/60 p-3"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p class="text-sm font-semibold text-foreground">{friend.name}</p>
+                <p class="text-xs text-muted-foreground">
+                  Score: {(friend.spamScore ?? 0).toFixed(2)}
+                </p>
+              </div>
+              <span
+                class="rounded-full border border-status-warning/60 bg-status-warning/20 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-status-warning-foreground"
+              >
+                Suspicious
+              </span>
+            </div>
+            {#if friend.spamReasons?.length}
+              <ul class="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                {#each friend.spamReasons as reason, idx (idx)}
+                  <li>{reason}</li>
+                {/each}
+              </ul>
+            {/if}
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                class="rounded-md bg-success px-3 py-1 text-sm font-semibold text-foreground hover:bg-success/80"
+                onclick={() => allowFlaggedFriend(friend)}
+              >
+                Allow
+              </button>
+              <button
+                class="rounded-md bg-status-warning px-3 py-1 text-sm font-semibold text-foreground hover:bg-status-warning/80"
+                onclick={() => keepFriendMuted(friend)}
+              >
+                Keep Muted
+              </button>
+            </div>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
   {#if friendships.length > 0}
     <h3 class="text-lg font-semibold mb-2">Your Friendships</h3>
     <ul>
@@ -77,6 +193,7 @@
         <li
           class="bg-muted p-3 rounded-lg mb-2 flex justify-between items-center"
         >
+          {@const friendRecord = findFriendByFriendship(friendship.id)}
           <span>
             {friendship.user_a_id === currentUser?.id
               ? "You"
@@ -84,6 +201,13 @@
             {friendship.user_b_id === currentUser?.id
               ? "You"
               : friendship.user_b_id} - Status: {friendship.status}
+            {#if friendRecord?.isSpamFlagged}
+              <span
+                class="ml-2 inline-flex items-center rounded-full border border-status-warning/50 bg-status-warning/20 px-2 py-0.5 text-xs font-semibold text-status-warning-foreground"
+              >
+                Flagged {(friendRecord.spamScore ?? 0).toFixed(2)}
+              </span>
+            {/if}
           </span>
           <div>
             {#if friendship.status === "pending" && friendship.user_b_id === currentUser?.id}

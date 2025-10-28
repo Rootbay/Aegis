@@ -481,6 +481,7 @@
         current_user_id: meId,
         target_user_id: user.id,
         muted: !currentlyMuted,
+        spam_score: null,
       });
 
       if (currentlyMuted) {
@@ -497,6 +498,48 @@
         "error",
       );
     }
+  }
+
+  async function allowSpamMessage(msg: Message) {
+    chatStore.overrideSpamDecision(msg.chatId, msg.id, "allow");
+    mutedFriendsStore.unmute(msg.senderId);
+
+    const meId = $userStore.me?.id;
+    if (meId) {
+      try {
+        await invoke("mute_user", {
+          current_user_id: meId,
+          target_user_id: msg.senderId,
+          muted: false,
+          spam_score: msg.spamScore ?? null,
+        });
+      } catch (error) {
+        console.debug("mute_user logging failed", error);
+      }
+    }
+
+    toasts.addToast("Message allowed.", "success");
+  }
+
+  async function keepSpamMessageMuted(msg: Message) {
+    chatStore.overrideSpamDecision(msg.chatId, msg.id, "mute");
+    mutedFriendsStore.mute(msg.senderId);
+
+    const meId = $userStore.me?.id;
+    if (meId) {
+      try {
+        await invoke("mute_user", {
+          current_user_id: meId,
+          target_user_id: msg.senderId,
+          muted: true,
+          spam_score: msg.spamScore ?? null,
+        });
+      } catch (error) {
+        console.debug("mute_user logging failed", error);
+      }
+    }
+
+    toasts.addToast("Message will remain hidden.", "info");
   }
 
   async function inviteUserToServer(user: User | Friend) {
@@ -1108,7 +1151,39 @@
                       </span>
                     {/if}
                   </div>
-                  {#if msg.content}
+                  {#if msg.isSpamFlagged && msg.spamDecision !== "allowed"}
+                    <div
+                      class="max-w-md rounded-lg border border-status-warning/60 bg-status-warning/10 p-3 text-sm text-status-warning-foreground"
+                    >
+                      <p class="font-semibold flex items-center gap-2">
+                        Message hidden
+                        <span class="text-xs font-normal text-muted-foreground">
+                          Score {(msg.spamScore ?? 0).toFixed(2)}
+                        </span>
+                      </p>
+                      {#if msg.spamReasons?.length}
+                        <ul class="mt-2 list-disc space-y-1 pl-4 text-xs text-muted-foreground">
+                          {#each msg.spamReasons as reason, idx (idx)}
+                            <li>{reason}</li>
+                          {/each}
+                        </ul>
+                      {/if}
+                      <div class="mt-3 flex flex-wrap gap-2">
+                        <button
+                          class="rounded-md bg-success px-3 py-1 text-xs font-semibold text-foreground hover:bg-success/80"
+                          onclick={() => allowSpamMessage(msg)}
+                        >
+                          Allow message
+                        </button>
+                        <button
+                          class="rounded-md bg-status-warning px-3 py-1 text-xs font-semibold text-foreground hover:bg-status-warning/80"
+                          onclick={() => keepSpamMessageMuted(msg)}
+                        >
+                          Keep muted
+                        </button>
+                      </div>
+                    </div>
+                  {:else if msg.content}
                     <div
                       class="max-w-md p-3 rounded-lg {isMe
                         ? 'bg-cyan-600 text-white rounded-tr-none'

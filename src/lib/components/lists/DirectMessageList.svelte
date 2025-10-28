@@ -120,6 +120,7 @@
         current_user_id: meId,
         target_user_id: friend.id,
         muted: !currentlyMuted,
+        spam_score: null,
       });
 
       if (currentlyMuted) {

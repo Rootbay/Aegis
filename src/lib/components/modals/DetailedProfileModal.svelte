@@ -371,6 +371,7 @@
             current_user_id: meId,
             target_user_id: profileUser.id,
             muted: !currentlyMuted,
+            spam_score: null,
           });
           if (currentlyMuted) {
             mutedFriendsStore.unmute(profileUser.id);
