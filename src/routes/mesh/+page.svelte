@@ -74,7 +74,7 @@
           <CardDescription>{$statusMessageStore}</CardDescription>
         </div>
         <Badge variant={statusVariant()} class="flex items-center gap-1">
-          <svelte:component this={statusIcon()} class="size-3" />
+          <{statusIcon()} class="size-3" />
           {statusLabel()}
         </Badge>
       </CardHeader>

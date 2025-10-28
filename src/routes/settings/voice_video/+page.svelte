@@ -43,7 +43,7 @@
   let enumerating = $state(false);
   let enumerationError = $state<string | null>(null);
 
-  let previewVideo: HTMLVideoElement | null = null;
+  const previewVideo = $state<HTMLVideoElement | null>(null);
   let previewStream: MediaStream | null = null;
   let previewActive = $state(false);
   let previewError = $state<string | null>(null);
@@ -149,9 +149,10 @@
       };
       previewStream = await navigator.mediaDevices.getUserMedia(constraints);
       previewActive = true;
-      if (previewVideo) {
-        previewVideo.srcObject = previewStream;
-        await previewVideo.play();
+      const videoElement = previewVideo();
+      if (videoElement) {
+        videoElement.srcObject = previewStream;
+        await videoElement.play();
       }
     } catch (error) {
       previewError =
@@ -166,9 +167,10 @@
     previewStream?.getTracks().forEach((track) => track.stop());
     previewStream = null;
     previewActive = false;
-    if (previewVideo) {
-      previewVideo.pause();
-      previewVideo.srcObject = null;
+    const videoElement = previewVideo();
+    if (videoElement) {
+      videoElement.pause();
+      videoElement.srcObject = null;
     }
   }
 
