@@ -18,6 +18,7 @@
   import AppModals from "$lib/layout/AppModals.svelte";
   import { ChatView } from "$features/chat";
   import { createAppController } from "$lib/layout/createAppController";
+  import CommandPalette from "$lib/features/navigation/CommandPalette.svelte";
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
   import type { FriendsLayoutContext } from "$lib/contextTypes";
   import type { User } from "$lib/features/auth/models/User";
@@ -68,6 +69,7 @@
     openModal,
     closeModal,
     openDetailedProfileModal,
+    closeCommandPalette,
   } = handlers;
 
   const { activeModal, modalProps } = modal;
@@ -174,3 +176,5 @@
   allUsers={$allUsers}
   {closeModal}
 />
+
+<CommandPalette on:close={closeCommandPalette} />

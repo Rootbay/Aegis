@@ -2,6 +2,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor } from "@testing-library/svelte";
 import { get } from "svelte/store";
 
+const {
+  commandPaletteOpenMock,
+  commandPaletteCloseMock,
+  commandPaletteState,
+} = vi.hoisted(() => {
+  const { writable } = require("svelte/store");
+  const state = writable(false);
+  return {
+    commandPaletteState: state,
+    commandPaletteOpenMock: vi.fn(() => state.set(true)),
+    commandPaletteCloseMock: vi.fn(() => state.set(false)),
+  };
+});
+
 vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
 
 vi.mock("$app/stores", async () => {
@@ -58,6 +72,14 @@ vi.mock("$lib/features/settings/stores/settings", async () => {
     settings: { subscribe: state.subscribe },
   };
 });
+
+vi.mock("$lib/features/navigation/commandPaletteStore", () => ({
+  commandPaletteStore: {
+    isOpen: { subscribe: commandPaletteState.subscribe },
+    open: commandPaletteOpenMock,
+    close: commandPaletteCloseMock,
+  },
+}));
 
 vi.mock("$lib/features/auth/stores/authStore", async () => {
   const { writable } = await vi.importActual<typeof import("svelte/store")>(
