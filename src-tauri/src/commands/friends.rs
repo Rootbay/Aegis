@@ -437,6 +437,8 @@ mod tests {
     ) -> (AppState, tokio::sync::mpsc::Receiver<Vec<u8>>) {
         let (network_tx, network_rx) = tokio::sync::mpsc::channel(8);
         let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_data_dir = temp_dir.into_path();
         let app_state = AppState {
             identity,
             network_tx,
@@ -444,6 +446,8 @@ mod tests {
             incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
             file_cmd_tx,
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir,
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
         };
         (app_state, network_rx)
     }
@@ -493,14 +497,10 @@ mod tests {
 
         let (app_state, mut network_rx) = build_app_state(identity.clone(), db_pool.clone());
 
-        let block_result = block_user_internal(
-            app_state.clone(),
-            my_id.clone(),
-            target_id.clone(),
-            None,
-        )
-        .await
-        .expect("block user");
+        let block_result =
+            block_user_internal(app_state.clone(), my_id.clone(), target_id.clone(), None)
+                .await
+                .expect("block user");
 
         assert!(block_result.newly_created);
         assert_eq!(
@@ -545,10 +545,9 @@ mod tests {
 
         let (app_state, _rx) = build_app_state(identity.clone(), db_pool);
 
-        let result =
-            mute_user_internal(app_state, my_id.clone(), target_id.clone(), true, None)
-                .await
-                .expect("mute user");
+        let result = mute_user_internal(app_state, my_id.clone(), target_id.clone(), true, None)
+            .await
+            .expect("mute user");
 
         assert!(result.muted);
         assert_eq!(result.target_user_id, target_id);

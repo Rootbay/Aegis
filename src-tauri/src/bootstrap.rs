@@ -1,13 +1,15 @@
 use libp2p::futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
 use std::collections::{HashMap, VecDeque};
-use std::path::Path;
+use std::fs::OpenOptions;
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, Mutex};
 
 use aegis_protocol::AepMessage;
-use aegis_shared_types::{AppState, User};
+use aegis_shared_types::{AppState, FileTransferMode, User};
 use aep::{database, handle_aep_message, initialize_aep};
 use bs58;
 use e2ee;
@@ -20,6 +22,26 @@ const MAX_OUTBOX_MESSAGES: usize = 256;
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
 const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
 const MAX_UNAPPROVED_BUFFER_BYTES: u64 = 8_388_608; // 8 MiB
+const DEFAULT_CHUNK_SIZE: usize = 128 * 1024;
+const OUTGOING_STATE_DIR: &str = "outgoing_transfers";
+const INCOMING_STATE_DIR: &str = "incoming_transfers";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct OutgoingResilientMetadata {
+    next_index: u64,
+    bytes_sent: u64,
+    chunk_size: usize,
+    file_size: u64,
+    safe_filename: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct IncomingResilientMetadata {
+    file_size: u64,
+    chunk_size: usize,
+    chunks: HashMap<u64, usize>,
+    safe_filename: String,
+}
 
 pub async fn initialize_app_state<R: Runtime>(
     app: tauri::AppHandle<R>,
@@ -43,6 +65,14 @@ pub async fn initialize_app_state<R: Runtime>(
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     if !app_data_dir.exists() {
         std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
+    }
+    let incoming_dir = app_data_dir.join(INCOMING_STATE_DIR);
+    if !incoming_dir.exists() {
+        std::fs::create_dir_all(&incoming_dir).map_err(|e| e.to_string())?;
+    }
+    let outgoing_dir = app_data_dir.join(OUTGOING_STATE_DIR);
+    if !outgoing_dir.exists() {
+        std::fs::create_dir_all(&outgoing_dir).map_err(|e| e.to_string())?;
     }
     let settings_path = app_data_dir.join("settings.json");
     let initial_acl = if let Ok(bytes) = std::fs::read(&settings_path) {
@@ -71,6 +101,7 @@ pub async fn initialize_app_state<R: Runtime>(
         incoming_files: Arc::new(Mutex::new(HashMap::new())),
         file_cmd_tx: file_tx,
         file_acl_policy: Arc::new(Mutex::new(initial_acl)),
+        app_data_dir: app_data_dir.clone(),
         connectivity_snapshot: connectivity_snapshot.clone(),
     };
 
@@ -278,29 +309,289 @@ pub async fn initialize_app_state<R: Runtime>(
                 file_cmd = file_rx.recv() => {
                     if let Some(cmd) = file_cmd {
                         match cmd {
-                            aegis_shared_types::FileTransferCommand::Send { recipient_peer_id, path } => {
+                            aegis_shared_types::FileTransferCommand::Send { recipient_peer_id, path, mode } => {
                                 if let Ok(peer) = recipient_peer_id.parse::<libp2p::PeerId>() {
-                                    let file_path = std::path::PathBuf::from(path);
+                                    let file_path = PathBuf::from(&path);
                                     if let Ok(mut f) = std::fs::File::open(&file_path) {
-                                        use std::io::Read;
-                                        let filename = file_path.file_name().and_then(|s| s.to_str()).unwrap_or("file").to_string();
-                                        let size = std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+                                        let filename = file_path
+                                            .file_name()
+                                            .and_then(|s| s.to_str())
+                                            .unwrap_or("file")
+                                            .to_string();
+                                        let safe_filename = sanitize_filename(&filename);
+                                        let size = std::fs::metadata(&file_path)
+                                            .map(|m| m.len())
+                                            .unwrap_or(0);
+
                                         {
                                             let mut swarm = shared_swarm_task.lock().await;
-                                            let _req_id = swarm.behaviour_mut().req_res.send_request(&peer, network::FileTransferRequest::Init { filename: filename.clone(), size });
+                                            let _ = swarm.behaviour_mut().req_res.send_request(
+                                                &peer,
+                                                network::FileTransferRequest::Init {
+                                                    filename: filename.clone(),
+                                                    size,
+                                                },
+                                            );
                                         }
+
+                                        let mode_label = mode_to_str(mode);
+                                        let mut buf = vec![0u8; DEFAULT_CHUNK_SIZE];
                                         let mut index: u64 = 0;
-                                        let mut buf = vec![0u8; 128 * 1024];
+                                        let mut bytes_sent: u64 = 0;
+                                        let mut resumed = false;
+                                        let mut metadata = OutgoingResilientMetadata {
+                                            next_index: 0,
+                                            bytes_sent: 0,
+                                            chunk_size: DEFAULT_CHUNK_SIZE,
+                                            file_size: size,
+                                            safe_filename: safe_filename.clone(),
+                                        };
+                                        let mut meta_path: Option<PathBuf> = None;
+
+                                        if mode == FileTransferMode::Resilient {
+                                            let base_dir = state_clone_for_aep
+                                                .app_data_dir
+                                                .join(OUTGOING_STATE_DIR)
+                                                .join(&recipient_peer_id);
+                                            if let Err(e) = std::fs::create_dir_all(&base_dir) {
+                                                eprintln!(
+                                                    "Failed to create resilient transfer directory: {}",
+                                                    e
+                                                );
+                                            }
+                                            let candidate_meta = base_dir.join(format!("{}.json", safe_filename));
+                                            meta_path = Some(candidate_meta.clone());
+                                            if candidate_meta.exists() {
+                                                match load_outgoing_metadata(&candidate_meta) {
+                                                    Ok(existing) => {
+                                                        metadata = OutgoingResilientMetadata {
+                                                            next_index: existing.next_index,
+                                                            bytes_sent: existing.bytes_sent,
+                                                            chunk_size: if existing.chunk_size == 0 {
+                                                                DEFAULT_CHUNK_SIZE
+                                                            } else {
+                                                                existing.chunk_size
+                                                            },
+                                                            file_size: size,
+                                                            safe_filename: safe_filename.clone(),
+                                                        };
+                                                        index = metadata.next_index;
+                                                        bytes_sent = metadata.bytes_sent.min(size);
+                                                        if index > 0 {
+                                                            let seek_to = index.saturating_mul(DEFAULT_CHUNK_SIZE as u64);
+                                                            if let Err(e) = f.seek(SeekFrom::Start(seek_to)) {
+                                                                eprintln!("Failed to seek file for resume: {}", e);
+                                                                index = 0;
+                                                                bytes_sent = 0;
+                                                                metadata.next_index = 0;
+                                                                metadata.bytes_sent = 0;
+                                                            } else {
+                                                                resumed = true;
+                                                            }
+                                                        }
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!(
+                                                            "Failed to load outgoing transfer metadata: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            if let Some(path) = meta_path.as_ref() {
+                                                if let Err(e) = persist_outgoing_metadata(path, &metadata) {
+                                                    eprintln!(
+                                                        "Failed to persist outgoing metadata: {}",
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                        }
+
+                                        let initial_status = if resumed {
+                                            "resuming"
+                                        } else {
+                                            "transferring"
+                                        };
+                                        let initial_progress = if size == 0 {
+                                            1.0
+                                        } else if bytes_sent == 0 {
+                                            0.0
+                                        } else {
+                                            (bytes_sent as f64 / size as f64).min(1.0)
+                                        };
+                                        let _ = app_for_emit.emit(
+                                            "file-transfer-progress",
+                                            serde_json::json!({
+                                                "direction": "outgoing",
+                                                "peer_id": recipient_peer_id,
+                                                "filename": filename.clone(),
+                                                "safe_filename": safe_filename.clone(),
+                                                "mode": mode_label,
+                                                "status": initial_status,
+                                                "progress": initial_progress,
+                                                "resumed": resumed,
+                                                "size": size,
+                                            }),
+                                        );
+                                        resumed = false;
+
+                                        if size == 0 {
+                                            let mut swarm = shared_swarm_task.lock().await;
+                                            let _ = swarm.behaviour_mut().req_res.send_request(
+                                                &peer,
+                                                network::FileTransferRequest::Complete {
+                                                    filename: filename.clone(),
+                                                },
+                                            );
+                                            drop(swarm);
+                                            if let Some(path) = meta_path.as_ref() {
+                                                let _ = std::fs::remove_file(path);
+                                            }
+                                            let _ = app_for_emit.emit(
+                                                "file-transfer-progress",
+                                                serde_json::json!({
+                                                    "direction": "outgoing",
+                                                    "peer_id": recipient_peer_id,
+                                                    "filename": filename.clone(),
+                                                    "safe_filename": safe_filename.clone(),
+                                                    "mode": mode_label,
+                                                    "status": "complete",
+                                                    "progress": 1.0,
+                                                    "resumed": false,
+                                                    "size": size,
+                                                }),
+                                            );
+                                            continue;
+                                        }
+
+                                        let mut completed = false;
                                         loop {
-                                            let n = match f.read(&mut buf) { Ok(n) => n, Err(_) => 0 };
-                                            if n == 0 { break; }
+                                            let n = match f.read(&mut buf) {
+                                                Ok(n) => n,
+                                                Err(e) => {
+                                                    eprintln!("Failed to read file chunk: {}", e);
+                                                    0
+                                                }
+                                            };
+                                            if n == 0 {
+                                                break;
+                                            }
                                             let chunk = buf[..n].to_vec();
                                             let mut swarm = shared_swarm_task.lock().await;
-                                            let _ = swarm.behaviour_mut().req_res.send_request(&peer, network::FileTransferRequest::Chunk { filename: filename.clone(), index, data: chunk });
-                                            index += 1;
+                                            let result = swarm.behaviour_mut().req_res.send_request(
+                                                &peer,
+                                                network::FileTransferRequest::Chunk {
+                                                    filename: filename.clone(),
+                                                    index,
+                                                    data: chunk,
+                                                },
+                                            );
+                                            drop(swarm);
+                                            match result {
+                                                Ok(_) => {
+                                                    bytes_sent = bytes_sent.saturating_add(n as u64);
+                                                    if let Some(path) = meta_path.as_ref() {
+                                                        metadata.next_index = index + 1;
+                                                        metadata.bytes_sent = bytes_sent;
+                                                        metadata.chunk_size = DEFAULT_CHUNK_SIZE;
+                                                        metadata.file_size = size;
+                                                        if let Err(e) = persist_outgoing_metadata(path, &metadata) {
+                                                            eprintln!(
+                                                                "Failed to update outgoing metadata: {}",
+                                                                e
+                                                            );
+                                                        }
+                                                    }
+                                                    let progress = if size == 0 {
+                                                        1.0
+                                                    } else {
+                                                        (bytes_sent as f64 / size as f64).min(1.0)
+                                                    };
+                                                    let _ = app_for_emit.emit(
+                                                        "file-transfer-progress",
+                                                        serde_json::json!({
+                                                            "direction": "outgoing",
+                                                            "peer_id": recipient_peer_id,
+                                                            "filename": filename.clone(),
+                                                            "safe_filename": safe_filename.clone(),
+                                                            "mode": mode_label,
+                                                            "status": "transferring",
+                                                            "progress": progress,
+                                                            "resumed": false,
+                                                            "size": size,
+                                                        }),
+                                                    );
+                                                    index += 1;
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Failed to queue file chunk: {}", e);
+                                                    if let Some(path) = meta_path.as_ref() {
+                                                        metadata.next_index = index;
+                                                        metadata.chunk_size = DEFAULT_CHUNK_SIZE;
+                                                        metadata.file_size = size;
+                                                        if let Err(err) = persist_outgoing_metadata(path, &metadata) {
+                                                            eprintln!(
+                                                                "Failed to persist retry metadata: {}",
+                                                                err
+                                                            );
+                                                        }
+                                                    }
+                                                    let progress = if size == 0 {
+                                                        0.0
+                                                    } else {
+                                                        (bytes_sent as f64 / size as f64).min(1.0)
+                                                    };
+                                                    let _ = app_for_emit.emit(
+                                                        "file-transfer-progress",
+                                                        serde_json::json!({
+                                                            "direction": "outgoing",
+                                                            "peer_id": recipient_peer_id,
+                                                            "filename": filename.clone(),
+                                                            "safe_filename": safe_filename.clone(),
+                                                            "mode": mode_label,
+                                                            "status": "retrying",
+                                                            "progress": progress,
+                                                            "resumed": true,
+                                                            "size": size,
+                                                        }),
+                                                    );
+                                                    break;
+                                                }
+                                            }
                                         }
-                                        let mut swarm = shared_swarm_task.lock().await;
-                                        let _ = swarm.behaviour_mut().req_res.send_request(&peer, network::FileTransferRequest::Complete { filename });
+
+                                        if bytes_sent >= size {
+                                            completed = true;
+                                        }
+
+                                        if completed {
+                                            let mut swarm = shared_swarm_task.lock().await;
+                                            let _ = swarm.behaviour_mut().req_res.send_request(
+                                                &peer,
+                                                network::FileTransferRequest::Complete {
+                                                    filename: filename.clone(),
+                                                },
+                                            );
+                                            drop(swarm);
+                                            if let Some(path) = meta_path.as_ref() {
+                                                let _ = std::fs::remove_file(path);
+                                            }
+                                            let _ = app_for_emit.emit(
+                                                "file-transfer-progress",
+                                                serde_json::json!({
+                                                    "direction": "outgoing",
+                                                    "peer_id": recipient_peer_id,
+                                                    "filename": filename.clone(),
+                                                    "safe_filename": safe_filename.clone(),
+                                                    "mode": mode_label,
+                                                    "status": "complete",
+                                                    "progress": 1.0,
+                                                    "resumed": false,
+                                                    "size": size,
+                                                }),
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -531,6 +822,10 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             nonce: vec![],
                                                             sender_id: sender_id.clone(),
                                                             accepted: false,
+                                                            mode: FileTransferMode::Basic,
+                                                            staging_path: None,
+                                                            metadata_path: None,
+                                                            resumed: false,
                                                         });
                                                         drop(inc);
                                                         let _ = app_for_emit.emit("file-transfer-request", serde_json::json!({
@@ -548,7 +843,11 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     let mut inc = state_clone_for_aep.incoming_files.lock().await;
                                                     if let Some(mut file) = inc.remove(&key) {
                                                         let chunk_len = data.len() as u64;
-                                                        let replaced_bytes = file.received_chunks.get(&index).map(|chunk| chunk.len() as u64).unwrap_or(0);
+                                                        let replaced_bytes = file
+                                                            .received_chunks
+                                                            .get(&index)
+                                                            .map(|chunk| chunk.len() as u64)
+                                                            .unwrap_or(0);
                     let current_total: u64 = file.received_chunks.values().map(|chunk| chunk.len() as u64).sum();
                     let adjusted_total = current_total.saturating_sub(replaced_bytes);
                     let new_total = adjusted_total.saturating_add(chunk_len);
@@ -579,11 +878,68 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error(reason.into()));
                                                             continue;
                                                         }
+
+                                                        let safe_name = sanitize_filename(&file.name);
+                                                        let mode_label = mode_to_str(file.mode);
+                                                        let mut resumed_flag = file.resumed || replaced_bytes > 0;
+
+                                                        if file.mode == FileTransferMode::Resilient {
+                                                            if let Some(staging_path) = file.staging_path.clone() {
+                                                                if let Err(e) = write_incoming_chunk(&staging_path, index, &data) {
+                                                                    eprintln!("Failed to persist incoming chunk: {}", e);
+                                                                }
+                                                            }
+                                                            if let Some(meta_path) = file.metadata_path.clone() {
+                                                                let mut metadata = if meta_path.exists() {
+                                                                    match std::fs::read(&meta_path) {
+                                                                        Ok(bytes) => serde_json::from_slice::<IncomingResilientMetadata>(&bytes)
+                                                                            .unwrap_or_else(|_| IncomingResilientMetadata::default()),
+                                                                        Err(_) => IncomingResilientMetadata::default(),
+                                                                    }
+                                                                } else {
+                                                                    IncomingResilientMetadata::default()
+                                                                };
+                                                                metadata.file_size = file.size;
+                                                                metadata.chunk_size = DEFAULT_CHUNK_SIZE;
+                                                                metadata.safe_filename = safe_name.clone();
+                                                                metadata.chunks.insert(index, data.len());
+                                                                if let Err(e) = persist_incoming_metadata(&meta_path, &metadata) {
+                                                                    eprintln!("Failed to persist incoming metadata: {}", e);
+                                                                }
+                                                            }
+                                                        }
+
                                                         file.received_chunks.insert(index, data);
+                                                        let progress = if file.size == 0 {
+                                                            1.0
+                                                        } else {
+                                                            (new_total as f64 / file.size as f64).min(1.0)
+                                                        };
+                                                        file.resumed = false;
                                                         inc.insert(key, file);
                                                         drop(inc);
                                                         let mut swarm = shared_swarm_task.lock().await;
                                                         let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Ack);
+                                                        drop(swarm);
+                                                        let status = if resumed_flag {
+                                                            "resuming"
+                                                        } else {
+                                                            "transferring"
+                                                        };
+                                                        let _ = app_for_emit.emit(
+                                                            "file-transfer-progress",
+                                                            serde_json::json!({
+                                                                "direction": "incoming",
+                                                                "peer_id": sender_id.clone(),
+                                                                "filename": filename,
+                                                                "safe_filename": safe_name,
+                                                                "mode": mode_label,
+                                                                "status": status,
+                                                                "progress": progress,
+                                                                "resumed": resumed_flag,
+                                                                "size": file.size,
+                                                            }),
+                                                        );
                                                     } else {
                                                         drop(inc);
                                                         let mut swarm = shared_swarm_task.lock().await;
@@ -624,8 +980,23 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                     eprintln!("Failed to create file for received transfer {}", safe_name);
                                                                 }
                                                             }
+                                                            cleanup_incoming_state(&file.staging_path, &file.metadata_path);
                                                             let mut swarm = shared_swarm_task.lock().await;
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Ack);
+                                                            let _ = app_for_emit.emit(
+                                                                "file-transfer-progress",
+                                                                serde_json::json!({
+                                                                    "direction": "incoming",
+                                                                    "peer_id": sender_id.clone(),
+                                                                    "filename": file.name.clone(),
+                                                                    "safe_filename": safe_name.clone(),
+                                                                    "mode": mode_to_str(file.mode),
+                                                                    "status": "complete",
+                                                                    "progress": 1.0,
+                                                                    "resumed": false,
+                                                                    "size": file.size,
+                                                                }),
+                                                            );
                                                         } else {
                                                             let _ = app_for_emit.emit("file-transfer-denied", serde_json::json!({
                                                                 "sender_id": sender_id,
@@ -634,6 +1005,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             }));
                                                             let mut swarm = shared_swarm_task.lock().await;
                                                             let _ = swarm.behaviour_mut().req_res.send_response(channel, network::FileTransferResponse::Error("Denied".into()));
+                                                            cleanup_incoming_state(&file.staging_path, &file.metadata_path);
                                                         }
                                                     } else {
                                                         drop(inc);
@@ -674,6 +1046,90 @@ pub async fn initialize_app_state<R: Runtime>(
     });
 
     Ok(())
+}
+
+fn mode_to_str(mode: FileTransferMode) -> &'static str {
+    match mode {
+        FileTransferMode::Basic => "basic",
+        FileTransferMode::Resilient => "resilient",
+    }
+}
+
+fn load_outgoing_metadata(path: &Path) -> Result<OutgoingResilientMetadata, String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+fn persist_outgoing_metadata(
+    path: &Path,
+    metadata: &OutgoingResilientMetadata,
+) -> Result<(), String> {
+    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
+    std::fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
+fn load_incoming_resilient_chunks(
+    meta_path: &Path,
+    data_path: &Path,
+) -> Result<(IncomingResilientMetadata, HashMap<u64, Vec<u8>>), String> {
+    if !meta_path.exists() || !data_path.exists() {
+        return Ok((IncomingResilientMetadata::default(), HashMap::new()));
+    }
+
+    let bytes = std::fs::read(meta_path).map_err(|e| e.to_string())?;
+    let metadata: IncomingResilientMetadata =
+        serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    let chunk_size = if metadata.chunk_size == 0 {
+        DEFAULT_CHUNK_SIZE
+    } else {
+        metadata.chunk_size
+    };
+
+    let mut file = std::fs::File::open(data_path).map_err(|e| e.to_string())?;
+    let mut chunks: HashMap<u64, Vec<u8>> = HashMap::new();
+    for (index, length) in metadata.chunks.iter() {
+        let offset = (*index as u64).saturating_mul(chunk_size as u64);
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|e| e.to_string())?;
+        let mut buf = vec![0u8; *length];
+        file.read_exact(&mut buf).map_err(|e| e.to_string())?;
+        chunks.insert(*index, buf);
+    }
+
+    Ok((metadata, chunks))
+}
+
+fn persist_incoming_metadata(
+    path: &Path,
+    metadata: &IncomingResilientMetadata,
+) -> Result<(), String> {
+    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
+    std::fs::write(path, bytes).map_err(|e| e.to_string())
+}
+
+fn write_incoming_chunk(path: &Path, index: u64, data: &[u8]) -> Result<(), String> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    let offset = index.saturating_mul(DEFAULT_CHUNK_SIZE as u64);
+    file.seek(SeekFrom::Start(offset))
+        .map_err(|e| e.to_string())?;
+    file.write_all(data).map_err(|e| e.to_string())
+}
+
+fn cleanup_incoming_state(staging_path: &Option<PathBuf>, metadata_path: &Option<PathBuf>) {
+    if let Some(path) = staging_path {
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    if let Some(path) = metadata_path {
+        if path.exists() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 fn sanitize_filename(input: &str) -> String {

@@ -724,6 +724,8 @@ mod tests {
     fn build_app_state(identity: Identity, db_pool: sqlx::Pool<sqlx::Sqlite>) -> AppState {
         let (network_tx, _network_rx) = tokio::sync::mpsc::channel(8);
         let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_data_dir = temp_dir.into_path();
         AppState {
             identity,
             network_tx,
@@ -731,6 +733,8 @@ mod tests {
             incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
             file_cmd_tx,
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir,
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -782,6 +786,8 @@ mod tests {
 
         let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
         let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_data_dir = temp_dir.into_path();
         let local_state = AppState {
             identity: identity.clone(),
             network_tx,
@@ -789,6 +795,8 @@ mod tests {
             incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
             file_cmd_tx,
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir,
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
         };
 
         delete_message_internal(
@@ -888,6 +896,8 @@ mod tests {
 
         let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
         let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_data_dir = temp_dir.into_path();
         let local_state = AppState {
             identity: identity.clone(),
             network_tx,
@@ -895,6 +905,8 @@ mod tests {
             incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
             file_cmd_tx,
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir,
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
         };
 
         let new_content = "Edited message".to_string();

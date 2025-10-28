@@ -3,6 +3,7 @@ use crypto::identity::Identity;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
@@ -158,6 +159,7 @@ pub struct AppState {
     pub incoming_files: Arc<Mutex<HashMap<String, IncomingFile>>>, // Key is "<sender_id>:<file_name>"
     pub file_cmd_tx: mpsc::Sender<FileTransferCommand>,
     pub file_acl_policy: Arc<Mutex<FileAclPolicy>>, // dynamic, shared across clones
+    pub app_data_dir: PathBuf,
     pub connectivity_snapshot: Arc<Mutex<Option<ConnectivityEventPayload>>>,
 }
 
@@ -170,16 +172,30 @@ pub struct IncomingFile {
     pub nonce: Vec<u8>,
     pub sender_id: String,
     pub accepted: bool,
+    pub mode: FileTransferMode,
+    pub staging_path: Option<PathBuf>,
+    pub metadata_path: Option<PathBuf>,
+    pub resumed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileTransferCommand {
-    Send { recipient_peer_id: String, path: String },
+    Send {
+        recipient_peer_id: String,
+        path: String,
+        mode: FileTransferMode,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileAclPolicy {
     Everyone,
     FriendsOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FileTransferMode {
+    Basic,
+    Resilient,
 }
 
