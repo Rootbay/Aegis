@@ -15,6 +15,7 @@ use e2ee;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use tauri::State;
 
 const ENVELOPE_VERSION: u8 = 1;
@@ -47,6 +48,15 @@ struct AttachmentEnvelope {
     key: String,
     ciphertext: String,
     original_size: u64,
+}
+
+fn is_voice_memo_attachment(descriptor: &AttachmentDescriptor) -> bool {
+    descriptor
+        .content_type
+        .as_deref()
+        .map(|value| value.starts_with("audio/"))
+        .unwrap_or(false)
+        && descriptor.name.starts_with("voice-message-")
 }
 
 #[derive(Debug, Serialize)]
@@ -339,6 +349,11 @@ async fn persist_and_broadcast_message(
 
     let mut db_attachments = Vec::new();
     let mut protocol_attachments = Vec::new();
+
+    let voice_memos_enabled = state.voice_memos_enabled.load(Ordering::Relaxed);
+    if !voice_memos_enabled && attachments.iter().any(is_voice_memo_attachment) {
+        return Err("Voice memo attachments are disabled by your settings.".to_string());
+    }
 
     for descriptor in attachments {
         let AttachmentDescriptor {
@@ -716,6 +731,7 @@ mod tests {
     use chrono::Utc;
     use crypto::identity::Identity;
     use std::collections::HashMap;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use tempfile::tempdir;
     use tokio::sync::Mutex;
@@ -735,6 +751,7 @@ mod tests {
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         }
     }
 
@@ -797,6 +814,7 @@ mod tests {
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         };
 
         delete_message_internal(
@@ -845,6 +863,41 @@ mod tests {
         assert!(
             remote_remaining.is_empty(),
             "message should be deleted on remote client"
+        );
+    }
+
+    #[tokio::test]
+    async fn voice_memo_attachments_blocked_when_disabled() {
+        let temp_dir = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(temp_dir.path().join("voice-memo.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let mut state = build_app_state(identity.clone(), db_pool.clone());
+        state.voice_memos_enabled.store(false, Ordering::Relaxed);
+
+        let attachments = vec![AttachmentDescriptor {
+            name: "voice-message-test.webm".into(),
+            content_type: Some("audio/webm".into()),
+            size: 4,
+            data: vec![0, 1, 2, 3],
+        }];
+
+        let result = persist_and_broadcast_message(
+            state,
+            "Test message".into(),
+            attachments,
+            Some("chat-voice".into()),
+            None,
+            None,
+            None,
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(message) if message.contains("Voice memo attachments are disabled")),
+            "Voice memo attachments should be rejected when disabled"
         );
     }
 
@@ -907,6 +960,7 @@ mod tests {
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         };
 
         let new_content = "Edited message".to_string();

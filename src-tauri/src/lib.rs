@@ -71,6 +71,7 @@ pub async fn run() {
             commands::calls::send_call_signal,
             commands::settings::get_file_acl_policy,
             commands::settings::set_file_acl_policy,
+            commands::settings::set_voice_memos_enabled,
             commands::data_privacy::export_user_data,
             commands::data_privacy::request_account_deletion,
             commands::moderation::submit_user_report,

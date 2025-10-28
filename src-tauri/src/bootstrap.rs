@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use tauri::{Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, Mutex};
 
@@ -103,6 +103,7 @@ pub async fn initialize_app_state<R: Runtime>(
         file_acl_policy: Arc::new(Mutex::new(initial_acl)),
         app_data_dir: app_data_dir.clone(),
         connectivity_snapshot: connectivity_snapshot.clone(),
+        voice_memos_enabled: Arc::new(AtomicBool::new(true)),
     };
 
     *state_container.0.lock().await = Some(new_state.clone());

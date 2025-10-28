@@ -88,7 +88,7 @@
     if (
       current.enableWalkieTalkieVoiceMemos !== enableWalkieTalkieVoiceMemos
     ) {
-      setWalkieTalkieVoiceMemosEnabled(enableWalkieTalkieVoiceMemos);
+      void setWalkieTalkieVoiceMemosEnabled(enableWalkieTalkieVoiceMemos);
     }
 
     if (current.autoDownloadMedia !== autoDownloadMedia) {

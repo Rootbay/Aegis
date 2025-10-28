@@ -167,8 +167,24 @@ export const setLinkPreviewsEnabled = createBooleanSetter(
 export const setResilientFileTransferEnabled = createBooleanSetter(
   "enableResilientFileTransfer",
 );
-export const setWalkieTalkieVoiceMemosEnabled = createBooleanSetter(
-  "enableWalkieTalkieVoiceMemos",
+export async function setWalkieTalkieVoiceMemosEnabled(
+  value: boolean,
+) {
+  if (get(settings).enableWalkieTalkieVoiceMemos !== value) {
+    updateAppSetting("enableWalkieTalkieVoiceMemos", value);
+  }
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      await invoke("set_voice_memos_enabled", { enabled: value });
+    }
+  } catch (error) {
+    console.error("Failed to sync voice memo setting with backend", error);
+  }
+}
+
+void setWalkieTalkieVoiceMemosEnabled(
+  get(settings).enableWalkieTalkieVoiceMemos,
 );
 export const setAutoDownloadMediaEnabled = createBooleanSetter(
   "autoDownloadMedia",
