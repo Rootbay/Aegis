@@ -3,6 +3,8 @@ import type { User } from "$lib/features/auth/models/User";
 
 export type FriendStatus = "Online" | "Offline" | "Blocked" | "Pending";
 
+export type SpamDecision = "flagged" | "auto-muted" | "muted" | "allowed";
+
 export interface Friend extends User {
   status: FriendStatus;
   timestamp: string;
@@ -12,4 +14,9 @@ export interface Friend extends User {
   isPinned?: boolean;
   friendshipId?: string;
   relationshipStatus?: string;
+  spamScore?: number;
+  isSpamFlagged?: boolean;
+  spamReasons?: string[];
+  spamMuted?: boolean;
+  spamDecision?: SpamDecision;
 }

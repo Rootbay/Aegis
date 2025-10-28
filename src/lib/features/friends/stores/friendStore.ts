@@ -5,6 +5,8 @@ import { getInvoke } from "$services/tauri";
 import type { InvokeFn } from "$services/tauri";
 import { userStore } from "$lib/stores/userStore";
 import { userCache } from "$lib/utils/cache";
+import { spamClassifier } from "$lib/features/security/spamClassifier";
+import { mutedFriendsStore } from "./mutedFriendsStore";
 
 type FriendshipBackend = {
   friendship: {
@@ -35,6 +37,11 @@ interface FriendStore extends Readable<FriendStoreState> {
   addFriend: (friend: Friend | (Partial<Friend> & { id: string })) => void;
   removeFriend: (friendId: string) => void;
   initialize: () => Promise<void>;
+  markFriendAsTrusted: (friendId: string) => void;
+  markFriendAsSpam: (
+    friendId: string,
+    options?: { score?: number; reasons?: string[] },
+  ) => void;
 }
 
 const FALLBACK_AVATAR = (id: string) =>
@@ -104,6 +111,11 @@ function normalizeFriend(friend: Partial<Friend> & { id: string }): Friend {
     isPinned: friend.isPinned,
     friendshipId: friend.friendshipId,
     relationshipStatus: relationshipStatus ?? status,
+    spamScore: friend.spamScore,
+    isSpamFlagged: friend.isSpamFlagged ?? false,
+    spamReasons: friend.spamReasons,
+    spamMuted: friend.spamMuted ?? false,
+    spamDecision: friend.spamDecision,
   };
 }
 
@@ -158,11 +170,157 @@ function mapFriendshipToFriend(
   });
 }
 
+function buildSpamTextForFriend(friend: Friend): string {
+  const parts: string[] = [];
+  if (friend.name) parts.push(friend.name);
+  if (friend.bio) parts.push(friend.bio);
+  if (friend.tag) parts.push(friend.tag);
+  if (friend.lastMessage) parts.push(friend.lastMessage);
+  if (friend.relationshipStatus) parts.push(friend.relationshipStatus);
+
+  const seen = new Set<string>();
+  const normalized = parts
+    .map((value) => value?.toString?.().trim() ?? "")
+    .filter((value) => value.length > 0);
+  const deduped: string[] = [];
+  for (const value of normalized) {
+    const lower = value.toLowerCase();
+    if (!seen.has(lower)) {
+      deduped.push(value);
+      seen.add(lower);
+    }
+  }
+
+  return deduped.join(" ");
+}
+
 export function createFriendStore(): FriendStore {
   const { subscribe, set, update } = writable<FriendStoreState>({
     friends: [],
     loading: true,
   });
+
+  type SpamAnnotationOptions = {
+    invokeFn?: InvokeFn | null;
+    currentUserId?: string | null;
+  };
+
+  const evaluateFriendSpam = async (
+    friend: Friend,
+    options: SpamAnnotationOptions,
+  ): Promise<Friend> => {
+    const manualDecision = friend.spamDecision;
+    const currentlyMuted = mutedFriendsStore.isMuted(friend.id);
+
+    if (manualDecision === "allowed") {
+      return normalizeFriend({
+        ...friend,
+        isSpamFlagged: false,
+        spamMuted: currentlyMuted,
+        spamDecision: "allowed",
+      });
+    }
+
+    const textForModel = buildSpamTextForFriend(friend);
+    if (textForModel.length === 0) {
+      const fallbackDecision =
+        manualDecision ?? (currentlyMuted ? "muted" : undefined);
+      return normalizeFriend({
+        ...friend,
+        isSpamFlagged: false,
+        spamMuted: currentlyMuted,
+        spamDecision: fallbackDecision,
+      });
+    }
+
+    try {
+      const result = await spamClassifier.scoreText(textForModel, {
+        context: "friend-request",
+        subjectId: friend.id,
+      });
+
+      let spamDecision = manualDecision;
+      let spamMuted = currentlyMuted;
+
+      if (result.autoMuted && !currentlyMuted) {
+        mutedFriendsStore.mute(friend.id);
+        spamMuted = true;
+        spamDecision = "auto-muted";
+        if (
+          options.invokeFn &&
+          options.currentUserId &&
+          options.currentUserId !== friend.id
+        ) {
+          try {
+            await options.invokeFn("mute_user", {
+              current_user_id: options.currentUserId,
+              target_user_id: friend.id,
+              muted: true,
+              spam_score: result.score,
+            });
+          } catch (error) {
+            console.warn("Failed to log auto mute event", error);
+          }
+        }
+      } else if (currentlyMuted && !spamDecision) {
+        spamDecision = "muted";
+      } else if (result.flagged && !spamDecision) {
+        spamDecision = "flagged";
+      }
+
+      return normalizeFriend({
+        ...friend,
+        spamScore: result.score,
+        isSpamFlagged: result.flagged,
+        spamReasons: result.reasons,
+        spamMuted,
+        spamDecision,
+      });
+    } catch (error) {
+      console.warn("Failed to evaluate friend for spam", error);
+      return normalizeFriend({
+        ...friend,
+        spamMuted: currentlyMuted,
+      });
+    }
+  };
+
+  const applySpamAnnotations = async (
+    friendsToAnnotate: Friend[],
+    options: SpamAnnotationOptions = {},
+  ) => {
+    if (!friendsToAnnotate.length) {
+      return;
+    }
+
+    const currentUserId =
+      options.currentUserId ?? get(userStore).me?.id ?? null;
+
+    let invokeFn = options.invokeFn;
+    if (invokeFn === undefined) {
+      try {
+        invokeFn = await getInvoke();
+      } catch (error) {
+        console.warn("Failed to obtain Tauri invoke handle", error);
+        invokeFn = null;
+      }
+    }
+
+    const annotated = await Promise.all(
+      friendsToAnnotate.map((friend) =>
+        evaluateFriendSpam(friend, { invokeFn, currentUserId }),
+      ),
+    );
+
+    const annotatedById = new Map(annotated.map((friend) => [friend.id, friend]));
+
+    update((state) => ({
+      ...state,
+      friends: state.friends.map(
+        (existing) => annotatedById.get(existing.id) ?? existing,
+      ),
+    }));
+  };
 
   const handleFriendsUpdate = (updatedFriends: Friend[]) => {
     const normalized = updatedFriends
@@ -171,6 +329,7 @@ export function createFriendStore(): FriendStore {
       )
       .map((friend) => normalizeFriend(friend));
     set({ friends: normalized, loading: false });
+    void applySpamAnnotations(normalized);
   };
 
   const updateFriendPresence = (userId: string, isOnline: boolean) => {
@@ -184,6 +343,11 @@ export function createFriendStore(): FriendStore {
               timestamp: friend.timestamp,
               relationshipStatus: friend.relationshipStatus,
               friendshipId: friend.friendshipId,
+              spamScore: friend.spamScore,
+              isSpamFlagged: friend.isSpamFlagged,
+              spamReasons: friend.spamReasons,
+              spamMuted: friend.spamMuted,
+              spamDecision: friend.spamDecision,
             })
           : friend,
       ),
@@ -202,12 +366,55 @@ export function createFriendStore(): FriendStore {
       }
       return { ...s, friends: next };
     });
+    void applySpamAnnotations([normalized]);
   };
 
   const removeFriend = (friendId: string) => {
     update((s) => ({
       ...s,
       friends: s.friends.filter((f) => f.id !== friendId),
+    }));
+  };
+
+  const markFriendAsTrusted = (friendId: string) => {
+    if (!friendId) return;
+    update((s) => ({
+      ...s,
+      friends: s.friends.map((friend) =>
+        friend.id === friendId
+          ? normalizeFriend({
+              ...friend,
+              isSpamFlagged: false,
+              spamMuted: false,
+              spamDecision: "allowed",
+            })
+          : friend,
+      ),
+    }));
+  };
+
+  const markFriendAsSpam = (
+    friendId: string,
+    options: { score?: number; reasons?: string[] } = {},
+  ) => {
+    if (!friendId) return;
+    update((s) => ({
+      ...s,
+      friends: s.friends.map((friend) =>
+        friend.id === friendId
+          ? normalizeFriend({
+              ...friend,
+              isSpamFlagged: true,
+              spamMuted: true,
+              spamDecision:
+                friend.spamDecision === "allowed"
+                  ? "muted"
+                  : friend.spamDecision ?? "muted",
+              spamScore: options.score ?? friend.spamScore,
+              spamReasons: options.reasons ?? friend.spamReasons,
+            })
+          : friend,
+      ),
     }));
   };
 
@@ -238,6 +445,10 @@ export function createFriendStore(): FriendStore {
         .filter((friend): friend is Friend => friend !== null);
 
       set({ friends, loading: false });
+      await applySpamAnnotations(friends, {
+        invokeFn,
+        currentUserId: currentUser.id,
+      });
     } catch (error) {
       console.error("Failed to fetch friendships:", error);
       set({ friends: [], loading: false });
@@ -250,6 +461,8 @@ export function createFriendStore(): FriendStore {
     updateFriendPresence,
     addFriend,
     removeFriend,
+    markFriendAsTrusted,
+    markFriendAsSpam,
     initialize,
   };
 }

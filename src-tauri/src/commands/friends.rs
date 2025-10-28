@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub struct BlockUserResult {
     pub friendship: database::FriendshipWithProfile,
     pub newly_created: bool,
+    pub spam_score: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ pub struct UnblockUserResult {
 pub struct MuteUserResult {
     pub target_user_id: String,
     pub muted: bool,
+    pub spam_score: Option<f32>,
 }
 
 #[tauri::command]
@@ -132,23 +134,33 @@ pub async fn accept_friend_request(
 pub async fn block_user(
     current_user_id: String,
     target_user_id: String,
+    spam_score: Option<f32>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<BlockUserResult, String> {
     let state_guard = state_container.0.lock().await;
     let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
     drop(state_guard);
 
-    block_user_internal(state, current_user_id, target_user_id).await
+    block_user_internal(state, current_user_id, target_user_id, spam_score).await
 }
 
 async fn block_user_internal(
     state: AppState,
     current_user_id: String,
     target_user_id: String,
+    spam_score: Option<f32>,
 ) -> Result<BlockUserResult, String> {
     let my_id = state.identity.peer_id().to_base58();
     if current_user_id != my_id {
         return Err("Caller identity mismatch".to_string());
+    }
+
+    if let Some(score) = spam_score {
+        tracing::info!(
+            target_user_id = %target_user_id,
+            spam_score = score,
+            "block_user invoked with spam score"
+        );
     }
 
     let now = Utc::now();
@@ -214,6 +226,7 @@ async fn block_user_internal(
     Ok(BlockUserResult {
         friendship,
         newly_created,
+        spam_score,
     })
 }
 
@@ -293,13 +306,14 @@ pub async fn mute_user(
     current_user_id: String,
     target_user_id: String,
     muted: bool,
+    spam_score: Option<f32>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<MuteUserResult, String> {
     let state_guard = state_container.0.lock().await;
     let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
     drop(state_guard);
 
-    mute_user_internal(state, current_user_id, target_user_id, muted).await
+    mute_user_internal(state, current_user_id, target_user_id, muted, spam_score).await
 }
 
 async fn mute_user_internal(
@@ -307,6 +321,7 @@ async fn mute_user_internal(
     current_user_id: String,
     target_user_id: String,
     muted: bool,
+    spam_score: Option<f32>,
 ) -> Result<MuteUserResult, String> {
     let my_id = state.identity.peer_id().to_base58();
     if current_user_id != my_id {
@@ -317,9 +332,18 @@ async fn mute_user_internal(
         return Err("Cannot mute yourself.".to_string());
     }
 
+    if let Some(score) = spam_score {
+        tracing::info!(
+            target_user_id = %target_user_id,
+            spam_score = score,
+            "mute_user invoked with spam score"
+        );
+    }
+
     Ok(MuteUserResult {
         target_user_id,
         muted,
+        spam_score,
     })
 }
 
@@ -469,15 +493,21 @@ mod tests {
 
         let (app_state, mut network_rx) = build_app_state(identity.clone(), db_pool.clone());
 
-        let block_result = block_user_internal(app_state.clone(), my_id.clone(), target_id.clone())
-            .await
-            .expect("block user");
+        let block_result = block_user_internal(
+            app_state.clone(),
+            my_id.clone(),
+            target_id.clone(),
+            None,
+        )
+        .await
+        .expect("block user");
 
         assert!(block_result.newly_created);
         assert_eq!(
             block_result.friendship.friendship.status,
             FriendshipStatus::BlockedByA.to_string()
         );
+        assert!(block_result.spam_score.is_none());
 
         let message = timeout(Duration::from_millis(250), network_rx.recv())
             .await
@@ -515,11 +545,13 @@ mod tests {
 
         let (app_state, _rx) = build_app_state(identity.clone(), db_pool);
 
-        let result = mute_user_internal(app_state, my_id.clone(), target_id.clone(), true)
-            .await
-            .expect("mute user");
+        let result =
+            mute_user_internal(app_state, my_id.clone(), target_id.clone(), true, None)
+                .await
+                .expect("mute user");
 
         assert!(result.muted);
         assert_eq!(result.target_user_id, target_id);
+        assert!(result.spam_score.is_none());
     }
 }

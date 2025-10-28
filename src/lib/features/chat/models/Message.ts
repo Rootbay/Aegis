@@ -22,4 +22,9 @@ export interface Message {
   editedAt?: string;
   editedBy?: string;
   expiresAt?: string;
+  spamScore?: number;
+  isSpamFlagged?: boolean;
+  spamReasons?: string[];
+  spamMuted?: boolean;
+  spamDecision?: "flagged" | "auto-muted" | "muted" | "allowed";
 }
