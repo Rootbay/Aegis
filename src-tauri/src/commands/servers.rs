@@ -1,13 +1,16 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::AepMessage;
+use aegis_shared_types::AppState;
 use aep::database;
 use aep::database::{
-    ChannelDisplayPreference, ServerInvite, ServerMetadataUpdate, ServerModerationUpdate,
+    ChannelDisplayPreference, ServerEvent, ServerEventPatch, ServerInvite, ServerMetadataUpdate,
+    ServerModerationUpdate,
 };
 use aep::user_service;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, State};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendServerInviteResult {
@@ -58,6 +61,199 @@ impl From<ChannelDisplayPreference> for ChannelDisplayPreferenceResponse {
             hide_member_names: value.hide_member_names,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerEventResponse {
+    pub id: String,
+    pub server_id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    pub scheduled_for: String,
+    pub created_by: String,
+    pub created_at: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cancelled_at: Option<String>,
+}
+
+impl From<ServerEvent> for ServerEventResponse {
+    fn from(value: ServerEvent) -> Self {
+        ServerEventResponse {
+            id: value.id,
+            server_id: value.server_id,
+            title: value.title,
+            description: value.description,
+            channel_id: value.channel_id,
+            scheduled_for: value.scheduled_for.to_rfc3339(),
+            created_by: value.created_by,
+            created_at: value.created_at.to_rfc3339(),
+            status: value.status,
+            cancelled_at: value.cancelled_at.map(|dt| dt.to_rfc3339()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateServerEventRequest {
+    pub server_id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    pub scheduled_for: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateServerEventRequest {
+    pub event_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_for: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CancelServerEventRequest {
+    pub event_id: String,
+}
+
+fn sanitize_optional_string(value: Option<String>) -> Option<String> {
+    value.and_then(|raw| {
+        let trimmed = raw.trim().to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+fn parse_schedule(value: &str) -> Result<DateTime<Utc>, String> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .map_err(|error| format!("Invalid scheduled time: {error}"))
+}
+
+async fn ensure_server_owner(state: &AppState, server_id: &str) -> Result<(), String> {
+    let server = database::get_server_by_id(&state.db_pool, server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    let current_user = state.identity.peer_id().to_base58();
+    if server.owner_id != current_user {
+        return Err("Only the server owner can manage events.".into());
+    }
+    Ok(())
+}
+
+async fn create_server_event_internal(
+    state: AppState,
+    request: CreateServerEventRequest,
+) -> Result<ServerEvent, String> {
+    let title = request.title.trim();
+    if title.is_empty() {
+        return Err("Event title cannot be empty.".into());
+    }
+
+    ensure_server_owner(&state, &request.server_id).await?;
+
+    let scheduled_for = parse_schedule(&request.scheduled_for)?;
+    let current_user = state.identity.peer_id().to_base58();
+    let event = ServerEvent {
+        id: Uuid::new_v4().to_string(),
+        server_id: request.server_id.clone(),
+        title: title.to_string(),
+        description: sanitize_optional_string(request.description),
+        channel_id: sanitize_optional_string(request.channel_id),
+        scheduled_for,
+        created_by: current_user,
+        created_at: Utc::now(),
+        status: "scheduled".to_string(),
+        cancelled_at: None,
+    };
+
+    database::insert_server_event(&state.db_pool, &event)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(event)
+}
+
+async fn update_server_event_internal(
+    state: AppState,
+    request: UpdateServerEventRequest,
+) -> Result<ServerEvent, String> {
+    let existing = database::get_server_event_by_id(&state.db_pool, &request.event_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Event not found.".to_string())?;
+
+    ensure_server_owner(&state, &existing.server_id).await?;
+
+    let mut patch = ServerEventPatch::default();
+
+    if let Some(title) = request.title {
+        let trimmed = title.trim().to_string();
+        if trimmed.is_empty() {
+            return Err("Event title cannot be empty.".into());
+        }
+        patch.title = Some(trimmed);
+    }
+
+    if let Some(description) = request.description {
+        patch.description = Some(sanitize_optional_string(description));
+    }
+
+    if let Some(channel_id) = request.channel_id {
+        patch.channel_id = Some(sanitize_optional_string(channel_id));
+    }
+
+    if let Some(scheduled_for) = request.scheduled_for {
+        let parsed = parse_schedule(&scheduled_for)?;
+        patch.scheduled_for = Some(parsed);
+    }
+
+    if let Some(status) = request.status {
+        let trimmed = status.trim().to_string();
+        if trimmed.is_empty() {
+            return Err("Event status cannot be empty.".into());
+        }
+        patch.status = Some(trimmed);
+    }
+
+    database::update_server_event(&state.db_pool, &request.event_id, patch)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn cancel_server_event_internal(
+    state: AppState,
+    event_id: String,
+) -> Result<ServerEvent, String> {
+    let existing = database::get_server_event_by_id(&state.db_pool, &event_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Event not found.".to_string())?;
+
+    ensure_server_owner(&state, &existing.server_id).await?;
+
+    let mut patch = ServerEventPatch::default();
+    patch.status = Some("cancelled".to_string());
+    patch.cancelled_at = Some(Some(Utc::now()));
+
+    database::update_server_event(&state.db_pool, &event_id, patch)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -293,6 +489,217 @@ pub async fn get_server_details(
     database::get_server_by_id(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_server_events(
+    server_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<ServerEventResponse>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let events = database::get_server_events(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(events.into_iter().map(ServerEventResponse::from).collect())
+}
+
+#[tauri::command]
+pub async fn create_server_event(
+    request: CreateServerEventRequest,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ServerEventResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let event = create_server_event_internal(state.clone(), request).await?;
+    let response: ServerEventResponse = event.into();
+    app.emit("server-event-created", response.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn update_server_event(
+    request: UpdateServerEventRequest,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ServerEventResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let event = update_server_event_internal(state.clone(), request).await?;
+    let response: ServerEventResponse = event.into();
+    app.emit("server-event-updated", response.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn cancel_server_event(
+    request: CancelServerEventRequest,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ServerEventResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let event = cancel_server_event_internal(state.clone(), request.event_id).await?;
+    let response: ServerEventResponse = event.into();
+    app.emit("server-event-cancelled", response.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, Server};
+    use crypto::identity::Identity;
+    use std::collections::HashMap;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use tempfile::tempdir;
+    use tokio::sync::Mutex;
+
+    fn build_app_state(identity: Identity, db_pool: sqlx::Pool<sqlx::Sqlite>) -> AppState {
+        let (network_tx, _network_rx) = tokio::sync::mpsc::channel(8);
+        let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
+        let temp_dir = tempdir().expect("tempdir");
+        let app_data_dir = temp_dir.into_path();
+        AppState {
+            identity,
+            network_tx,
+            db_pool,
+            incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
+            file_cmd_tx,
+            file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
+            app_data_dir,
+            connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+        }
+    }
+
+    async fn seed_server(db_pool: &sqlx::Pool<sqlx::Sqlite>, owner_id: &str) -> Server {
+        let server = Server {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: "Test Server".into(),
+            owner_id: owner_id.to_string(),
+            created_at: Utc::now(),
+            icon_url: None,
+            description: None,
+            default_channel_id: None,
+            allow_invites: Some(true),
+            moderation_level: None,
+            explicit_content_filter: Some(false),
+            channels: Vec::new(),
+            members: Vec::new(),
+            roles: Vec::new(),
+            invites: Vec::new(),
+        };
+
+        database::insert_server(db_pool, &server)
+            .await
+            .expect("insert server");
+        database::add_server_member(db_pool, &server.id, owner_id)
+            .await
+            .expect("add member");
+        server
+    }
+
+    #[tokio::test]
+    async fn create_event_persists_record() {
+        let temp_dir = tempdir().expect("tempdir");
+        let db_path = temp_dir.path().join("events.db");
+        let db_pool = aep::database::initialize_db(db_path)
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let owner_id = identity.peer_id().to_base58();
+        let state = build_app_state(identity.clone(), db_pool.clone());
+        let server = seed_server(&db_pool, &owner_id).await;
+
+        let request = CreateServerEventRequest {
+            server_id: server.id.clone(),
+            title: "Town Hall".into(),
+            description: Some("Monthly update".into()),
+            channel_id: None,
+            scheduled_for: Utc::now().to_rfc3339(),
+        };
+
+        let event = create_server_event_internal(state.clone(), request)
+            .await
+            .expect("create event");
+
+        let events = database::get_server_events(&state.db_pool, &server.id)
+            .await
+            .expect("fetch events");
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].id, event.id);
+        assert_eq!(events[0].title, "Town Hall");
+        assert_eq!(events[0].created_by, owner_id);
+    }
+
+    #[tokio::test]
+    async fn cancel_event_sets_status_and_timestamp() {
+        let temp_dir = tempdir().expect("tempdir");
+        let db_path = temp_dir.path().join("events-cancel.db");
+        let db_pool = aep::database::initialize_db(db_path)
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let owner_id = identity.peer_id().to_base58();
+        let state = build_app_state(identity.clone(), db_pool.clone());
+        let server = seed_server(&db_pool, &owner_id).await;
+
+        let request = CreateServerEventRequest {
+            server_id: server.id.clone(),
+            title: "Launch Stream".into(),
+            description: None,
+            channel_id: None,
+            scheduled_for: (Utc::now() + chrono::Duration::hours(2)).to_rfc3339(),
+        };
+
+        let event = create_server_event_internal(state.clone(), request)
+            .await
+            .expect("create event");
+
+        let cancelled = cancel_server_event_internal(state.clone(), event.id.clone())
+            .await
+            .expect("cancel event");
+
+        assert_eq!(cancelled.status, "cancelled");
+        assert!(cancelled.cancelled_at.is_some());
+
+        let refreshed = database::get_server_event_by_id(&state.db_pool, &event.id)
+            .await
+            .expect("fetch event")
+            .expect("event exists");
+
+        assert_eq!(refreshed.status, "cancelled");
+        assert!(refreshed.cancelled_at.is_some());
+    }
 }
 
 #[tauri::command]

@@ -3,6 +3,7 @@ use sqlx::{sqlite::SqlitePoolOptions, FromRow, Pool, QueryBuilder, Sqlite};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use serde_json;
 use aegis_types::AegisError;
 
@@ -131,6 +132,63 @@ pub struct GroupChatMember {
 pub struct GroupChatRecord {
     pub chat: GroupChat,
     pub member_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ServerEvent {
+    pub id: String,
+    pub server_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub channel_id: Option<String>,
+    pub scheduled_for: DateTime<Utc>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub status: String,
+    pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServerEventPatch {
+    pub title: Option<String>,
+    pub description: Option<Option<String>>,
+    pub channel_id: Option<Option<String>>,
+    pub scheduled_for: Option<DateTime<Utc>>,
+    pub status: Option<String>,
+    pub cancelled_at: Option<Option<DateTime<Utc>>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+struct ServerEventRow {
+    id: String,
+    server_id: String,
+    title: String,
+    description: Option<String>,
+    channel_id: Option<String>,
+    scheduled_for: String,
+    created_by: String,
+    created_at: String,
+    status: String,
+    cancelled_at: Option<String>,
+}
+
+impl TryInto<ServerEvent> for ServerEventRow {
+    type Error = sqlx::Error;
+
+    fn try_into(self) -> Result<ServerEvent, Self::Error> {
+        Ok(ServerEvent {
+            id: self.id,
+            server_id: self.server_id,
+            title: self.title,
+            description: self.description,
+            channel_id: self.channel_id,
+            scheduled_for: parse_timestamp(&self.scheduled_for)?,
+            created_by: self.created_by,
+            created_at: parse_timestamp(&self.created_at)?,
+            status: self.status,
+            cancelled_at: parse_optional_timestamp(self.cancelled_at)?,
+        })
+    }
 }
 
 pub async fn initialize_db(db_path: std::path::PathBuf) -> Result<Pool<Sqlite>, sqlx::Error> {
@@ -580,6 +638,133 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         roles,
         invites,
     })
+}
+
+pub async fn insert_server_event(
+    pool: &Pool<Sqlite>,
+    event: &ServerEvent,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO server_events (id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        event.id,
+        event.server_id,
+        event.title,
+        event.description,
+        event.channel_id,
+        event.scheduled_for.to_rfc3339(),
+        event.created_by,
+        event.created_at.to_rfc3339(),
+        event.status,
+        event.cancelled_at.map(|dt| dt.to_rfc3339()),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_server_event_by_id(
+    pool: &Pool<Sqlite>,
+    event_id: &str,
+) -> Result<Option<ServerEvent>, sqlx::Error> {
+    let row = sqlx::query_as!(
+        ServerEventRow,
+        "SELECT id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at FROM server_events WHERE id = ?",
+        event_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(row) = row {
+        let event: ServerEvent = row.try_into()?;
+        Ok(Some(event))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn get_server_events(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+) -> Result<Vec<ServerEvent>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        ServerEventRow,
+        "SELECT id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at FROM server_events WHERE server_id = ? ORDER BY scheduled_for ASC",
+        server_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut events = Vec::with_capacity(rows.len());
+    for row in rows {
+        let event: ServerEvent = row.try_into()?;
+        events.push(event);
+    }
+    Ok(events)
+}
+
+pub async fn update_server_event(
+    pool: &Pool<Sqlite>,
+    event_id: &str,
+    patch: ServerEventPatch,
+) -> Result<ServerEvent, sqlx::Error> {
+    let mut builder = QueryBuilder::<Sqlite>::new("UPDATE server_events SET ");
+    let mut has_updates = false;
+
+    let mut push_comma = |builder: &mut QueryBuilder<Sqlite>, has_updates: &mut bool| {
+        if *has_updates {
+            builder.push(", ");
+        }
+        *has_updates = true;
+    };
+
+    if let Some(title) = patch.title {
+        push_comma(&mut builder, &mut has_updates);
+        builder.push("title = ");
+        builder.push_bind(title);
+    }
+    if let Some(description) = patch.description {
+        push_comma(&mut builder, &mut has_updates);
+        builder.push("description = ");
+        builder.push_bind(description);
+    }
+    if let Some(channel_id) = patch.channel_id {
+        push_comma(&mut builder, &mut has_updates);
+        builder.push("channel_id = ");
+        builder.push_bind(channel_id);
+    }
+    if let Some(scheduled_for) = patch.scheduled_for {
+        push_comma(&mut builder, &mut has_updates);
+        builder.push("scheduled_for = ");
+        builder.push_bind(scheduled_for.to_rfc3339());
+    }
+    if let Some(status) = patch.status {
+        push_comma(&mut builder, &mut has_updates);
+        builder.push("status = ");
+        builder.push_bind(status);
+    }
+    if let Some(cancelled_at) = patch.cancelled_at {
+        push_comma(&mut builder, &mut has_updates);
+        builder.push("cancelled_at = ");
+        builder.push_bind(cancelled_at.map(|dt| dt.to_rfc3339()));
+    }
+
+    if !has_updates {
+        return get_server_event_by_id(pool, event_id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound);
+    }
+
+    builder.push(" WHERE id = ");
+    builder.push_bind(event_id);
+    builder.push(
+        " RETURNING id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at",
+    );
+
+    let row: ServerEventRow = builder
+        .build_query_as::<ServerEventRow>()
+        .fetch_one(pool)
+        .await?;
+    row.try_into()
 }
 
 pub async fn insert_channel(pool: &Pool<Sqlite>, channel: &Channel) -> Result<(), sqlx::Error> {
