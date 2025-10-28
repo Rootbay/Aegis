@@ -417,6 +417,71 @@ pub async fn get_friendships(
         .map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn get_friendships_for_user(
+    current_user_id: String,
+    target_user_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<String>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+    drop(state_guard);
+
+    get_friendships_for_user_internal(state, current_user_id, target_user_id).await
+}
+
+async fn get_friendships_for_user_internal(
+    state: AppState,
+    current_user_id: String,
+    target_user_id: String,
+) -> Result<Vec<String>, String> {
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".into());
+    }
+
+    let accepted_status = FriendshipStatus::Accepted.to_string();
+
+    if target_user_id != my_id {
+        let maybe_friendship = database::get_friendship(&state.db_pool, &my_id, &target_user_id)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let friendship = maybe_friendship.ok_or_else(|| {
+            "You do not have permission to view this user's friendships.".to_string()
+        })?;
+
+        if friendship.status != accepted_status {
+            return Err("You do not have permission to view this user's friendships.".into());
+        }
+    }
+
+    let friendships = database::get_all_friendships_for_user(&state.db_pool, &target_user_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut sanitized_ids: Vec<String> = friendships
+        .into_iter()
+        .filter(|friendship| friendship.status == accepted_status)
+        .map(|friendship| {
+            if friendship.user_a_id == target_user_id {
+                friendship.user_b_id
+            } else {
+                friendship.user_a_id
+            }
+        })
+        .filter(|friend_id| friend_id != &target_user_id && friend_id != &current_user_id)
+        .collect();
+
+    sanitized_ids.sort();
+    sanitized_ids.dedup();
+
+    Ok(sanitized_ids)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,5 +618,102 @@ mod tests {
         assert!(result.muted);
         assert_eq!(result.target_user_id, target_id);
         assert!(result.spam_score.is_none());
+    }
+
+    #[tokio::test]
+    async fn get_friendships_for_user_internal_returns_sanitized_ids() {
+        let temp = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(temp.path().join("friends_for_user.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let my_id = identity.peer_id().to_base58();
+        let target_id = Uuid::new_v4().to_string();
+        let mutual_friend_id = Uuid::new_v4().to_string();
+        let pending_friend_id = Uuid::new_v4().to_string();
+
+        let now = Utc::now();
+
+        let mutual_friendship = Friendship {
+            id: Uuid::new_v4().to_string(),
+            user_a_id: target_id.clone(),
+            user_b_id: mutual_friend_id.clone(),
+            status: FriendshipStatus::Accepted.to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        let pending_friendship = Friendship {
+            id: Uuid::new_v4().to_string(),
+            user_a_id: target_id.clone(),
+            user_b_id: pending_friend_id,
+            status: FriendshipStatus::Pending.to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        let direct_friendship = Friendship {
+            id: Uuid::new_v4().to_string(),
+            user_a_id: my_id.clone(),
+            user_b_id: target_id.clone(),
+            status: FriendshipStatus::Accepted.to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        database::insert_friendship(&db_pool, &mutual_friendship)
+            .await
+            .expect("insert mutual friendship");
+        database::insert_friendship(&db_pool, &pending_friendship)
+            .await
+            .expect("insert pending friendship");
+        database::insert_friendship(&db_pool, &direct_friendship)
+            .await
+            .expect("insert direct friendship");
+
+        let (app_state, _rx) = build_app_state(identity, db_pool);
+
+        let sanitized = get_friendships_for_user_internal(
+            app_state,
+            my_id.clone(),
+            target_id.clone(),
+        )
+        .await
+        .expect("fetch sanitized friendships");
+
+        assert_eq!(sanitized, vec![mutual_friend_id]);
+    }
+
+    #[tokio::test]
+    async fn get_friendships_for_user_internal_requires_accepted_friendship() {
+        let temp = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(temp.path().join("friends_for_user_denied.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let my_id = identity.peer_id().to_base58();
+        let target_id = Uuid::new_v4().to_string();
+        let now = Utc::now();
+
+        let pending_friendship = Friendship {
+            id: Uuid::new_v4().to_string(),
+            user_a_id: my_id.clone(),
+            user_b_id: target_id.clone(),
+            status: FriendshipStatus::Pending.to_string(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        database::insert_friendship(&db_pool, &pending_friendship)
+            .await
+            .expect("insert pending friendship");
+
+        let (app_state, _rx) = build_app_state(identity, db_pool);
+
+        let result = get_friendships_for_user_internal(app_state, my_id, target_id).await;
+
+        assert!(result.is_err());
     }
 }

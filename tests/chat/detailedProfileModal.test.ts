@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CREATE_GROUP_CONTEXT_KEY } from "../../src/lib/contextKeys";
 
 const mocks = vi.hoisted(() => {
-  const invoke = vi.fn(async (command: string) => {
+  const defaultInvoke = async (command: string, args?: any) => {
     switch (command) {
       case "get_friendships":
+        return [];
+      case "get_friendships_for_user":
         return [];
       case "send_friend_request":
         return null;
@@ -19,7 +21,9 @@ const mocks = vi.hoisted(() => {
       default:
         return null;
     }
-  });
+  };
+
+  const invoke = vi.fn(defaultInvoke);
 
   const addToast = vi.fn();
 
@@ -139,6 +143,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     invoke,
+    defaultInvoke,
     addToast,
     userStoreMock,
     friendStoreMock,
@@ -216,6 +221,7 @@ describe("Detailed profile modal integration", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.invoke.mockImplementation(mocks.defaultInvoke);
   });
 
   it("renders DetailedProfileModal via AppModals and handles actions", async () => {
@@ -301,6 +307,51 @@ describe("Detailed profile modal integration", () => {
     await fireEvent.click(getByLabelText("Close"));
 
     expect(closeModal).toHaveBeenCalledTimes(2);
+  });
+
+  it("renders mutual friends when backend supplies data", async () => {
+    mocks.invoke.mockImplementation(async (command, args) => {
+      switch (command) {
+        case "get_friendships":
+          if (args?.current_user_id === "current-user") {
+            return [
+              {
+                id: "friendship-1",
+                user_a_id: "current-user",
+                user_b_id: "friend-42",
+              },
+            ];
+          }
+          return [];
+        case "get_friendships_for_user":
+          expect(args).toMatchObject({
+            current_user_id: "current-user",
+            target_user_id: "user-123",
+          });
+          return ["friend-42", "someone-else"];
+        default:
+          return mocks.defaultInvoke(command, args);
+      }
+    });
+
+    const { findByText, queryByText } = render(AppModals, {
+      props: {
+        activeModal: "detailedProfile",
+        modalProps: {
+          profileUser,
+          mutualFriends: [],
+          mutualServers: [],
+          mutualGroups: [],
+          isFriend: false,
+          isMyProfile: false,
+        },
+        closeModal: vi.fn(),
+      },
+    });
+
+    await findByText("User friend-42");
+
+    expect(queryByText("No mutual friends.")).toBeNull();
   });
 });
 
