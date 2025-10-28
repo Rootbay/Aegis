@@ -102,6 +102,14 @@ pub enum AepMessage {
         call_id: String,
         signal: CallSignalPayload,
     },
+    CollaborationUpdate {
+        document_id: String,
+        update: Vec<u8>,
+        kind: CollaborationKind,
+        sender_id: String,
+        participants: Vec<String>,
+        timestamp: Option<DateTime<Utc>>,
+    },
     MessageReaction {
         message_id: String,
         chat_id: String,
@@ -125,6 +133,13 @@ pub enum AepMessage {
         edited_at: DateTime<Utc>,
         signature: Option<Vec<u8>>,
     },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum CollaborationKind {
+    Document,
+    Whiteboard,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

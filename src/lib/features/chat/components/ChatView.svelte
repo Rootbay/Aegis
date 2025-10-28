@@ -23,6 +23,7 @@
   } from "$lib/features/chat/stores/chatStore";
   import { afterUpdate, getContext, onDestroy, onMount, tick } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
+  import { generateCollaborationDocumentId } from "$lib/features/collaboration/collabDocumentStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { get, derived } from "svelte/store";
   import {
@@ -63,6 +64,10 @@
   const openDetailedProfileModal = createGroupContext?.openDetailedProfileModal;
   const openCreateGroupModal = createGroupContext?.openCreateGroupModal;
   const openReportUserModal = createGroupContext?.openReportUserModal;
+  const openCollaborativeDocumentModal =
+    createGroupContext?.openCollaborativeDocumentModal;
+  const openCollaborativeWhiteboard =
+    createGroupContext?.openCollaborativeWhiteboard;
 
   const LOAD_COOLDOWN_MS = 600;
   let showContextMenu = $state(false);
@@ -368,6 +373,10 @@
     } else {
       base.push({ label: "Invite to Server", action: "invite_to_server" });
     }
+    base.push(
+      { label: "Share Collaborative Document", action: "open_collaboration_document" },
+      { label: "Open Shared Whiteboard", action: "open_collaboration_whiteboard" },
+    );
     contextMenuItems = base;
   });
 
@@ -411,6 +420,25 @@
       }
       const payload = buildReportUserPayload(chat, item);
       openReportUserModal(payload);
+    } else if (detail.action === "open_collaboration_document") {
+      if (!openCollaborativeDocumentModal) {
+        toasts.addToast("Collaboration tools are unavailable.", "error");
+        return;
+      }
+      const prefix = chat?.id ?? "doc";
+      openCollaborativeDocumentModal({
+        documentId: generateCollaborationDocumentId(prefix),
+        kind: "document",
+      });
+    } else if (detail.action === "open_collaboration_whiteboard") {
+      if (!openCollaborativeWhiteboard) {
+        toasts.addToast("Collaboration tools are unavailable.", "error");
+        return;
+      }
+      const prefix = chat?.id ?? "whiteboard";
+      openCollaborativeWhiteboard({
+        documentId: generateCollaborationDocumentId(prefix),
+      });
     } else {
       console.log(`Action not implemented: ${detail.action}`);
     }

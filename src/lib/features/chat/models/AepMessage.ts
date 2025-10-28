@@ -4,6 +4,19 @@ import type { Server } from "$lib/features/servers/models/Server";
 
 type BytePayload = number[] | Uint8Array;
 
+export type CollaborationKind = "document" | "whiteboard";
+
+export interface CollaborationUpdate {
+  document_id?: string;
+  documentId?: string;
+  update?: BytePayload;
+  kind?: CollaborationKind;
+  sender_id?: string;
+  senderId?: string;
+  participants?: string[];
+  timestamp?: string;
+}
+
 export interface AttachmentPayload {
   id: string;
   name: string;
@@ -247,6 +260,7 @@ export interface AepMessage {
   EncryptedGroupMessage?: EncryptedGroupMessage;
   PeerDiscovery?: PeerDiscovery;
   PresenceUpdate?: PresenceUpdate;
+  CollaborationUpdate?: CollaborationUpdate;
   ProfileUpdate?: ProfileUpdate;
   FriendRequest?: FriendRequest;
   FriendRequestResponse?: FriendRequestResponse;

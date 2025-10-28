@@ -1,5 +1,3 @@
-import { browser } from "$app/environment";
-
 export type InvokeFn = <T>(
   cmd: string,
   args?: Record<string, unknown>,
@@ -20,8 +18,10 @@ declare global {
   }
 }
 
+const isBrowser = typeof window !== "undefined";
+
 export async function getInvoke(): Promise<InvokeFn | null> {
-  if (!browser) {
+  if (!isBrowser) {
     return null;
   }
 
@@ -63,7 +63,7 @@ let cachedListen: ListenFn | null = null;
 let listenPromise: Promise<ListenFn | null> | null = null;
 
 export async function getListen(): Promise<ListenFn | null> {
-  if (!browser) {
+  if (!isBrowser) {
     return null;
   }
 

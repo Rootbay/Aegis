@@ -18,6 +18,7 @@ import {
   type FileTransferRequestPayload,
   type FileReceivedPayload,
 } from "$lib/features/chat/stores/fileTransferStore";
+import { collaborationStore } from "$lib/features/collaboration/collabDocumentStore";
 import {
   activeChannelId,
   activeChatId,
@@ -50,6 +51,7 @@ import type {
   GroupModalOptions,
   ReportUserModalPayload,
 } from "$lib/features/chat/utils/contextMenu";
+import type { CollaborationSessionKind } from "$lib/features/collaboration/collabDocumentStore";
 import {
   connectivityStore,
   type ConnectivityState,
@@ -61,7 +63,9 @@ export type AppModalType =
   | "serverManagement"
   | "detailedProfile"
   | "userCard"
-  | "reportUser";
+  | "reportUser"
+  | "collaborationDocument"
+  | "collaborationWhiteboard";
 
 type ProfileModalSource = User & {
   bio?: string;
@@ -91,6 +95,12 @@ type PageState = {
   readonly openDetailedProfileModal: (user: User) => void;
   readonly openCreateGroupModal: (options?: GroupModalOptions) => void;
   readonly openReportUserModal: (payload: ReportUserModalPayload) => void;
+  readonly openCollaborativeDocument: (options?: {
+    documentId?: string;
+    initialContent?: string;
+    kind?: CollaborationSessionKind;
+  }) => void;
+  readonly openCollaborativeWhiteboard: (options?: { documentId?: string }) => void;
   readonly messagesByChatId: typeof messagesByChatId;
 };
 
@@ -283,6 +293,18 @@ export function createAppController(): AppController {
     openModal("reportUser", payload);
   };
 
+  const openCollaborativeDocument: PageState["openCollaborativeDocument"] = (
+    options = {},
+  ) => {
+    openModal("collaborationDocument", options);
+  };
+
+  const openCollaborativeWhiteboard: PageState["openCollaborativeWhiteboard"] = (
+    options = {},
+  ) => {
+    openModal("collaborationWhiteboard", options);
+  };
+
   const handleFriendsTabSelect = (tab: string) => {
     const url = new URL(get(page).url);
     if (url.pathname === "/friends/add") {
@@ -405,6 +427,30 @@ export function createAppController(): AppController {
             const { user_id, is_online } = receivedMessage.PresenceUpdate;
             friendStore.updateFriendPresence(user_id, is_online);
             serverStore.updateServerMemberPresence(user_id, is_online);
+            return;
+          }
+
+          if (receivedMessage.CollaborationUpdate) {
+            const payload = receivedMessage.CollaborationUpdate;
+            const documentId =
+              payload.document_id ?? payload.documentId ?? undefined;
+            if (documentId && payload.update) {
+              const kind =
+                (payload.kind ?? "document") === "whiteboard"
+                  ? "whiteboard"
+                  : "document";
+              const updateArray = Array.isArray(payload.update)
+                ? payload.update
+                : Array.from(payload.update ?? []);
+              collaborationStore.receiveRemoteUpdate({
+                documentId,
+                update: updateArray,
+                kind,
+                senderId: payload.sender_id ?? payload.senderId,
+                participants: payload.participants ?? [],
+                timestamp: payload.timestamp,
+              });
+            }
             return;
           }
 
@@ -833,6 +879,8 @@ export function createAppController(): AppController {
     openDetailedProfileModal,
     openCreateGroupModal: openCreateGroupModalWithOptions,
     openReportUserModal,
+    openCollaborativeDocument,
+    openCollaborativeWhiteboard,
     messagesByChatId,
   };
 
