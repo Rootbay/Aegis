@@ -143,6 +143,7 @@
     "Moderation",
     "Privacy",
     "ServerEventsPanel",
+    "WebhookManagement",
   ]);
   const isSeparator = (item: SidebarItem): item is SidebarSeparator =>
     item.type === "separator";
