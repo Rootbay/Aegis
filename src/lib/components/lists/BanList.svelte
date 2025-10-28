@@ -6,9 +6,16 @@
   type Props = {
     bannedUsers?: User[];
     serverId?: string;
+    onUnban?: (user: User) => void | Promise<void>;
   };
 
-  let { bannedUsers = [], serverId = undefined }: Props = $props();
+  const noopOnUnban = () => {};
+
+  let {
+    bannedUsers = [],
+    serverId = undefined,
+    onUnban = noopOnUnban,
+  }: Props = $props();
 
   let bans = $state<User[]>(Array.isArray(bannedUsers) ? bannedUsers : []);
   let isLoading = $state(false);
@@ -99,6 +106,7 @@
       if (result.success) {
         await loadBans(true, resolvedServerId);
         toasts.addToast(`${displayName} was unbanned.`, "success");
+        await onUnban(user);
       } else if (result.error) {
         toasts.addToast(result.error, "error");
       } else {

@@ -70,6 +70,10 @@ interface ServerStore extends Readable<ServerStoreState> {
   addChannelToServer: (serverId: string, channel: Channel) => void;
   addInviteToServer: (serverId: string, invite: ServerInvite) => void;
   removeMemberFromServer: (serverId: string, memberId: string) => void;
+  removeMember: (
+    serverId: string,
+    memberId: string,
+  ) => Promise<ServerUpdateResult>;
   updateServer: (
     serverId: string,
     patch: Partial<Server>,
@@ -543,6 +547,42 @@ export function createServerStore(): ServerStore {
     });
   };
 
+  const removeMember = async (
+    serverId: string,
+    memberId: string,
+  ): Promise<ServerUpdateResult> => {
+    if (!serverId || !memberId) {
+      return {
+        success: false,
+        error: "Missing server or member identifier.",
+      };
+    }
+
+    try {
+      await invoke("remove_server_member", {
+        serverId,
+        server_id: serverId,
+        memberId,
+        member_id: memberId,
+      });
+
+      removeMemberFromServer(serverId, memberId);
+
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to remove member.";
+      return {
+        success: false,
+        error: message,
+      };
+    }
+  };
+
   const updateServer = async (
     serverId: string,
     patch: Partial<Server>,
@@ -732,6 +772,7 @@ export function createServerStore(): ServerStore {
     addChannelToServer,
     addInviteToServer,
     removeMemberFromServer,
+    removeMember,
     updateServer,
     removeChannelFromServer,
     initialize,
