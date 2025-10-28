@@ -139,6 +139,9 @@ describe("chatStore encrypted messaging", () => {
       if (command === "send_encrypted_dm") {
         return undefined;
       }
+      if (command === "send_encrypted_dm_with_attachments") {
+        return undefined;
+      }
       if (command === "send_direct_message_with_attachments") {
         return undefined;
       }
@@ -156,11 +159,14 @@ describe("chatStore encrypted messaging", () => {
     let messages = get(store.messagesByChatId).get("friend-1") ?? [];
     expect(messages).toHaveLength(1);
     expect(messages[0].pending).toBe(true);
-    expect(invokeMock).toHaveBeenCalledWith("send_encrypted_dm", {
-      message: "cipher:Hello secure",
-      recipientId: "friend-1",
-      recipient_id: "friend-1",
-    });
+    expect(invokeMock).toHaveBeenCalledWith(
+      "send_encrypted_dm",
+      expect.objectContaining({
+        message: "cipher:Hello secure",
+        recipientId: "friend-1",
+        recipient_id: "friend-1",
+      }),
+    );
 
     const timestamp = new Date().toISOString();
     await store.handleNewMessageEvent({
@@ -195,12 +201,18 @@ describe("chatStore encrypted messaging", () => {
 
     await store.sendMessage("Fallback message");
 
-    expect(invokeMock).toHaveBeenCalledWith("send_encrypted_dm", expect.anything());
-    expect(invokeMock).toHaveBeenCalledWith("send_direct_message", {
-      message: "cipher:Fallback message",
-      recipientId: "friend-2",
-      recipient_id: "friend-2",
-    });
+    expect(invokeMock).toHaveBeenCalledWith(
+      "send_encrypted_dm",
+      expect.anything(),
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      "send_direct_message",
+      expect.objectContaining({
+        message: "cipher:Fallback message",
+        recipientId: "friend-2",
+        recipient_id: "friend-2",
+      }),
+    );
 
     const messages = get(store.messagesByChatId).get("friend-2") ?? [];
     expect(messages).toHaveLength(1);
@@ -215,7 +227,7 @@ describe("chatStore encrypted messaging", () => {
     await store.sendMessageWithAttachments("Encrypted file", [file]);
 
     const attachmentCall = invokeMock.mock.calls.find(
-      ([command]) => command === "send_direct_message_with_attachments",
+      ([command]) => command === "send_encrypted_dm_with_attachments",
     );
     expect(attachmentCall).toBeTruthy();
     const payload = attachmentCall?.[1] as {
@@ -225,6 +237,38 @@ describe("chatStore encrypted messaging", () => {
     expect(payload.message).toBe("cipher:Encrypted file");
     expect(Array.from(payload.attachments[0].data)).not.toEqual(
       Array.from(originalBytes),
+    );
+  });
+
+  it("falls back to plaintext attachment command when encrypted send fails", async () => {
+    const store = createChatStore();
+    invokeMock.mockImplementation(async (command) => {
+      if (command === "get_messages") {
+        return [];
+      }
+      if (command === "send_encrypted_dm_with_attachments") {
+        throw new Error("no session");
+      }
+      if (command === "send_direct_message_with_attachments") {
+        return undefined;
+      }
+      if (command === "send_encrypted_dm") {
+        return undefined;
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    await store.setActiveChat("friend-attachments", "dm");
+
+    const file = createMockFile([5, 6], "fallback.bin", "application/octet-stream");
+    await store.sendMessageWithAttachments("Attachment fallback", [file]);
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "send_encrypted_dm_with_attachments",
+      expect.anything(),
+    );
+    expect(invokeMock).toHaveBeenCalledWith(
+      "send_direct_message_with_attachments",
+      expect.objectContaining({ message: "cipher:Attachment fallback" }),
     );
   });
 
@@ -239,5 +283,48 @@ describe("chatStore encrypted messaging", () => {
 
     const messages = get(store.messagesByChatId).get("friend-1") ?? [];
     expect(messages).toHaveLength(0);
+  });
+
+  it("decodes encrypted attachments on incoming messages", async () => {
+    const store = await setupDmStore();
+    const encryptedAttachment = {
+      id: "att-remote",
+      name: "secret.txt",
+      content_type: "text/plain",
+      size: 4,
+      data: new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
+    };
+
+    encryptionMocks.decodeMock.mockResolvedValueOnce({
+      content: "Decrypted attachment content",
+      attachments: [
+        {
+          ...encryptedAttachment,
+          data: new Uint8Array([1, 2, 3, 4]),
+        },
+      ],
+      wasEncrypted: true,
+    });
+
+    await store.handleNewMessageEvent({
+      id: "incoming-attachment",
+      sender: "friend-1",
+      content: "cipher:Decrypted attachment content",
+      timestamp: new Date().toISOString(),
+      conversation_id: "friend-1",
+      attachments: [encryptedAttachment],
+    });
+
+    expect(encryptionMocks.decodeMock).toHaveBeenCalledWith({
+      content: "cipher:Decrypted attachment content",
+      attachments: [encryptedAttachment],
+    });
+
+    const messages = get(store.messagesByChatId).get("friend-1") ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe("Decrypted attachment content");
+    expect(messages[0].attachments).toBeDefined();
+    expect(messages[0].attachments?.[0].name).toBe("secret.txt");
+    expect(messages[0].attachments?.[0].isLoaded).toBe(true);
   });
 });

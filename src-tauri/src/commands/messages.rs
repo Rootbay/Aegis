@@ -31,6 +31,12 @@ pub struct AttachmentDescriptor {
     pub data: Vec<u8>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EncryptedDmPayload {
+    pub content: String,
+    pub attachments: Vec<AttachmentDescriptor>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct MessageEnvelope {
     version: u8,
@@ -1281,6 +1287,129 @@ pub async fn send_encrypted_dm(
         let mut mgr = e2ee_arc.lock();
         let pkt = mgr
             .encrypt_for(&recipient_id, message.as_bytes())
+            .map_err(|e| format!("E2EE encrypt error: {e}"))?;
+        pkt
+    };
+
+    let payload_sig_bytes = bincode::serialize(&(
+        my_id.clone(),
+        recipient_id.clone(),
+        &pkt.enc_header,
+        &pkt.enc_content,
+    ))
+    .map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&payload_sig_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let aep_message = AepMessage::EncryptedChatMessage {
+        sender: my_id,
+        recipient: recipient_id,
+        init: pkt.init,
+        enc_header: pkt.enc_header,
+        enc_content: pkt.enc_content,
+        signature: Some(signature),
+    };
+    let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn send_encrypted_dm_with_attachments(
+    recipient_id: String,
+    message: String,
+    attachments: Vec<AttachmentDescriptor>,
+    expires_at: Option<String>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let my_id = state.identity.peer_id().to_base58();
+
+    let expires_at = parse_optional_datetime(expires_at)?;
+
+    let voice_memos_enabled = state.voice_memos_enabled.load(Ordering::Relaxed);
+    if !voice_memos_enabled && attachments.iter().any(is_voice_memo_attachment) {
+        return Err("Voice memo attachments are disabled by your settings.".to_string());
+    }
+
+    let message_id = uuid::Uuid::new_v4().to_string();
+    let timestamp = chrono::Utc::now();
+    let mut db_attachments = Vec::new();
+    let mut payload_attachments = Vec::new();
+
+    for descriptor in attachments.into_iter() {
+        let AttachmentDescriptor {
+            name,
+            content_type,
+            size,
+            data,
+        } = descriptor;
+
+        if data.is_empty() {
+            return Err(format!("Attachment '{name}' is missing binary data"));
+        }
+
+        let data_len = data.len() as u64;
+        let effective_size = if size == 0 { data_len } else { size };
+        let sanitized_size = if effective_size == data_len {
+            effective_size
+        } else {
+            data_len
+        };
+
+        let attachment_id = uuid::Uuid::new_v4().to_string();
+        db_attachments.push(database::Attachment {
+            id: attachment_id,
+            message_id: message_id.clone(),
+            name: name.clone(),
+            content_type: content_type.clone(),
+            size: sanitized_size,
+            data: Some(data.clone()),
+        });
+
+        payload_attachments.push(AttachmentDescriptor {
+            name,
+            content_type,
+            size: sanitized_size,
+            data,
+        });
+    }
+
+    let new_local_message = database::Message {
+        id: message_id,
+        chat_id: recipient_id.clone(),
+        sender_id: my_id.clone(),
+        content: message.clone(),
+        timestamp,
+        read: false,
+        attachments: db_attachments,
+        reactions: HashMap::new(),
+        edited_at: None,
+        edited_by: None,
+        expires_at,
+    };
+    database::insert_message(&state.db_pool, &new_local_message)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let payload = EncryptedDmPayload {
+        content: message,
+        attachments: payload_attachments,
+    };
+    let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+
+    let pkt = {
+        let e2ee_arc = e2ee::init_global_manager();
+        let mut mgr = e2ee_arc.lock();
+        let pkt = mgr
+            .encrypt_for(&recipient_id, &plaintext)
             .map_err(|e| format!("E2EE encrypt error: {e}"))?;
         pkt
     };
