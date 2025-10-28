@@ -1,5 +1,5 @@
-use aegis_shared_types::ConnectivityEventPayload;
-use tauri::State;
+use aegis_shared_types::{ConnectivityEventPayload, ConnectivityGatewayStatus};
+use tauri::{AppHandle, Runtime, State};
 
 use crate::commands::state::AppStateContainer;
 
@@ -14,4 +14,12 @@ pub async fn get_connectivity_snapshot(
     } else {
         Err("Application state not initialized. Please unlock your identity.".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn set_bridge_mode_enabled<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+) -> Result<ConnectivityGatewayStatus, String> {
+    crate::connectivity::set_bridge_mode_enabled(&app, enabled).await
 }

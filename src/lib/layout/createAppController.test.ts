@@ -43,6 +43,13 @@ vi.mock("$lib/stores/connectivityStore", async () => {
     peers: [],
     links: [],
     bridgeSuggested: false,
+    gatewayStatus: {
+      bridgeModeEnabled: false,
+      forwarding: false,
+      upstreamPeers: 0,
+      lastDialAttempt: null,
+      lastError: null,
+    },
     fallbackActive: false,
     fallbackReason: null,
     lastUpdated: null,

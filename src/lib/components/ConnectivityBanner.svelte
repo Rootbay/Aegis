@@ -6,7 +6,7 @@
   import { Alert } from "$lib/components/ui/alert/alert.svelte";
   import AlertDescription from "$lib/components/ui/alert/alert-description.svelte";
   import { toasts } from "$lib/stores/ToastStore";
-  import { updateAppSetting } from "$lib/features/settings/stores/settings";
+  import { setEnableBridgeMode } from "$lib/features/settings/stores/settings";
   import type { ConnectivityState } from "$lib/stores/connectivityStore";
   import { AlertTriangle, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
   import { goto } from "$app/navigation";
@@ -22,6 +22,10 @@
     fallbackMessage: string | null;
     showBridgePrompt?: boolean;
   }>();
+
+  let enablingBridge = $state(false);
+
+  const gatewayStatus = $derived(() => state.gatewayStatus);
 
   const statusLabel = $derived(() => {
     switch (state.status) {
@@ -68,15 +72,67 @@
     return `${meshPart} • ${totalPart}`;
   });
 
-  const bridgeMessage = $derived(() =>
-    state.bridgeSuggested
-      ? "Nearby devices are requesting an uplink."
-      : null,
-  );
+  const bridgeTone = $derived(() => {
+    if (gatewayStatus().forwarding) {
+      return "success" as const;
+    }
+    if (gatewayStatus().bridgeModeEnabled) {
+      return gatewayStatus().lastError ? ("warning" as const) : ("info" as const);
+    }
+    if (state.bridgeSuggested) {
+      return "warning" as const;
+    }
+    return null;
+  });
 
-  function enableBridgeMode() {
-    updateAppSetting("enableBridgeMode", true);
-    toasts.addToast("Bridge Mode enabled. Nearby peers can route through you.", "success");
+  const bridgeMessage = $derived(() => {
+    const tone = bridgeTone();
+    const status = gatewayStatus();
+
+    switch (tone) {
+      case "success": {
+        const peers = status.upstreamPeers;
+        const label = peers === 1 ? "uplink" : "uplinks";
+        return `Bridge Mode forwarding to ${peers} ${label}.`;
+      }
+      case "warning":
+        if (status.bridgeModeEnabled && status.lastError) {
+          return `Bridge Mode reconnecting: ${status.lastError}`;
+        }
+        return "Nearby devices are requesting an uplink.";
+      case "info":
+        if (status.bridgeModeEnabled) {
+          return "Bridge Mode enabled. Establishing uplink…";
+        }
+        return null;
+      default:
+        return null;
+    }
+  });
+
+  async function enableBridgeMode() {
+    if (enablingBridge) {
+      return;
+    }
+    enablingBridge = true;
+    try {
+      const status = await setEnableBridgeMode(true);
+      if (status?.forwarding) {
+        toasts.addToast("Bridge Mode active. Traffic is now routed upstream.", "success");
+      } else if (status?.lastError) {
+        toasts.addToast(
+          `Bridge Mode enabled but encountered an uplink issue: ${status.lastError}`,
+          "warning",
+        );
+      } else {
+        toasts.addToast("Bridge Mode enabled. Waiting for uplink peers…", "info");
+      }
+    } catch (error) {
+      console.error("Failed to enable Bridge Mode", error);
+      toasts.addToast("Failed to enable Bridge Mode. Check network settings for details.", "error");
+    } finally {
+      enablingBridge = false;
+    }
   }
 
   function openMeshExplorer() {
@@ -104,10 +160,22 @@
     </div>
     <div class="flex items-center gap-2">
       {#if bridgeMessage()}
-        <span class="text-xs text-amber-500">{bridgeMessage()}</span>
+        <span
+          class="text-xs"
+          class:text-emerald-500={bridgeTone() === "success"}
+          class:text-amber-500={bridgeTone() === "warning"}
+          class:text-muted-foreground={bridgeTone() === "info"}
+        >
+          {bridgeMessage()}
+        </span>
       {/if}
-      {#if showBridgePrompt}
-        <Button size="sm" variant="outline" onclick={enableBridgeMode}>
+      {#if showBridgePrompt && !gatewayStatus().bridgeModeEnabled}
+        <Button
+          size="sm"
+          variant="outline"
+          onclick={enableBridgeMode}
+          disabled={enablingBridge}
+        >
           Enable Bridge Mode
         </Button>
       {/if}
