@@ -1,6 +1,6 @@
 
 use sqlx::{Pool, Sqlite};
-use aegis_shared_types::{AppState, IncomingFile};
+use aegis_shared_types::{AppState, FileTransferMode, IncomingFile};
 use std::path::Path;
 use aegis_protocol::{AepMessage, ChatMessageData, DeleteMessageData, MessageDeletionScope, MessageEditData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
@@ -460,6 +460,10 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 nonce,
                 sender_id: sender_id.clone(),
                 accepted: false,
+                mode: FileTransferMode::Basic,
+                staging_path: None,
+                metadata_path: None,
+                resumed: false,
             };
             incoming_files.insert(map_key, incoming_file);
             println!("Started receiving file {} from {}", safe_name, sender_id);

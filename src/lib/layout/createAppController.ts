@@ -15,6 +15,7 @@ import { serverStore } from "$lib/features/servers/stores/serverStore";
 import {
   fileTransferStore,
   type FileTransferDeniedPayload,
+  type FileTransferProgressPayload,
   type FileTransferRequestPayload,
   type FileReceivedPayload,
 } from "$lib/features/chat/stores/fileTransferStore";
@@ -442,6 +443,12 @@ export function createAppController(): AppController {
         fileTransferStore.handleFileReceived(event.payload);
       });
 
+      const unlistenFileTransferProgress = await listen<{
+        payload: FileTransferProgressPayload;
+      }>("file-transfer-progress", (event) => {
+        fileTransferStore.handleTransferProgress(event.payload);
+      });
+
       const unlistenPresence = await listen<{ payload: AepMessage }>(
         "new-message",
         (event) => {
@@ -664,6 +671,7 @@ export function createAppController(): AppController {
         unlistenPresence,
         unlistenFileTransferRequest,
         unlistenFileTransferDenied,
+        unlistenFileTransferProgress,
         unlistenFileReceived,
         unlistenReadReceipts,
         unlistenTypingIndicators,
