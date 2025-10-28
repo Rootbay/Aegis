@@ -172,6 +172,55 @@ struct ServerEventRow {
     cancelled_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ServerWebhook {
+    pub id: String,
+    pub server_id: String,
+    pub name: String,
+    pub url: String,
+    pub channel_id: Option<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServerWebhookPatch {
+    pub name: Option<String>,
+    pub url: Option<String>,
+    pub channel_id: Option<Option<String>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, FromRow)]
+struct ServerWebhookRow {
+    id: String,
+    server_id: String,
+    name: String,
+    url: String,
+    channel_id: Option<String>,
+    created_by: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl TryInto<ServerWebhook> for ServerWebhookRow {
+    type Error = sqlx::Error;
+
+    fn try_into(self) -> Result<ServerWebhook, Self::Error> {
+        Ok(ServerWebhook {
+            id: self.id,
+            server_id: self.server_id,
+            name: self.name,
+            url: self.url,
+            channel_id: self.channel_id,
+            created_by: self.created_by,
+            created_at: parse_timestamp(&self.created_at)?,
+            updated_at: parse_timestamp(&self.updated_at)?,
+        })
+    }
+}
+
 impl TryInto<ServerEvent> for ServerEventRow {
     type Error = sqlx::Error;
 
@@ -778,6 +827,131 @@ pub async fn insert_channel(pool: &Pool<Sqlite>, channel: &Channel) -> Result<()
     )
     .execute(pool)
     .await?;
+    Ok(())
+}
+
+pub async fn insert_server_webhook(
+    pool: &Pool<Sqlite>,
+    webhook: &ServerWebhook,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO server_webhooks (id, server_id, name, url, channel_id, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        webhook.id,
+        webhook.server_id,
+        webhook.name,
+        webhook.url,
+        webhook.channel_id,
+        webhook.created_by,
+        webhook.created_at.to_rfc3339(),
+        webhook.updated_at.to_rfc3339(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn get_server_webhook_by_id(
+    pool: &Pool<Sqlite>,
+    webhook_id: &str,
+) -> Result<Option<ServerWebhook>, sqlx::Error> {
+    let row = sqlx::query_as!(
+        ServerWebhookRow,
+        "SELECT id, server_id, name, url, channel_id, created_by, created_at, updated_at FROM server_webhooks WHERE id = ?",
+        webhook_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    if let Some(row) = row {
+        let webhook: ServerWebhook = row.try_into()?;
+        Ok(Some(webhook))
+    } else {
+        Ok(None)
+    }
+}
+
+pub async fn list_server_webhooks(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+) -> Result<Vec<ServerWebhook>, sqlx::Error> {
+    let rows = sqlx::query_as!(
+        ServerWebhookRow,
+        "SELECT id, server_id, name, url, channel_id, created_by, created_at, updated_at FROM server_webhooks WHERE server_id = ? ORDER BY name COLLATE NOCASE ASC",
+        server_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let mut webhooks = Vec::with_capacity(rows.len());
+    for row in rows {
+        webhooks.push(row.try_into()?);
+    }
+    Ok(webhooks)
+}
+
+pub async fn update_server_webhook(
+    pool: &Pool<Sqlite>,
+    webhook_id: &str,
+    patch: ServerWebhookPatch,
+) -> Result<ServerWebhook, sqlx::Error> {
+    let mut builder = QueryBuilder::<Sqlite>::new("UPDATE server_webhooks SET ");
+    let mut has_updates = false;
+
+    let mut push_update = |builder: &mut QueryBuilder<Sqlite>, column: &str| {
+        if has_updates {
+            builder.push(", ");
+        }
+        has_updates = true;
+        builder.push(column);
+        builder.push(" = ");
+    };
+
+    if let Some(name) = patch.name {
+        push_update(&mut builder, "name");
+        builder.push_bind(name);
+    }
+
+    if let Some(url) = patch.url {
+        push_update(&mut builder, "url");
+        builder.push_bind(url);
+    }
+
+    if let Some(channel_id) = patch.channel_id {
+        push_update(&mut builder, "channel_id");
+        builder.push_bind(channel_id);
+    }
+
+    if let Some(updated_at) = patch.updated_at {
+        push_update(&mut builder, "updated_at");
+        builder.push_bind(updated_at.to_rfc3339());
+    }
+
+    if !has_updates {
+        return get_server_webhook_by_id(pool, webhook_id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound);
+    }
+
+    builder.push(" WHERE id = ");
+    builder.push_bind(webhook_id);
+    builder.push(
+        " RETURNING id, server_id, name, url, channel_id, created_by, created_at, updated_at",
+    );
+
+    let row: ServerWebhookRow = builder
+        .build_query_as::<ServerWebhookRow>()
+        .fetch_one(pool)
+        .await?;
+    row.try_into()
+}
+
+pub async fn delete_server_webhook(
+    pool: &Pool<Sqlite>,
+    webhook_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM server_webhooks WHERE id = ?", webhook_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
