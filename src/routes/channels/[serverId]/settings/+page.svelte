@@ -9,6 +9,7 @@
   import type { Role } from "$lib/features/servers/models/Role";
   import {
     Ban,
+    CalendarClock,
     Boxes,
     Hash,
     LayoutPanelTop,
@@ -75,6 +76,7 @@
     { type: "separator" },
     { label: "Roles", icon: UserCog, tab: "roles" },
     { label: "Channels", icon: MessageSquare, tab: "channels" },
+    { label: "Events", icon: CalendarClock, tab: "events" },
     { label: "Moderation", icon: ShieldCheck, tab: "moderation" },
     { type: "separator" },
     { label: "Emojis", icon: Smile, tab: "emojis" },
@@ -161,6 +163,14 @@
       description: "Create, edit, or delete channels.",
       type: "custom_component",
       component: "ChannelManagement",
+    },
+    {
+      id: "serverEvents",
+      category: "events",
+      title: "Events",
+      description: "Schedule and manage server events.",
+      type: "custom_component",
+      component: "ServerEventsPanel",
     },
     {
       id: "moderationLevel",
@@ -264,6 +274,7 @@
     emojis: "Emojis",
     stickers: "Stickers",
     widgets: "Widgets",
+    events: "Events",
     server_templates: "Server Templates",
     integrations: "Integrations",
     safety_setup: "Safety & Setup",

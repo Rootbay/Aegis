@@ -11,6 +11,7 @@
   import UserManagement from "$lib/components/server-settings/UserManagement.svelte";
   import Roles from "$lib/components/server-settings/Roles.svelte";
   import Privacy from "$lib/components/server-settings/Privacy.svelte";
+  import ServerEventsPanel from "$lib/components/server-settings/ServerEventsPanel.svelte";
   import {
     AlertDialog,
     AlertDialogHeader,
@@ -137,7 +138,12 @@
 
   let showDeleteServerConfirm = $state(false);
 
-  const serverAwareComponents = new Set(["Overview", "Moderation", "Privacy"]);
+  const serverAwareComponents = new Set([
+    "Overview",
+    "Moderation",
+    "Privacy",
+    "ServerEventsPanel",
+  ]);
   const isSeparator = (item: SidebarItem): item is SidebarSeparator =>
     item.type === "separator";
 
@@ -163,6 +169,7 @@
     UserManagement,
     Roles,
     Privacy,
+    ServerEventsPanel,
   };
 
   $effect(() => {

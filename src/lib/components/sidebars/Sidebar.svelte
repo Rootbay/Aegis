@@ -38,6 +38,7 @@
   } from "$lib/components/ui/tooltip/index.js";
   import * as Popover from "$lib/components/ui/popover/index.js";
   import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
+  import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import { cn } from "$lib/utils";
   import type { User } from "$lib/features/auth/models/User";
 
@@ -51,6 +52,7 @@
   } = $props();
   const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
   let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
+  let eventModalServer = $state<Server | null>(null);
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
@@ -261,7 +263,9 @@
         toasts.addToast("Manage categories from the Channels tab.", "info");
         break;
       case "create_event":
-        toasts.addToast("Server events are not implemented yet.", "info");
+        lastVisitedServerId.set(server.id);
+        serverStore.setActiveServer(server.id);
+        eventModalServer = server;
         break;
       case "leave_server":
         if (
@@ -481,3 +485,12 @@
     </SidebarFooter>
   </TooltipProvider>
 </Sidebar>
+
+{#if eventModalServer}
+  <ServerEventModal
+    server={eventModalServer}
+    onclose={() => {
+      eventModalServer = null;
+    }}
+  />
+{/if}
