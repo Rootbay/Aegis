@@ -206,21 +206,20 @@
       const myFriendships: any[] = await invoke("get_friendships", {
         current_user_id: meId,
       });
-      const otherFriendships: any[] = await invoke("get_friendships", {
-        current_user_id: otherId,
-      });
+      const otherFriendIds = await invoke<string[]>(
+        "get_friendships_for_user",
+        {
+          current_user_id: meId,
+          target_user_id: otherId,
+        },
+      );
       const myFriendIds = new Set(
         (myFriendships || []).map((f: any) =>
           f.user_a_id === meId ? f.user_b_id : f.user_a_id,
         ),
       );
-      const otherFriendIds = new Set(
-        (otherFriendships || []).map((f: any) =>
-          f.user_a_id === otherId ? f.user_b_id : f.user_a_id,
-        ),
-      );
-      const mutualIds: string[] = Array.from(myFriendIds).filter((id) =>
-        otherFriendIds.has(id),
+      const mutualIds: string[] = (otherFriendIds || []).filter((id) =>
+        myFriendIds.has(id),
       );
       const users = await Promise.all(
         mutualIds.map((id) => userStore.getUser(id)),
