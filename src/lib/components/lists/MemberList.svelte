@@ -1,20 +1,23 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
   import type { User } from "$lib/features/auth/models/User";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { toasts } from "$lib/stores/ToastStore";
 
   type OpenUserCardModal = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
   const noopOpenUserCard: OpenUserCardModal = () => {};
+  type MemberRemovedHandler = (member: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
+  const noopMemberRemoved: MemberRemovedHandler = () => {};
 
   let {
     members = [],
     openUserCardModal = noopOpenUserCard,
     serverId = undefined,
+    onMemberRemoved = noopMemberRemoved,
   }: {
     members?: User[];
     openUserCardModal?: OpenUserCardModal;
     serverId?: string;
+    onMemberRemoved?: MemberRemovedHandler;
   } = $props();
 
   let removalStates = $state<Record<string, boolean>>({});
@@ -53,17 +56,24 @@
     setRemovalState(member.id, true);
 
     try {
-      await invoke("remove_server_member", {
-        serverId: resolvedServerId,
-        server_id: resolvedServerId,
-        memberId: member.id,
-        member_id: member.id,
-      });
+      const result = await serverStore.removeMember(
+        resolvedServerId,
+        member.id,
+      );
 
-      serverStore.removeMemberFromServer(resolvedServerId, member.id);
+      if (!result.success) {
+        if (result.error) {
+          toasts.addToast(result.error, "error");
+        } else {
+          toasts.addToast("Failed to remove member.", "error");
+        }
+        return;
+      }
 
       const displayName = member.name?.trim().length ? member.name : "Member";
       toasts.addToast(`${displayName} removed from server.`, "success");
+
+      await onMemberRemoved(member);
     } catch (error) {
       const message =
         typeof error === "string"
