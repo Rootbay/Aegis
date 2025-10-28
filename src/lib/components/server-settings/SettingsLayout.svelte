@@ -295,6 +295,10 @@
       props.serverId = currentData.id;
     }
 
+    if (componentName === "BanList" && currentData) {
+      props.serverId = currentData.id;
+    }
+
     if (
       componentName === "Overview" ||
       componentName === "Moderation" ||

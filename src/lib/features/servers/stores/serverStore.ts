@@ -52,6 +52,7 @@ interface ServerStoreState {
   servers: Server[];
   loading: boolean;
   activeServerId: string | null;
+  bansByServer: Record<string, User[]>;
 }
 
 export type ServerUpdateResult = {
@@ -76,6 +77,8 @@ interface ServerStore extends Readable<ServerStoreState> {
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   initialize: () => Promise<void>;
   getServer: (serverId: string) => Promise<Server | null>;
+  fetchBans: (serverId: string, options?: { force?: boolean }) => Promise<User[]>;
+  unbanMember: (serverId: string, userId: string) => Promise<ServerUpdateResult>;
 }
 
 export function createServerStore(): ServerStore {
@@ -86,7 +89,10 @@ export function createServerStore(): ServerStore {
       typeof localStorage !== "undefined"
         ? localStorage.getItem("activeServerId")
         : null,
+    bansByServer: {},
   });
+
+  const banCache = new Map<string, User[]>();
 
   const fromBackendUser = (u: BackendUser): User => {
     const fallbackName = u.username ?? u.name;
@@ -253,11 +259,24 @@ export function createServerStore(): ServerStore {
       ...server,
       invites: server.invites ?? [],
     }));
+    const snapshot = get({ subscribe });
+    const filteredBans = Object.fromEntries(
+      Object.entries(snapshot.bansByServer).filter(([serverId]) =>
+        normalized.some((server) => server.id === serverId),
+      ),
+    );
+    const validServerIds = new Set(normalized.map((server) => server.id));
+    for (const id of banCache.keys()) {
+      if (!validServerIds.has(id)) {
+        banCache.delete(id);
+      }
+    }
     normalized.forEach((server) => serverCache.set(server.id, server));
     set({
       servers: normalized,
       loading: false,
-      activeServerId: get({ subscribe }).activeServerId,
+      activeServerId: snapshot.activeServerId,
+      bansByServer: filteredBans,
     });
   };
 
@@ -297,11 +316,16 @@ export function createServerStore(): ServerStore {
   };
 
   const removeServer = (serverId: string) => {
-    update((s) => ({
-      ...s,
-      servers: s.servers.filter((s) => s.id !== serverId),
-    }));
+    update((s) => {
+      const { [serverId]: _removed, ...restBans } = s.bansByServer;
+      return {
+        ...s,
+        servers: s.servers.filter((sv) => sv.id !== serverId),
+        bansByServer: restBans,
+      };
+    });
     serverCache.delete(serverId);
+    banCache.delete(serverId);
   };
 
   const fetchServerDetails = async (serverId: string) => {
@@ -396,6 +420,92 @@ export function createServerStore(): ServerStore {
       if (updated) serverCache.set(serverId, updated);
       return { ...s, servers };
     });
+  };
+
+  const fetchBans = async (
+    serverId: string,
+    options: { force?: boolean } = {},
+  ): Promise<User[]> => {
+    if (!serverId) {
+      return [];
+    }
+
+    const shouldUseCache = !options.force && banCache.has(serverId);
+    if (shouldUseCache) {
+      const cached = banCache.get(serverId) ?? [];
+      update((state) => ({
+        ...state,
+        bansByServer: { ...state.bansByServer, [serverId]: cached },
+      }));
+      return cached;
+    }
+
+    try {
+      const backendBans = await invoke<BackendUser[] | null>("list_server_bans", {
+        serverId,
+        server_id: serverId,
+      });
+      const bans = Array.isArray(backendBans)
+        ? backendBans.map(fromBackendUser)
+        : [];
+      banCache.set(serverId, bans);
+      update((state) => ({
+        ...state,
+        bansByServer: { ...state.bansByServer, [serverId]: bans },
+      }));
+      return bans;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to fetch banned members.";
+      throw new Error(message);
+    }
+  };
+
+  const unbanMember = async (
+    serverId: string,
+    userId: string,
+  ): Promise<ServerUpdateResult> => {
+    if (!serverId || !userId) {
+      return {
+        success: false,
+        error: "Missing server or user identifier.",
+      };
+    }
+
+    try {
+      await invoke("unban_server_member", {
+        serverId,
+        server_id: serverId,
+        userId,
+        user_id: userId,
+      });
+
+      const cached = banCache.get(serverId) ?? [];
+      const updated = cached.filter((member) => member.id !== userId);
+      banCache.set(serverId, updated);
+
+      update((state) => ({
+        ...state,
+        bansByServer: { ...state.bansByServer, [serverId]: updated },
+      }));
+
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to unban member.";
+      return {
+        success: false,
+        error: message,
+      };
+    }
   };
 
   const removeMemberFromServer = (serverId: string, memberId: string) => {
@@ -617,6 +727,8 @@ export function createServerStore(): ServerStore {
     removeChannelFromServer,
     initialize,
     getServer,
+    fetchBans,
+    unbanMember,
   };
 }
 

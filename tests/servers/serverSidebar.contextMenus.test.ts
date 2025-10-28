@@ -81,6 +81,8 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     setActiveServer: setActiveServerMock,
     removeChannelFromServer: removeChannelFromServerMock,
     handleServersUpdate: handleServersUpdateMock,
+    fetchBans: vi.fn(async () => []),
+    unbanMember: vi.fn(async () => ({ success: true })),
   },
 }));
 

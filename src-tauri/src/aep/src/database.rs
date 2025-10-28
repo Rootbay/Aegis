@@ -173,6 +173,15 @@ struct ServerEventRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ServerBan {
+    pub server_id: String,
+    pub user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct ServerWebhook {
     pub id: String,
     pub server_id: String,
@@ -1572,6 +1581,40 @@ pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String])
     }
 
     Ok(members_map)
+}
+
+pub async fn get_server_bans(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+) -> Result<Vec<User>, sqlx::Error> {
+    let banned_users = sqlx::query_as!(
+        User,
+        "SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag \
+         FROM users u \
+         INNER JOIN server_bans sb ON u.id = sb.user_id \
+         WHERE sb.server_id = ? \
+         ORDER BY sb.created_at DESC",
+        server_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(banned_users)
+}
+
+pub async fn remove_server_ban(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM server_bans WHERE server_id = ? AND user_id = ?",
+        server_id,
+        user_id
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

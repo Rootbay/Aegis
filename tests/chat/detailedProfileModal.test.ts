@@ -101,7 +101,12 @@ const mocks = vi.hoisted(() => {
     clear: vi.fn(),
   };
 
-  const serverStoreValue = { servers: [], loading: false, activeServerId: null };
+  const serverStoreValue = {
+    servers: [],
+    loading: false,
+    activeServerId: null,
+    bansByServer: {},
+  };
   const serverStoreMock = {
     subscribe(run: (value: typeof serverStoreValue) => void) {
       run(serverStoreValue);
@@ -115,6 +120,8 @@ const mocks = vi.hoisted(() => {
     fetchServerDetails: vi.fn(async () => {}),
     addChannelToServer: vi.fn(),
     addInviteToServer: vi.fn(),
+    fetchBans: vi.fn(async () => []),
+    unbanMember: vi.fn(async () => ({ success: true })),
     updateServer: vi.fn(async () => ({ success: true })),
     removeChannelFromServer: vi.fn(),
     initialize: vi.fn(),
