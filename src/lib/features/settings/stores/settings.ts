@@ -3,6 +3,22 @@ import { getInvoke } from "$services/tauri";
 import { persistentStore } from "$lib/stores/persistentStore";
 import type { GatewayStatus } from "$lib/stores/connectivityStore";
 
+export interface TrustedDevice {
+  id: string;
+  name: string;
+  platform: string;
+  lastSeen: string;
+  active: boolean;
+}
+
+export interface ConnectedAccount {
+  id: string;
+  provider: string;
+  username: string;
+  linkedAt: string;
+  scopes: string[];
+}
+
 export interface UserSettings {
   name: string;
   avatar: string;
@@ -50,9 +66,30 @@ export interface AppSettings {
   audioInputDeviceId: string;
   videoInputDeviceId: string;
   audioOutputDeviceId: string;
+  enableHighContrast: boolean;
+  enableReducedMotion: boolean;
+  enableLiveCaptions: boolean;
+  screenReaderVerbosity: "concise" | "detailed";
+  textToSpeechRate: number;
+  filterMatureContent: boolean;
+  allowTaggingByFriends: boolean;
+  autoShareActivityStatus: boolean;
+  allowFriendInvites: boolean;
+  autoApproveKnownContacts: boolean;
+  surfaceFriendSuggestions: boolean;
+  preferredLanguage: string;
+  commandPaletteShortcut: string;
+  pushToTalkShortcut: string;
+  toggleMuteShortcut: string;
+  autoDownloadUpdates: boolean;
+  includePreReleaseUpdates: boolean;
+  remindAboutUpdates: boolean;
+  updateReminderIntervalDays: number;
+  connectedAccounts: ConnectedAccount[];
+  trustedDevices: TrustedDevice[];
 }
 
-const defaultSettings: AppSettings = {
+export const defaultSettings: AppSettings = {
   user: {
     name: "John Doe",
     avatar: "https://api.dicebear.com/8.x/bottts-neutral/svg?seed=JohnDoe",
@@ -96,6 +133,42 @@ const defaultSettings: AppSettings = {
   audioInputDeviceId: "",
   videoInputDeviceId: "",
   audioOutputDeviceId: "",
+  enableHighContrast: false,
+  enableReducedMotion: false,
+  enableLiveCaptions: false,
+  screenReaderVerbosity: "concise",
+  textToSpeechRate: 1,
+  filterMatureContent: true,
+  allowTaggingByFriends: true,
+  autoShareActivityStatus: true,
+  allowFriendInvites: true,
+  autoApproveKnownContacts: false,
+  surfaceFriendSuggestions: true,
+  preferredLanguage: "en-US",
+  commandPaletteShortcut: "Ctrl+K",
+  pushToTalkShortcut: "Shift+Space",
+  toggleMuteShortcut: "Ctrl+Shift+M",
+  autoDownloadUpdates: true,
+  includePreReleaseUpdates: false,
+  remindAboutUpdates: true,
+  updateReminderIntervalDays: 7,
+  connectedAccounts: [],
+  trustedDevices: [
+    {
+      id: "device-local",
+      name: "Aegis Desktop",
+      platform: "Linux",
+      lastSeen: new Date().toISOString(),
+      active: true,
+    },
+    {
+      id: "device-mobile",
+      name: "Aegis Mobile",
+      platform: "Android",
+      lastSeen: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+      active: true,
+    },
+  ],
 };
 
 export const settings = persistentStore<AppSettings>(
@@ -167,6 +240,30 @@ export const setLinkPreviewsEnabled = createBooleanSetter(
 export const setResilientFileTransferEnabled = createBooleanSetter(
   "enableResilientFileTransfer",
 );
+export const setHighContrastEnabled = createBooleanSetter("enableHighContrast");
+export const setReducedMotionEnabled = createBooleanSetter("enableReducedMotion");
+export const setLiveCaptionsEnabled = createBooleanSetter("enableLiveCaptions");
+export const setFilterMatureContentEnabled = createBooleanSetter(
+  "filterMatureContent",
+);
+export const setAllowTaggingByFriends = createBooleanSetter(
+  "allowTaggingByFriends",
+);
+export const setAutoShareActivityStatus = createBooleanSetter(
+  "autoShareActivityStatus",
+);
+export const setAllowFriendInvites = createBooleanSetter("allowFriendInvites");
+export const setAutoApproveKnownContacts = createBooleanSetter(
+  "autoApproveKnownContacts",
+);
+export const setSurfaceFriendSuggestions = createBooleanSetter(
+  "surfaceFriendSuggestions",
+);
+export const setAutoDownloadUpdates = createBooleanSetter("autoDownloadUpdates");
+export const setIncludePreReleaseUpdates = createBooleanSetter(
+  "includePreReleaseUpdates",
+);
+export const setRemindAboutUpdates = createBooleanSetter("remindAboutUpdates");
 export async function setWalkieTalkieVoiceMemosEnabled(
   value: boolean,
 ) {
@@ -189,6 +286,7 @@ void setWalkieTalkieVoiceMemosEnabled(
 export const setAutoDownloadMediaEnabled = createBooleanSetter(
   "autoDownloadMedia",
 );
+export const setClearCacheOnExit = createBooleanSetter("clearCacheOnExit");
 export const setEnableNewMessageNotifications = createBooleanSetter(
   "enableNewMessageNotifications",
 );
@@ -238,6 +336,11 @@ export const setEphemeralMessageDuration = (durationMinutes: number) => {
   updateAppSetting("ephemeralMessageDuration", normalized);
 };
 
+export const setKeepMediaDuration = (days: number) => {
+  const normalized = Math.max(1, Math.min(180, Math.round(days)));
+  updateAppSetting("keepMediaDuration", normalized);
+};
+
 export const setNotificationSound = (sound: string) => {
   updateAppSetting("notificationSound", sound.trim());
 };
@@ -258,3 +361,174 @@ export const setVideoInputDeviceId = (deviceId: string) => {
 export const setAudioOutputDeviceId = (deviceId: string) => {
   updateAppSetting("audioOutputDeviceId", deviceId.trim());
 };
+
+export const setScreenReaderVerbosity = (
+  level: AppSettings["screenReaderVerbosity"],
+) => {
+  updateAppSetting("screenReaderVerbosity", level);
+};
+
+export const setTextToSpeechRate = (rate: number) => {
+  const normalized = Math.min(2, Math.max(0.5, Number(rate)));
+  updateAppSetting("textToSpeechRate", Number(normalized.toFixed(2)));
+};
+
+export const setPreferredLanguage = (language: string) => {
+  updateAppSetting("preferredLanguage", language);
+};
+
+export const setCommandPaletteShortcut = (shortcut: string) => {
+  updateAppSetting("commandPaletteShortcut", shortcut.trim());
+};
+
+export const setPushToTalkShortcut = (shortcut: string) => {
+  updateAppSetting("pushToTalkShortcut", shortcut.trim());
+};
+
+export const setToggleMuteShortcut = (shortcut: string) => {
+  updateAppSetting("toggleMuteShortcut", shortcut.trim());
+};
+
+export const setUpdateReminderInterval = (days: number) => {
+  const normalized = Math.max(1, Math.min(30, Math.round(days)));
+  updateAppSetting("updateReminderIntervalDays", normalized);
+};
+
+export function upsertTrustedDevice(device: TrustedDevice) {
+  settings.update((current) => {
+    const existingIndex = current.trustedDevices.findIndex(
+      (item) => item.id === device.id,
+    );
+    const trustedDevices = [...current.trustedDevices];
+    if (existingIndex >= 0) {
+      trustedDevices[existingIndex] = {
+        ...trustedDevices[existingIndex],
+        ...device,
+      };
+    } else {
+      trustedDevices.push(device);
+    }
+
+    return {
+      ...current,
+      trustedDevices,
+    };
+  });
+}
+
+export function revokeTrustedDevice(deviceId: string) {
+  settings.update((current) => ({
+    ...current,
+    trustedDevices: current.trustedDevices.map((device) =>
+      device.id === deviceId ? { ...device, active: false } : device,
+    ),
+  }));
+}
+
+export function removeTrustedDevice(deviceId: string) {
+  settings.update((current) => ({
+    ...current,
+    trustedDevices: current.trustedDevices.filter((device) =>
+      device.id !== deviceId
+    ),
+  }));
+}
+
+function generateFallbackId(prefix: string) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  const random = Math.random().toString(36).slice(2, 10);
+  return `${prefix}-${random}`;
+}
+
+function applyConnectedAccountUpdate(
+  updater: (accounts: ConnectedAccount[]) => ConnectedAccount[],
+) {
+  settings.update((current) => ({
+    ...current,
+    connectedAccounts: updater(current.connectedAccounts),
+  }));
+}
+
+export async function refreshConnectedAccountsFromBackend() {
+  try {
+    const invoke = await getInvoke();
+    if (!invoke) {
+      return;
+    }
+    const accounts = await invoke<ConnectedAccount[]>(
+      "list_connected_accounts",
+    );
+    settings.update((current) => ({
+      ...current,
+      connectedAccounts: accounts,
+    }));
+  } catch (error) {
+    console.error("Failed to refresh connected accounts", error);
+  }
+}
+
+export async function linkConnectedAccount(
+  provider: string,
+  username: string,
+) {
+  const normalized = username.trim();
+  if (!normalized) {
+    throw new Error("Account handle is required.");
+  }
+
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      const account = await invoke<ConnectedAccount>("link_external_account", {
+        provider,
+        username: normalized,
+      });
+      applyConnectedAccountUpdate((accounts) => {
+        const index = accounts.findIndex((item) => item.id === account.id);
+        if (index >= 0) {
+          const clone = [...accounts];
+          clone[index] = account;
+          return clone;
+        }
+        return [...accounts, account];
+      });
+      return account;
+    }
+  } catch (error) {
+    console.error("Failed to link external account", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Unable to link external account.");
+  }
+
+  const fallbackAccount: ConnectedAccount = {
+    id: generateFallbackId(provider),
+    provider,
+    username: normalized,
+    linkedAt: new Date().toISOString(),
+    scopes: ["basic"],
+  };
+  applyConnectedAccountUpdate((accounts) => [...accounts, fallbackAccount]);
+  return fallbackAccount;
+}
+
+export async function unlinkConnectedAccount(accountId: string) {
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      await invoke("unlink_external_account", { accountId });
+    }
+  } catch (error) {
+    console.error("Failed to unlink external account", error);
+    throw error instanceof Error
+      ? error
+      : new Error("Unable to unlink external account.");
+  }
+
+  applyConnectedAccountUpdate((accounts) =>
+    accounts.filter((item) => item.id !== accountId),
+  );
+}
