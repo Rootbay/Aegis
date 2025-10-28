@@ -133,6 +133,20 @@ pub enum AepMessage {
         edited_at: DateTime<Utc>,
         signature: Option<Vec<u8>>,
     },
+    ReadReceipt {
+        chat_id: String,
+        message_id: String,
+        reader_id: String,
+        timestamp: DateTime<Utc>,
+        signature: Option<Vec<u8>>,
+    },
+    TypingIndicator {
+        chat_id: String,
+        user_id: String,
+        is_typing: bool,
+        timestamp: DateTime<Utc>,
+        signature: Option<Vec<u8>>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -267,6 +281,22 @@ pub struct MessageReactionData {
     pub emoji: String,
     pub user_id: String,
     pub action: ReactionAction,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReadReceiptData {
+    pub chat_id: String,
+    pub message_id: String,
+    pub reader_id: String,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TypingIndicatorData {
+    pub chat_id: String,
+    pub user_id: String,
+    pub is_typing: bool,
+    pub timestamp: DateTime<Utc>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

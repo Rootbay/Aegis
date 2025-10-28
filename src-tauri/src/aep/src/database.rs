@@ -1259,6 +1259,19 @@ pub async fn update_message_content(
     Ok(())
 }
 
+pub async fn mark_message_as_read(
+    pool: &Pool<Sqlite>,
+    message_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE messages SET read = 1 WHERE id = ?",
+        message_id
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn get_message_metadata(
     pool: &Pool<Sqlite>,
     message_id: &str,
@@ -1275,6 +1288,33 @@ pub async fn get_message_metadata(
         chat_id: row.chat_id,
         sender_id: row.sender_id,
     }))
+}
+
+pub async fn upsert_typing_indicator(
+    pool: &Pool<Sqlite>,
+    chat_id: &str,
+    user_id: &str,
+    is_typing: bool,
+    timestamp: DateTime<Utc>,
+) -> Result<(), sqlx::Error> {
+    let ts = timestamp.to_rfc3339();
+    let is_typing_i64 = if is_typing { 1 } else { 0 };
+    sqlx::query!(
+        r#"
+        INSERT INTO typing_indicators (chat_id, user_id, is_typing, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(chat_id, user_id) DO UPDATE SET
+            is_typing = excluded.is_typing,
+            updated_at = excluded.updated_at
+        "#,
+        chat_id,
+        user_id,
+        is_typing_i64,
+        ts,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub async fn add_reaction_to_message(

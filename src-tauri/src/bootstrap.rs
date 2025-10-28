@@ -8,7 +8,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use tauri::{Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, Mutex};
 
-use aegis_protocol::AepMessage;
+use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};
 use aegis_shared_types::{AppState, FileTransferMode, User};
 use aep::{database, handle_aep_message, initialize_aep};
 use bs58;
@@ -16,6 +16,7 @@ use e2ee;
 use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
 use tokio::sync::mpsc::Sender as TokioSender;
 
+use crate::commands::messages::{ReadReceiptEventPayload, TypingIndicatorEventPayload};
 use crate::connectivity::spawn_connectivity_task;
 
 const MAX_OUTBOX_MESSAGES: usize = 256;
@@ -700,6 +701,166 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             }
                                                             Err(e) => eprintln!("Failed to decrypt group key for {}: {}", my_id, e),
                                                         }
+                                                    }
+                                                }
+                                                AepMessage::ReadReceipt { chat_id, message_id, reader_id, timestamp, signature } => {
+                                                    let signature = match signature {
+                                                        Some(sig) => sig,
+                                                        None => {
+                                                            eprintln!(
+                                                                "Missing signature for read receipt from {}",
+                                                                reader_id
+                                                            );
+                                                            continue;
+                                                        }
+                                                    };
+
+                                                    let receipt = ReadReceiptData {
+                                                        chat_id: chat_id.clone(),
+                                                        message_id: message_id.clone(),
+                                                        reader_id: reader_id.clone(),
+                                                        timestamp: timestamp.clone(),
+                                                    };
+
+                                                    let payload_bytes = match bincode::serialize(&receipt) {
+                                                        Ok(bytes) => bytes,
+                                                        Err(err) => {
+                                                            eprintln!(
+                                                                "Failed to serialize read receipt for {}: {}",
+                                                                message_id, err
+                                                            );
+                                                            continue;
+                                                        }
+                                                    };
+
+                                                    let verified = if let Ok(Some(user)) =
+                                                        aep::user_service::get_user(&db_pool_clone, &reader_id).await
+                                                    {
+                                                        if let Some(pk_b58) = user.public_key {
+                                                            if let Ok(bytes) = bs58::decode(pk_b58).into_vec() {
+                                                                if let Ok(public_key) = libp2p::identity::PublicKey::from_protobuf_encoding(&bytes) {
+                                                                    public_key.verify(&payload_bytes, &signature)
+                                                                } else {
+                                                                    false
+                                                                }
+                                                            } else {
+                                                                false
+                                                            }
+                                                        } else {
+                                                            false
+                                                        }
+                                                    } else {
+                                                        false
+                                                    };
+
+                                                    if !verified {
+                                                        eprintln!(
+                                                            "Invalid signature for read receipt {} in chat {}",
+                                                            message_id, chat_id
+                                                        );
+                                                        continue;
+                                                    }
+
+                                                    if let Err(err) = database::mark_message_as_read(&db_pool_clone, &message_id).await {
+                                                        eprintln!(
+                                                            "Failed to mark message {} as read: {}",
+                                                            message_id, err
+                                                        );
+                                                    }
+
+                                                    let timestamp_str = timestamp.to_rfc3339();
+                                                    let payload = ReadReceiptEventPayload {
+                                                        chat_id,
+                                                        message_id,
+                                                        reader_id,
+                                                        timestamp: timestamp_str,
+                                                    };
+                                                    if let Err(err) = app_for_emit.emit("message-read", payload) {
+                                                        eprintln!("Failed to emit message-read event: {}", err);
+                                                    }
+                                                }
+                                                AepMessage::TypingIndicator { chat_id, user_id, is_typing, timestamp, signature } => {
+                                                    let signature = match signature {
+                                                        Some(sig) => sig,
+                                                        None => {
+                                                            eprintln!(
+                                                                "Missing signature for typing indicator from {}",
+                                                                user_id
+                                                            );
+                                                            continue;
+                                                        }
+                                                    };
+
+                                                    let indicator = TypingIndicatorData {
+                                                        chat_id: chat_id.clone(),
+                                                        user_id: user_id.clone(),
+                                                        is_typing,
+                                                        timestamp: timestamp.clone(),
+                                                    };
+
+                                                    let payload_bytes = match bincode::serialize(&indicator) {
+                                                        Ok(bytes) => bytes,
+                                                        Err(err) => {
+                                                            eprintln!(
+                                                                "Failed to serialize typing indicator for chat {}: {}",
+                                                                chat_id, err
+                                                            );
+                                                            continue;
+                                                        }
+                                                    };
+
+                                                    let verified = if let Ok(Some(user)) =
+                                                        aep::user_service::get_user(&db_pool_clone, &user_id).await
+                                                    {
+                                                        if let Some(pk_b58) = user.public_key {
+                                                            if let Ok(bytes) = bs58::decode(pk_b58).into_vec() {
+                                                                if let Ok(public_key) = libp2p::identity::PublicKey::from_protobuf_encoding(&bytes) {
+                                                                    public_key.verify(&payload_bytes, &signature)
+                                                                } else {
+                                                                    false
+                                                                }
+                                                            } else {
+                                                                false
+                                                            }
+                                                        } else {
+                                                            false
+                                                        }
+                                                    } else {
+                                                        false
+                                                    };
+
+                                                    if !verified {
+                                                        eprintln!(
+                                                            "Invalid signature for typing indicator in chat {} from {}",
+                                                            chat_id, user_id
+                                                        );
+                                                        continue;
+                                                    }
+
+                                                    if let Err(err) = database::upsert_typing_indicator(
+                                                        &db_pool_clone,
+                                                        &chat_id,
+                                                        &user_id,
+                                                        is_typing,
+                                                        timestamp.clone(),
+                                                    )
+                                                    .await
+                                                    {
+                                                        eprintln!(
+                                                            "Failed to persist typing indicator for chat {}: {}",
+                                                            chat_id, err
+                                                        );
+                                                    }
+
+                                                    let timestamp_str = timestamp.to_rfc3339();
+                                                    let payload = TypingIndicatorEventPayload {
+                                                        chat_id,
+                                                        user_id,
+                                                        is_typing,
+                                                        timestamp: timestamp_str,
+                                                    };
+                                                    if let Err(err) = app_for_emit.emit("typing-indicator", payload) {
+                                                        eprintln!("Failed to emit typing-indicator event: {}", err);
                                                     }
                                                 }
                                                 AepMessage::EncryptedGroupMessage { sender, server_id, channel_id, epoch, nonce, ciphertext, signature } => {
