@@ -42,6 +42,21 @@ pub struct ConnectivityLink {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct ConnectivityGatewayStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bridge_mode_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forwarding: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upstream_peer_count: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_dial_attempt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectivityEventPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub internet_reachable: Option<bool>,
@@ -59,6 +74,8 @@ pub struct ConnectivityEventPayload {
     pub bridge_suggested: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gateway_status: Option<ConnectivityGatewayStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

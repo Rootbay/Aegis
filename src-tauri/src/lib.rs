@@ -75,6 +75,7 @@ pub async fn run() {
             commands::data_privacy::request_account_deletion,
             commands::moderation::submit_user_report,
             commands::connectivity::get_connectivity_snapshot,
+            commands::connectivity::set_bridge_mode_enabled,
             commands::collaboration::send_collaboration_update,
         ])
         .run(tauri::generate_context!())

@@ -37,6 +37,7 @@ export interface ConnectivityEventPayload {
   links?: Array<PartialMeshLink>;
   bridgeSuggested?: boolean;
   reason?: string | null;
+  gatewayStatus?: PartialGatewayStatus | null;
 }
 
 export interface ConnectivityState {
@@ -48,6 +49,7 @@ export interface ConnectivityState {
   peers: MeshPeer[];
   links: MeshLink[];
   bridgeSuggested: boolean;
+  gatewayStatus: GatewayStatus;
   fallbackActive: boolean;
   fallbackReason: string | null;
   lastUpdated: number | null;
@@ -75,6 +77,33 @@ type PartialMeshLink = {
   type?: ConnectionMedium | null;
 };
 
+export interface GatewayStatus {
+  bridgeModeEnabled: boolean;
+  forwarding: boolean;
+  upstreamPeers: number;
+  lastDialAttempt: string | null;
+  lastError: string | null;
+}
+
+type PartialGatewayStatus = {
+  bridgeModeEnabled?: boolean | null;
+  forwarding?: boolean | null;
+  upstreamPeerCount?: number | null;
+  upstreamPeers?: number | null;
+  lastDialAttempt?: string | null;
+  lastDialAttemptAt?: string | null;
+  last_error?: string | null;
+  lastError?: string | null;
+};
+
+const defaultGatewayStatus: GatewayStatus = {
+  bridgeModeEnabled: false,
+  forwarding: false,
+  upstreamPeers: 0,
+  lastDialAttempt: null,
+  lastError: null,
+};
+
 type ConnectivityStore = Readable<ConnectivityState> & {
   initialize: () => Promise<void>;
   teardown: () => void;
@@ -93,6 +122,7 @@ const initialState: ConnectivityState = {
   peers: [],
   links: [],
   bridgeSuggested: false,
+  gatewayStatus: { ...defaultGatewayStatus },
   fallbackActive: false,
   fallbackReason: null,
   lastUpdated: null,
@@ -107,6 +137,7 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
     peers: [],
     links: [],
     bridgeSuggested: false,
+    gatewayStatus: { ...defaultGatewayStatus },
     reason: "No connectivity data available.",
   },
   {
@@ -161,6 +192,7 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
       },
     ],
     bridgeSuggested: true,
+    gatewayStatus: { ...defaultGatewayStatus },
     reason: "Demo mesh snapshot (no backend events).",
   },
   {
@@ -247,7 +279,13 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
       },
     ],
     bridgeSuggested: false,
-    reason: "Demo mesh snapshot (no backend events).",
+    gatewayStatus: {
+      ...defaultGatewayStatus,
+      bridgeModeEnabled: true,
+      forwarding: true,
+      upstreamPeers: 1,
+    },
+    reason: "Demo online snapshot (no backend events).",
   },
 ];
 
@@ -283,8 +321,43 @@ function normalizeLink(link: PartialMeshLink): MeshLink | null {
   };
 }
 
+function normalizeGatewayStatus(status?: PartialGatewayStatus | null): GatewayStatus {
+  if (!status) {
+    return { ...defaultGatewayStatus };
+  }
+
+  const upstreamPeers =
+    typeof status.upstreamPeerCount === "number"
+      ? status.upstreamPeerCount
+      : typeof status.upstreamPeers === "number"
+        ? status.upstreamPeers
+        : defaultGatewayStatus.upstreamPeers;
+
+  const lastDialAttempt =
+    typeof status.lastDialAttempt === "string"
+      ? status.lastDialAttempt
+      : typeof status.lastDialAttemptAt === "string"
+        ? status.lastDialAttemptAt
+        : null;
+
+  const lastError =
+    typeof status.lastError === "string"
+      ? status.lastError
+      : typeof status.last_error === "string"
+        ? status.last_error
+        : null;
+
+  return {
+    bridgeModeEnabled: Boolean(status.bridgeModeEnabled),
+    forwarding: Boolean(status.forwarding),
+    upstreamPeers,
+    lastDialAttempt,
+    lastError,
+  };
+}
+
 function computeStatus(state: ConnectivityState, payload: ConnectivityEventPayload) {
-  if (payload.internetReachable) {
+  if (payload.internetReachable || payload.gatewayStatus?.forwarding) {
     return "online" as const;
   }
 
@@ -347,6 +420,8 @@ export function createConnectivityStore(): ConnectivityStore {
         .map(normalizeLink)
         .filter((link): link is MeshLink => Boolean(link));
 
+      const gatewayStatus = normalizeGatewayStatus(payload.gatewayStatus);
+
       const meshPeers =
         typeof payload.meshPeers === "number"
           ? payload.meshPeers
@@ -358,16 +433,21 @@ export function createConnectivityStore(): ConnectivityStore {
           : peers.length;
 
       const status = computeStatus(current, payload);
+      const internetReachable =
+        typeof payload.internetReachable === "boolean"
+          ? payload.internetReachable
+          : gatewayStatus.forwarding;
 
       return {
         status,
-        internetReachable: Boolean(payload.internetReachable),
+        internetReachable,
         meshReachable: Boolean(payload.meshReachable || meshPeers > 0),
         totalPeers,
         meshPeers,
         peers,
         links,
         bridgeSuggested: Boolean(payload.bridgeSuggested),
+        gatewayStatus,
         fallbackActive: current.fallbackActive,
         fallbackReason: current.fallbackReason,
         lastUpdated: Date.now(),

@@ -1,4 +1,7 @@
+import { get } from "svelte/store";
+import { getInvoke } from "$services/tauri";
 import { persistentStore } from "$lib/stores/persistentStore";
+import type { GatewayStatus } from "$lib/stores/connectivityStore";
 
 export interface UserSettings {
   name: string;
@@ -180,10 +183,34 @@ export const setEnableCrossDeviceSync = createBooleanSetter(
   "enableCrossDeviceSync",
 );
 export const setPreferWifiDirect = createBooleanSetter("preferWifiDirect");
-export const setEnableBridgeMode = createBooleanSetter("enableBridgeMode");
 export const setEnableIntelligentMeshRouting = createBooleanSetter(
   "enableIntelligentMeshRouting",
 );
+
+export async function setEnableBridgeMode(
+  value: Extract<AppSettings["enableBridgeMode"], boolean>,
+): Promise<GatewayStatus | null> {
+  const invoke = await getInvoke();
+  const previous = get(settings).enableBridgeMode;
+
+  if (!invoke) {
+    updateAppSetting("enableBridgeMode", value as AppSettings["enableBridgeMode"]);
+    return null;
+  }
+
+  try {
+    const status = await invoke<GatewayStatus | null>("set_bridge_mode_enabled", {
+      enabled: value,
+    });
+    const effective = status?.bridgeModeEnabled ?? value;
+    updateAppSetting("enableBridgeMode", effective as AppSettings["enableBridgeMode"]);
+    return status;
+  } catch (error) {
+    console.error("Failed to toggle Bridge Mode", error);
+    updateAppSetting("enableBridgeMode", previous as AppSettings["enableBridgeMode"]);
+    throw error;
+  }
+}
 export const setEnableDarkMode = createBooleanSetter("enableDarkMode");
 
 export const setMessageDensity = (density: MessageDensity) => {
