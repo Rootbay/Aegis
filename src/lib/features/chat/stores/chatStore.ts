@@ -173,6 +173,10 @@ type ChatStoreOptions = {
 const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
 const TYPING_INDICATOR_TIMEOUT_MS = 4_000;
 
+const isVoiceMemoFile = (file: File) =>
+  (file.type?.startsWith("audio/") ?? false) &&
+  file.name.startsWith("voice-message-");
+
 const normalizeEventId = (value?: string | null) => {
   if (typeof value === "string" && value.length > 0) {
     return value;
@@ -1520,11 +1524,27 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const messageChatId = type === "server" ? channelId : chatId;
     if (!messageChatId) return;
 
+    const voiceMemosAllowed = get(settings).enableWalkieTalkieVoiceMemos;
+    const filesToProcess = voiceMemosAllowed
+      ? files
+      : files.filter((file) => !isVoiceMemoFile(file));
+
+    if (!voiceMemosAllowed && filesToProcess.length !== files.length) {
+      if (filesToProcess.length === 0) {
+        const trimmed = content.trim();
+        if (trimmed.length === 0) {
+          return;
+        }
+        await sendMessage(trimmed);
+        return;
+      }
+    }
+
     const tempId = Date.now().toString() + "-a";
     const timestamp = new Date().toISOString();
 
     const attachmentsCombined = await Promise.all(
-      files.map(
+      filesToProcess.map(
         async (
           file,
         ): Promise<{

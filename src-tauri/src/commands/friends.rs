@@ -425,7 +425,7 @@ mod tests {
     use bs58;
     use crypto::identity::Identity;
     use std::collections::HashMap;
-    use std::sync::Arc;
+    use std::sync::{atomic::AtomicBool, Arc};
     use tempfile::tempdir;
     use tokio::sync::Mutex;
     use tokio::time::{timeout, Duration};
@@ -448,6 +448,7 @@ mod tests {
             file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
+            voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         };
         (app_state, network_rx)
     }

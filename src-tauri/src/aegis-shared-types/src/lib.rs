@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use tokio::sync::{mpsc, Mutex};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -161,6 +161,7 @@ pub struct AppState {
     pub file_acl_policy: Arc<Mutex<FileAclPolicy>>, // dynamic, shared across clones
     pub app_data_dir: PathBuf,
     pub connectivity_snapshot: Arc<Mutex<Option<ConnectivityEventPayload>>>,
+    pub voice_memos_enabled: Arc<AtomicBool>,
 }
 
 #[derive(Clone)]

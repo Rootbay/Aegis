@@ -35,6 +35,7 @@
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import { settings } from "$lib/features/settings/stores/settings";
   import MessageAuthorName from "$lib/features/chat/components/MessageAuthorName.svelte";
   import { highlightText } from "$lib/features/chat/utils/highlightText";
 
@@ -90,6 +91,12 @@
 
   const supportsVoiceRecording =
     typeof window !== "undefined" && "MediaRecorder" in window;
+  const voiceMemosEnabled = $derived(
+    () => $settings.enableWalkieTalkieVoiceMemos,
+  );
+  const isVoiceMemoFile = (file: File) =>
+    (file.type?.startsWith("audio/") ?? false) &&
+    file.name.startsWith("voice-message-");
   let isRecording = $state(false);
   let recordingDuration = $state(0);
   let recordingStartedAt = 0;
@@ -97,6 +104,12 @@
   let mediaRecorder: MediaRecorder | null = null;
   let recordingStream: MediaStream | null = null;
   let recordedChunks: Blob[] = [];
+
+  $effect(() => {
+    if (!voiceMemosEnabled && isRecording) {
+      void stopRecording({ save: false, silent: true });
+    }
+  });
 
   let listRef: any = $state();
   let fileInput: HTMLInputElement | null = $state(null);
@@ -758,6 +771,11 @@
   }
 
   async function handleMicClick() {
+    if (!voiceMemosEnabled) {
+      toasts.addToast("Voice memos are disabled in settings.", "info");
+      return;
+    }
+
     if (isRecording) {
       await stopRecording();
     } else {
@@ -776,7 +794,21 @@
   function addAttachments(newFiles: File[]) {
     if (!newFiles.length) return;
 
-    const { files, duplicates } = mergeAttachments(attachedFiles, newFiles);
+    let filesToProcess = newFiles;
+
+    if (!voiceMemosEnabled) {
+      const allowed = newFiles.filter((file) => !isVoiceMemoFile(file));
+      if (allowed.length !== newFiles.length) {
+        toasts.addToast("Voice memos are disabled in settings.", "info");
+      }
+      filesToProcess = allowed;
+    }
+
+    if (filesToProcess.length === 0) {
+      return;
+    }
+
+    const { files, duplicates } = mergeAttachments(attachedFiles, filesToProcess);
     attachedFiles = files;
 
     if (duplicates > 0) {
@@ -1457,9 +1489,14 @@
             class:text-red-400={isRecording}
             aria-pressed={isRecording}
             onclick={handleMicClick}
-            title={isRecording
-              ? "Stop recording voice message"
-              : "Record voice message"}
+            class:opacity-50={!voiceMemosEnabled}
+            class:cursor-not-allowed={!voiceMemosEnabled}
+            aria-disabled={!voiceMemosEnabled}
+            title={voiceMemosEnabled
+              ? isRecording
+                ? "Stop recording voice message"
+                : "Record voice message"
+              : "Voice memos are disabled in settings"}
           >
             {#if isRecording}
               <Square size={12} />

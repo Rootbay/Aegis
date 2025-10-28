@@ -1,5 +1,6 @@
 use crate::commands::state::AppStateContainer;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri::State;
 
@@ -48,5 +49,16 @@ pub async fn set_file_acl_policy(
     };
     let json = serde_json::to_vec_pretty(&to_write).map_err(|e| e.to_string())?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_voice_memos_enabled(
+    enabled: bool,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?;
+    state.voice_memos_enabled.store(enabled, Ordering::Relaxed);
     Ok(())
 }
