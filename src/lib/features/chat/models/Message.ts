@@ -9,6 +9,11 @@ export interface AttachmentMeta {
   loadError?: string;
 }
 
+export interface ReplySnapshot {
+  author?: string;
+  snippet?: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -32,4 +37,6 @@ export interface Message {
   deleted?: boolean;
   deletedAt?: string;
   deletedBy?: string;
+  replyToMessageId?: string;
+  replySnapshot?: ReplySnapshot;
 }

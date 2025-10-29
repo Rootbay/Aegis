@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AttachmentMeta,
   Message,
+  ReplySnapshot,
 } from "$lib/features/chat/models/Message";
 import type {
   ChatMessage,
@@ -44,6 +45,12 @@ type BackendMessage = {
   editedBy?: string | null;
   expires_at?: string | number | Date | null;
   expiresAt?: string | number | Date | null;
+  reply_to_message_id?: string | null;
+  replyToMessageId?: string | null;
+  reply_snapshot_author?: string | null;
+  replySnapshotAuthor?: string | null;
+  reply_snapshot_snippet?: string | null;
+  replySnapshotSnippet?: string | null;
 };
 
 export type MessageReadReceiptEvent = {
@@ -103,6 +110,11 @@ export interface ChatMetadata {
   unreadCount: number;
 }
 
+export interface SendMessageOptions {
+  replyToMessageId?: string;
+  replySnapshot?: ReplySnapshot;
+}
+
 interface ChatStore {
   messagesByChatId: Readable<Map<string, Message[]>>;
   hasMoreByChatId: Readable<Map<string, boolean>>;
@@ -124,8 +136,12 @@ interface ChatStore {
     },
   ) => Promise<void>;
   handleMessagesUpdate: (chatId: string, messages: Message[]) => void;
-  sendMessage: (content: string) => Promise<void>;
-  sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
+  sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
+  sendMessageWithAttachments: (
+    content: string,
+    files: File[],
+    options?: SendMessageOptions,
+  ) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   pinMessage: (chatId: string, messageId: string) => Promise<void>;
   unpinMessage: (chatId: string, messageId: string) => Promise<void>;
@@ -1026,6 +1042,20 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       message.expires_at ?? message.expiresAt,
     );
     const pinned = Boolean(message.pinned);
+    const replyToMessageId =
+      message.reply_to_message_id ?? message.replyToMessageId ?? undefined;
+    const replySnapshotAuthor =
+      message.reply_snapshot_author ?? message.replySnapshotAuthor ?? undefined;
+    const replySnapshotSnippet =
+      message.reply_snapshot_snippet ?? message.replySnapshotSnippet ?? undefined;
+    const replySnapshot: ReplySnapshot | undefined =
+      replySnapshotAuthor || replySnapshotSnippet
+        ? {
+            author: replySnapshotAuthor ?? undefined,
+            snippet: replySnapshotSnippet ?? undefined,
+          }
+        : undefined;
+
     const normalized: Message = {
       id: message.id,
       chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
@@ -1040,6 +1070,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       editedAt: editedAt,
       editedBy: editedBy ?? undefined,
       expiresAt: backendExpires ?? computeExpiryForTimestamp(timestamp),
+      replyToMessageId: replyToMessageId ?? undefined,
+      replySnapshot,
     };
     return ensureMessageExpiry(normalized);
   };
@@ -1053,6 +1085,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (selfId && optimistic.senderId !== selfId) return false;
     if (optimistic.senderId !== incoming.senderId) return false;
     if (optimistic.content !== incoming.content) return false;
+    if (optimistic.replyToMessageId !== incoming.replyToMessageId) return false;
     const optimisticAttachments = optimistic.attachments?.length ?? 0;
     const incomingAttachments = incoming.attachments?.length ?? 0;
     if (optimisticAttachments > 0 && incomingAttachments > 0) {
@@ -1070,6 +1103,14 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       ...incoming,
       pending: false,
     };
+
+    if (!merged.replyToMessageId && optimistic.replyToMessageId) {
+      merged.replyToMessageId = optimistic.replyToMessageId;
+    }
+
+    if (!merged.replySnapshot && optimistic.replySnapshot) {
+      merged.replySnapshot = optimistic.replySnapshot;
+    }
 
     if (
       (!merged.attachments || merged.attachments.length === 0) &&
@@ -1468,7 +1509,33 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return fetchPromise;
   };
 
-  const sendMessage = async (content: string) => {
+  const buildReplyMetadataPayload = (options?: SendMessageOptions) => {
+    if (!options?.replyToMessageId) {
+      return {};
+    }
+
+    const payload: Record<string, unknown> = {
+      replyToMessageId: options.replyToMessageId,
+      reply_to_message_id: options.replyToMessageId,
+    };
+
+    const snapshot = options.replySnapshot;
+    if (snapshot?.author) {
+      payload.replySnapshotAuthor = snapshot.author;
+      payload.reply_snapshot_author = snapshot.author;
+    }
+    if (snapshot?.snippet) {
+      payload.replySnapshotSnippet = snapshot.snippet;
+      payload.reply_snapshot_snippet = snapshot.snippet;
+    }
+
+    return payload;
+  };
+
+  const sendMessage = async (
+    content: string,
+    options: SendMessageOptions = {},
+  ) => {
     const type = get(activeChatType);
     const chatId = get(activeChatId);
     const channelId = get(activeChannelId);
@@ -1492,6 +1559,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       pinned: false,
       pending: true,
       expiresAt: optimisticExpiresAt,
+      replyToMessageId: options.replyToMessageId,
+      replySnapshot: options.replySnapshot,
     };
 
     updateMessagesForChat(messageChatId, (existing) => [
@@ -1517,6 +1586,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       backendContent = content;
     }
     try {
+      const replyPayload = buildReplyMetadataPayload(options);
       if (type === "dm") {
         await invoke("send_encrypted_dm", {
           message: backendContent,
@@ -1524,6 +1594,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           recipient_id: chatId,
           expiresAt: optimisticExpiresAt,
           expires_at: optimisticExpiresAt,
+          ...replyPayload,
         });
       } else {
         await invoke("send_encrypted_group_message", {
@@ -1534,6 +1605,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           server_id: chatId,
           expiresAt: optimisticExpiresAt,
           expires_at: optimisticExpiresAt,
+          ...replyPayload,
         });
       }
     } catch (error) {
@@ -1543,6 +1615,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         error,
       );
       try {
+        const replyPayload = buildReplyMetadataPayload(options);
         if (type === "dm") {
           await invoke("send_direct_message", {
             message: backendContent,
@@ -1550,6 +1623,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             recipient_id: chatId,
             expiresAt: optimisticExpiresAt,
             expires_at: optimisticExpiresAt,
+            ...replyPayload,
           });
         } else {
           await invoke("send_message", {
@@ -1560,6 +1634,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             server_id: chatId,
             expiresAt: optimisticExpiresAt,
             expires_at: optimisticExpiresAt,
+            ...replyPayload,
           });
         }
       } catch (fallbackError) {
@@ -1586,7 +1661,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   };
 
-  const sendMessageWithAttachments = async (content: string, files: File[]) => {
+  const sendMessageWithAttachments = async (
+    content: string,
+    files: File[],
+    options: SendMessageOptions = {},
+  ) => {
     const type = get(activeChatType);
     const chatId = get(activeChatId);
     const channelId = get(activeChannelId);
@@ -1607,7 +1686,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         if (trimmed.length === 0) {
           return;
         }
-        await sendMessage(trimmed);
+        await sendMessage(trimmed, options);
         return;
       }
     }
@@ -1693,6 +1772,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
       expiresAt: optimisticExpiresAt,
+      replyToMessageId: options.replyToMessageId,
+      replySnapshot: options.replySnapshot,
     };
     updateMessagesForChat(messageChatId, (existing) => [
       ...existing,
@@ -1700,6 +1781,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     ]);
 
     let encryptedFailed = false;
+    const replyPayload = buildReplyMetadataPayload(options);
     try {
       if (type === "dm") {
         try {
@@ -1710,6 +1792,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             expiresAt: optimisticExpiresAt,
             expires_at: optimisticExpiresAt,
             attachments: attachmentsForSend,
+            ...replyPayload,
           });
         } catch (error) {
           encryptedFailed = true;
@@ -1724,6 +1807,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             expiresAt: optimisticExpiresAt,
             expires_at: optimisticExpiresAt,
             attachments: attachmentsForSend,
+            ...replyPayload,
           });
         }
       } else {
@@ -1736,6 +1820,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           server_id: chatId,
           expiresAt: optimisticExpiresAt,
           expires_at: optimisticExpiresAt,
+          ...replyPayload,
         });
       }
     } catch (error) {
@@ -2124,6 +2209,20 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const isMissingMetadata = !messageIdFromPayload || !timestampFromPayload;
     const isSelfAuthored = sender === me?.id;
 
+    const replyToMessageId =
+      message.reply_to_message_id ?? message.replyToMessageId ?? undefined;
+    const replySnapshotAuthor =
+      message.reply_snapshot_author ?? message.replySnapshotAuthor ?? undefined;
+    const replySnapshotSnippet =
+      message.reply_snapshot_snippet ?? message.replySnapshotSnippet ?? undefined;
+    const replySnapshot: ReplySnapshot | undefined =
+      replySnapshotAuthor || replySnapshotSnippet
+        ? {
+            author: replySnapshotAuthor ?? undefined,
+            snippet: replySnapshotSnippet ?? undefined,
+          }
+        : undefined;
+
     const newMessage: Message = {
       id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
       chatId: targetChatId,
@@ -2140,6 +2239,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       expiresAt: undefined,
       isSpamFlagged: false,
       spamMuted: false,
+      replyToMessageId,
+      replySnapshot,
     };
     newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
 
