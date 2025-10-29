@@ -337,6 +337,7 @@ import ChatView from "$lib/features/chat/components/ChatView.svelte";
 import {
   defaultSettings,
   settings,
+  setMessageDensity,
   setShowMessageAvatars,
   setShowMessageTimestamps,
 } from "$lib/features/settings/stores/settings";
@@ -362,24 +363,28 @@ function getMessageContainer(messageText: string) {
   return container as HTMLElement;
 }
 
+function resetChatViewState() {
+  const baseline = structuredClone(defaultSettings);
+  baseline.showMessageAvatars = true;
+  baseline.showMessageTimestamps = true;
+  settings.set(baseline);
+
+  messagesByChatId.set(new Map());
+  hasMoreByChatId.set(new Map());
+  loadingStateByChat.set(new Map());
+  chatSearchStore.reset();
+  __setUser({
+    id: "user-current",
+    name: "Current User",
+    avatar: "https://example.com/me.png",
+    online: true,
+  });
+  __resetMutedFriends();
+}
+
 describe("ChatView privacy preferences", () => {
   beforeEach(() => {
-    const baseline = structuredClone(defaultSettings);
-    baseline.showMessageAvatars = true;
-    baseline.showMessageTimestamps = true;
-    settings.set(baseline);
-
-    messagesByChatId.set(new Map());
-    hasMoreByChatId.set(new Map());
-    loadingStateByChat.set(new Map());
-    chatSearchStore.reset();
-    __setUser({
-      id: "user-current",
-      name: "Current User",
-      avatar: "https://example.com/me.png",
-      online: true,
-    });
-    __resetMutedFriends();
+    resetChatViewState();
   });
 
   it("hides avatars and timestamps when settings are disabled", async () => {
@@ -473,5 +478,63 @@ describe("ChatView privacy preferences", () => {
     expect(screen.queryByText(message.content)).not.toBeNull();
 
     settingsUnsubscribe();
+  });
+});
+
+describe("ChatView message density", () => {
+  beforeEach(() => {
+    resetChatViewState();
+  });
+
+  it("applies compact spacing classes when density is compact", async () => {
+    const chatId = "chat-density";
+    const friend: Friend = {
+      id: "friend-density",
+      name: "Density Friend",
+      avatar: "https://example.com/density.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-density",
+      chatId,
+      senderId: friend.id,
+      content: "Testing compact spacing",
+      timestamp: new Date().toISOString(),
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    await screen.findByText(message.content);
+
+    await waitFor(() => {
+      const initialContainer = getMessageContainer(message.content);
+      expect(initialContainer.classList.contains("space-y-6")).toBe(true);
+    });
+
+    setMessageDensity("compact");
+    await tick();
+
+    messagesByChatId.set(new Map([[chatId, [{ ...message }]]]));
+    await tick();
+
+    await waitFor(() => {
+      const compactContainer = getMessageContainer(message.content);
+      expect(compactContainer.classList.contains("space-y-3")).toBe(true);
+      expect(compactContainer.classList.contains("space-y-6")).toBe(false);
+    });
   });
 });

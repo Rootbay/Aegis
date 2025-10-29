@@ -101,6 +101,9 @@
   const showMessageAvatars = $derived($settings.showMessageAvatars);
   const showMessageTimestamps = $derived($settings.showMessageTimestamps);
   const voiceMemosEnabled = $derived($settings.enableWalkieTalkieVoiceMemos);
+  const messageDensity = $derived($settings.messageDensity);
+  const densityClass = (cozy: string, compact: string) =>
+    messageDensity === "compact" ? compact : cozy;
   const isVoiceMemoFile = (file: File) =>
     (file.type?.startsWith("audio/") ?? false) &&
     file.name.startsWith("voice-message-");
@@ -1285,8 +1288,13 @@
         <VirtualList
           items={currentChatMessages}
           mode="bottomToTop"
-          defaultEstimatedItemHeight={80}
-          viewportClass="virtual-list-viewport p-4 chat-viewport"
+          defaultEstimatedItemHeight={
+            messageDensity === "compact" ? 64 : 80
+          }
+          viewportClass={densityClass(
+            "virtual-list-viewport p-4 chat-viewport",
+            "virtual-list-viewport p-2 chat-viewport",
+          )}
           bind:this={listRef}
         >
           {#snippet renderItem(msg, index)}
@@ -1306,14 +1314,18 @@
               </div>
             {/if}
             <div
-              class="space-y-6"
+              class={densityClass("space-y-6", "space-y-3")}
               use:captureViewport
               id={`message-${msg.id}`}
             >
               <div
                 class={`flex items-start ${
                   isMe ? "flex-row-reverse" : ""
-                } ${showMessageAvatars ? "gap-3" : "gap-0"}`}
+                } ${
+                  showMessageAvatars
+                    ? densityClass("gap-3", "gap-2")
+                    : densityClass("gap-0", "gap-1")
+                }`}
               >
                 {#if showMessageAvatars}
                   <button
