@@ -4,4 +4,5 @@ export interface Channel {
   server_id: string;
   channel_type: "text" | "voice";
   private: boolean;
+  category_id?: string | null;
 }

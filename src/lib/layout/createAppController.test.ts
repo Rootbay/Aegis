@@ -241,6 +241,7 @@ describe("createAppController server channel behavior", () => {
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
     };
@@ -316,6 +317,7 @@ describe("createAppController server channel behavior", () => {
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
     };
@@ -340,6 +342,7 @@ describe("createAppController server channel behavior", () => {
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
     };

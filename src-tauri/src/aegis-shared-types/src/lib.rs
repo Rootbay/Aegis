@@ -111,6 +111,8 @@ pub struct Server {
     #[serde(default)]
     pub channels: Vec<Channel>,
     #[serde(default)]
+    pub categories: Vec<ChannelCategory>,
+    #[serde(default)]
     pub members: Vec<User>,
     #[serde(default)]
     pub roles: Vec<Role>,
@@ -151,6 +153,17 @@ pub struct Channel {
     pub name: String,
     pub channel_type: String,
     pub private: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ChannelCategory {
+    pub id: String,
+    pub server_id: String,
+    pub name: String,
+    pub position: i64,
+    pub created_at: String,
 }
 
 #[derive(Clone)]

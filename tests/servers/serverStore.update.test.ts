@@ -43,6 +43,7 @@ describe("serverStore.updateServer", () => {
     name: "Test Server",
     owner_id: "owner-1",
     channels: [],
+    categories: [],
     members: [],
     roles: [],
     invites: [],
@@ -69,6 +70,7 @@ describe("serverStore.updateServer", () => {
           owner_id: "owner-1",
           created_at: new Date().toISOString(),
           channels: [],
+          categories: [],
           members: [],
           roles: [],
           invites: [],
@@ -107,6 +109,7 @@ describe("serverStore.updateServer", () => {
         name: "general",
         channel_type: "text",
         private: false,
+        category_id: null,
       },
       {
         id: "channel-2",
@@ -114,6 +117,7 @@ describe("serverStore.updateServer", () => {
         name: "voice",
         channel_type: "voice",
         private: false,
+        category_id: null,
       },
     ];
 

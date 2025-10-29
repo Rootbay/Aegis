@@ -7,7 +7,7 @@ use std::convert::TryInto;
 use serde_json;
 use aegis_types::AegisError;
 
-pub use aegis_shared_types::{Channel, Role, Server, ServerInvite, User};
+pub use aegis_shared_types::{Channel, ChannelCategory, Role, Server, ServerInvite, User};
 
 // Define migrations for the database schema
 // The path is relative to the crate root (src/aep), pointing up two levels to src-tauri/migrations.
@@ -604,6 +604,7 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
     let server_ids: Vec<String> = server_rows.iter().map(|s| s.id.clone()).collect();
 
     let channels_map = get_channels_for_servers(pool, &server_ids).await?;
+    let categories_map = get_channel_categories_for_servers(pool, &server_ids).await?;
     let members_map = get_members_for_servers(pool, &server_ids).await?;
     let invites_map = get_invites_for_servers(pool, &server_ids).await?;
     let roles_map = get_roles_for_servers(pool, &server_ids).await?;
@@ -613,6 +614,10 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
         let created_at = parse_timestamp(&server_row.created_at)?;
         let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
         let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
+        let categories = categories_map
+            .get(&server_row.id)
+            .cloned()
+            .unwrap_or_default();
         let invites = invites_map.get(&server_row.id).cloned().unwrap_or_default();
         let roles = roles_map.get(&server_row.id).cloned().unwrap_or_default();
         servers.push(Server {
@@ -627,6 +632,7 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
             moderation_level: server_row.moderation_level,
             explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
             channels,
+            categories,
             members,
             roles,
             invites,
@@ -671,12 +677,17 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
     let server_ids = vec![server_row.id.clone()];
 
     let channels_map = get_channels_for_servers(pool, &server_ids).await?;
+    let categories_map = get_channel_categories_for_servers(pool, &server_ids).await?;
     let members_map = get_members_for_servers(pool, &server_ids).await?;
     let invites_map = get_invites_for_servers(pool, &server_ids).await?;
     let roles_map = get_roles_for_servers(pool, &server_ids).await?;
 
     let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
     let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
+    let categories = categories_map
+        .get(&server_row.id)
+        .cloned()
+        .unwrap_or_default();
     let invites = invites_map.get(&server_row.id).cloned().unwrap_or_default();
     let roles = roles_map.get(&server_row.id).cloned().unwrap_or_default();
 
@@ -692,6 +703,7 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         moderation_level: server_row.moderation_level,
         explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
         channels,
+        categories,
         members,
         roles,
         invites,
@@ -832,12 +844,13 @@ pub async fn update_server_event(
 
 pub async fn insert_channel(pool: &Pool<Sqlite>, channel: &Channel) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "INSERT INTO channels (id, server_id, name, channel_type, private) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO channels (id, server_id, name, channel_type, private, category_id) VALUES (?, ?, ?, ?, ?, ?)",
         channel.id,
         channel.server_id,
         channel.name,
         channel.channel_type,
         channel.private,
+        channel.category_id.clone(),
     )
     .execute(pool)
     .await?;
@@ -984,12 +997,13 @@ pub async fn replace_server_channels(
 
     for channel in channels {
         sqlx::query!(
-            "INSERT INTO channels (id, server_id, name, channel_type, private) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO channels (id, server_id, name, channel_type, private, category_id) VALUES (?, ?, ?, ?, ?, ?)",
             channel.id,
             channel.server_id,
             channel.name,
             channel.channel_type,
             channel.private,
+            channel.category_id.clone(),
         )
         .execute(&mut *tx)
         .await?;
@@ -1002,7 +1016,7 @@ pub async fn replace_server_channels(
 pub async fn get_channel_by_id(pool: &Pool<Sqlite>, channel_id: &str) -> Result<Channel, sqlx::Error> {
     sqlx::query_as!(
         Channel,
-        "SELECT id, server_id, name, channel_type, private FROM channels WHERE id = ?",
+        "SELECT id, server_id, name, channel_type, private, category_id FROM channels WHERE id = ?",
         channel_id
     )
     .fetch_one(pool)
@@ -1010,7 +1024,7 @@ pub async fn get_channel_by_id(pool: &Pool<Sqlite>, channel_id: &str) -> Result<
 }
 
 pub async fn get_channels_for_server(pool: &Pool<Sqlite>, server_id: &str) -> Result<Vec<Channel>, sqlx::Error> {
-    let channels = sqlx::query_as!(Channel, "SELECT id, server_id, name, channel_type, private FROM channels WHERE server_id = ?", server_id)
+    let channels = sqlx::query_as!(Channel, "SELECT id, server_id, name, channel_type, private, category_id FROM channels WHERE server_id = ?", server_id)
         .fetch_all(pool)
         .await?;
     Ok(channels)
@@ -1023,7 +1037,7 @@ pub async fn get_channels_for_servers(pool: &Pool<Sqlite>, server_ids: &[String]
         return Ok(channels_map);
     }
 
-    let query = format!("SELECT id, server_id, name, channel_type, private FROM channels WHERE server_id IN ({})",
+    let query = format!("SELECT id, server_id, name, channel_type, private, category_id FROM channels WHERE server_id IN ({})",
         server_ids.iter().map(|_| "?").collect::<Vec<&str>>().join(", ")
     );
 
@@ -1046,6 +1060,95 @@ pub async fn delete_channel(pool: &Pool<Sqlite>, channel_id: &str) -> Result<(),
         .execute(pool)
         .await?;
     Ok(())
+}
+
+pub async fn insert_channel_category(
+    pool: &Pool<Sqlite>,
+    category: &ChannelCategory,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT INTO channel_categories (id, server_id, name, position, created_at) VALUES (?, ?, ?, ?, ?)",
+        category.id,
+        category.server_id,
+        category.name,
+        category.position,
+        category.created_at,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+pub async fn delete_channel_category(
+    pool: &Pool<Sqlite>,
+    category_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM channel_categories WHERE id = ?", category_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+pub async fn get_channel_category_by_id(
+    pool: &Pool<Sqlite>,
+    category_id: &str,
+) -> Result<Option<ChannelCategory>, sqlx::Error> {
+    let category = sqlx::query_as!(
+        ChannelCategory,
+        "SELECT id, server_id, name, position, created_at FROM channel_categories WHERE id = ?",
+        category_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(category)
+}
+
+pub async fn get_channel_categories_for_server(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+) -> Result<Vec<ChannelCategory>, sqlx::Error> {
+    let categories = sqlx::query_as!(
+        ChannelCategory,
+        "SELECT id, server_id, name, position, created_at FROM channel_categories WHERE server_id = ? ORDER BY position ASC, created_at ASC",
+        server_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(categories)
+}
+
+pub async fn get_channel_categories_for_servers(
+    pool: &Pool<Sqlite>,
+    server_ids: &[String],
+) -> Result<HashMap<String, Vec<ChannelCategory>>, sqlx::Error> {
+    let mut categories_map: HashMap<String, Vec<ChannelCategory>> = HashMap::new();
+
+    if server_ids.is_empty() {
+        return Ok(categories_map);
+    }
+
+    let query = format!(
+        "SELECT id, server_id, name, position, created_at FROM channel_categories WHERE server_id IN ({}) ORDER BY position ASC, created_at ASC",
+        server_ids.iter().map(|_| "?").collect::<Vec<&str>>().join(", "),
+    );
+
+    let mut q = sqlx::query_as::<_, ChannelCategory>(&query);
+    for id in server_ids {
+        q = q.bind(id);
+    }
+
+    let categories = q.fetch_all(pool).await?;
+
+    for category in categories {
+        categories_map
+            .entry(category.server_id.clone())
+            .or_insert_with(Vec::new)
+            .push(category);
+    }
+
+    Ok(categories_map)
 }
 
 pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<(), sqlx::Error> {

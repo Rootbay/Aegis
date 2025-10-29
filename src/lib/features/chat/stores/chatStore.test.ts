@@ -565,8 +565,10 @@ describe("chatStore attachment lifecycle", () => {
           server_id: "server-1",
           channel_type: "text",
           private: false,
+          category_id: null,
         },
       ],
+      categories: [],
       members: [
         {
           id: "friend-3",
@@ -611,8 +613,10 @@ describe("chatStore attachment lifecycle", () => {
           server_id: "server-1",
           channel_type: "text",
           private: false,
+          category_id: null,
         },
       ],
+      categories: [],
       members: [
         {
           id: "friend-3",

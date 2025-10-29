@@ -1,5 +1,6 @@
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
+import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
 import type { Role } from "./Role";
 import type { ServerInvite } from "./ServerInvite";
 
@@ -9,6 +10,7 @@ export interface Server {
   owner_id: string;
   created_at?: string;
   channels: Channel[];
+  categories: ChannelCategory[];
   members: User[];
   roles: Role[];
   iconUrl?: string;

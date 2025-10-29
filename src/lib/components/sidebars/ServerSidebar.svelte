@@ -5,6 +5,8 @@
   import ServerBackgroundContextMenu from "$lib/components/context-menus/ServerBackgroundContextMenu.svelte";
   import CategoryContextMenu from "$lib/components/context-menus/CategoryContextMenu.svelte";
   import ChannelContextMenu from "$lib/components/context-menus/ChannelContextMenu.svelte";
+  import CreateCategoryModal from "$lib/components/modals/CreateCategoryModal.svelte";
+  import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
@@ -84,6 +86,8 @@
   const { activeServerChannelId } = chatStore;
 
   let showCreateChannelModal = $state(false);
+  let showCreateCategoryModal = $state(false);
+  let showServerEventModal = $state(false);
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
@@ -273,11 +277,11 @@
   }
 
   function handleCreateCategory() {
-    toasts.addToast("Create Category not yet implemented.", "info");
+    showCreateCategoryModal = true;
   }
 
   function handleCreateEvent() {
-    toasts.addToast("Create Event not yet implemented.", "info");
+    showServerEventModal = true;
   }
 
   function handleNotificationSettings() {
@@ -326,6 +330,7 @@
       name: slugifyChannelName(newChannelName),
       channel_type: newChannelType,
       private: newChannelPrivate,
+      category_id: null,
     };
 
     try {
@@ -372,6 +377,24 @@
     }
   }
 
+  async function deleteCategory(categoryId: string) {
+    try {
+      await invoke("delete_channel_category", {
+        request: {
+          server_id: server.id,
+          category_id: categoryId,
+        },
+      });
+      serverStore.removeCategoryFromServer(server.id, categoryId);
+      toasts.addToast("Category deleted.", "success");
+    } catch (error: any) {
+      console.error("Failed to delete category:", error);
+      const message =
+        error?.message ?? "Failed to delete category. Please try again.";
+      toasts.addToast(message, "error");
+    }
+  }
+
   function handleCategoryContextMenu(event: MouseEvent, categoryId: string) {
     event.preventDefault();
     event.stopPropagation();
@@ -391,8 +414,29 @@
     action: string;
     categoryId: string;
   }) {
-    toasts.addToast(`Action: ${action} on category: ${categoryId}`, "info");
     showCategoryContextMenu = false;
+
+    switch (action) {
+      case "create_category":
+        showCreateCategoryModal = true;
+        break;
+      case "delete_category": {
+        const exists = Array.isArray(server.categories)
+          ? server.categories.some((category) => category.id === categoryId)
+          : false;
+        if (!exists) {
+          toasts.addToast(
+            "Select a custom category to delete.",
+            "info",
+          );
+          break;
+        }
+        void deleteCategory(categoryId);
+        break;
+      }
+      default:
+        toasts.addToast(`Action: ${action} on category: ${categoryId}`, "info");
+    }
   }
 
   function handleChannelContextMenu(event: MouseEvent, channel: Channel) {
@@ -539,6 +583,7 @@
             name: `${orig.name}-copy`,
             channel_type: orig.channel_type,
             private: orig.private,
+            category_id: orig.category_id ?? null,
           };
           try {
             await invoke("create_channel", { channel: dup });
@@ -1041,3 +1086,21 @@
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
+{#if showCreateCategoryModal}
+  <CreateCategoryModal
+    {server}
+    onclose={() => {
+      showCreateCategoryModal = false;
+    }}
+  />
+{/if}
+
+{#if showServerEventModal}
+  <ServerEventModal
+    {server}
+    onclose={() => {
+      showServerEventModal = false;
+    }}
+  />
+{/if}

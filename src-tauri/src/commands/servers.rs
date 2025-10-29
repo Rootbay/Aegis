@@ -3,8 +3,8 @@ use aegis_protocol::AepMessage;
 use aegis_shared_types::AppState;
 use aep::database;
 use aep::database::{
-    ChannelDisplayPreference, ServerEvent, ServerEventPatch, ServerInvite, ServerMetadataUpdate,
-    ServerModerationUpdate, ServerWebhook, ServerWebhookPatch,
+    ChannelCategory, ChannelDisplayPreference, ServerEvent, ServerEventPatch, ServerInvite,
+    ServerMetadataUpdate, ServerModerationUpdate, ServerWebhook, ServerWebhookPatch,
 };
 use aep::user_service;
 use chrono::{DateTime, Utc};
@@ -64,6 +64,27 @@ impl From<ChannelDisplayPreference> for ChannelDisplayPreferenceResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelCategoryResponse {
+    pub id: String,
+    pub server_id: String,
+    pub name: String,
+    pub position: i64,
+    pub created_at: String,
+}
+
+impl From<ChannelCategory> for ChannelCategoryResponse {
+    fn from(value: ChannelCategory) -> Self {
+        ChannelCategoryResponse {
+            id: value.id,
+            server_id: value.server_id,
+            name: value.name,
+            position: value.position,
+            created_at: value.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerEventResponse {
     pub id: String,
     pub server_id: String,
@@ -118,6 +139,20 @@ pub struct DeleteServerWebhookResponse {
 pub struct ServerBanUpdate {
     pub server_id: String,
     pub user_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateChannelCategoryRequest {
+    pub server_id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteChannelCategoryRequest {
+    pub server_id: String,
+    pub category_id: String,
 }
 
 impl From<ServerEvent> for ServerEventResponse {
@@ -230,6 +265,66 @@ async fn ensure_server_owner(state: &AppState, server_id: &str) -> Result<(), St
         return Err("Only the server owner can manage this resource.".into());
     }
     Ok(())
+}
+
+async fn create_channel_category_internal(
+    state: AppState,
+    request: CreateChannelCategoryRequest,
+) -> Result<ChannelCategory, String> {
+    let name = sanitize_required_string(&request.name, "Category name")?;
+
+    ensure_server_owner(&state, &request.server_id).await?;
+
+    let position = if let Some(position) = request.position {
+        position
+    } else {
+        let categories =
+            database::get_channel_categories_for_server(&state.db_pool, &request.server_id)
+                .await
+                .map_err(|e| e.to_string())?;
+        categories
+            .iter()
+            .map(|category| category.position)
+            .max()
+            .map(|value| value + 1)
+            .unwrap_or(0)
+    };
+
+    let category = ChannelCategory {
+        id: Uuid::new_v4().to_string(),
+        server_id: request.server_id,
+        name,
+        position,
+        created_at: Utc::now().to_rfc3339(),
+    };
+
+    database::insert_channel_category(&state.db_pool, &category)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(category)
+}
+
+async fn delete_channel_category_internal(
+    state: AppState,
+    request: DeleteChannelCategoryRequest,
+) -> Result<ChannelCategory, String> {
+    let existing = database::get_channel_category_by_id(&state.db_pool, &request.category_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Category not found.".to_string())?;
+
+    if existing.server_id != request.server_id {
+        return Err("Category does not belong to the specified server.".into());
+    }
+
+    ensure_server_owner(&state, &existing.server_id).await?;
+
+    database::delete_channel_category(&state.db_pool, &request.category_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(existing)
 }
 
 async fn create_server_event_internal(
@@ -446,6 +541,7 @@ pub async fn create_server(
         name: "general".to_string(),
         channel_type: "text".to_string(),
         private: false,
+        category_id: None,
     };
     database::insert_channel(&state.db_pool, &default_channel)
         .await
@@ -609,6 +705,46 @@ pub async fn create_channel(
 }
 
 #[tauri::command]
+pub async fn create_channel_category(
+    request: CreateChannelCategoryRequest,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ChannelCategoryResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let category = create_channel_category_internal(state, request).await?;
+    let response: ChannelCategoryResponse = category.clone().into();
+    app.emit("server-category-created", response.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(response)
+}
+
+#[tauri::command]
+pub async fn delete_channel_category(
+    request: DeleteChannelCategoryRequest,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ChannelCategoryResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let category = delete_channel_category_internal(state, request).await?;
+    let response: ChannelCategoryResponse = category.clone().into();
+    app.emit("server-category-deleted", response.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(response)
+}
+
+#[tauri::command]
 pub async fn get_servers(
     current_user_id: String,
     state_container: State<'_, AppStateContainer>,
@@ -630,6 +766,22 @@ pub async fn get_channels_for_server(
     database::get_channels_for_server(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_channel_categories_for_server(
+    server_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<ChannelCategoryResponse>, String> {
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?;
+    let categories = database::get_channel_categories_for_server(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(categories
+        .into_iter()
+        .map(ChannelCategoryResponse::from)
+        .collect())
 }
 
 #[tauri::command]
@@ -1056,6 +1208,7 @@ mod tests {
             name: "alerts".into(),
             channel_type: "text".into(),
             private: false,
+            category_id: None,
         };
         database::insert_channel(&db_pool, &channel)
             .await

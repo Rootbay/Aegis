@@ -65,6 +65,7 @@
       owner_id: $userStore.me.id,
       created_at: new Date().toISOString(),
       channels: [],
+      categories: [],
       members: [],
       roles: [],
     };
