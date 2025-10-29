@@ -60,6 +60,8 @@ pub async fn run() {
             commands::servers::list_server_bans,
             commands::servers::send_server_invite,
             commands::servers::generate_server_invite,
+            commands::servers::list_server_invites,
+            commands::servers::revoke_server_invite,
             commands::servers::get_channel_display_preferences,
             commands::servers::set_channel_display_preferences,
             commands::servers::delete_channel,

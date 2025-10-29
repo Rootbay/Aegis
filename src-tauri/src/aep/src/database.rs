@@ -2122,6 +2122,34 @@ pub async fn get_invites_for_servers(
     Ok(invites_map)
 }
 
+pub async fn get_server_invite_by_id(
+    pool: &Pool<Sqlite>,
+    invite_id: &str,
+) -> Result<Option<ServerInvite>, sqlx::Error> {
+    let row = sqlx::query_as!(
+        ServerInviteRow,
+        "SELECT id, server_id, code, created_by, created_at, expires_at, max_uses, uses FROM server_invites WHERE id = ?",
+        invite_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some(row) => row.into_invite().map(Some),
+        None => Ok(None),
+    }
+}
+
+pub async fn delete_server_invite(
+    pool: &Pool<Sqlite>,
+    invite_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!("DELETE FROM server_invites WHERE id = ?", invite_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn create_server_invite(
     pool: &Pool<Sqlite>,
     server_id: &str,

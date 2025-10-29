@@ -1402,6 +1402,79 @@ pub async fn generate_server_invite(
 }
 
 #[tauri::command]
+pub async fn list_server_invites(
+    server_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Vec<ServerInviteResponse>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+
+    let requester_id = state.identity.peer_id().to_base58();
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can manage invites.".into());
+    }
+
+    let invite_map = database::get_invites_for_servers(&state.db_pool, &[server_id.clone()])
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let invites = invite_map
+        .get(&server_id)
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(ServerInviteResponse::from)
+        .collect();
+
+    Ok(invites)
+}
+
+#[tauri::command]
+pub async fn revoke_server_invite(
+    server_id: String,
+    invite_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or("State not initialized")?
+        .clone();
+
+    let requester_id = state.identity.peer_id().to_base58();
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id != requester_id {
+        return Err("Only server owners can revoke invites.".into());
+    }
+
+    let invite = database::get_server_invite_by_id(&state.db_pool, &invite_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let invite = invite.ok_or_else(|| "Invite not found.".to_string())?;
+
+    if invite.server_id != server_id {
+        return Err("Invite does not belong to the specified server.".into());
+    }
+
+    database::delete_server_invite(&state.db_pool, &invite_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn get_channel_display_preferences(
     server_id: Option<String>,
     state_container: State<'_, AppStateContainer>,

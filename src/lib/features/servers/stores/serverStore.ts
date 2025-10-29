@@ -99,6 +99,7 @@ interface ServerStore extends Readable<ServerStoreState> {
   addChannelToServer: (serverId: string, channel: Channel) => void;
   addCategoryToServer: (serverId: string, category: ChannelCategory) => void;
   addInviteToServer: (serverId: string, invite: ServerInvite) => void;
+  refreshServerInvites: (serverId: string) => Promise<ServerInvite[]>;
   removeMemberFromServer: (serverId: string, memberId: string) => void;
   removeMember: (
     serverId: string,
@@ -298,6 +299,17 @@ export function createServerStore(): ServerStore {
       return baseUser;
     });
   };
+
+  const mapBackendInvite = (invite: BackendServerInvite): ServerInvite => ({
+    id: invite.id,
+    serverId: invite.server_id,
+    code: invite.code,
+    createdBy: invite.created_by,
+    createdAt: invite.created_at,
+    expiresAt: invite.expires_at ?? undefined,
+    maxUses: invite.max_uses ?? undefined,
+    uses: invite.uses ?? 0,
+  });
 
   const applyRoleAssignmentsToServer = (server: Server): Server => {
     const normalizedRoles = normalizeRolesArray(server.roles ?? []);
@@ -770,26 +782,63 @@ export function createServerStore(): ServerStore {
     if (server) serverCache.set(serverId, server);
   };
 
-  const addInviteToServer = (serverId: string, invite: ServerInvite) => {
+  const setInvitesForServer = (serverId: string, invites: ServerInvite[]) => {
     update((s) => {
       const servers = s.servers.map((server) => {
         if (server.id !== serverId) return server;
-        const existingInvites = Array.isArray(server.invites)
-          ? server.invites
-          : [];
-        const filtered = existingInvites.filter(
-          (existing) =>
-            existing.id !== invite.id && existing.code !== invite.code,
-        );
-        return {
+        const nextInvites = invites.slice();
+        const nextServer = {
           ...server,
-          invites: [...filtered, invite],
+          invites: nextInvites,
         };
+        serverCache.set(serverId, nextServer);
+        return nextServer;
       });
-      const updated = servers.find((sv) => sv.id === serverId);
-      if (updated) serverCache.set(serverId, updated);
       return { ...s, servers };
     });
+  };
+
+  const addInviteToServer = (serverId: string, invite: ServerInvite) => {
+    const state = get({ subscribe });
+    const server = state.servers.find((sv) => sv.id === serverId);
+    const existingInvites = Array.isArray(server?.invites)
+      ? server!.invites
+      : [];
+    const filtered = existingInvites.filter(
+      (existing) => existing.id !== invite.id && existing.code !== invite.code,
+    );
+    setInvitesForServer(serverId, [...filtered, invite]);
+  };
+
+  const refreshServerInvites = async (
+    serverId: string,
+  ): Promise<ServerInvite[]> => {
+    if (!serverId) {
+      return [];
+    }
+
+    try {
+      const backendInvites = await invoke<BackendServerInvite[]>(
+        "list_server_invites",
+        {
+          serverId,
+          server_id: serverId,
+        },
+      );
+      const invites = Array.isArray(backendInvites)
+        ? backendInvites.map(mapBackendInvite)
+        : [];
+      setInvitesForServer(serverId, invites);
+      return invites;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to refresh server invites.";
+      throw new Error(message);
+    }
   };
 
   const fetchBans = async (
@@ -1252,6 +1301,7 @@ export function createServerStore(): ServerStore {
     addChannelToServer,
     addCategoryToServer,
     addInviteToServer,
+    refreshServerInvites,
     removeMemberFromServer,
     removeMember,
     updateServer,
