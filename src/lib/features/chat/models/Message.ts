@@ -16,6 +16,7 @@ export interface Message {
   content: string;
   timestamp: string;
   read: boolean;
+  pinned?: boolean;
   attachments?: AttachmentMeta[];
   reactions?: Record<string, string[]>;
   pending?: boolean;

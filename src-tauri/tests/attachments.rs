@@ -1,5 +1,6 @@
 use aep::database;
 use chrono::Utc;
+use std::collections::HashMap;
 use tempfile::tempdir;
 use uuid::Uuid;
 
@@ -32,7 +33,12 @@ async fn message_with_attachments_round_trips() {
         content: content.clone(),
         timestamp: Utc::now(),
         read: false,
+        pinned: false,
         attachments: vec![attachment.clone()],
+        reactions: HashMap::new(),
+        edited_at: None,
+        edited_by: None,
+        expires_at: None,
     };
 
     database::insert_message(&pool, &message)

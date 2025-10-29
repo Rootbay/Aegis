@@ -29,7 +29,7 @@
   import {
     buildLowercaseContent,
     matchNormalizedMessages,
-    normalizeSearchQuery,
+    parseSearchQuery,
     type MessageContentCache,
   } from "$lib/features/chat/utils/chatSearch";
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
@@ -925,13 +925,18 @@
     callStore.dismissCall();
   }
 
-  let normalizedQuery = $derived(normalizeSearchQuery($chatSearchQueryStore));
+  let parsedSearchQuery = $derived(parseSearchQuery($chatSearchQueryStore));
+  let normalizedQuery = $derived(parsedSearchQuery.normalizedText);
+  let pinnedFilter = $derived(parsedSearchQuery.filters.pinned);
 
   let chatSearchMatches = $derived(() => {
     if (!chat?.id) {
       return [];
     }
-    return matchNormalizedMessages(normalizedMessages, normalizedQuery);
+    return matchNormalizedMessages(normalizedMessages, normalizedQuery, {
+      pinned: pinnedFilter ?? undefined,
+      messages: currentChatMessages || [],
+    });
   });
 
   $effect(() => {
@@ -1036,6 +1041,22 @@
         } else {
           toasts.addToast("Cannot delete others' messages.", "warning");
         }
+        break;
+      case "pin_message":
+        void chatStore
+          .pinMessage(selectedMsg.chatId, selectedMsg.id)
+          .catch((error) => {
+            console.error("Failed to pin message", error);
+            toasts.addToast("Failed to pin message.", "error");
+          });
+        break;
+      case "unpin_message":
+        void chatStore
+          .unpinMessage(selectedMsg.chatId, selectedMsg.id)
+          .catch((error) => {
+            console.error("Failed to unpin message", error);
+            toasts.addToast("Failed to unpin message.", "error");
+          });
         break;
       default:
         console.debug("Unhandled message action", action);
@@ -1569,6 +1590,21 @@
     show={showMsgMenu}
     menuItems={[
       ...baseMessageMenuItems,
+      ...(selectedMsg.pinned
+        ? [
+            {
+              label: "Unpin Message",
+              action: "unpin_message",
+              disabled: selectedMsg.pending === true,
+            },
+          ]
+        : [
+            {
+              label: "Pin Message",
+              action: "pin_message",
+              disabled: selectedMsg.pending === true,
+            },
+          ]),
       ...reactionMenuItems,
       ...(selectedMsg.senderId === $userStore.me?.id
         ? [

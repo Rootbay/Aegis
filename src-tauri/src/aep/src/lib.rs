@@ -209,6 +209,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 content: content,
                 timestamp,
                 read: false,
+                pinned: false,
                 attachments: attachments_for_db,
                 reactions: std::collections::HashMap::new(),
                 edited_at: None,
