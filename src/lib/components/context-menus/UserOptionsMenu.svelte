@@ -11,6 +11,7 @@
 
   const menuItems = [
     { label: "Invite to Server", action: "invite_to_server" },
+    { label: "View Reviews", action: "view_reviews" },
     { label: "Ignore", action: "ignore" },
     { label: "Mute User", action: "mute_user" },
     { isSeparator: true },

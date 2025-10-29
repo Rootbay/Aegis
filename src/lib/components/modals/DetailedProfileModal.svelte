@@ -129,7 +129,25 @@
   );
   const openCreateGroupModal = createGroupContext?.openCreateGroupModal;
   const openReportUserModal = createGroupContext?.openReportUserModal;
+  const openProfileReviewsModal =
+    createGroupContext?.openProfileReviewsModal;
   const getCurrentChat = () => createGroupContext?.currentChat ?? null;
+
+  function viewProfileReviews() {
+    if (!profileUser?.id) {
+      return;
+    }
+    if (!openProfileReviewsModal) {
+      console.warn("Review modal handler is unavailable");
+      return;
+    }
+    openProfileReviewsModal({
+      subjectType: "user",
+      subjectId: profileUser.id,
+      subjectName: profileUser.name,
+      subjectAvatarUrl: profileUser.avatar,
+    });
+  }
 
   async function computeMutualServers() {
     if (!profileUser?.id) {
@@ -389,7 +407,7 @@
           openInvitePicker();
           break;
         case "view_reviews":
-          toasts.addToast("Reviews not implemented yet.", "info");
+          viewProfileReviews();
           break;
         case "add_to_group":
           if (openCreateGroupModal && profileUser) {
@@ -573,9 +591,18 @@
             {/if}
           </div>
 
-          <div class="flex space-x-1 mb-4">
-            <Star class="w-4 h-4 text-yellow-400" />
-            <CircleCheck class="w-4 h-4 text-green-500" />
+          <div class="flex items-center gap-2 mb-4">
+            <div class="flex items-center gap-1 text-yellow-400">
+              <Star class="h-4 w-4" />
+              <CircleCheck class="h-4 w-4 text-green-500" />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={viewProfileReviews}
+            >
+              <Star class="mr-2 h-4 w-4" /> View reviews
+            </Button>
           </div>
 
           <div class="flex gap-2 mb-4">

@@ -64,6 +64,7 @@ export type AppModalType =
   | "createGroup"
   | "serverManagement"
   | "detailedProfile"
+  | "profileReviews"
   | "userCard"
   | "reportUser"
   | "collaborationDocument"
@@ -95,6 +96,7 @@ type PageState = {
     isServerMemberContext: boolean,
   ) => void;
   readonly openDetailedProfileModal: (user: User) => void;
+  readonly openProfileReviewsModal: (options: ProfileReviewsModalOptions) => void;
   readonly openCreateGroupModal: (options?: GroupModalOptions) => void;
   readonly openReportUserModal: (payload: ReportUserModalPayload) => void;
   readonly openCollaborativeDocument: (options?: {
@@ -106,6 +108,13 @@ type PageState = {
     documentId?: string;
   }) => void;
   readonly messagesByChatId: typeof messagesByChatId;
+};
+
+type ProfileReviewsModalOptions = {
+  subjectType: "user" | "server";
+  subjectId: string;
+  subjectName?: string;
+  subjectAvatarUrl?: string | null;
 };
 
 type ModalState = {
@@ -287,6 +296,12 @@ export function createAppController(): AppController {
       profileUser: toProfileModalUser(user),
       isFriend: friends.some((friend) => friend.id === user.id),
     });
+  };
+
+  const openProfileReviewsModal: PageState["openProfileReviewsModal"] = (
+    options,
+  ) => {
+    openModal("profileReviews", options);
   };
 
   const openCreateGroupModalWithOptions: PageState["openCreateGroupModal"] = (
@@ -935,6 +950,7 @@ export function createAppController(): AppController {
     closeModal,
     openUserCardModal,
     openDetailedProfileModal,
+    openProfileReviewsModal,
     openCreateGroupModal: openCreateGroupModalWithOptions,
     openReportUserModal,
     openCollaborativeDocument,
@@ -988,6 +1004,7 @@ export function createAppController(): AppController {
       openModal,
       closeModal,
       openDetailedProfileModal,
+      openProfileReviewsModal,
       openCommandPalette: commandPaletteStore.open,
       closeCommandPalette: commandPaletteStore.close,
     },

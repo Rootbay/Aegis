@@ -10,6 +10,7 @@ pub mod identity;
 pub mod messages;
 pub mod moderation;
 pub mod presence;
+pub mod reviews;
 pub mod servers;
 pub mod settings;
 pub mod state;
