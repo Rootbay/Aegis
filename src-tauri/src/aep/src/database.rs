@@ -584,6 +584,8 @@ pub struct ServerMetadataUpdate {
 pub struct ServerModerationUpdate {
     pub moderation_level: Option<Option<String>>,
     pub explicit_content_filter: Option<bool>,
+    pub transparent_edits: Option<bool>,
+    pub deleted_message_display: Option<String>,
 }
 
 pub async fn insert_server(pool: &Pool<Sqlite>, server: &Server) -> Result<(), sqlx::Error> {
@@ -663,6 +665,18 @@ pub async fn update_server_moderation(
                 .push("explicit_content_filter = ")
                 .push_bind(explicit_content_filter);
         }
+        if let Some(transparent_edits) = update.transparent_edits {
+            has_updates = true;
+            separated
+                .push("transparent_edits = ")
+                .push_bind(transparent_edits);
+        }
+        if let Some(deleted_message_display) = update.deleted_message_display.as_ref() {
+            has_updates = true;
+            separated
+                .push("deleted_message_display = ")
+                .push_bind(deleted_message_display);
+        }
     }
 
     if !has_updates {
@@ -687,11 +701,13 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
         allow_invites: i64,
         moderation_level: Option<String>,
         explicit_content_filter: i64,
+        transparent_edits: i64,
+        deleted_message_display: String,
     }
 
     let server_rows = sqlx::query_as!(
         ServerRow,
-        "SELECT s.id, s.name, s.owner_id, s.created_at, s.icon_url, s.description, s.default_channel_id, s.allow_invites, s.moderation_level, s.explicit_content_filter FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
+        "SELECT s.id, s.name, s.owner_id, s.created_at, s.icon_url, s.description, s.default_channel_id, s.allow_invites, s.moderation_level, s.explicit_content_filter, s.transparent_edits, s.deleted_message_display FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
         current_user_id
     )
     .fetch_all(pool)
@@ -727,6 +743,8 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
             allow_invites: Some(bool_from_i64(server_row.allow_invites)),
             moderation_level: server_row.moderation_level,
             explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
+            transparent_edits: Some(bool_from_i64(server_row.transparent_edits)),
+            deleted_message_display: Some(server_row.deleted_message_display.clone()),
             channels,
             categories,
             members,
@@ -758,11 +776,13 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         allow_invites: i64,
         moderation_level: Option<String>,
         explicit_content_filter: i64,
+        transparent_edits: i64,
+        deleted_message_display: String,
     }
 
     let server_row = sqlx::query_as!(
         ServerRow,
-        "SELECT id, name, owner_id, created_at, icon_url, description, default_channel_id, allow_invites, moderation_level, explicit_content_filter FROM servers WHERE id = ?",
+        "SELECT id, name, owner_id, created_at, icon_url, description, default_channel_id, allow_invites, moderation_level, explicit_content_filter, transparent_edits, deleted_message_display FROM servers WHERE id = ?",
         server_id
     )
     .fetch_one(pool)
@@ -798,6 +818,8 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         allow_invites: Some(bool_from_i64(server_row.allow_invites)),
         moderation_level: server_row.moderation_level,
         explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
+        transparent_edits: Some(bool_from_i64(server_row.transparent_edits)),
+        deleted_message_display: Some(server_row.deleted_message_display.clone()),
         channels,
         categories,
         members,

@@ -1,6 +1,9 @@
 import { writable, get, type Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import type { Server } from "$lib/features/servers/models/Server";
+import type {
+  Server,
+  ServerModerationSettings,
+} from "$lib/features/servers/models/Server";
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
@@ -59,6 +62,11 @@ type BackendServer = {
   explicit_content_filter?: boolean;
   invites?: BackendServerInvite[];
   categories?: BackendChannelCategory[];
+  settings?: Record<string, unknown> | null;
+  transparent_edits?: boolean | number | null;
+  transparentEdits?: boolean | number | null;
+  deleted_message_display?: string | null;
+  deletedMessageDisplay?: string | null;
   [key: string]: unknown;
 };
 
@@ -130,6 +138,98 @@ export function createServerStore(): ServerStore {
   });
 
   const banCache = new Map<string, User[]>();
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+  const coerceBoolean = (value: unknown): boolean | undefined => {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "number") {
+      if (!Number.isFinite(value)) {
+        return undefined;
+      }
+      return value !== 0;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no", "off"].includes(normalized)) {
+        return false;
+      }
+    }
+    return undefined;
+  };
+
+  const normalizeDeletedMessageDisplay = (
+    value: unknown,
+  ): "ghost" | "tombstone" | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "ghost" || normalized === "tombstone") {
+      return normalized as "ghost" | "tombstone";
+    }
+    return undefined;
+  };
+
+  const extractSettingsChanges = (
+    incoming: unknown,
+    previous: ServerModerationSettings | undefined,
+  ): {
+    normalizedSettings?: ServerModerationSettings;
+    moderationPayload: Record<string, unknown>;
+  } => {
+    const moderationPayload: Record<string, unknown> = {};
+
+    if (incoming === null || incoming === undefined) {
+      return { normalizedSettings: undefined, moderationPayload };
+    }
+
+    if (!isRecord(incoming)) {
+      return { normalizedSettings: undefined, moderationPayload };
+    }
+
+    const base: ServerModerationSettings = { ...(previous ?? {}) };
+    let touched = false;
+
+    for (const [key, value] of Object.entries(incoming)) {
+      if (key === "transparentEdits") {
+        const coerced = coerceBoolean(value);
+        if (coerced === undefined) {
+          continue;
+        }
+        base.transparentEdits = coerced;
+        moderationPayload.transparentEdits = coerced;
+        touched = true;
+        continue;
+      }
+
+      if (key === "deletedMessageDisplay") {
+        const normalized = normalizeDeletedMessageDisplay(value);
+        if (!normalized) {
+          continue;
+        }
+        base.deletedMessageDisplay = normalized;
+        moderationPayload.deletedMessageDisplay = normalized;
+        touched = true;
+        continue;
+      }
+
+      base[key] = value;
+      touched = true;
+    }
+
+    if (!touched) {
+      return { normalizedSettings: undefined, moderationPayload };
+    }
+
+    return { normalizedSettings: base, moderationPayload };
+  };
 
   const normalizeRoleIds = (value: unknown): string[] => {
     if (!Array.isArray(value)) {
@@ -264,6 +364,11 @@ export function createServerStore(): ServerStore {
       roles = [],
       invites = [],
       categories = [],
+      settings: rawSettings,
+      transparent_edits,
+      transparentEdits,
+      deleted_message_display,
+      deletedMessageDisplay,
       ...rest
     } = s;
     const normalizedMembers: BackendUser[] = Array.isArray(members)
@@ -300,6 +405,27 @@ export function createServerStore(): ServerStore {
       maxUses: invite.max_uses ?? undefined,
       uses: invite.uses ?? 0,
     });
+
+    const mergedSettings: ServerModerationSettings = isRecord(rawSettings)
+      ? ({ ...rawSettings } as ServerModerationSettings)
+      : {};
+    const transparentSetting =
+      coerceBoolean(
+        transparentEdits ?? transparent_edits ?? mergedSettings.transparentEdits,
+      );
+    if (transparentSetting !== undefined) {
+      mergedSettings.transparentEdits = transparentSetting;
+    }
+    const deletedSetting = normalizeDeletedMessageDisplay(
+      deletedMessageDisplay ??
+        deleted_message_display ??
+        mergedSettings.deletedMessageDisplay,
+    );
+    if (deletedSetting) {
+      mergedSettings.deletedMessageDisplay = deletedSetting;
+    }
+    const hasSettings = Object.keys(mergedSettings).length > 0;
+
     return {
       ...rest,
       id: s.id,
@@ -311,6 +437,7 @@ export function createServerStore(): ServerStore {
       members: assignRolesToMembers(normalizedMembers, roleAssignments),
       roles: normalizedRoles,
       invites: normalizedInvites.map(mapInvite),
+      settings: hasSettings ? mergedSettings : undefined,
     } as Server;
   };
 
@@ -865,15 +992,34 @@ export function createServerStore(): ServerStore {
       moderationPayload.explicitContentFilter =
         patch.explicit_content_filter ?? false;
     }
-    const moderationTouched = Object.keys(moderationPayload).length > 0;
 
     const rolesTouched = hasOwn(patch, "roles") && Array.isArray(patch.roles);
     const channelsTouched =
       hasOwn(patch, "channels") && Array.isArray(patch.channels);
 
-    const normalizedPatch: Partial<Server> = rolesTouched
+    let normalizedPatch: Partial<Server> = rolesTouched
       ? { ...patch, roles: normalizeRolesArray(patch.roles ?? []) }
-      : patch;
+      : { ...patch };
+
+    if (hasOwn(normalizedPatch, "settings")) {
+      delete (normalizedPatch as Record<string, unknown>).settings;
+    }
+
+    let settingsWereTouched = false;
+    if (hasOwn(patch, "settings")) {
+      const { normalizedSettings, moderationPayload: settingsModerationPayload } =
+        extractSettingsChanges(patch.settings, previousServer.settings);
+      if (normalizedSettings !== undefined) {
+        normalizedPatch = {
+          ...normalizedPatch,
+          settings: normalizedSettings,
+        };
+        settingsWereTouched = true;
+      }
+      Object.assign(moderationPayload, settingsModerationPayload);
+    }
+
+    const moderationTouched = Object.keys(moderationPayload).length > 0;
 
     const optimisticServer = applyPatchToServer(
       previousServer,
@@ -948,10 +1094,12 @@ export function createServerStore(): ServerStore {
         } as Server;
       }
 
-      if (hasOwn(normalizedPatch, "settings")) {
+      const patchedSettings = normalizedPatch
+        .settings as ServerModerationSettings | undefined;
+      if (settingsWereTouched) {
         finalServer = {
           ...finalServer,
-          settings: normalizedPatch.settings,
+          settings: patchedSettings,
         } as Server;
       } else if (!finalServer.settings && previousServer.settings) {
         finalServer = {

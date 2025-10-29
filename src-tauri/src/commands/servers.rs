@@ -1063,6 +1063,8 @@ mod tests {
             allow_invites: Some(true),
             moderation_level: None,
             explicit_content_filter: Some(false),
+            transparent_edits: Some(false),
+            deleted_message_display: Some("ghost".into()),
             channels: Vec::new(),
             members: Vec::new(),
             roles: Vec::new(),

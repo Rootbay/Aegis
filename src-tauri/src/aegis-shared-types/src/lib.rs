@@ -110,6 +110,10 @@ pub struct Server {
     pub moderation_level: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub explicit_content_filter: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transparent_edits: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deleted_message_display: Option<String>,
     #[serde(default)]
     pub channels: Vec<Channel>,
     #[serde(default)]

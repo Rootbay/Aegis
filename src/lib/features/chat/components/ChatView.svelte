@@ -149,6 +149,38 @@
     }, TYPING_IDLE_TIMEOUT_MS);
   };
 
+  const baseModerationPreferences = {
+    transparentEdits: false,
+    deletedMessageDisplay: "ghost" as const,
+  };
+
+  const moderationPreferences = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return baseModerationPreferences;
+    }
+    const server = $serverStore.servers.find((entry) =>
+      (entry.channels ?? []).some((channel) => channel.id === chat.id),
+    );
+    if (!server) {
+      return baseModerationPreferences;
+    }
+    const settings = server.settings ?? {};
+    return {
+      transparentEdits: settings.transparentEdits === true,
+      deletedMessageDisplay:
+        settings.deletedMessageDisplay === "tombstone"
+          ? ("tombstone" as const)
+          : ("ghost" as const),
+    };
+  });
+
+  const showTransparentEditHistory = $derived(
+    () => moderationPreferences.transparentEdits,
+  );
+  const showDeletedTombstones = $derived(
+    () => moderationPreferences.deletedMessageDisplay === "tombstone",
+  );
+
   const handleComposerFocus = () => {
     if (!typingActive) {
       typingActive = true;
@@ -1247,6 +1279,27 @@
                         </button>
                       </div>
                     </div>
+                  {:else if showDeletedTombstones && msg.deleted}
+                    <div
+                      class="max-w-md rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
+                    >
+                      <p class="italic">
+                        Message deleted
+                        {#if msg.deletedBy}
+                          · removed by
+                          {msg.deletedBy === myId
+                            ? "you"
+                            : memberById.get(msg.deletedBy)?.name ?? "a moderator"}
+                        {/if}
+                        {#if msg.deletedAt}
+                          ·
+                          {new Date(msg.deletedAt).toLocaleString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        {/if}
+                      </p>
+                    </div>
                   {:else if msg.content}
                     <div
                       class="max-w-md p-3 rounded-lg {isMe
@@ -1323,6 +1376,19 @@
                         <p class="text-base whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
+                      {/if}
+                      {#if showTransparentEditHistory && msg.editHistory?.length}
+                        {@const historyEntries = [...msg.editHistory].reverse()}
+                        <div class="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs text-white/80">
+                          <p class="text-[0.625rem] uppercase tracking-wide opacity-70">
+                            Edit history
+                          </p>
+                          {#each historyEntries as previous, historyIndex (historyIndex)}
+                            <p class="whitespace-pre-wrap break-words text-white/80">
+                              {previous}
+                            </p>
+                          {/each}
+                        </div>
                       {/if}
                     </div>
                   {/if}

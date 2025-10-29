@@ -4,6 +4,12 @@ import type { ChannelCategory } from "$lib/features/channels/models/ChannelCateg
 import type { Role } from "./Role";
 import type { ServerInvite } from "./ServerInvite";
 
+export type ServerModerationSettings = {
+  transparentEdits?: boolean;
+  deletedMessageDisplay?: "ghost" | "tombstone";
+  [key: string]: unknown;
+};
+
 export interface Server {
   id: string;
   name: string;
@@ -15,7 +21,7 @@ export interface Server {
   roles: Role[];
   iconUrl?: string;
   description?: string;
-  settings?: Record<string, unknown>;
+  settings?: ServerModerationSettings;
   default_channel_id?: string;
   allow_invites?: boolean;
   moderation_level?: "None" | "Low" | "Medium" | "High";
