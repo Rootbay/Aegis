@@ -98,9 +98,9 @@
 
   const supportsVoiceRecording =
     typeof window !== "undefined" && "MediaRecorder" in window;
-  const voiceMemosEnabled = $derived(
-    () => $settings.enableWalkieTalkieVoiceMemos,
-  );
+  const showMessageAvatars = $derived($settings.showMessageAvatars);
+  const showMessageTimestamps = $derived($settings.showMessageTimestamps);
+  const voiceMemosEnabled = $derived($settings.enableWalkieTalkieVoiceMemos);
   const isVoiceMemoFile = (file: File) =>
     (file.type?.startsWith("audio/") ?? false) &&
     file.name.startsWith("voice-message-");
@@ -1311,27 +1311,31 @@
               id={`message-${msg.id}`}
             >
               <div
-                class="flex items-start gap-3 {isMe ? 'flex-row-reverse' : ''}"
+                class={`flex items-start ${
+                  isMe ? "flex-row-reverse" : ""
+                } ${showMessageAvatars ? "gap-3" : "gap-0"}`}
               >
-                <button
-                  onclick={(e) =>
-                    displayableUser &&
-                    openUserCardModal(
-                      displayableUser as User,
-                      e.clientX,
-                      e.clientY,
-                      chat.type === "channel",
-                    )}
-                  oncontextmenu={(e) =>
-                    displayableUser && handleContextMenu(e, displayableUser)}
-                  class="w-10 h-10 rounded-full flex-shrink-0 cursor-pointer"
-                >
-                  <img
-                    src={senderAvatar}
-                    alt={senderName}
-                    class="w-full h-full rounded-full"
-                  />
-                </button>
+                {#if showMessageAvatars}
+                  <button
+                    onclick={(e) =>
+                      displayableUser &&
+                      openUserCardModal(
+                        displayableUser as User,
+                        e.clientX,
+                        e.clientY,
+                        chat.type === "channel",
+                      )}
+                    oncontextmenu={(e) =>
+                      displayableUser && handleContextMenu(e, displayableUser)}
+                    class="w-10 h-10 rounded-full flex-shrink-0 cursor-pointer"
+                  >
+                    <img
+                      src={senderAvatar}
+                      alt={senderName}
+                      class="w-full h-full rounded-full"
+                    />
+                  </button>
+                {/if}
                 <div class="flex flex-col {isMe ? 'items-end' : ''}">
                   <div class="flex items-center gap-2 mb-1">
                     <MessageAuthorName
@@ -1351,13 +1355,14 @@
                         displayableUser &&
                         handleContextMenu(e, displayableUser)}
                     />
-                    >
-                    <p class="text-xs text-muted-foreground">
-                      {new Date(msg.timestamp).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                    {#if showMessageTimestamps}
+                      <p class="text-xs text-muted-foreground">
+                        {new Date(msg.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    {/if}
                     {#if msg.editedAt}
                       <span
                         class="text-[0.625rem] uppercase tracking-wide text-muted-foreground/80"
@@ -1581,6 +1586,9 @@
                     <div class="mt-2 space-y-2">
                       {#each msg.attachments as attachment (attachment.id)}
                         <div
+                          role="button"
+                          tabindex="-1"
+                          aria-label="Attachment options"
                           oncontextmenu={(event) =>
                             handleMessageContextMenu(event, msg)}
                         >
