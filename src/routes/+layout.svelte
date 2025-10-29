@@ -144,15 +144,13 @@
             <div class="flex flex-1 flex-col min-w-0">
               <ChatView chat={$currentChat} />
             </div>
-            {#if $currentChat.type === "channel"}
-              {#if $chatSearchStore.searching}
-                <SearchSidebar />
-              {:else}
-                <MemberSidebar
-                  members={$currentChat.members as MemberWithRoles[]}
-                  {openDetailedProfileModal}
-                />
-              {/if}
+            {#if $chatSearchStore.searching}
+              <SearchSidebar chat={$currentChat} />
+            {:else if $currentChat.type === "channel"}
+              <MemberSidebar
+                members={$currentChat.members as MemberWithRoles[]}
+                {openDetailedProfileModal}
+              />
             {/if}
           </div>
         </div>
