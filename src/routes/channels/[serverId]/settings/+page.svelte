@@ -197,24 +197,24 @@
       category: "emojis",
       title: "Manage Emojis",
       description: "Add, edit, or delete custom emojis.",
-      type: "static",
-      property: "emojis_placeholder",
+      type: "custom_component",
+      component: "EmojiManagement",
     },
     {
       id: "stickerManagement",
       category: "stickers",
       title: "Manage Stickers",
       description: "Add, edit, or delete custom stickers.",
-      type: "static",
-      property: "stickers_placeholder",
+      type: "custom_component",
+      component: "StickerManagement",
     },
     {
       id: "widgetSettings",
       category: "widgets",
       title: "Server Widget",
       description: "Enable and configure a server widget.",
-      type: "static",
-      property: "widgets_placeholder",
+      type: "custom_component",
+      component: "WidgetSettings",
     },
     {
       id: "serverTemplate",
@@ -239,6 +239,8 @@
       description: "Configure safety and setup options.",
       type: "static",
       property: "safety_setup_placeholder",
+      emptyMessage:
+        "No safety or onboarding flows are configured yet. Set up screening or welcome steps from the Moderation tab.",
     },
     {
       id: "memberList",
@@ -261,8 +263,8 @@
       category: "audit_log",
       title: "Audit Log",
       description: "View recent server changes.",
-      type: "static",
-      property: "audit_log_placeholder",
+      type: "custom_component",
+      component: "AuditLogViewer",
     },
   ]);
 

@@ -2,7 +2,11 @@ import { writable, get, type Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Server,
+  ServerAuditLogEntry,
+  ServerEmoji,
   ServerModerationSettings,
+  ServerSticker,
+  ServerWidgetSettings,
 } from "$lib/features/servers/models/Server";
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
@@ -47,6 +51,69 @@ type BackendChannelCategory = {
   created_at: string;
 };
 
+type BackendServerEmoji = {
+  id: string;
+  name: string;
+  url?: string;
+  animated?: boolean | number | string;
+  created_at?: string | null;
+  createdAt?: string | null;
+  uploaded_by?: string | null;
+  uploadedBy?: string | null;
+  available?: boolean | number | string;
+  usage_count?: number | string | null;
+  usageCount?: number | string | null;
+};
+
+type BackendServerSticker = {
+  id: string;
+  name: string;
+  url?: string;
+  preview_url?: string | null;
+  previewUrl?: string | null;
+  format?: string | null;
+  size_kb?: number | string | null;
+  sizeKb?: number | string | null;
+  tags?: string[] | null;
+  description?: string | null;
+  created_at?: string | null;
+  createdAt?: string | null;
+  uploaded_by?: string | null;
+  uploadedBy?: string | null;
+};
+
+type BackendServerWidgetSettings = {
+  enabled?: boolean | number | string;
+  channel_id?: string | null;
+  channelId?: string | null;
+  theme?: string | null;
+  show_members_online?: boolean | number | string;
+  showMembersOnline?: boolean | number | string;
+  show_instant_invite?: boolean | number | string;
+  showInstantInvite?: boolean | number | string;
+  invite_url?: string | null;
+  inviteUrl?: string | null;
+  preview_url?: string | null;
+  previewUrl?: string | null;
+  last_synced_at?: string | null;
+  lastSyncedAt?: string | null;
+};
+
+type BackendServerAuditLogEntry = {
+  id: string;
+  action: string;
+  actor_id?: string | null;
+  actorId?: string | null;
+  actor_name?: string | null;
+  actorName?: string | null;
+  actor_avatar?: string | null;
+  actorAvatar?: string | null;
+  target?: string | null;
+  created_at?: string | null;
+  createdAt?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
 type BackendServer = {
   id: string;
   name: string;
@@ -68,6 +135,12 @@ type BackendServer = {
   deleted_message_display?: string | null;
   deletedMessageDisplay?: string | null;
   [key: string]: unknown;
+  emojis?: BackendServerEmoji[] | null;
+  stickers?: BackendServerSticker[] | null;
+  widget_settings?: BackendServerWidgetSettings | null;
+  widgetSettings?: BackendServerWidgetSettings | null;
+  audit_log?: BackendServerAuditLogEntry[] | null;
+  auditLog?: BackendServerAuditLogEntry[] | null;
 };
 
 interface ServerStoreState {
@@ -165,6 +238,27 @@ export function createServerStore(): ServerStore {
     return undefined;
   };
 
+  const coerceNumber = (value: unknown): number | undefined => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return undefined;
+  };
+
+  const normalizeString = (value: unknown): string | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+
   const normalizeDeletedMessageDisplay = (
     value: unknown,
   ): "ghost" | "tombstone" | undefined => {
@@ -177,6 +271,85 @@ export function createServerStore(): ServerStore {
     }
     return undefined;
   };
+
+  const mapBackendEmoji = (emoji: BackendServerEmoji): ServerEmoji => {
+    const animated = coerceBoolean(emoji.animated);
+    const available = coerceBoolean(emoji.available);
+    const usage = coerceNumber(emoji.usage_count ?? emoji.usageCount);
+
+    return {
+      id: emoji.id,
+      name: emoji.name,
+      url: normalizeString(emoji.url) ?? "",
+      animated: animated ?? undefined,
+      available: available ?? undefined,
+      createdAt: normalizeString(emoji.createdAt ?? emoji.created_at),
+      uploadedBy: normalizeString(emoji.uploadedBy ?? emoji.uploaded_by),
+      usageCount: usage,
+    } satisfies ServerEmoji;
+  };
+
+  const mapBackendSticker = (sticker: BackendServerSticker): ServerSticker => {
+    const size = coerceNumber(sticker.size_kb ?? sticker.sizeKb);
+    return {
+      id: sticker.id,
+      name: sticker.name,
+      format: normalizeString(sticker.format) ?? "png",
+      url: normalizeString(sticker.url) ?? "",
+      previewUrl: normalizeString(sticker.previewUrl ?? sticker.preview_url),
+      description: normalizeString(sticker.description),
+      tags: Array.isArray(sticker.tags)
+        ? sticker.tags.filter((tag) => typeof tag === "string")
+        : undefined,
+      sizeKb: size,
+      createdAt: normalizeString(sticker.createdAt ?? sticker.created_at),
+      uploadedBy: normalizeString(sticker.uploadedBy ?? sticker.uploaded_by),
+    } satisfies ServerSticker;
+  };
+
+  const mapBackendWidgetSettings = (
+    widget: BackendServerWidgetSettings | null | undefined,
+  ): ServerWidgetSettings | null => {
+    if (!widget) {
+      return null;
+    }
+
+    const enabled = coerceBoolean(widget.enabled) ?? false;
+    const showMembersOnline = coerceBoolean(
+      widget.showMembersOnline ?? widget.show_members_online,
+    );
+    const showInstantInvite = coerceBoolean(
+      widget.showInstantInvite ?? widget.show_instant_invite,
+    );
+
+    return {
+      enabled,
+      channelId: normalizeString(widget.channelId ?? widget.channel_id) ?? null,
+      theme: normalizeString(widget.theme) ?? undefined,
+      showMembersOnline: showMembersOnline ?? undefined,
+      showInstantInvite: showInstantInvite ?? undefined,
+      inviteUrl: normalizeString(widget.inviteUrl ?? widget.invite_url) ?? null,
+      previewUrl: normalizeString(widget.previewUrl ?? widget.preview_url) ?? null,
+      lastSyncedAt:
+        normalizeString(widget.lastSyncedAt ?? widget.last_synced_at) ?? null,
+    } satisfies ServerWidgetSettings;
+  };
+
+  const mapBackendAuditLogEntry = (
+    entry: BackendServerAuditLogEntry,
+  ): ServerAuditLogEntry => ({
+    id: entry.id,
+    action: entry.action,
+    actorId:
+      normalizeString(entry.actorId ?? entry.actor_id) ?? "unknown-actor", // fallback for robustness
+    actorName: normalizeString(entry.actorName ?? entry.actor_name),
+    actorAvatar: normalizeString(entry.actorAvatar ?? entry.actor_avatar),
+    target: normalizeString(entry.target),
+    createdAt:
+      normalizeString(entry.createdAt ?? entry.created_at) ??
+      new Date().toISOString(),
+    metadata: entry.metadata ?? undefined,
+  });
 
   const extractSettingsChanges = (
     incoming: unknown,
@@ -394,6 +567,12 @@ export function createServerStore(): ServerStore {
       deletedMessageDisplay,
       read_receipts_enabled,
       readReceiptsEnabled,
+      emojis = [],
+      stickers = [],
+      widget_settings,
+      widgetSettings,
+      audit_log,
+      auditLog,
       ...rest
     } = s;
     const normalizedMembers: BackendUser[] = Array.isArray(members)
@@ -418,6 +597,21 @@ export function createServerStore(): ServerStore {
               : 0,
             created_at: category.created_at,
           })),
+        )
+      : [];
+    const normalizedEmojis: ServerEmoji[] = Array.isArray(emojis)
+      ? (emojis as BackendServerEmoji[]).map(mapBackendEmoji)
+      : [];
+    const normalizedStickers: ServerSticker[] = Array.isArray(stickers)
+      ? (stickers as BackendServerSticker[]).map(mapBackendSticker)
+      : [];
+    const normalizedWidget = mapBackendWidgetSettings(
+      widgetSettings ?? widget_settings,
+    );
+    const rawAuditLog = auditLog ?? audit_log;
+    const normalizedAuditLog: ServerAuditLogEntry[] = Array.isArray(rawAuditLog)
+      ? (rawAuditLog as BackendServerAuditLogEntry[]).map(
+          mapBackendAuditLogEntry,
         )
       : [];
     const mapInvite = (invite: BackendServerInvite): ServerInvite => ({
@@ -473,6 +667,10 @@ export function createServerStore(): ServerStore {
       roles: normalizedRoles,
       invites: normalizedInvites.map(mapInvite),
       settings: hasSettings ? mergedSettings : undefined,
+      emojis: normalizedEmojis,
+      stickers: normalizedStickers,
+      widgetSettings: normalizedWidget,
+      auditLog: normalizedAuditLog,
     } as Server;
   };
 
@@ -484,6 +682,10 @@ export function createServerStore(): ServerStore {
       categories: sortCategories(server.categories ?? []),
       members: server.members ?? [],
       roles: server.roles ?? [],
+      emojis: server.emojis ?? [],
+      stickers: server.stickers ?? [],
+      widgetSettings: server.widgetSettings ?? null,
+      auditLog: server.auditLog ?? [],
     }),
   });
 
@@ -515,6 +717,18 @@ export function createServerStore(): ServerStore {
       invites: hasOwn(patch, "invites")
         ? (patch.invites ?? [])
         : (original.invites ?? []),
+      emojis: hasOwn(patch, "emojis")
+        ? (patch.emojis ?? [])
+        : (original.emojis ?? []),
+      stickers: hasOwn(patch, "stickers")
+        ? (patch.stickers ?? [])
+        : (original.stickers ?? []),
+      widgetSettings: hasOwn(patch, "widgetSettings")
+        ? patch.widgetSettings ?? null
+        : original.widgetSettings ?? null,
+      auditLog: hasOwn(patch, "auditLog")
+        ? (patch.auditLog ?? [])
+        : (original.auditLog ?? []),
     } as Server;
 
     if (hasOwn(patch, "iconUrl")) {
@@ -661,6 +875,10 @@ export function createServerStore(): ServerStore {
       ...server,
       invites: server.invites ?? [],
       categories: server.categories ?? [],
+      emojis: server.emojis ?? [],
+      stickers: server.stickers ?? [],
+      widgetSettings: server.widgetSettings ?? null,
+      auditLog: server.auditLog ?? [],
     };
     update((s) => ({ ...s, servers: [...s.servers, withInvites] }));
     serverCache.set(withInvites.id, withInvites);
