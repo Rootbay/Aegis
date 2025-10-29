@@ -207,6 +207,37 @@ function createBooleanSetter<Key extends AppSettingsKey>(key: Key) {
   };
 }
 
+export async function triggerPanicWipe(): Promise<boolean> {
+  if (typeof window === "undefined") {
+    throw new Error("Panic wipe can only be triggered from the desktop client.");
+  }
+
+  const initialConfirmation = window.confirm(
+    "This will immediately wipe local caches, database entries, and authentication keys. Continue?",
+  );
+
+  if (!initialConfirmation) {
+    return false;
+  }
+
+  const finalConfirmation = window.confirm(
+    "This action cannot be undone. Do you want to trigger the panic wipe now?",
+  );
+
+  if (!finalConfirmation) {
+    return false;
+  }
+
+  const invoke = await getInvoke();
+
+  if (!invoke) {
+    throw new Error("Secure backend is unavailable. Panic wipe could not be initiated.");
+  }
+
+  await invoke("panic_wipe");
+  return true;
+}
+
 export const setReadReceiptsEnabled = createBooleanSetter("enableReadReceipts");
 export const setTypingIndicatorsEnabled = createBooleanSetter(
   "enableTypingIndicators",
