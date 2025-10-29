@@ -424,10 +424,7 @@ pub async fn get_friendships_for_user(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<String>, String> {
     let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or("State not initialized")?
-        .clone();
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
     drop(state_guard);
 
     get_friendships_for_user_internal(state, current_user_id, target_user_id).await
@@ -674,13 +671,10 @@ mod tests {
 
         let (app_state, _rx) = build_app_state(identity, db_pool);
 
-        let sanitized = get_friendships_for_user_internal(
-            app_state,
-            my_id.clone(),
-            target_id.clone(),
-        )
-        .await
-        .expect("fetch sanitized friendships");
+        let sanitized =
+            get_friendships_for_user_internal(app_state, my_id.clone(), target_id.clone())
+                .await
+                .expect("fetch sanitized friendships");
 
         assert_eq!(sanitized, vec![mutual_friend_id]);
     }

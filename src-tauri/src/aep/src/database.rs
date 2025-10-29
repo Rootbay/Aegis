@@ -1684,6 +1684,7 @@ impl ServerRoleRow {
                 hoist: bool_from_i64(self.hoist),
                 mentionable: bool_from_i64(self.mentionable),
                 permissions,
+                member_ids: Vec::new(),
             },
         ))
     }
@@ -1710,9 +1711,50 @@ pub async fn get_roles_for_servers(
     }
 
     let rows = builder.fetch_all(pool).await?;
+
+    if rows.is_empty() {
+        return Ok(roles_map);
+    }
+
+    let role_ids: Vec<String> = rows.iter().map(|row| row.id.clone()).collect();
+
+    #[derive(FromRow)]
+    struct RoleAssignmentRow {
+        role_id: String,
+        user_id: String,
+    }
+
+    let assignments = if role_ids.is_empty() {
+        HashMap::<String, Vec<String>>::new()
+    } else {
+        let placeholders = role_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let query = format!(
+            "SELECT role_id, user_id FROM server_role_assignments WHERE role_id IN ({})",
+            placeholders
+        );
+        let mut assignment_builder = sqlx::query_as::<_, RoleAssignmentRow>(&query);
+        for role_id in &role_ids {
+            assignment_builder = assignment_builder.bind(role_id);
+        }
+        let rows = assignment_builder.fetch_all(pool).await?;
+        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+        for row in rows {
+            map.entry(row.role_id)
+                .or_insert_with(Vec::new)
+                .push(row.user_id);
+        }
+        map
+    };
+
     for row in rows {
-        let (server_id, role) = row.into_role()?;
-        roles_map.entry(server_id).or_insert_with(Vec::new).push(role);
+        let (server_id, mut role) = row.into_role()?;
+        if let Some(member_ids) = assignments.get(&role.id) {
+            role.member_ids = member_ids.clone();
+        }
+        roles_map
+            .entry(server_id)
+            .or_insert_with(Vec::new)
+            .push(role);
     }
 
     Ok(roles_map)
@@ -1724,6 +1766,13 @@ pub async fn replace_server_roles(
     roles: &[Role],
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
+
+    sqlx::query!(
+        "DELETE FROM server_role_assignments WHERE server_id = ?",
+        server_id
+    )
+    .execute(&mut *tx)
+    .await?;
 
     sqlx::query!("DELETE FROM server_roles WHERE server_id = ?", server_id)
         .execute(&mut *tx)
@@ -1745,6 +1794,17 @@ pub async fn replace_server_roles(
         )
         .execute(&mut *tx)
         .await?;
+
+        for member_id in &role.member_ids {
+            sqlx::query!(
+                "INSERT INTO server_role_assignments (server_id, role_id, user_id) VALUES (?, ?, ?)",
+                server_id,
+                role.id,
+                member_id
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
     }
 
     tx.commit().await?;

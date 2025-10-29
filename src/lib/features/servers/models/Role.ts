@@ -5,4 +5,5 @@ export interface Role {
   hoist: boolean;
   mentionable: boolean;
   permissions: { [key: string]: boolean };
+  member_ids: string[];
 }

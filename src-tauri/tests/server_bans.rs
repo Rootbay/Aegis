@@ -1,11 +1,7 @@
 use aegis::commands::servers::{list_server_bans, unban_server_member, ServerBanUpdate};
 use aegis::commands::state::AppStateContainer;
 use aegis_shared_types::{
-    AppState,
-    ConnectivityEventPayload,
-    FileAclPolicy,
-    FileTransferCommand,
-    IncomingFile,
+    AppState, ConnectivityEventPayload, FileAclPolicy, FileTransferCommand, IncomingFile,
 };
 use chrono::Utc;
 use crypto::identity::Identity;
@@ -106,12 +102,9 @@ async fn unban_command_removes_ban_and_emits_event() {
         }
     });
 
-    let bans_before = list_server_bans(
-        server_id.clone(),
-        State(&state_container),
-    )
-    .await
-    .expect("list bans before");
+    let bans_before = list_server_bans(server_id.clone(), State(&state_container))
+        .await
+        .expect("list bans before");
     assert_eq!(bans_before.len(), 1);
 
     let payload = unban_server_member(
@@ -145,11 +138,8 @@ async fn unban_command_removes_ban_and_emits_event() {
 
     app_handle.unlisten(listener_id);
 
-    let bans_after = list_server_bans(
-        server_id,
-        State(&state_container),
-    )
-    .await
-    .expect("list bans after");
+    let bans_after = list_server_bans(server_id, State(&state_container))
+        .await
+        .expect("list bans after");
     assert!(bans_after.is_empty());
 }

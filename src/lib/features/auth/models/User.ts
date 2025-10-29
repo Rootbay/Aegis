@@ -8,4 +8,7 @@ export interface User {
   bannerUrl?: string;
   bio?: string;
   tag?: string;
+  roles?: string[];
+  role_ids?: string[];
+  roleIds?: string[];
 }
