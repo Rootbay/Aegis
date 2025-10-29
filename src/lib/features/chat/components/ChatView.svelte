@@ -38,6 +38,8 @@
   import { settings } from "$lib/features/settings/stores/settings";
   import MessageAuthorName from "$lib/features/chat/components/MessageAuthorName.svelte";
   import { highlightText } from "$lib/features/chat/utils/highlightText";
+  import LinkPreview from "$lib/features/chat/components/LinkPreview.svelte";
+  import { extractFirstLink } from "$lib/features/chat/utils/linkPreviews";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -1530,6 +1532,14 @@
                         <p class="text-base whitespace-pre-wrap break-words">
                           {msg.content}
                         </p>
+                        {#if $settings.enableLinkPreviews}
+                          {@const previewUrl = extractFirstLink(msg.content ?? "")}
+                          {#if previewUrl}
+                            <div class="mt-2">
+                              <LinkPreview url={previewUrl} />
+                            </div>
+                          {/if}
+                        {/if}
                       {/if}
                       {#if showTransparentEditHistory && msg.editHistory?.length}
                         {@const historyEntries = [...msg.editHistory].reverse()}
