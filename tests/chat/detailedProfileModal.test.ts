@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
 
   const openCreateGroupModal = vi.fn();
   const openReportUserModal = vi.fn();
+  const openProfileReviewsModal = vi.fn();
 
   const currentChat = {
     id: "chat-789",
@@ -55,6 +56,7 @@ const mocks = vi.hoisted(() => {
     openReportUserModal,
     openUserCardModal: vi.fn(),
     openDetailedProfileModal: vi.fn(),
+    openProfileReviewsModal,
   };
 
   const userStoreValue = {
@@ -156,6 +158,7 @@ const mocks = vi.hoisted(() => {
     chatStoreMock,
     openCreateGroupModal,
     openReportUserModal,
+    openProfileReviewsModal,
     createGroupContext,
   };
 });
@@ -275,7 +278,17 @@ describe("Detailed profile modal integration", () => {
     });
 
     await fireEvent.click(getByLabelText("More options"));
-    expect(queryByText("View Reviews")).toBeNull();
+    const viewReviewsItem = await findByText("View Reviews");
+    await fireEvent.click(viewReviewsItem);
+    expect(mocks.openProfileReviewsModal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectType: "user",
+        subjectId: profileUser.id,
+        subjectName: profileUser.name,
+      }),
+    );
+
+    await fireEvent.click(getByLabelText("More options"));
     await fireEvent.click(getByText("Add to Group"));
 
     await waitFor(() => {

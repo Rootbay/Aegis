@@ -16,6 +16,12 @@ export interface CreateGroupContext {
     isServerMemberContext: boolean,
   ) => void;
   openDetailedProfileModal: (user: User) => void;
+  openProfileReviewsModal: (options: {
+    subjectType: "user" | "server";
+    subjectId: string;
+    subjectName?: string;
+    subjectAvatarUrl?: string | null;
+  }) => void;
   openCreateGroupModal: (options?: GroupModalOptions) => void;
   openReportUserModal: (payload: ReportUserModalPayload) => void;
   openCollaborativeDocumentModal: (options?: {

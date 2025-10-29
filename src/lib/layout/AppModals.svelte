@@ -4,6 +4,7 @@
   import ReportUserModal from "$lib/components/modals/ReportUserModal.svelte";
   import ServerManagementModal from "$lib/components/modals/ServerManagementModal.svelte";
   import DetailedProfileModal from "$lib/components/modals/DetailedProfileModal.svelte";
+  import ProfileReviewsModal from "$lib/components/modals/ProfileReviewsModal.svelte";
   import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
   import CollaborativeDocumentModal from "$lib/features/collaboration/components/CollaborativeDocumentModal.svelte";
   import CollaborativeWhiteboard from "$lib/features/collaboration/components/CollaborativeWhiteboard.svelte";
@@ -100,6 +101,10 @@
 
 {#if activeModal === "detailedProfile"}
   <DetailedProfileModal {...modalProps} close={closeModal} />
+{/if}
+
+{#if activeModal === "profileReviews"}
+  <ProfileReviewsModal {...modalProps} close={closeModal} />
 {/if}
 
 {#if activeModal === "userCard" && modalProps?.profileUser}

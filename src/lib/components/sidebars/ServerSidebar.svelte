@@ -29,7 +29,7 @@
     Calendar,
   } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
-  import { onMount, onDestroy } from "svelte";
+  import { getContext, onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
   import { SvelteURLSearchParams } from "svelte/reactivity";
@@ -72,6 +72,8 @@
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
+  import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
+  import type { CreateGroupContext } from "$lib/contextTypes";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -84,6 +86,12 @@
   }: { server: Server; onSelectChannel: ChannelSelectHandler } = $props();
 
   const { activeServerChannelId } = chatStore;
+
+  const createGroupContext = getContext<CreateGroupContext | undefined>(
+    CREATE_GROUP_CONTEXT_KEY,
+  );
+  const openProfileReviewsModal =
+    createGroupContext?.openProfileReviewsModal;
 
   let showCreateChannelModal = $state(false);
   let showCreateCategoryModal = $state(false);
@@ -247,7 +255,16 @@
   }
 
   function handleViewReviews() {
-    // Replace with actual reviews dialog
+    if (!server?.id || !openProfileReviewsModal) {
+      return;
+    }
+    closeAllContextMenus();
+    openProfileReviewsModal({
+      subjectType: "server",
+      subjectId: server.id,
+      subjectName: server.name,
+      subjectAvatarUrl: server.iconUrl ?? null,
+    });
   }
 
   async function handleInviteToServerClick() {
@@ -677,6 +694,9 @@
         break;
       case "invite_people":
         void handleInviteToServerClick();
+        break;
+      case "view_reviews":
+        handleViewReviews();
         break;
       case "hide_muted_channels": {
         const key = "serverSidebar.hideMuted";
