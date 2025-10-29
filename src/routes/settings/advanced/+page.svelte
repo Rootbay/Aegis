@@ -11,9 +11,11 @@
     setEnableIntelligentMeshRouting,
     setEnableNewMessageNotifications,
     setEnableGroupMessageNotifications,
+    triggerPanicWipe,
     updateAppSetting,
     type AppSettings,
   } from "$lib/features/settings/stores/settings";
+  import { toasts } from "$lib/stores/ToastStore";
 
   const advancedFlags = [
     {
@@ -64,6 +66,7 @@
   let enableGroupNotifications = $state(
     get(settings).enableGroupMessageNotifications,
   );
+  let panicWipePending = $state(false);
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
@@ -116,6 +119,30 @@
       toggleFlag(flag.key, defaultValue as boolean);
     });
   }
+
+  async function handlePanicWipeTrigger() {
+    if (panicWipePending) return;
+
+    panicWipePending = true;
+    try {
+      const executed = await triggerPanicWipe();
+      if (executed) {
+        toasts.addToast(
+          "Local Aegis data purged. The workspace has been reset.",
+          "success",
+        );
+      }
+    } catch (error) {
+      console.error("Failed to execute panic wipe", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Panic wipe failed. Check application logs.";
+      toasts.addToast(message, "error");
+    } finally {
+      panicWipePending = false;
+    }
+  }
 </script>
 
 <div class="space-y-6">
@@ -151,6 +178,27 @@
         />
       </div>
     {/each}
+
+    {#if advancedState.enablePanicButton}
+      <div class="space-y-3 rounded-lg border border-red-900/60 bg-red-950/40 p-4">
+        <div>
+          <p class="text-sm font-semibold text-red-200">Emergency panic wipe</p>
+          <p class="text-xs text-red-200/80">
+            Immediately halt network activity and erase cached secrets from this
+            device.
+          </p>
+        </div>
+        <Button
+          variant="destructive"
+          size="sm"
+          class="w-full sm:w-auto"
+          disabled={panicWipePending}
+          onclick={handlePanicWipeTrigger}
+        >
+          {panicWipePending ? "Purging…" : "Trigger panic wipe"}
+        </Button>
+      </div>
+    {/if}
   </section>
 
   <section

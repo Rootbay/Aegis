@@ -89,6 +89,7 @@ pub async fn run() {
             commands::settings::set_voice_memos_enabled,
             commands::data_privacy::export_user_data,
             commands::data_privacy::request_account_deletion,
+            commands::data_privacy::panic_wipe,
             commands::connected_accounts::list_connected_accounts,
             commands::connected_accounts::link_external_account,
             commands::connected_accounts::unlink_external_account,
