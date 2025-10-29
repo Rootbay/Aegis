@@ -37,6 +37,7 @@ export interface FileTransferRecord {
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly dismissed: boolean;
+  readonly autoApprovalFailed: boolean;
 }
 
 export interface FileTransferRequestPayload {
@@ -154,32 +155,99 @@ function createFileTransferStore(): FileTransferStore {
     });
   }
 
+  function recordAccepted(
+    senderId: string,
+    filename: string,
+    mode: FileTransferMode,
+    overrides?: { safeFilename?: string | null; size?: number },
+  ) {
+    upsertRecord("incoming", senderId, filename, (existing, now) => ({
+      id: buildId("incoming", senderId, filename),
+      senderId,
+      filename,
+      safeFilename:
+        overrides?.safeFilename ?? existing?.safeFilename ?? filename,
+      size: overrides?.size ?? existing?.size,
+      path: existing?.path,
+      status: "accepted",
+      direction: "incoming",
+      mode,
+      phase: existing?.phase ?? "awaiting",
+      progress: existing?.progress ?? 0,
+      resumed: existing?.resumed ?? false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      dismissed: false,
+      autoApprovalFailed: false,
+    }));
+  }
+
+  function queuePendingIncoming(
+    payload: FileTransferRequestPayload,
+    mode: FileTransferMode,
+    autoApprovalFailed: boolean,
+  ) {
+    const { sender_id, filename, safe_filename, size } = payload;
+    upsertRecord("incoming", sender_id, filename, (existing, now) => ({
+      id: buildId("incoming", sender_id, filename),
+      senderId: sender_id,
+      filename,
+      safeFilename: safe_filename ?? existing?.safeFilename ?? filename,
+      size: size ?? existing?.size,
+      path: existing?.path,
+      status: "pending",
+      direction: "incoming",
+      mode,
+      phase: existing?.phase ?? "awaiting",
+      progress: existing?.progress ?? 0,
+      resumed: existing?.resumed ?? false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      dismissed: false,
+      autoApprovalFailed,
+    }));
+  }
+
+  async function performApproval(
+    senderId: string,
+    filename: string,
+    resilientEnabled: boolean,
+    overrides?: { safeFilename?: string | null; size?: number },
+  ) {
+    await invoke("approve_file_transfer", {
+      senderId,
+      sender_id: senderId,
+      filename,
+      resilient: resilientEnabled,
+    });
+
+    const mode: FileTransferMode = resilientEnabled ? "resilient" : "basic";
+    recordAccepted(senderId, filename, mode, overrides);
+  }
+
+  async function autoApproveIncomingTransfer(
+    payload: FileTransferRequestPayload,
+    resilientEnabled: boolean,
+    mode: FileTransferMode,
+  ) {
+    try {
+      await performApproval(payload.sender_id, payload.filename, resilientEnabled, {
+        safeFilename: payload.safe_filename,
+        size: payload.size,
+      });
+    } catch (error) {
+      console.error("Failed to auto-approve file transfer", error);
+      toasts.showErrorToast(
+        "Automatic file download failed. Please approve manually.",
+      );
+      queuePendingIncoming(payload, mode, true);
+    }
+  }
+
   async function approveTransfer(senderId: string, filename: string) {
     const resilientEnabled = get(settings).enableResilientFileTransfer;
     try {
-      await invoke("approve_file_transfer", {
-        senderId,
-        sender_id: senderId,
-        filename,
-        resilient: resilientEnabled,
-      });
-      upsertRecord("incoming", senderId, filename, (existing, now) => ({
-        id: buildId("incoming", senderId, filename),
-        senderId,
-        filename,
-        safeFilename: existing?.safeFilename ?? filename,
-        size: existing?.size,
-        path: existing?.path,
-        status: "accepted",
-        direction: "incoming",
-        mode: resilientEnabled ? "resilient" : (existing?.mode ?? "basic"),
-        phase: existing?.phase ?? "awaiting",
-        progress: existing?.progress ?? 0,
-        resumed: existing?.resumed ?? false,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-        dismissed: false,
-      }));
+      await performApproval(senderId, filename, resilientEnabled);
     } catch (error) {
       console.error("Failed to approve file transfer", error);
       toasts.showErrorToast("Failed to approve file transfer.");
@@ -198,20 +266,21 @@ function createFileTransferStore(): FileTransferStore {
         id: buildId("incoming", senderId, filename),
         senderId,
         filename,
-        safeFilename: existing?.safeFilename ?? filename,
-        size: existing?.size,
-        path: existing?.path,
-        status: "denied",
-        direction: "incoming",
-        mode: existing?.mode ?? "basic",
-        phase: "complete",
-        progress: existing?.progress ?? 0,
-        resumed: existing?.resumed ?? false,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-        dismissed: false,
-      }));
-    } catch (error) {
+      safeFilename: existing?.safeFilename ?? filename,
+      size: existing?.size,
+      path: existing?.path,
+      status: "denied",
+      direction: "incoming",
+      mode: existing?.mode ?? "basic",
+      phase: "complete",
+      progress: existing?.progress ?? 0,
+      resumed: existing?.resumed ?? false,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      dismissed: false,
+      autoApprovalFailed: existing?.autoApprovalFailed ?? false,
+    }));
+  } catch (error) {
       console.error("Failed to reject file transfer", error);
       toasts.showErrorToast("Failed to reject file transfer.");
       throw error;
@@ -239,26 +308,26 @@ function createFileTransferStore(): FileTransferStore {
     safe_filename,
     size,
   }: FileTransferRequestPayload) {
-    const resilientMode = get(settings).enableResilientFileTransfer
+    const currentSettings = get(settings);
+    const resilientEnabled = currentSettings.enableResilientFileTransfer;
+    const resilientMode: FileTransferMode = resilientEnabled
       ? "resilient"
       : "basic";
-    upsertRecord("incoming", sender_id, filename, (existing, now) => ({
-      id: buildId("incoming", sender_id, filename),
-      senderId: sender_id,
-      filename,
-      safeFilename: safe_filename ?? existing?.safeFilename ?? filename,
-      size: size ?? existing?.size,
-      path: existing?.path,
-      status: "pending",
-      direction: "incoming",
-      mode: resilientMode,
-      phase: existing?.phase ?? "awaiting",
-      progress: existing?.progress ?? 0,
-      resumed: existing?.resumed ?? false,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      dismissed: false,
-    }));
+
+    if (currentSettings.autoDownloadMedia) {
+      void autoApproveIncomingTransfer(
+        { sender_id, filename, safe_filename, size },
+        resilientEnabled,
+        resilientMode,
+      );
+      return;
+    }
+
+    queuePendingIncoming(
+      { sender_id, filename, safe_filename, size },
+      resilientMode,
+      false,
+    );
   }
 
   function handleTransferDenied({
@@ -282,6 +351,7 @@ function createFileTransferStore(): FileTransferStore {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       dismissed: false,
+      autoApprovalFailed: existing?.autoApprovalFailed ?? false,
     }));
   }
 
@@ -307,6 +377,7 @@ function createFileTransferStore(): FileTransferStore {
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       dismissed: false,
+      autoApprovalFailed: existing?.autoApprovalFailed ?? false,
     }));
   }
 
@@ -386,6 +457,7 @@ function createFileTransferStore(): FileTransferStore {
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
         dismissed: false,
+        autoApprovalFailed: existing?.autoApprovalFailed ?? false,
       };
     });
   }

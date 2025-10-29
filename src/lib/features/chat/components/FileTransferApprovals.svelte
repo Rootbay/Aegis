@@ -1,6 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import { get } from "svelte/store";
   import {
     AlertDialog,
     AlertDialogAction,
@@ -13,6 +14,7 @@
   } from "$lib/components/ui/alert-dialog";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { fileTransferStore } from "$lib/features/chat/stores/fileTransferStore";
+  import { settings } from "$lib/features/settings/stores/settings";
 
   const pendingStore = fileTransferStore.pending;
 
@@ -20,12 +22,31 @@
   let activeRequest = $derived(pendingTransfers[0] ?? null);
   let dialogOpen = $state(false);
   let actionInFlight = $state<"approve" | "reject" | null>(null);
+  let autoDownloadMediaEnabled = $state(get(settings).autoDownloadMedia);
   let friendLookup = $derived(
     new Map(($friendStore.friends ?? []).map((friend) => [friend.id, friend])),
   );
 
+  let shouldDisplayDialog = $derived(() => {
+    if (!activeRequest) {
+      return false;
+    }
+    if (!autoDownloadMediaEnabled) {
+      return true;
+    }
+    return activeRequest.autoApprovalFailed;
+  });
+
   $effect(() => {
-    dialogOpen = Boolean(activeRequest);
+    const unsubscribe = settings.subscribe((value) => {
+      autoDownloadMediaEnabled = value.autoDownloadMedia;
+    });
+
+    return () => unsubscribe();
+  });
+
+  $effect(() => {
+    dialogOpen = shouldDisplayDialog;
   });
 
   function formatBytes(bytes?: number) {
@@ -90,7 +111,7 @@
   }
 </script>
 
-{#if activeRequest}
+{#if shouldDisplayDialog && activeRequest}
   <AlertDialog bind:open={dialogOpen}>
     <AlertDialogContent class="max-w-md">
       <AlertDialogHeader>
