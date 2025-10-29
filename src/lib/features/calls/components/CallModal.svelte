@@ -11,7 +11,7 @@
     DialogTitle,
   } from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
-  import { PhoneOff, Video, Mic, Timer } from "@lucide/svelte";
+  import { Phone, PhoneOff, Video, Mic, Timer } from "@lucide/svelte";
   import {
     callStore,
     describeCallStatus,
@@ -269,7 +269,27 @@
         >
           Minimize
         </Button>
-        {#if isActive}
+        {#if activeCall.status === "ringing"}
+          <div class="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              class="cursor-pointer"
+              onclick={() => void callStore.rejectCall()}
+            >
+              <PhoneOff class="mr-2 h-4 w-4" />
+              Decline
+            </Button>
+            <Button
+              type="button"
+              class="cursor-pointer"
+              onclick={() => void callStore.acceptCall()}
+            >
+              <Phone class="mr-2 h-4 w-4" />
+              Accept
+            </Button>
+          </div>
+        {:else if isActive}
           <Button
             type="button"
             variant="destructive"

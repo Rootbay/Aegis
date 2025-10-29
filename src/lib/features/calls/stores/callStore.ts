@@ -10,6 +10,7 @@ const isBrowser = typeof window !== "undefined";
 export type CallType = "voice" | "video";
 export type CallStatus =
   | "idle"
+  | "ringing"
   | "initializing"
   | "connecting"
   | "in-call"
@@ -143,6 +144,8 @@ function stopStream(stream: MediaStream | null) {
 function describeCallStatus(call: ActiveCall | null): string {
   if (!call) return "";
   switch (call.status) {
+    case "ringing":
+      return "Incoming call";
     case "initializing":
       return "Requesting devices";
     case "connecting":
@@ -181,6 +184,9 @@ function createCallStore() {
   let deviceChangeUnsubscribe: (() => void) | null = null;
   let dismissalTimer: ReturnType<typeof setTimeout> | null = null;
   let participantStates = new Map<string, InternalParticipant>();
+  let pendingIncomingOffer:
+    | { senderId: string; callId: string; signal: OfferSignal }
+    | null = null;
 
   function clearDismissalTimer() {
     if (dismissalTimer) {
@@ -290,6 +296,7 @@ function createCallStore() {
     });
     participantStates.clear();
     activeCallId = null;
+    pendingIncomingOffer = null;
     update((state) => {
       if (!state.activeCall) {
         return state;
@@ -324,6 +331,7 @@ function createCallStore() {
         return state;
       }
       if (
+        call.status === "ringing" ||
         call.status === "ended" ||
         call.status === "ending" ||
         call.status === "error"
@@ -1238,7 +1246,7 @@ function createCallStore() {
           chatName: signal.chatName ?? chatId,
           chatType,
           type,
-          status: "initializing",
+          status: "ringing",
           startedAt: Date.now(),
           connectedAt: null,
           endedAt: null,
@@ -1270,14 +1278,18 @@ function createCallStore() {
             chatId,
             chatName: signal.chatName ?? next.activeCall.chatName,
             chatType,
+            status: "ringing",
+            localStream: null,
           },
         };
       });
     }
 
+    pendingIncomingOffer = { senderId, callId, signal };
+
     mutateParticipant(senderId, (participant) => {
       if (participant) {
-        participant.status = "connecting";
+        participant.status = "invited";
         participant.direction = "incoming";
         participant.name = signal.chatName ?? participant.name ?? senderId;
         return participant;
@@ -1285,7 +1297,7 @@ function createCallStore() {
       return {
         userId: senderId,
         name: signal.chatName ?? senderId,
-        status: "connecting",
+        status: "invited",
         remoteStream: null,
         peerConnection: null,
         error: undefined,
@@ -1294,11 +1306,48 @@ function createCallStore() {
         pendingCandidates: [],
       };
     });
+  }
+
+  async function acceptCall() {
+    if (!isBrowser) {
+      return;
+    }
+
+    const pending = pendingIncomingOffer;
+    const state = get(store);
+    const currentCall = state.activeCall;
+
+    if (!pending || !currentCall || currentCall.callId !== pending.callId) {
+      return;
+    }
+
+    pendingIncomingOffer = null;
+
+    const { senderId, callId, signal } = pending;
 
     try {
       if (!activeStream) {
-        activeStream = await requestUserMedia(type);
+        activeStream = await requestUserMedia(currentCall.type);
       }
+
+      mutateParticipant(senderId, (participant) => {
+        if (!participant) {
+          return {
+            userId: senderId,
+            name: signal.chatName ?? senderId,
+            status: "connecting",
+            remoteStream: null,
+            peerConnection: null,
+            error: undefined,
+            joinedAt: null,
+            direction: "incoming",
+            pendingCandidates: [],
+          };
+        }
+        participant.status = "connecting";
+        participant.direction = "incoming";
+        return participant;
+      });
 
       update((next) => {
         if (!next.activeCall || next.activeCall.callId !== callId) {
@@ -1370,6 +1419,28 @@ function createCallStore() {
         });
       }
     }
+  }
+
+  async function rejectCall(reason = "Call declined") {
+    const pending = pendingIncomingOffer;
+    pendingIncomingOffer = null;
+
+    if (!pending) {
+      dismissCall();
+      return;
+    }
+
+    try {
+      await sendSignal(pending.senderId, pending.callId, {
+        type: "error",
+        message: reason,
+      });
+    } catch (error) {
+      console.warn("Failed to send call rejection signal", error);
+    }
+
+    toasts.addToast(reason, "info");
+    dismissCall();
   }
 
   async function handleAnswerSignal(
@@ -1586,6 +1657,8 @@ function createCallStore() {
     canStartCall,
     startCall,
     endCall,
+    acceptCall,
+    rejectCall,
     setCallModalOpen,
     dismissCall,
     describeStatus: (call: ActiveCall | null) => describeCallStatus(call),
