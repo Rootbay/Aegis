@@ -351,6 +351,7 @@ import ChatView from "$lib/features/chat/components/ChatView.svelte";
 import {
   defaultSettings,
   settings,
+  setMessageDensity,
   setShowMessageAvatars,
   setShowMessageTimestamps,
 } from "$lib/features/settings/stores/settings";
@@ -374,6 +375,25 @@ function getMessageContainer(messageText: string) {
   const container = visibleNode?.closest<HTMLElement>("[id^='message-']");
   expect(container).not.toBeNull();
   return container as HTMLElement;
+}
+
+function resetChatViewState() {
+  const baseline = structuredClone(defaultSettings);
+  baseline.showMessageAvatars = true;
+  baseline.showMessageTimestamps = true;
+  settings.set(baseline);
+
+  messagesByChatId.set(new Map());
+  hasMoreByChatId.set(new Map());
+  loadingStateByChat.set(new Map());
+  chatSearchStore.reset();
+  __setUser({
+    id: "user-current",
+    name: "Current User",
+    avatar: "https://example.com/me.png",
+    online: true,
+  });
+  __resetMutedFriends();
 }
 
 describe("ChatView privacy preferences", () => {
