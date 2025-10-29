@@ -56,6 +56,12 @@
     already_member: boolean;
   };
 
+  type ReplyPreview = {
+    messageId: string;
+    author?: string;
+    snippet?: string;
+  };
+
   let { chat } = $props<{ chat: Chat | null }>();
 
   const createGroupContext = getContext<CreateGroupContext | undefined>(
@@ -88,6 +94,7 @@
   let typingActive = $state(false);
   let typingResetTimer: ReturnType<typeof setTimeout> | null = null;
   const TYPING_IDLE_TIMEOUT_MS = 2_500;
+  const MAX_REPLY_SNIPPET_LENGTH = 120;
 
   const supportsVoiceRecording =
     typeof window !== "undefined" && "MediaRecorder" in window;
@@ -125,6 +132,8 @@
   let editingDraft = $state("");
   let editingSaving = $state(false);
   let editingTextarea: HTMLTextAreaElement | null = $state(null);
+  let replyTargetMessageId = $state<string | null>(null);
+  let replyPreview = $state<ReplyPreview | null>(null);
 
   const notifyMessagesViewed = () => {
     if (!chat) return;
@@ -334,6 +343,8 @@
       prevCount = 0;
       prevChatId = id;
       chatSearchStore.reset();
+      replyTargetMessageId = null;
+      replyPreview = null;
     }
   });
 
@@ -342,6 +353,18 @@
       memberById = new Map(chat.members.map((member) => [member.id, member]));
     } else {
       memberById = new Map();
+    }
+  });
+
+  $effect(() => {
+    if (!replyTargetMessageId) {
+      return;
+    }
+    const target =
+      currentChatMessages?.find((msg) => msg.id === replyTargetMessageId) ??
+      null;
+    if (target) {
+      replyPreview = buildReplyPreviewFromMessage(target);
     }
   });
 
@@ -829,6 +852,71 @@
     return `${minutes}:${seconds}`;
   }
 
+  function resolveReplyAuthor(message: Message): string | undefined {
+    if (message.senderId === myId) {
+      return $userStore.me?.name ?? "You";
+    }
+
+    if (!chat) {
+      return memberById.get(message.senderId)?.name ?? message.senderId;
+    }
+
+    if (chat.type === "dm") {
+      if (message.senderId === chat.friend.id) {
+        return chat.friend.name;
+      }
+      return $userStore.me?.name ?? message.senderId;
+    }
+
+    return memberById.get(message.senderId)?.name ?? message.senderId;
+  }
+
+  function buildReplySnippet(message: Message): string | undefined {
+    const content = message.content?.trim();
+    if (content && content.length > 0) {
+      const firstLine = content.split(/\r?\n/, 1)[0];
+      if (firstLine.length > MAX_REPLY_SNIPPET_LENGTH) {
+        return `${firstLine.slice(0, MAX_REPLY_SNIPPET_LENGTH - 1)}…`;
+      }
+      return firstLine;
+    }
+
+    const attachment = message.attachments?.[0];
+    if (attachment?.name) {
+      return `Attachment: ${attachment.name}`;
+    }
+
+    if (message.attachments && message.attachments.length > 0) {
+      return "Attachment";
+    }
+
+    return undefined;
+  }
+
+  function buildReplyPreviewFromMessage(message: Message): ReplyPreview {
+    return {
+      messageId: message.id,
+      author: resolveReplyAuthor(message),
+      snippet: buildReplySnippet(message),
+    };
+  }
+
+  function enterReplyMode(message: Message) {
+    replyTargetMessageId = message.id;
+    replyPreview = buildReplyPreviewFromMessage(message);
+    textareaRef?.focus();
+    adjustTextareaHeight();
+  }
+
+  function cancelReply() {
+    if (!replyTargetMessageId && !replyPreview) {
+      return;
+    }
+    replyTargetMessageId = null;
+    replyPreview = null;
+    textareaRef?.focus();
+  }
+
   function addAttachments(newFiles: File[]) {
     if (!newFiles.length) return;
 
@@ -871,13 +959,28 @@
       return;
     try {
       sending = true;
+      const replyOptions =
+        replyTargetMessageId && replyPreview
+          ? {
+              replyToMessageId: replyTargetMessageId,
+              replySnapshot: {
+                author: replyPreview.author,
+                snippet: replyPreview.snippet,
+              },
+            }
+          : undefined;
       if (attachedFiles.length > 0) {
-        await chatStore.sendMessageWithAttachments(messageInput, attachedFiles);
+        await chatStore.sendMessageWithAttachments(
+          messageInput,
+          attachedFiles,
+          replyOptions,
+        );
       } else {
-        await chatStore.sendMessage(messageInput);
+        await chatStore.sendMessage(messageInput, replyOptions);
       }
       messageInput = "";
       attachedFiles = [];
+      cancelReply();
       adjustTextareaHeight();
       if (typingActive) {
         typingActive = false;
@@ -917,6 +1020,22 @@
       isAtBottom = true;
       notifyMessagesViewed();
     }
+  }
+
+  function scrollToMessage(messageId: string) {
+    if (!messageId) {
+      return;
+    }
+
+    const messages = currentChatMessages || [];
+    const index = messages.findIndex((msg) => msg.id === messageId);
+    if (listRef && typeof listRef.scroll === "function" && index !== -1) {
+      listRef.scroll({ index, align: "center", smoothScroll: true });
+      return;
+    }
+
+    const element = document.getElementById(`message-${messageId}`);
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   let currentChatMessages = $derived(
@@ -1056,9 +1175,7 @@
         });
         break;
       case "reply_message":
-        messageInput = `> ${selectedMsg.content}\n`;
-        textareaRef?.focus();
-        adjustTextareaHeight();
+        enterReplyMode(selectedMsg);
         break;
       case "edit_message":
         if (selectedMsg.senderId === $userStore.me?.id) {
@@ -1188,7 +1305,11 @@
                 Loading older messages...
               </div>
             {/if}
-            <div class="space-y-6" use:captureViewport>
+            <div
+              class="space-y-6"
+              use:captureViewport
+              id={`message-${msg.id}`}
+            >
               <div
                 class="flex items-start gap-3 {isMe ? 'flex-row-reverse' : ''}"
               >
@@ -1325,6 +1446,22 @@
                         }
                       }}
                     >
+                      {#if msg.replyToMessageId}
+                        <button
+                          type="button"
+                          class="mb-2 w-full rounded-md bg-black/20 px-3 py-2 text-left text-xs text-white/80 hover:bg-black/30 focus:outline-none"
+                          onclick={() => scrollToMessage(msg.replyToMessageId ?? "")}
+                        >
+                          <p class="font-semibold text-[0.65rem] uppercase tracking-wide text-white/60">
+                            Replying to {msg.replySnapshot?.author ?? "message"}
+                          </p>
+                          {#if msg.replySnapshot?.snippet}
+                            <p class="mt-1 text-sm text-white/90 overflow-hidden text-ellipsis whitespace-nowrap">
+                              {msg.replySnapshot.snippet}
+                            </p>
+                          {/if}
+                        </button>
+                      {/if}
                       {#if editingMessageId === msg.id}
                         <form
                           class="space-y-2"
@@ -1499,6 +1636,29 @@
       </div>
 
       <footer class="p-4 bg-card/50 border-t border-zinc-700/50">
+        {#if replyPreview}
+          <div
+            class="mb-2 flex items-center justify-between rounded-md border border-zinc-700/40 bg-muted/60 px-3 py-2 text-sm"
+          >
+            <div class="mr-2 min-w-0">
+              <p class="text-xs uppercase tracking-wide text-muted-foreground">
+                Replying to {replyPreview.author ?? "message"}
+              </p>
+              {#if replyPreview.snippet}
+                <p class="truncate text-sm text-white/90">
+                  {replyPreview.snippet}
+                </p>
+              {/if}
+            </div>
+            <button
+              type="button"
+              class="text-xs font-medium text-muted-foreground hover:text-white"
+              onclick={cancelReply}
+            >
+              Cancel
+            </button>
+          </div>
+        {/if}
         {#if attachedFiles.length > 0}
           <div class="p-2 mb-2 border-b border-zinc-700/50">
             <p class="text-sm font-semibold mb-2 text-zinc-300">Attachments</p>

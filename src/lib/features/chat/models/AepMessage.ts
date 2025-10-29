@@ -86,6 +86,12 @@ export interface ChatMessage {
   conversationId?: string;
   attachments?: AttachmentPayload[];
   reactions?: Record<string, string[]> | null;
+  reply_to_message_id?: string;
+  replyToMessageId?: string;
+  reply_snapshot_author?: string;
+  replySnapshotAuthor?: string;
+  reply_snapshot_snippet?: string;
+  replySnapshotSnippet?: string;
   signature?: BytePayload;
 }
 
