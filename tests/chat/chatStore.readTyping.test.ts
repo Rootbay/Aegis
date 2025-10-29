@@ -57,14 +57,51 @@ vi.mock("$lib/stores/userStore", () => {
   };
 });
 
-vi.mock("$lib/features/servers/stores/serverStore", () => {
-  const state = writable({ activeServerId: null });
+type MockServerState = {
+  activeServerId: string | null;
+  servers: Array<{
+    id: string;
+    name: string;
+    owner_id: string;
+    channels: Array<{
+      id: string;
+      server_id: string;
+      name: string;
+      channel_type: string;
+      private: boolean;
+      category_id: string | null;
+    }>;
+    categories: unknown[];
+    members: unknown[];
+    roles: unknown[];
+    settings?: Record<string, unknown>;
+  }>;
+};
+
+const createServerStoreState = () => {
+  const state = writable<MockServerState>({
+    activeServerId: null,
+    servers: [],
+  });
   return {
-    serverStore: {
-      subscribe: state.subscribe,
+    state,
+    set(next: MockServerState) {
+      state.set(next);
+    },
+    reset() {
+      state.set({ activeServerId: null, servers: [] });
     },
   };
-});
+};
+
+const serverStoreStateRef = createServerStoreState();
+
+vi.mock("$lib/features/servers/stores/serverStore", () => ({
+  serverStore: {
+    subscribe: serverStoreStateRef.state.subscribe,
+    __setState: (next: MockServerState) => serverStoreStateRef.set(next),
+  },
+}));
 
 const settingsStoreRef = vi.hoisted(() => {
   const initial = {
@@ -133,6 +170,7 @@ describe("chatStore read receipts and typing indicators", () => {
   beforeEach(() => {
     localStorage.clear();
     settingsStoreRef.reset();
+    serverStoreStateRef.reset();
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (command, payload: any) => {
       if (command === "decrypt_chat_payload") {
@@ -161,6 +199,50 @@ describe("chatStore read receipts and typing indicators", () => {
       {
         id: "msg-1",
         chatId: "chat-1",
+        senderId: "friend-1",
+        content: "Hello",
+        timestamp: new Date().toISOString(),
+        read: false,
+      },
+    ]);
+    return store;
+  };
+
+  const configureServerState = (settings?: Record<string, unknown>) => {
+    serverStoreStateRef.set({
+      activeServerId: "server-1",
+      servers: [
+        {
+          id: "server-1",
+          name: "Test Server",
+          owner_id: "owner-1",
+          channels: [
+            {
+              id: "channel-1",
+              server_id: "server-1",
+              name: "general",
+              channel_type: "text",
+              private: false,
+              category_id: null,
+            },
+          ],
+          categories: [],
+          members: [],
+          roles: [],
+          settings,
+        },
+      ],
+    });
+  };
+
+  const seedServerChat = async (settings?: Record<string, unknown>) => {
+    configureServerState(settings);
+    const store = createChatStore();
+    await store.setActiveChat("server-1", "server", "channel-1");
+    store.handleMessagesUpdate("channel-1", [
+      {
+        id: "msg-1",
+        chatId: "channel-1",
         senderId: "friend-1",
         content: "Hello",
         timestamp: new Date().toISOString(),
@@ -202,6 +284,37 @@ describe("chatStore read receipts and typing indicators", () => {
       "send_read_receipt",
       expect.anything(),
     );
+  });
+
+  it("respects server overrides that disable read receipts", async () => {
+    const store = await seedServerChat({ enableReadReceipts: false });
+    invokeMock.mockClear();
+
+    await store.markActiveChatViewed();
+
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "send_read_receipt",
+      expect.anything(),
+    );
+  });
+
+  it("respects server overrides that enable read receipts", async () => {
+    settingsStoreRef.store.update((current) => ({
+      ...current,
+      enableReadReceipts: false,
+    }));
+    const store = await seedServerChat({ enableReadReceipts: true });
+    invokeMock.mockClear();
+
+    await store.markActiveChatViewed();
+
+    expect(invokeMock).toHaveBeenCalledWith("send_read_receipt", {
+      chatId: "channel-1",
+      chat_id: "channel-1",
+      messageId: "msg-1",
+      message_id: "msg-1",
+      timestamp: expect.any(String),
+    });
   });
 
   it("applies read receipt updates to messages", async () => {
