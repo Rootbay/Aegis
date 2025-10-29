@@ -32,21 +32,63 @@ const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
     };
   });
 
-const { callState, initializeCallMock, startCallMock, setCallModalOpenMock } =
-  vi.hoisted(() => {
-    const { writable } = require("svelte/store");
-    return {
-      callState: writable({
-        activeCall: null,
-        deviceAvailability: { audioInput: true, videoInput: true },
-        permissions: { audio: "granted", video: "granted", checking: false },
-        showCallModal: false,
-      }),
-      initializeCallMock: vi.fn(),
-      startCallMock: vi.fn(),
-      setCallModalOpenMock: vi.fn(),
-    };
-  });
+const {
+  callState,
+  initializeCallMock,
+  startCallMock,
+  setCallModalOpenMock,
+} = vi.hoisted(() => {
+  const { writable } = require("svelte/store");
+  return {
+    callState: writable({
+      activeCall: null,
+      deviceAvailability: { audioInput: true, videoInput: true },
+      permissions: { audio: "granted", video: "granted", checking: false },
+      showCallModal: false,
+    }),
+    initializeCallMock: vi.fn(),
+    startCallMock: vi.fn(),
+    setCallModalOpenMock: vi.fn(),
+  };
+});
+
+const {
+  memberSidebarState,
+  toggleMemberSidebarVisibilityMock,
+  setMemberSidebarVisibilityMock,
+} = vi.hoisted(() => {
+  const { writable } = require("svelte/store");
+  const state = writable(new Map<string, boolean>());
+  return {
+    memberSidebarState: state,
+    toggleMemberSidebarVisibilityMock: vi.fn((chatId: string) => {
+      let nextVisible = true;
+      state.update((map: Map<string, boolean>) => {
+        const current = map.get(chatId);
+        nextVisible = !(current ?? true);
+        const next = new Map(map);
+        if (nextVisible) {
+          next.delete(chatId);
+        } else {
+          next.set(chatId, false);
+        }
+        return next;
+      });
+      return nextVisible;
+    }),
+    setMemberSidebarVisibilityMock: vi.fn((chatId: string, visible: boolean) => {
+      state.update((map: Map<string, boolean>) => {
+        const next = new Map(map);
+        if (visible) {
+          next.delete(chatId);
+        } else {
+          next.set(chatId, false);
+        }
+        return next;
+      });
+    }),
+  };
+});
 
 vi.mock("$app/navigation", () => ({
   goto: gotoMock,
@@ -70,6 +112,14 @@ vi.mock("$lib/features/channels/stores/channelDisplayPreferencesStore", () => ({
     subscribe: preferencesState.subscribe,
     toggleHideMemberNames: toggleHideMemberNamesMock,
     setHideMemberNames: setHideMemberNamesMock,
+  },
+}));
+
+vi.mock("$lib/features/chat/stores/memberSidebarVisibilityStore", () => ({
+  memberSidebarVisibilityStore: {
+    subscribe: memberSidebarState.subscribe,
+    toggleVisibility: toggleMemberSidebarVisibilityMock,
+    setVisibility: setMemberSidebarVisibilityMock,
   },
 }));
 
@@ -109,6 +159,7 @@ describe("NavigationHeader actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     preferencesState.set(new Map());
+    memberSidebarState.set(new Map());
     chatSearchStore.reset();
     chatSearchStore.clearHistory();
     chatSearchStore.setDropdownOpen(false);
@@ -188,6 +239,29 @@ describe("NavigationHeader actions", () => {
 
     await waitFor(() => {
       expect(button.getAttribute("aria-pressed")).toBe("true");
+    });
+  });
+
+  it("toggles the member sidebar visibility", async () => {
+    const { getByLabelText } = render(NavigationHeader, {
+      props: {
+        chat: baseChat,
+        onOpenDetailedProfile: vi.fn(),
+      },
+    });
+
+    const button = getByLabelText("Hide Member Sidebar");
+
+    await fireEvent.click(button);
+
+    expect(toggleMemberSidebarVisibilityMock).toHaveBeenCalledWith("channel-1");
+
+    await waitFor(() => {
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    await waitFor(() => {
+      expect(button.getAttribute("aria-label")).toBe("Show Member Sidebar");
     });
   });
 });

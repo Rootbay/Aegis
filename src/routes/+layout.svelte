@@ -18,6 +18,7 @@
   import { ChatView } from "$features/chat";
   import { createAppController } from "$lib/layout/createAppController";
   import CommandPalette from "$lib/features/navigation/CommandPalette.svelte";
+  import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
   import type { FriendsLayoutContext } from "$lib/contextTypes";
   import type { User } from "$lib/features/auth/models/User";
@@ -69,6 +70,16 @@
   } = handlers;
 
   const { activeModal, modalProps } = modal;
+
+  const shouldShowMemberSidebar = $derived(() => {
+    const chat = $currentChat;
+    if (!chat) {
+      return false;
+    }
+    const visibilityState = $memberSidebarVisibilityStore;
+    const entry = visibilityState.get(chat.id);
+    return entry !== false;
+  });
 
   $effect(() => {
     if ($theme === "dark") {
@@ -146,10 +157,16 @@
             </div>
             {#if $chatSearchStore.searching}
               <SearchSidebar chat={$currentChat} />
-            {:else if $currentChat.type === "channel"}
+            {:else if shouldShowMemberSidebar && $currentChat.type === "channel"}
               <MemberSidebar
                 members={$currentChat.members as MemberWithRoles[]}
                 {openDetailedProfileModal}
+              />
+            {:else if shouldShowMemberSidebar && $currentChat.type === "group"}
+              <MemberSidebar
+                members={$currentChat.members as MemberWithRoles[]}
+                {openDetailedProfileModal}
+                context="group"
               />
             {/if}
           </div>
