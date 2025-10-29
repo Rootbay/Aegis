@@ -67,6 +67,12 @@ interface CallState {
     video: PermissionState | "unknown";
     checking: boolean;
   };
+  localMedia: {
+    audioEnabled: boolean;
+    videoEnabled: boolean;
+    audioAvailable: boolean;
+    videoAvailable: boolean;
+  };
   showCallModal: boolean;
 }
 
@@ -124,6 +130,12 @@ const INITIAL_STATE: CallState = {
     audio: "unknown",
     video: "unknown",
     checking: false,
+  },
+  localMedia: {
+    audioEnabled: true,
+    videoEnabled: true,
+    audioAvailable: false,
+    videoAvailable: false,
   },
   showCallModal: false,
 };
@@ -187,6 +199,24 @@ function createCallStore() {
   let pendingIncomingOffer:
     | { senderId: string; callId: string; signal: OfferSignal }
     | null = null;
+
+  function syncLocalMediaState(stream: MediaStream | null) {
+    const audioTracks = stream?.getAudioTracks() ?? [];
+    const videoTracks = stream?.getVideoTracks() ?? [];
+
+    const audioEnabled = audioTracks.some((track) => track.enabled !== false);
+    const videoEnabled = videoTracks.some((track) => track.enabled !== false);
+
+    update((state) => ({
+      ...state,
+      localMedia: {
+        audioEnabled,
+        videoEnabled,
+        audioAvailable: audioTracks.length > 0,
+        videoAvailable: videoTracks.length > 0,
+      },
+    }));
+  }
 
   function clearDismissalTimer() {
     if (dismissalTimer) {
@@ -1062,6 +1092,7 @@ function createCallStore() {
     try {
       const stream = await requestUserMedia(type);
       activeStream = stream;
+      syncLocalMediaState(activeStream);
 
       update((next) => {
         if (!next.activeCall || next.activeCall.callId !== callId) {
@@ -1328,7 +1359,9 @@ function createCallStore() {
     try {
       if (!activeStream) {
         activeStream = await requestUserMedia(currentCall.type);
+        syncLocalMediaState(activeStream);
       }
+      syncLocalMediaState(activeStream);
 
       mutateParticipant(senderId, (participant) => {
         if (!participant) {
@@ -1604,7 +1637,74 @@ function createCallStore() {
   function cleanupMedia() {
     stopStream(activeStream);
     activeStream = null;
+    syncLocalMediaState(null);
     cleanupAllParticipants();
+  }
+
+  function setLocalAudioEnabled(enabled: boolean) {
+    if (!activeStream) {
+      return;
+    }
+
+    const tracks = activeStream.getAudioTracks();
+    if (!tracks.length) {
+      return;
+    }
+
+    tracks.forEach((track) => {
+      track.enabled = enabled;
+    });
+
+    syncLocalMediaState(activeStream);
+  }
+
+  function toggleMute() {
+    const state = get(store);
+    if (!state.localMedia.audioAvailable) {
+      return;
+    }
+    setLocalAudioEnabled(!state.localMedia.audioEnabled);
+  }
+
+  function mute() {
+    setLocalAudioEnabled(false);
+  }
+
+  function unmute() {
+    setLocalAudioEnabled(true);
+  }
+
+  function setLocalVideoEnabled(enabled: boolean) {
+    if (!activeStream) {
+      return;
+    }
+
+    const tracks = activeStream.getVideoTracks();
+    if (!tracks.length) {
+      return;
+    }
+
+    tracks.forEach((track) => {
+      track.enabled = enabled;
+    });
+
+    syncLocalMediaState(activeStream);
+  }
+
+  function toggleCamera() {
+    const state = get(store);
+    if (!state.localMedia.videoAvailable) {
+      return;
+    }
+    setLocalVideoEnabled(!state.localMedia.videoEnabled);
+  }
+
+  function disableCamera() {
+    setLocalVideoEnabled(false);
+  }
+
+  function enableCamera() {
+    setLocalVideoEnabled(true);
   }
 
   function endCall(reason = "Call ended") {
@@ -1661,6 +1761,12 @@ function createCallStore() {
     rejectCall,
     setCallModalOpen,
     dismissCall,
+    mute,
+    unmute,
+    toggleMute,
+    disableCamera,
+    enableCamera,
+    toggleCamera,
     describeStatus: (call: ActiveCall | null) => describeCallStatus(call),
     reset,
   };
