@@ -11,13 +11,27 @@
     DialogTitle,
   } from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
-  import { Phone, PhoneOff, Video, Mic, Timer } from "@lucide/svelte";
+  import {
+    Phone,
+    PhoneOff,
+    Video,
+    VideoOff,
+    Mic,
+    MicOff,
+    Timer,
+  } from "@lucide/svelte";
   import {
     callStore,
     describeCallStatus,
     type ActiveCall,
     type CallParticipant,
   } from "$lib/features/calls/stores/callStore";
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
 
   const state = $callStore;
   const activeCall = $callStore.activeCall;
@@ -117,6 +131,16 @@
       (activeCall.status === "in-call" ||
         activeCall.status === "connecting" ||
         activeCall.status === "initializing"),
+  );
+  const localMedia = $derived($callStore.localMedia);
+  const hasLocalStream = $derived(Boolean($callStore.activeCall?.localStream));
+  const canToggleAudio = $derived(
+    hasLocalStream && $callStore.localMedia.audioAvailable,
+  );
+  const canToggleVideo = $derived(
+    hasLocalStream &&
+      $callStore.localMedia.videoAvailable &&
+      $callStore.activeCall?.type === "video",
   );
   function describeParticipant(participant: CallParticipant) {
     switch (participant.status) {
@@ -290,15 +314,81 @@
             </Button>
           </div>
         {:else if isActive}
-          <Button
-            type="button"
-            variant="destructive"
-            class="cursor-pointer"
-            onclick={() => callStore.endCall("Call ended")}
-          >
-            <PhoneOff class="mr-2 h-4 w-4" />
-            End Call
-          </Button>
+          <div class="flex items-center gap-2">
+            <TooltipProvider>
+              <div class="flex items-center gap-2">
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={localMedia.audioEnabled ? "secondary" : "outline"}
+                      class="cursor-pointer"
+                      aria-pressed={localMedia.audioEnabled}
+                      aria-label={
+                        localMedia.audioEnabled
+                          ? "Mute microphone"
+                          : "Unmute microphone"
+                      }
+                      disabled={!canToggleAudio}
+                      onclick={() => callStore.toggleMute()}
+                    >
+                      {#if localMedia.audioEnabled}
+                        <Mic class="h-4 w-4" />
+                      {:else}
+                        <MicOff class="h-4 w-4" />
+                      {/if}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {localMedia.audioEnabled
+                      ? "Mute microphone"
+                      : "Unmute microphone"}
+                  </TooltipContent>
+                </Tooltip>
+                {#if activeCall.type === "video"}
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant={localMedia.videoEnabled ? "secondary" : "outline"}
+                        class="cursor-pointer"
+                        aria-pressed={localMedia.videoEnabled}
+                        aria-label={
+                          localMedia.videoEnabled
+                            ? "Disable camera"
+                            : "Enable camera"
+                        }
+                        disabled={!canToggleVideo}
+                        onclick={() => callStore.toggleCamera()}
+                      >
+                        {#if localMedia.videoEnabled}
+                          <Video class="h-4 w-4" />
+                        {:else}
+                          <VideoOff class="h-4 w-4" />
+                        {/if}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {localMedia.videoEnabled
+                        ? "Disable camera"
+                        : "Enable camera"}
+                    </TooltipContent>
+                  </Tooltip>
+                {/if}
+              </div>
+            </TooltipProvider>
+            <Button
+              type="button"
+              variant="destructive"
+              class="cursor-pointer"
+              onclick={() => callStore.endCall("Call ended")}
+            >
+              <PhoneOff class="mr-2 h-4 w-4" />
+              End Call
+            </Button>
+          </div>
         {:else}
           <Button
             type="button"
