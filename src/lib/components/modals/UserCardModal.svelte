@@ -3,6 +3,7 @@
   import { resolve } from "$app/paths";
   import { toasts } from "$lib/stores/ToastStore";
   import { userStore } from "$lib/stores/userStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import type { User } from "$lib/features/auth/models/User";
   import {
@@ -36,6 +37,9 @@
   let lightboxImageUrl = $state("");
 
   let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
+  let draftMessage = $state("");
+  let isSending = $state(false);
+  let messageInputElement: HTMLInputElement | null = null;
 
   function handleOpenDetailedProfile() {
     close?.();
@@ -55,6 +59,31 @@
   function openLightbox(imageUrl: string) {
     lightboxImageUrl = imageUrl;
     showLightbox = true;
+  }
+
+  async function sendDirectMessage() {
+    if (isSending) return;
+    const trimmed = draftMessage.trim();
+    if (!trimmed || !profileUser?.id) {
+      return;
+    }
+
+    isSending = true;
+
+    try {
+      await chatStore.setActiveChat(profileUser.id, "dm");
+      await chatStore.sendMessage(trimmed);
+      draftMessage = "";
+      messageInputElement?.blur();
+      close?.();
+    } catch (error) {
+      console.error("Failed to send direct message:", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to send message.";
+      toasts.addToast(message, "error");
+    } finally {
+      isSending = false;
+    }
   }
 </script>
 
@@ -141,11 +170,29 @@
         Edit Profile
       </Button>
     {:else}
-      <Input
-        class="w-full"
-        type="text"
-        placeholder={`Message @${profileUser.name}`}
-      />
+      <div class="flex w-full items-center gap-2">
+        <Input
+          class="w-full"
+          type="text"
+          placeholder={`Message @${profileUser.name}`}
+          bind:value={draftMessage}
+          bind:this={messageInputElement}
+          onkeydown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void sendDirectMessage();
+            }
+          }}
+          disabled={isSending}
+        />
+        <Button
+          class="flex-shrink-0"
+          onclick={() => void sendDirectMessage()}
+          disabled={isSending}
+        >
+          Send
+        </Button>
+      </div>
     {/if}
   </CardFooter>
 </Card>
