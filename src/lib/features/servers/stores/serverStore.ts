@@ -21,6 +21,8 @@ type BackendUser = {
   tag?: string;
   roles?: string[];
   role_ids?: string[];
+  status_message?: string | null;
+  location?: string | null;
 };
 
 type BackendServerInvite = {
@@ -75,7 +77,14 @@ export type ServerUpdateResult = {
 interface ServerStore extends Readable<ServerStoreState> {
   handleServersUpdate: (servers: Server[]) => void;
   setActiveServer: (serverId: string | null) => void;
-  updateServerMemberPresence: (userId: string, isOnline: boolean) => void;
+  updateServerMemberPresence: (
+    userId: string,
+    presence: {
+      isOnline: boolean;
+      statusMessage?: string | null;
+      location?: string | null;
+    },
+  ) => void;
   addServer: (server: Server) => void;
   removeServer: (serverId: string) => void;
   fetchServerDetails: (serverId: string) => Promise<void>;
@@ -149,7 +158,9 @@ export function createServerStore(): ServerStore {
   };
 
   const normalizeRolesArray = (roles: unknown): Role[] =>
-    Array.isArray(roles) ? (roles as Role[]).map((role) => normalizeRole(role)) : [];
+    Array.isArray(roles)
+      ? (roles as Role[]).map((role) => normalizeRole(role))
+      : [];
 
   const buildMemberRoleMap = (roles: Role[]): Map<string, string[]> => {
     const map = new Map<string, string[]>();
@@ -191,7 +202,10 @@ export function createServerStore(): ServerStore {
   const applyRoleAssignmentsToServer = (server: Server): Server => {
     const normalizedRoles = normalizeRolesArray(server.roles ?? []);
     const roleAssignments = buildMemberRoleMap(normalizedRoles);
-    const enrichedMembers = assignRolesToMembers(server.members, roleAssignments);
+    const enrichedMembers = assignRolesToMembers(
+      server.members,
+      roleAssignments,
+    );
     return {
       ...server,
       roles: normalizedRoles,
@@ -199,16 +213,26 @@ export function createServerStore(): ServerStore {
     } as Server;
   };
 
-  const fromBackendUser = (u: BackendUser, assignedRoleIds: string[] = []): User => {
+  const fromBackendUser = (
+    u: BackendUser,
+    assignedRoleIds: string[] = [],
+  ): User => {
     const fallbackName = u.username ?? u.name;
     const name =
       fallbackName && fallbackName.trim().length > 0
         ? fallbackName
         : `User-${u.id.slice(0, 4)}`;
-    const backendRoles =
-      normalizeRoleIds(u.role_ids ?? u.roles ?? []) ?? [];
+    const backendRoles = normalizeRoleIds(u.role_ids ?? u.roles ?? []) ?? [];
     const normalizedRoleIds =
       assignedRoleIds.length > 0 ? assignedRoleIds : backendRoles;
+    const statusMessageRaw = u.status_message ?? null;
+    const trimmedStatusMessage = statusMessageRaw?.trim?.() ?? "";
+    const normalizedStatusMessage =
+      trimmedStatusMessage.length > 0 ? trimmedStatusMessage : null;
+    const locationRaw = u.location ?? null;
+    const trimmedLocation = locationRaw?.trim?.() ?? "";
+    const normalizedLocation =
+      trimmedLocation.length > 0 ? trimmedLocation : null;
     return {
       id: u.id,
       name,
@@ -220,6 +244,8 @@ export function createServerStore(): ServerStore {
       roles: normalizedRoleIds,
       role_ids: normalizedRoleIds,
       roleIds: normalizedRoleIds,
+      statusMessage: normalizedStatusMessage,
+      location: normalizedLocation,
     };
   };
 
@@ -436,13 +462,33 @@ export function createServerStore(): ServerStore {
     }
   };
 
-  const updateServerMemberPresence = (userId: string, isOnline: boolean) => {
+  const updateServerMemberPresence = (
+    userId: string,
+    presence: {
+      isOnline: boolean;
+      statusMessage?: string | null;
+      location?: string | null;
+    },
+  ) => {
     update((s) => ({
       ...s,
       servers: s.servers.map((server) => ({
         ...server,
         members: server.members.map((member) =>
-          member.id === userId ? { ...member, online: isOnline } : member,
+          member.id === userId
+            ? {
+                ...member,
+                online: presence.isOnline,
+                statusMessage:
+                  presence.statusMessage !== undefined
+                    ? presence.statusMessage
+                    : (member.statusMessage ?? null),
+                location:
+                  presence.location !== undefined
+                    ? presence.location
+                    : (member.location ?? null),
+              }
+            : member,
         ),
       })),
     }));
@@ -484,32 +530,36 @@ export function createServerStore(): ServerStore {
     }
     update((s) => ({ ...s, loading: true }));
     try {
-      const [channelsResult, membersResult, categoriesResult] = await Promise.all([
-        invoke<Channel[]>("get_channels_for_server", {
-          serverId,
-          server_id: serverId,
-        }).catch((e) => {
-          console.error(`Failed to get channels for server ${serverId}:`, e);
-          return null;
-        }),
-        invoke<BackendUser[]>("get_members_for_server", {
-          serverId,
-          server_id: serverId,
-        }).catch((e) => {
-          console.error(`Failed to get members for server ${serverId}:`, e);
-          return null;
-        }),
-        invoke<BackendChannelCategory[]>("get_channel_categories_for_server", {
-          serverId,
-          server_id: serverId,
-        }).catch((e) => {
-          console.error(
-            `Failed to get channel categories for server ${serverId}:`,
-            e,
-          );
-          return null;
-        }),
-      ]);
+      const [channelsResult, membersResult, categoriesResult] =
+        await Promise.all([
+          invoke<Channel[]>("get_channels_for_server", {
+            serverId,
+            server_id: serverId,
+          }).catch((e) => {
+            console.error(`Failed to get channels for server ${serverId}:`, e);
+            return null;
+          }),
+          invoke<BackendUser[]>("get_members_for_server", {
+            serverId,
+            server_id: serverId,
+          }).catch((e) => {
+            console.error(`Failed to get members for server ${serverId}:`, e);
+            return null;
+          }),
+          invoke<BackendChannelCategory[]>(
+            "get_channel_categories_for_server",
+            {
+              serverId,
+              server_id: serverId,
+            },
+          ).catch((e) => {
+            console.error(
+              `Failed to get channel categories for server ${serverId}:`,
+              e,
+            );
+            return null;
+          }),
+        ]);
 
       update((s) => {
         const newServers = s.servers.map((server) => {
@@ -522,17 +572,17 @@ export function createServerStore(): ServerStore {
           }
 
           if (categoriesResult !== null) {
-            updatedServer.categories = (categoriesResult as BackendChannelCategory[]).map(
-              (category) => ({
-                id: category.id,
-                server_id: category.server_id,
-                name: category.name,
-                position: Number.isFinite(category.position)
-                  ? category.position
-                  : 0,
-                created_at: category.created_at,
-              }),
-            );
+            updatedServer.categories = (
+              categoriesResult as BackendChannelCategory[]
+            ).map((category) => ({
+              id: category.id,
+              server_id: category.server_id,
+              name: category.name,
+              position: Number.isFinite(category.position)
+                ? category.position
+                : 0,
+              created_at: category.created_at,
+            }));
           }
 
           if (membersResult !== null) {
@@ -573,10 +623,7 @@ export function createServerStore(): ServerStore {
     if (server) serverCache.set(serverId, server);
   };
 
-  const addCategoryToServer = (
-    serverId: string,
-    category: ChannelCategory,
-  ) => {
+  const addCategoryToServer = (serverId: string, category: ChannelCategory) => {
     update((s) => ({
       ...s,
       servers: s.servers.map((server) =>
@@ -828,7 +875,10 @@ export function createServerStore(): ServerStore {
       ? { ...patch, roles: normalizeRolesArray(patch.roles ?? []) }
       : patch;
 
-    const optimisticServer = applyPatchToServer(previousServer, normalizedPatch);
+    const optimisticServer = applyPatchToServer(
+      previousServer,
+      normalizedPatch,
+    );
 
     update((state) => {
       const servers = state.servers.map((srv, index) =>

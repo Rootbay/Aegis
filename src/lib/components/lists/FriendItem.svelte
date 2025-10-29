@@ -14,6 +14,7 @@
     UserMinus,
     Unlock,
     X,
+    MapPin,
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import type { Friend } from "$lib/features/friends/models/Friend";
@@ -336,6 +337,23 @@
       {/if}
     </div>
     <p class={`text-xs ${statusClass}`}>{displayStatus}</p>
+    {#if friend.statusMessage}
+      <p
+        class="text-xs text-muted-foreground truncate"
+        title={friend.statusMessage}
+      >
+        {friend.statusMessage}
+      </p>
+    {/if}
+    {#if friend.location}
+      <p
+        class="text-xs text-muted-foreground flex items-center gap-1"
+        title={friend.location}
+      >
+        <MapPin class="w-3 h-3" />
+        <span class="truncate">{friend.location}</span>
+      </p>
+    {/if}
   </div>
   <div class="flex items-center gap-2">
     {#if isPending}

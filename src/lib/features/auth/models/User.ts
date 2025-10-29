@@ -11,4 +11,6 @@ export interface User {
   roles?: string[];
   role_ids?: string[];
   roleIds?: string[];
+  statusMessage?: string | null;
+  location?: string | null;
 }

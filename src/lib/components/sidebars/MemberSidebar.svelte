@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Users } from "@lucide/svelte";
+  import { Users, MapPin } from "@lucide/svelte";
   import type { User } from "$lib/features/auth/models/User";
   import type { Role } from "$lib/features/servers/models/Role";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -308,10 +308,32 @@
                                   ></span>
                                 {/if}
                               </div>
-                              <span
-                                class="truncate text-sm font-medium text-foreground"
-                                >{member.name}</span
-                              >
+                              <div class="min-w-0">
+                                <p
+                                  class="truncate text-sm font-medium text-foreground"
+                                >
+                                  {member.name}
+                                </p>
+                                {#if member.statusMessage}
+                                  <p
+                                    class="text-xs text-muted-foreground truncate"
+                                    title={member.statusMessage}
+                                  >
+                                    {member.statusMessage}
+                                  </p>
+                                {/if}
+                                {#if member.location}
+                                  <p
+                                    class="text-xs text-muted-foreground flex items-center gap-1"
+                                    title={member.location}
+                                  >
+                                    <MapPin class="h-3 w-3" />
+                                    <span class="truncate"
+                                      >{member.location}</span
+                                    >
+                                  </p>
+                                {/if}
+                              </div>
                             </SidebarMenuButton>
                           </Popover.Trigger>
                           <Popover.Content class="w-auto border-none p-0">

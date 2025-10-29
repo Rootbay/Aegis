@@ -138,6 +138,8 @@ export interface PeerDiscovery {
 export interface PresenceUpdate {
   user_id: string;
   is_online: boolean;
+  status_message?: string | null;
+  location?: string | null;
   signature?: BytePayload;
 }
 
