@@ -24,6 +24,7 @@ import {
 } from "$lib/features/chat/services/chatEncryptionService";
 import { showNativeNotification } from "$lib/utils/nativeNotification";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
+import type { Server } from "$lib/features/servers/models/Server";
 
 type BackendMessage = {
   id: string;
@@ -567,6 +568,65 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
   const activeAttachmentUrls = new Set<string>();
   const pendingAttachmentFetches = new Map<string, Promise<string>>();
+
+  type ModerationPreferences = {
+    transparentEdits: boolean;
+    deletedMessageDisplay: "ghost" | "tombstone";
+  };
+
+  const DEFAULT_MODERATION_PREFERENCES: ModerationPreferences = {
+    transparentEdits: false,
+    deletedMessageDisplay: "ghost",
+  };
+
+  const serverModerationPreferences = new Map<string, ModerationPreferences>();
+  const channelServerIndex = new Map<string, string>();
+
+  const normalizeModerationPreferences = (server: Server): ModerationPreferences => {
+    const settings = server.settings ?? {};
+    const transparentEdits = settings.transparentEdits === true;
+    const deletedMessageDisplay =
+      settings.deletedMessageDisplay === "tombstone" ? "tombstone" : "ghost";
+    return { transparentEdits, deletedMessageDisplay };
+  };
+
+  const rebuildModerationIndexes = (servers: Server[] | undefined) => {
+    serverModerationPreferences.clear();
+    channelServerIndex.clear();
+    if (!Array.isArray(servers)) {
+      return;
+    }
+    for (const server of servers) {
+      serverModerationPreferences.set(
+        server.id,
+        normalizeModerationPreferences(server),
+      );
+      for (const channel of server.channels ?? []) {
+        channelServerIndex.set(channel.id, server.id);
+      }
+    }
+  };
+
+  const resolveServerIdForChat = (chatId: string): string | null => {
+    if (serverModerationPreferences.has(chatId)) {
+      return chatId;
+    }
+    return channelServerIndex.get(chatId) ?? null;
+  };
+
+  const resolveModerationForChat = (chatId: string): ModerationPreferences => {
+    const serverId = resolveServerIdForChat(chatId);
+    if (!serverId) {
+      return DEFAULT_MODERATION_PREFERENCES;
+    }
+    return (
+      serverModerationPreferences.get(serverId) ?? DEFAULT_MODERATION_PREFERENCES
+    );
+  };
+
+  serverStore.subscribe(($serverState) => {
+    rebuildModerationIndexes($serverState.servers);
+  });
 
   const trackAttachmentUrl = (url?: string) => {
     if (url) {
@@ -1689,9 +1749,38 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const deleteMessage = async (targetChatId: string, messageId: string) => {
-    updateMessagesForChat(targetChatId, (existing) =>
-      existing.filter((m) => m.id !== messageId),
-    );
+    const preferences = resolveModerationForChat(targetChatId);
+    const showTombstone = preferences.deletedMessageDisplay === "tombstone";
+    let previous: Message | undefined;
+
+    if (showTombstone) {
+      updateMessagesForChat(targetChatId, (existing) =>
+        existing.map((message) => {
+          if (message.id !== messageId) {
+            return message;
+          }
+          previous = message;
+          return {
+            ...message,
+            content: "",
+            attachments: undefined,
+            reactions: undefined,
+            deleted: true,
+            deletedAt: new Date().toISOString(),
+            deletedBy: get(userStore).me?.id,
+          };
+        }),
+      );
+
+      if (!previous) {
+        return;
+      }
+    } else {
+      updateMessagesForChat(targetChatId, (existing) =>
+        existing.filter((m) => m.id !== messageId),
+      );
+    }
+
     try {
       await invoke("delete_message", {
         chatId: targetChatId,
@@ -1699,7 +1788,17 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         messageId,
         message_id: messageId,
       });
+      if (showTombstone && previous) {
+        revokeAttachmentsForMessages([previous]);
+      }
     } catch (e) {
+      if (showTombstone && previous) {
+        updateMessagesForChat(targetChatId, (existing) =>
+          existing.map((message) =>
+            message.id === messageId ? previous! : message,
+          ),
+        );
+      }
       console.error("Failed to delete message:", e);
     }
   };
@@ -1794,6 +1893,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
 
     const optimisticTimestamp = new Date().toISOString();
+    const preferences = resolveModerationForChat(targetChatId);
     let previous: Message | undefined;
     let found = false;
     updateMessagesForChat(targetChatId, (existing) =>
@@ -1803,11 +1903,20 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         }
         found = true;
         previous = message;
+        const shouldTrackHistory =
+          preferences.transparentEdits &&
+          typeof message.content === "string" &&
+          message.content.length > 0 &&
+          message.content !== trimmed;
+        const nextHistory = shouldTrackHistory
+          ? [...(message.editHistory ?? []), message.content]
+          : message.editHistory;
         return {
           ...message,
           content: trimmed,
           editedAt: optimisticTimestamp,
           editedBy: me.id,
+          editHistory: nextHistory,
         };
       }),
     );
@@ -2333,6 +2442,34 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return;
     }
 
+    const preferences = resolveModerationForChat(chatId);
+    if (preferences.deletedMessageDisplay === "tombstone") {
+      const removed: Message[] = [];
+      const deletedAt = new Date().toISOString();
+      const initiator = payload.initiator_id ?? payload.initiatorId ?? undefined;
+      updateMessagesForChat(chatId, (existing) =>
+        existing.map((message) => {
+          if (message.id !== messageId) {
+            return message;
+          }
+          removed.push(message);
+          return {
+            ...message,
+            content: "",
+            attachments: undefined,
+            reactions: undefined,
+            deleted: true,
+            deletedAt,
+            deletedBy: initiator,
+          };
+        }),
+      );
+      if (removed.length > 0) {
+        revokeAttachmentsForMessages(removed);
+      }
+      return;
+    }
+
     const removed: Message[] = [];
     updateMessagesForChat(chatId, (existing) =>
       existing.filter((message) => {
@@ -2365,17 +2502,28 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     );
     const editorId = payload.editor_id ?? payload.editorId;
 
+    const preferences = resolveModerationForChat(chatId);
+
     updateMessagesForChat(chatId, (existing) =>
       existing.map((message) => {
         if (message.id !== messageId) {
           return message;
         }
+        const shouldTrackHistory =
+          preferences.transparentEdits &&
+          typeof message.content === "string" &&
+          message.content.length > 0 &&
+          message.content !== nextContent;
+        const nextHistory = shouldTrackHistory
+          ? [...(message.editHistory ?? []), message.content]
+          : message.editHistory;
         return {
           ...message,
           content: nextContent,
           editedBy: editorId ?? message.editedBy,
           editedAt:
             normalizedEditedAt ?? message.editedAt ?? new Date().toISOString(),
+          editHistory: nextHistory,
         };
       }),
     );

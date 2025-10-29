@@ -28,4 +28,8 @@ export interface Message {
   spamReasons?: string[];
   spamMuted?: boolean;
   spamDecision?: "flagged" | "auto-muted" | "muted" | "allowed";
+  editHistory?: string[];
+  deleted?: boolean;
+  deletedAt?: string;
+  deletedBy?: string;
 }
