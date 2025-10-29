@@ -64,6 +64,20 @@ vi.mock("@tauri-apps/plugin-store", () => {
   return { Store };
 });
 
+const linkPreviewMocks = vi.hoisted(() => ({
+  extractFirstLink: vi.fn<
+    (content: string | null | undefined) => string | null
+  >(() => null),
+  getLinkPreviewMetadata: vi
+    .fn<(url: string) => Promise<unknown>>()
+    .mockResolvedValue(null),
+}));
+
+vi.mock("$lib/features/chat/utils/linkPreviews", () => linkPreviewMocks);
+
+const mockExtractFirstLink = linkPreviewMocks.extractFirstLink;
+const mockGetLinkPreviewMetadata = linkPreviewMocks.getLinkPreviewMetadata;
+
 
 vi.mock("@lucide/svelte", () => ({
   Link: Passthrough,
@@ -380,6 +394,11 @@ describe("ChatView privacy preferences", () => {
       online: true,
     });
     __resetMutedFriends();
+
+    mockExtractFirstLink.mockReset();
+    mockExtractFirstLink.mockImplementation(() => null);
+    mockGetLinkPreviewMetadata.mockReset();
+    mockGetLinkPreviewMetadata.mockResolvedValue(null);
   });
 
   it("hides avatars and timestamps when settings are disabled", async () => {
@@ -473,5 +492,123 @@ describe("ChatView privacy preferences", () => {
     expect(screen.queryByText(message.content)).not.toBeNull();
 
     settingsUnsubscribe();
+  });
+});
+
+describe("ChatView link previews", () => {
+  const previewMetadata = {
+    url: "https://example.com/article",
+    title: "Example Article",
+    description: "A descriptive summary for testing.",
+    siteName: "Example Site",
+    imageUrl: "https://example.com/image.png",
+  };
+
+  beforeEach(() => {
+    const baseline = structuredClone(defaultSettings);
+    baseline.enableLinkPreviews = true;
+    settings.set(baseline);
+
+    messagesByChatId.set(new Map());
+    hasMoreByChatId.set(new Map());
+    loadingStateByChat.set(new Map());
+    chatSearchStore.reset();
+    __setUser({
+      id: "user-current",
+      name: "Current User",
+      avatar: "https://example.com/me.png",
+      online: true,
+    });
+    __resetMutedFriends();
+
+    mockExtractFirstLink.mockReset();
+    mockExtractFirstLink.mockImplementation(() => null);
+    mockGetLinkPreviewMetadata.mockReset();
+    mockGetLinkPreviewMetadata.mockResolvedValue(null);
+  });
+
+  it("renders plain message text when no links are detected", async () => {
+    const chatId = "chat-plain";
+    const friend: Friend = {
+      id: "friend-plain",
+      name: "Plain Friend",
+      avatar: "https://example.com/plain.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-plain",
+      chatId,
+      senderId: friend.id,
+      content: "Just a regular message without links.",
+      timestamp: "2024-01-01T00:00:00.000Z",
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    const content = await screen.findByText(message.content);
+    expect(content).toBeTruthy();
+    expect(screen.queryByText("Loading preview…")).toBeNull();
+    expect(screen.queryByText("Preview unavailable.")).toBeNull();
+  });
+
+  it("renders a link preview when metadata is available", async () => {
+    const chatId = "chat-preview";
+    const friend: Friend = {
+      id: "friend-preview",
+      name: "Preview Friend",
+      avatar: "https://example.com/preview.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-preview",
+      chatId,
+      senderId: friend.id,
+      content: "Check this out: https://example.com/article",
+      timestamp: "2024-01-01T00:00:00.000Z",
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    mockExtractFirstLink.mockImplementation(() => previewMetadata.url);
+    mockGetLinkPreviewMetadata.mockResolvedValueOnce(previewMetadata);
+
+    render(ChatView, { props: { chat } });
+
+    await screen.findByText(message.content);
+
+    await waitFor(() => {
+      expect(mockExtractFirstLink).toHaveBeenCalled();
+    });
+
+    const title = await screen.findByText(previewMetadata.title);
+    expect(title).toBeTruthy();
+    expect(screen.getByText(previewMetadata.siteName)).toBeTruthy();
+    expect(screen.getByText(previewMetadata.description)).toBeTruthy();
   });
 });
