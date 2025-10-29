@@ -12,6 +12,10 @@
   import Roles from "$lib/components/server-settings/Roles.svelte";
   import Privacy from "$lib/components/server-settings/Privacy.svelte";
   import ServerEventsPanel from "$lib/components/server-settings/ServerEventsPanel.svelte";
+  import EmojiManagement from "$lib/components/server-settings/EmojiManagement.svelte";
+  import StickerManagement from "$lib/components/server-settings/StickerManagement.svelte";
+  import WidgetSettings from "$lib/components/server-settings/WidgetSettings.svelte";
+  import AuditLogViewer from "$lib/components/server-settings/AuditLogViewer.svelte";
   import {
     AlertDialog,
     AlertDialogHeader,
@@ -144,6 +148,8 @@
     "Privacy",
     "ServerEventsPanel",
     "WebhookManagement",
+    "WidgetSettings",
+    "AuditLogViewer",
   ]);
   const isSeparator = (item: SidebarItem): item is SidebarSeparator =>
     item.type === "separator";
@@ -171,6 +177,36 @@
     Roles,
     Privacy,
     ServerEventsPanel,
+    EmojiManagement,
+    StickerManagement,
+    WidgetSettings,
+    AuditLogViewer,
+  };
+
+  const hasValue = (value: unknown): boolean => {
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    if (value instanceof Date) {
+      return !Number.isNaN(value.getTime());
+    }
+    return true;
+  };
+
+  const getEmptyStateMessage = (setting: any): string => {
+    if (typeof setting?.emptyMessage === "string") {
+      return setting.emptyMessage;
+    }
+    if (typeof setting?.title === "string" && setting.title.length > 0) {
+      return `No ${setting.title.toLowerCase()} configured yet.`;
+    }
+    return "No data available yet.";
   };
 
   $effect(() => {
@@ -297,6 +333,34 @@
 
     if (componentName === "BanList" && currentData) {
       props.serverId = currentData.id;
+    }
+
+    if (componentName === "EmojiManagement" && currentData) {
+      props.emojis = Array.isArray(currentData.emojis)
+        ? currentData.emojis
+        : [];
+    }
+
+    if (componentName === "StickerManagement" && currentData) {
+      props.stickers = Array.isArray(currentData.stickers)
+        ? currentData.stickers
+        : [];
+    }
+
+    if (componentName === "WidgetSettings" && currentData) {
+      props.channels = Array.isArray(currentData.channels)
+        ? currentData.channels
+        : [];
+      props.widgetSettings = currentData.widgetSettings ?? null;
+    }
+
+    if (componentName === "AuditLogViewer" && currentData) {
+      props.entries = Array.isArray(currentData.auditLog)
+        ? currentData.auditLog
+        : [];
+      props.members = Array.isArray(currentData.members)
+        ? currentData.members
+        : [];
     }
 
     if (
@@ -441,38 +505,62 @@
                       </Avatar>
                     {/if}
                   {:else if setting.type === "static"}
-                    <p
-                      class="text-muted-foreground font-mono bg-card p-2 rounded"
-                    >
-                      {currentData[setting.property]}
-                    </p>
+                    {@const value =
+                      setting.property && currentData
+                        ? currentData[setting.property]
+                        : undefined}
+                    {#if hasValue(value)}
+                      <p
+                        class="text-muted-foreground font-mono bg-card p-2 rounded"
+                      >
+                        {value}
+                      </p>
+                    {:else}
+                      <div
+                        class="rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm text-muted-foreground"
+                      >
+                        {getEmptyStateMessage(setting)}
+                      </div>
+                    {/if}
                   {:else if setting.type === "select"}
-                    <Select
-                      type="single"
-                      value={currentData[setting.property]}
-                      onValueChange={(value: string) =>
-                        onupdate_setting?.({
-                          id: setting.id,
-                          property: setting.property,
-                          value,
-                        })}
-                    >
-                      <SelectTrigger class="w-full">
-                        <span data-slot="select-value" class="flex-1 text-left">
-                          {getOptionLabel(
-                            setting.options,
-                            currentData[setting.property],
-                          ) || "Select an option"}
-                        </span>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {#each setting.options as option (option.value)}
-                          <SelectItem value={option.value}
-                            >{option.label}</SelectItem
+                    {#if Array.isArray(setting.options) && setting.options.length > 0}
+                      <Select
+                        type="single"
+                        value={currentData[setting.property]}
+                        onValueChange={(value: string) =>
+                          onupdate_setting?.({
+                            id: setting.id,
+                            property: setting.property,
+                            value,
+                          })}
+                      >
+                        <SelectTrigger class="w-full">
+                          <span
+                            data-slot="select-value"
+                            class="flex-1 text-left"
                           >
-                        {/each}
-                      </SelectContent>
-                    </Select>
+                            {getOptionLabel(
+                              setting.options,
+                              currentData[setting.property],
+                            ) || "Select an option"}
+                          </span>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {#each setting.options as option (option.value)}
+                            <SelectItem value={option.value}
+                              >{option.label}</SelectItem
+                            >
+                          {/each}
+                        </SelectContent>
+                      </Select>
+                    {:else}
+                      <div
+                        class="rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm text-muted-foreground"
+                      >
+                        {setting.noOptionsMessage ||
+                          "No selectable options are currently available."}
+                      </div>
+                    {/if}
                   {:else if setting.type === "toggle"}
                     <Switch
                       checked={currentData[setting.property]}
