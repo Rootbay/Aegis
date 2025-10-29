@@ -421,8 +421,13 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
             }
             println!("Discovered peer {} at {}", peer_id, address);
         }
-        AepMessage::PresenceUpdate { user_id, is_online, signature } => {
-            let presence_update_data = PresenceUpdateData { user_id: user_id.clone(), is_online };
+        AepMessage::PresenceUpdate { user_id, is_online, status_message, location, signature } => {
+            let presence_update_data = PresenceUpdateData {
+                user_id: user_id.clone(),
+                is_online,
+                status_message: status_message.clone(),
+                location: location.clone(),
+            };
             let presence_update_bytes = bincode::serialize(&presence_update_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &user_id).await?;
 
@@ -436,7 +441,14 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 return Err(AegisError::InvalidInput("Missing signature for presence update.".to_string()));
             }
             println!("User {} is now {}", user_id, if is_online { "online" } else { "offline" });
-            user_service::update_user_online_status(db_pool, &user_id, is_online).await?;
+            user_service::update_user_presence(
+                db_pool,
+                &user_id,
+                is_online,
+                Some(status_message.clone()),
+                Some(location.clone()),
+            )
+            .await?;
         }
         AepMessage::ProfileUpdate { user, signature } => {
             println!("Received profile update for user: {}", user.id);

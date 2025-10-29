@@ -32,6 +32,7 @@
     Search,
     HelpCircle,
     Trash2,
+    MapPin,
   } from "@lucide/svelte";
   import {
     Popover,
@@ -40,6 +41,7 @@
   } from "$lib/components/ui/popover";
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
+  import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
@@ -783,7 +785,7 @@
   <header
     class="h-[55px] border-b border-border px-4 pt-4 pb-2 flex items-center justify-start sticky top-0 z-10 bg-card"
   >
-    <div class="flex space-x-2">
+    <div class="flex flex-wrap items-center gap-2">
       {#each friendsTabs as tab}
         <button
           type="button"
@@ -799,6 +801,7 @@
         <UserRoundPlus size={10} class="mr-2" />
         Add Friend
       </Button>
+      <PresenceStatusEditor label="Status" variant="secondary" size="sm" />
     </div>
   </header>
 {:else if chat}
@@ -836,6 +839,23 @@
           <p class="text-xs text-muted-foreground whitespace-nowrap">
             {chat.friend.online ? "Online" : "Offline"}
           </p>
+          {#if chat.friend.statusMessage}
+            <p
+              class="text-xs text-muted-foreground truncate"
+              title={chat.friend.statusMessage}
+            >
+              {chat.friend.statusMessage}
+            </p>
+          {/if}
+          {#if chat.friend.location}
+            <p
+              class="text-xs text-muted-foreground flex items-center gap-1 whitespace-nowrap"
+              title={chat.friend.location}
+            >
+              <MapPin class="w-3 h-3" />
+              <span class="truncate">{chat.friend.location}</span>
+            </p>
+          {/if}
           {#if typingStatusLabel}
             <p class="text-xs text-cyan-400 whitespace-nowrap">
               {typingStatusLabel}
@@ -886,6 +906,7 @@
           <Video class="w-4 h-4" />
         </Button>
       {/if}
+      <PresenceStatusEditor />
       {#if chat.type !== "dm"}
         <Button
           variant="ghost"

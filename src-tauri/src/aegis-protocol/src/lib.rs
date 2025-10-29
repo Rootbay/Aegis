@@ -49,7 +49,13 @@ pub enum AepMessage {
         signature: Option<Vec<u8>>,
     },
     PeerDiscovery { peer_id: String, address: String, signature: Option<Vec<u8>> },
-    PresenceUpdate { user_id: String, is_online: bool, signature: Option<Vec<u8>> },
+    PresenceUpdate {
+        user_id: String,
+        is_online: bool,
+        status_message: Option<String>,
+        location: Option<String>,
+        signature: Option<Vec<u8>>,
+    },
     ProfileUpdate { user: User, signature: Option<Vec<u8>> },
     FriendRequest { sender_id: String, target_id: String, signature: Option<Vec<u8>> },
     FriendRequestResponse { sender_id: String, target_id: String, accepted: bool, signature: Option<Vec<u8>> },
@@ -309,6 +315,8 @@ pub struct PeerDiscoveryData {
 pub struct PresenceUpdateData {
     pub user_id: String,
     pub is_online: bool,
+    pub status_message: Option<String>,
+    pub location: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

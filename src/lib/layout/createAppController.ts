@@ -455,9 +455,35 @@ export function createAppController(): AppController {
         (event) => {
           const receivedMessage: AepMessage = event.payload;
           if (receivedMessage.PresenceUpdate) {
-            const { user_id, is_online } = receivedMessage.PresenceUpdate;
-            friendStore.updateFriendPresence(user_id, is_online);
-            serverStore.updateServerMemberPresence(user_id, is_online);
+            const {
+              user_id,
+              is_online,
+              status_message,
+              location,
+            } = receivedMessage.PresenceUpdate;
+            const trimmedStatus = status_message?.trim?.() ?? "";
+            const normalizedStatusMessage =
+              trimmedStatus.length > 0 ? trimmedStatus : null;
+            const trimmedLocation = location?.trim?.() ?? "";
+            const normalizedLocation =
+              trimmedLocation.length > 0 ? trimmedLocation : null;
+            friendStore.updateFriendPresence(user_id, {
+              isOnline: is_online,
+              statusMessage: normalizedStatusMessage,
+              location: normalizedLocation,
+            });
+            serverStore.updateServerMemberPresence(user_id, {
+              isOnline: is_online,
+              statusMessage: normalizedStatusMessage,
+              location: normalizedLocation,
+            });
+            if ($userStore.me?.id === user_id) {
+              userStore.applyPresence({
+                online: is_online,
+                statusMessage: normalizedStatusMessage,
+                location: normalizedLocation,
+              });
+            }
             return;
           }
 

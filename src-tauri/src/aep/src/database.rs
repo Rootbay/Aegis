@@ -340,7 +340,9 @@ pub async fn get_friendships_with_profiles(
             u.is_online as "counterpart_is_online?: bool",
             u.public_key as "counterpart_public_key?",
             u.bio as "counterpart_bio?",
-            u.tag as "counterpart_tag?"
+            u.tag as "counterpart_tag?",
+            u.status_message as "counterpart_status_message?",
+            u.location as "counterpart_location?"
         FROM friendships f
         LEFT JOIN users u
             ON u.id = CASE WHEN f.user_a_id = ? THEN f.user_b_id ELSE f.user_a_id END
@@ -374,6 +376,8 @@ pub async fn get_friendships_with_profiles(
                     public_key: row.counterpart_public_key,
                     bio: row.counterpart_bio,
                     tag: row.counterpart_tag,
+                    status_message: row.counterpart_status_message,
+                    location: row.counterpart_location,
                 })
             } else {
                 None
@@ -409,7 +413,9 @@ pub async fn get_friendship_with_profile_for_user(
             u.is_online as "counterpart_is_online?: bool",
             u.public_key as "counterpart_public_key?",
             u.bio as "counterpart_bio?",
-            u.tag as "counterpart_tag?"
+            u.tag as "counterpart_tag?",
+            u.status_message as "counterpart_status_message?",
+            u.location as "counterpart_location?"
         FROM friendships f
         LEFT JOIN users u
             ON u.id = CASE WHEN f.user_a_id = ? THEN f.user_b_id ELSE f.user_a_id END
@@ -441,6 +447,8 @@ pub async fn get_friendship_with_profile_for_user(
             public_key: row.counterpart_public_key,
             bio: row.counterpart_bio,
             tag: row.counterpart_tag,
+            status_message: row.counterpart_status_message,
+            location: row.counterpart_location,
         });
 
         FriendshipWithProfile {
@@ -1674,7 +1682,7 @@ pub async fn remove_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id:
 
 pub async fn get_server_members(pool: &Pool<Sqlite>, server_id: &str) -> Result<Vec<User>, sqlx::Error> {
     let members = sqlx::query_as!(User,
-        "SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag FROM users u JOIN server_members sm ON u.id = sm.user_id WHERE sm.server_id = ?",
+        "SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag, u.status_message, u.location FROM users u JOIN server_members sm ON u.id = sm.user_id WHERE sm.server_id = ?",
         server_id
     )
     .fetch_all(pool)
@@ -1698,10 +1706,12 @@ pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String])
         public_key: Option<String>,
         bio: Option<String>,
         tag: Option<String>,
+        status_message: Option<String>,
+        location: Option<String>,
         server_id: String,
     }
 
-    let query = format!("SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag, sm.server_id FROM users u JOIN server_members sm ON u.id = sm.user_id WHERE sm.server_id IN ({})",
+    let query = format!("SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag, u.status_message, u.location, sm.server_id FROM users u JOIN server_members sm ON u.id = sm.user_id WHERE sm.server_id IN ({})",
         server_ids.iter().map(|_| "?").collect::<Vec<&str>>().join(", ")
     );
 
@@ -1721,6 +1731,8 @@ pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String])
             public_key: row.public_key,
             bio: row.bio,
             tag: row.tag,
+            status_message: row.status_message,
+            location: row.location,
         };
         members_map.entry(row.server_id).or_insert_with(Vec::new).push(member);
     }
@@ -1734,7 +1746,7 @@ pub async fn get_server_bans(
 ) -> Result<Vec<User>, sqlx::Error> {
     let banned_users = sqlx::query_as!(
         User,
-        "SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag \
+        "SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag, u.status_message, u.location \
          FROM users u \
          INNER JOIN server_bans sb ON u.id = sb.user_id \
          WHERE sb.server_id = ? \

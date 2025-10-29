@@ -88,6 +88,8 @@ pub struct User {
     pub public_key: Option<String>,
     pub bio: Option<String>,
     pub tag: Option<String>,
+    pub status_message: Option<String>,
+    pub location: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

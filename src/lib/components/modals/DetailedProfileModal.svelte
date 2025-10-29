@@ -47,6 +47,7 @@
     SendHorizontal,
     Trash,
     Ellipsis,
+    MapPin,
   } from "@lucide/svelte";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -610,7 +611,24 @@
             <Badge variant="outline">Premium</Badge>
           </div>
 
-          <p class="text-sm text-muted-foreground">{profileUser.bio}</p>
+          <p class="text-sm text-muted-foreground whitespace-pre-wrap">
+            {profileUser.bio ?? ""}
+          </p>
+
+          {#if profileUser.statusMessage}
+            <p class="text-sm text-muted-foreground mt-2">
+              {profileUser.statusMessage}
+            </p>
+          {/if}
+
+          {#if profileUser.location}
+            <p
+              class="text-sm text-muted-foreground mt-2 flex items-center gap-2"
+            >
+              <MapPin class="h-4 w-4" />
+              <span>{profileUser.location}</span>
+            </p>
+          {/if}
 
           <div class="mt-6">
             <h3

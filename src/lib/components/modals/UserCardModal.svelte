@@ -13,7 +13,7 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Pencil } from "@lucide/svelte";
+  import { Pencil, MapPin } from "@lucide/svelte";
 
   type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -104,6 +104,19 @@
     <p class="text-sm mb-4 whitespace-pre-wrap break-word">
       {profileUser.bio || ""}
     </p>
+
+    {#if profileUser.statusMessage}
+      <p class="text-sm text-muted-foreground mb-2">
+        {profileUser.statusMessage}
+      </p>
+    {/if}
+
+    {#if profileUser.location}
+      <p class="text-sm text-muted-foreground mb-4 flex items-center gap-2">
+        <MapPin class="h-4 w-4" />
+        <span>{profileUser.location}</span>
+      </p>
+    {/if}
 
     {#if isServerMemberContext}
       <p class="text-sm text-muted-foreground mt-4">

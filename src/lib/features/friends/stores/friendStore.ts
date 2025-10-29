@@ -23,6 +23,8 @@ type FriendshipBackend = {
     public_key?: string | null;
     bio?: string | null;
     tag?: string | null;
+    status_message?: string | null;
+    location?: string | null;
   } | null;
 };
 
@@ -33,7 +35,14 @@ interface FriendStoreState {
 
 interface FriendStore extends Readable<FriendStoreState> {
   handleFriendsUpdate: (friends: Friend[]) => void;
-  updateFriendPresence: (userId: string, isOnline: boolean) => void;
+  updateFriendPresence: (
+    userId: string,
+    presence: {
+      isOnline: boolean;
+      statusMessage?: string | null;
+      location?: string | null;
+    },
+  ) => void;
   addFriend: (friend: Friend | (Partial<Friend> & { id: string })) => void;
   removeFriend: (friendId: string) => void;
   initialize: () => Promise<void>;
@@ -94,6 +103,24 @@ function normalizeFriend(friend: Partial<Friend> & { id: string }): Friend {
   const fallbackName = "User-" + friend.id.slice(0, 4);
   const name =
     friend.name && friend.name.trim().length > 0 ? friend.name : fallbackName;
+  const statusMessageRaw =
+    typeof friend.statusMessage === "string"
+      ? friend.statusMessage
+      : typeof (friend as Record<string, unknown>).status_message === "string"
+        ? ((friend as Record<string, unknown>).status_message as string)
+        : undefined;
+  const trimmedStatusMessage = statusMessageRaw?.trim?.() ?? "";
+  const normalizedStatusMessage =
+    trimmedStatusMessage.length > 0 ? trimmedStatusMessage : null;
+  const locationRaw =
+    typeof friend.location === "string"
+      ? friend.location
+      : typeof (friend as Record<string, unknown>).location === "string"
+        ? ((friend as Record<string, unknown>).location as string)
+        : undefined;
+  const trimmedLocation = locationRaw?.trim?.() ?? "";
+  const normalizedLocation =
+    trimmedLocation.length > 0 ? trimmedLocation : null;
 
   return {
     id: friend.id,
@@ -103,6 +130,8 @@ function normalizeFriend(friend: Partial<Friend> & { id: string }): Friend {
     publicKey: friend.publicKey,
     bio: friend.bio,
     tag: friend.tag,
+    statusMessage: normalizedStatusMessage,
+    location: normalizedLocation,
     status,
     timestamp: friend.timestamp ?? new Date().toISOString(),
     messages: friend.messages ?? [],
@@ -144,6 +173,14 @@ function mapFriendshipToFriend(
   const trimmedAvatar = avatarFromBackend.trim();
   const avatar =
     trimmedAvatar.length > 0 ? trimmedAvatar : FALLBACK_AVATAR(counterpartId);
+  const counterpartStatusRaw = counterpart?.status_message ?? null;
+  const trimmedCounterpartStatus = counterpartStatusRaw?.trim?.() ?? "";
+  const counterpartStatus =
+    trimmedCounterpartStatus.length > 0 ? trimmedCounterpartStatus : null;
+  const counterpartLocationRaw = counterpart?.location ?? null;
+  const trimmedCounterpartLocation = counterpartLocationRaw?.trim?.() ?? "";
+  const counterpartLocation =
+    trimmedCounterpartLocation.length > 0 ? trimmedCounterpartLocation : null;
 
   const baseUser: User = {
     id: counterpartId,
@@ -153,6 +190,8 @@ function mapFriendshipToFriend(
     publicKey: counterpart?.public_key ?? undefined,
     bio: counterpart?.bio ?? undefined,
     tag: counterpart?.tag ?? undefined,
+    statusMessage: counterpartStatus,
+    location: counterpartLocation,
   };
 
   userCache.set(baseUser.id, baseUser);
@@ -330,14 +369,29 @@ export function createFriendStore(): FriendStore {
     void applySpamAnnotations(normalized);
   };
 
-  const updateFriendPresence = (userId: string, isOnline: boolean) => {
+  const updateFriendPresence = (
+    userId: string,
+    presence: {
+      isOnline: boolean;
+      statusMessage?: string | null;
+      location?: string | null;
+    },
+  ) => {
     update((s) => ({
       ...s,
       friends: s.friends.map((friend) =>
         friend.id === userId
           ? normalizeFriend({
               ...friend,
-              online: isOnline,
+              online: presence.isOnline,
+              statusMessage:
+                presence.statusMessage !== undefined
+                  ? presence.statusMessage
+                  : (friend.statusMessage ?? null),
+              location:
+                presence.location !== undefined
+                  ? presence.location
+                  : (friend.location ?? null),
               timestamp: friend.timestamp,
               relationshipStatus: friend.relationshipStatus,
               friendshipId: friend.friendshipId,

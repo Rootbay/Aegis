@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { User } from "$lib/features/auth/models/User";
 import { toasts } from "$lib/stores/ToastStore";
 import { userCache } from "$lib/utils/cache";
+import { presenceStore } from "$lib/features/presence/presenceStore";
 
 type BackendUser = {
   id: string;
@@ -14,6 +15,8 @@ type BackendUser = {
   public_key?: string;
   bio?: string;
   tag?: string;
+  status_message?: string | null;
+  location?: string | null;
 };
 
 interface UserStoreState {
@@ -31,6 +34,11 @@ interface UserStore extends Readable<UserStoreState> {
   updateProfile: (updatedUser: User) => Promise<void>;
   getUser: (id: string) => Promise<User | null>;
   reset: () => void;
+  applyPresence: (presence: {
+    online?: boolean;
+    statusMessage?: string | null;
+    location?: string | null;
+  }) => void;
 }
 
 const DEFAULT_IDENTITY_PASSWORD = "aegis-default-password";
@@ -49,6 +57,8 @@ function createUserStore(): UserStore {
     public_key: u.publicKey ?? undefined,
     bio: u.bio ?? undefined,
     tag: u.tag ?? undefined,
+    status_message: u.statusMessage ?? null,
+    location: u.location ?? null,
   });
 
   const fromBackendUser = (u: BackendUser): User => {
@@ -65,6 +75,8 @@ function createUserStore(): UserStore {
       publicKey: u.public_key ?? undefined,
       bio: u.bio ?? undefined,
       tag: u.tag ?? undefined,
+      statusMessage: u.status_message ?? null,
+      location: u.location ?? null,
     };
   };
 
@@ -137,6 +149,8 @@ function createUserStore(): UserStore {
           publicKey,
           bio: "Ready for secure comms.",
           tag: "#0000",
+          statusMessage: null,
+          location: null,
         };
         await invoke("update_user_profile", {
           user: toBackendUser(existingUser),
@@ -147,6 +161,7 @@ function createUserStore(): UserStore {
 
       set({ me: existingUser, loading: false });
       userCache.set(existingUser.id, existingUser);
+      presenceStore.syncFromUser(existingUser);
       return existingUser;
     } catch (error) {
       console.error("Failed to initialize user:", error);
@@ -162,13 +177,19 @@ function createUserStore(): UserStore {
     if (!currentUser) return;
 
     const newStatus = !currentUser.online;
-    const updatedUser = { ...currentUser, online: newStatus };
-
     try {
-      await invoke("send_presence_update", { is_online: newStatus });
-      await invoke("update_user_profile", { user: toBackendUser(updatedUser) });
+      const presenceResult = await presenceStore.broadcastPresence({
+        isOnline: newStatus,
+      });
+      const updatedUser = {
+        ...currentUser,
+        online: presenceResult.isOnline,
+        statusMessage: presenceResult.statusMessage,
+        location: presenceResult.location,
+      } as User;
       update((state) => ({ ...state, me: updatedUser }));
       userCache.set(updatedUser.id, updatedUser);
+      presenceStore.syncFromUser(updatedUser);
       toasts.addToast(
         `You are now ${newStatus ? "Online" : "Offline"}`,
         "success",
@@ -187,6 +208,7 @@ function createUserStore(): UserStore {
       await invoke("update_user_profile", { user: toBackendUser(updatedUser) });
       update((state) => ({ ...state, me: updatedUser }));
       userCache.set(updatedUser.id, updatedUser);
+      presenceStore.syncFromUser(updatedUser);
       toasts.addToast("Profile updated successfully!", "success");
     } catch (error) {
       console.error("Failed to update user profile:", error);
@@ -195,7 +217,41 @@ function createUserStore(): UserStore {
     }
   };
 
-  const reset = () => set({ me: null, loading: false });
+  const applyPresence = ({
+    online,
+    statusMessage,
+    location,
+  }: {
+    online?: boolean;
+    statusMessage?: string | null;
+    location?: string | null;
+  }) => {
+    let appliedUser: User | null = null;
+    update((state) => {
+      if (!state.me) return state;
+      const nextUser: User = {
+        ...state.me,
+        online: online ?? state.me.online,
+        statusMessage:
+          statusMessage !== undefined
+            ? statusMessage
+            : (state.me.statusMessage ?? null),
+        location:
+          location !== undefined ? location : (state.me.location ?? null),
+      };
+      appliedUser = nextUser;
+      userCache.set(nextUser.id, nextUser);
+      return { ...state, me: nextUser };
+    });
+    if (appliedUser) {
+      presenceStore.syncFromUser(appliedUser);
+    }
+  };
+
+  const reset = () => {
+    set({ me: null, loading: false });
+    presenceStore.syncFromUser(null);
+  };
 
   return {
     subscribe,
@@ -204,6 +260,7 @@ function createUserStore(): UserStore {
     updateProfile,
     getUser,
     reset,
+    applyPresence,
   };
 }
 
