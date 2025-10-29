@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import { toasts } from "$lib/stores/ToastStore";
   import { userStore } from "$lib/stores/userStore";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import type { User } from "$lib/features/auth/models/User";
@@ -39,8 +42,14 @@
     openDetailedProfileModal(profileUser);
   }
 
-  function editProfile() {
-    console.log("Editing my profile.");
+  async function editProfile() {
+    close?.();
+    try {
+      await goto(resolve("/settings/account"));
+    } catch (error) {
+      console.error("Failed to navigate to profile settings:", error);
+      toasts.addToast("Failed to open profile settings.", "error");
+    }
   }
 
   function openLightbox(imageUrl: string) {
