@@ -11,10 +11,7 @@
     SidebarGroupContent,
   } from "$lib/components/ui/sidebar";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
-  import {
-    activeChannelId,
-    messagesByChatId,
-  } from "$lib/features/chat/stores/chatStore";
+  import { messagesByChatId } from "$lib/features/chat/stores/chatStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { userStore } from "$lib/stores/userStore";
   import type { Message } from "$lib/features/chat/models/Message";
@@ -23,6 +20,9 @@
     highlightText,
     type HighlightPart,
   } from "$lib/features/chat/utils/highlightText";
+  import type { Chat } from "$lib/features/chat/models/Chat";
+
+  let { chat } = $props<{ chat: Chat | null }>();
 
   type MatchPreview = {
     id: string;
@@ -63,33 +63,51 @@
     };
   }
 
+  const chatParticipants = $derived(() => {
+    if (!chat) return [] as User[];
+    if (chat.type === "dm") {
+      const participants: User[] = [chat.friend];
+      const me = $userStore.me;
+      if (me) {
+        participants.push(me);
+      }
+      return participants;
+    }
+    return chat.members ?? [];
+  });
+
   const memberLookup = $derived(() => {
     const map = new Map<string, User>();
+    chatParticipants.forEach((member) => {
+      map.set(member.id, member);
+    });
     const activeServerId = $serverStore.activeServerId;
     if (activeServerId) {
       const server = $serverStore.servers.find((s) => s.id === activeServerId);
       server?.members?.forEach((member) => {
-        map.set(member.id, member);
+        if (!map.has(member.id)) {
+          map.set(member.id, member);
+        }
       });
     }
     const me = $userStore.me;
-    if (me) {
+    if (me && !map.has(me.id)) {
       map.set(me.id, me);
     }
     return map;
   });
 
-  const channelMessages = $derived(() => {
-    const channelId = $activeChannelId;
-    if (!channelId) return [] as Message[];
-    return ($messagesByChatId.get(channelId) ?? []) as Message[];
+  const chatMessages = $derived(() => {
+    const chatId = chat?.id;
+    if (!chatId) return [] as Message[];
+    return ($messagesByChatId.get(chatId) ?? []) as Message[];
   });
 
   const matchPreviews = $derived(() => {
     const matches = $chatSearchStore.matches;
     if (!matches.length) return [] as MatchPreview[];
     const query = $chatSearchStore.query;
-    const messages = channelMessages;
+    const messages = chatMessages;
     const previews: MatchPreview[] = [];
     matches.forEach((messageIndex, matchIndex) => {
       const message = messages[messageIndex];
