@@ -7,6 +7,7 @@
   import { userStore } from "$lib/stores/userStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
+  import { userNotesStore } from "$lib/features/friends/stores/userNotesStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
@@ -110,6 +111,77 @@
   let lightboxImageUrl = $state("");
   let copyFeedback = $state("");
   let copyTimeout: ReturnType<typeof setTimeout> | undefined;
+  let notePersistTimeout: ReturnType<typeof setTimeout> | undefined;
+  let noteFeedbackTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  let notes = $state<Record<string, string>>({});
+  let noteDraft = $state("");
+  let noteFeedback = $state("");
+  let notesReady = $state(false);
+
+  const NOTE_SAVE_THROTTLE_MS = 500;
+  const SAVE_FEEDBACK_DURATION_MS = 2000;
+
+  $effect(() => {
+    if (!notesReady) {
+      return;
+    }
+
+    const id = profileUser?.id;
+    if (!id) {
+      noteDraft = "";
+      return;
+    }
+
+    const persisted = notes[id] ?? "";
+    if (persisted !== noteDraft) {
+      noteDraft = persisted;
+    }
+  });
+
+  $effect(() => {
+    if (!notesReady) {
+      return;
+    }
+
+    const id = profileUser?.id;
+    if (!id) {
+      return;
+    }
+
+    if ((notes[id] ?? "") === noteDraft) {
+      return;
+    }
+
+    if (notePersistTimeout) {
+      clearTimeout(notePersistTimeout);
+      notePersistTimeout = undefined;
+    }
+
+    const draftToPersist = noteDraft;
+    notePersistTimeout = setTimeout(() => {
+      notePersistTimeout = undefined;
+      userNotesStore.setNote(id, draftToPersist);
+
+      if (draftToPersist.trim().length === 0) {
+        noteFeedback = "";
+        if (noteFeedbackTimeout) {
+          clearTimeout(noteFeedbackTimeout);
+          noteFeedbackTimeout = undefined;
+        }
+        return;
+      }
+
+      noteFeedback = "Saved";
+      if (noteFeedbackTimeout) {
+        clearTimeout(noteFeedbackTimeout);
+      }
+      noteFeedbackTimeout = setTimeout(() => {
+        noteFeedback = "";
+        noteFeedbackTimeout = undefined;
+      }, SAVE_FEEDBACK_DURATION_MS);
+    }, NOTE_SAVE_THROTTLE_MS);
+  });
 
   let showUserOptionsMenu = $state(false);
   let userOptionsMenuX = $state(0);
@@ -132,6 +204,23 @@
   const openProfileReviewsModal =
     createGroupContext?.openProfileReviewsModal;
   const getCurrentChat = () => createGroupContext?.currentChat ?? null;
+
+  const unsubscribeNotes = userNotesStore.subscribe((value) => {
+    notes = value;
+    notesReady = true;
+  });
+
+  onDestroy(() => {
+    unsubscribeNotes();
+    if (notePersistTimeout) {
+      clearTimeout(notePersistTimeout);
+      notePersistTimeout = undefined;
+    }
+    if (noteFeedbackTimeout) {
+      clearTimeout(noteFeedbackTimeout);
+      noteFeedbackTimeout = undefined;
+    }
+  });
 
   function viewProfileReviews() {
     if (!profileUser?.id) {
@@ -658,14 +747,18 @@
           {/if}
 
           <div class="mt-6">
-            <h3
-              class="text-xs uppercase font-semibold text-muted-foreground mb-2"
-            >
-              Note
-            </h3>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs uppercase font-semibold text-muted-foreground">
+                Note
+              </h3>
+              {#if noteFeedback}
+                <span class="text-xs text-muted-foreground">{noteFeedback}</span>
+              {/if}
+            </div>
             <Textarea
               placeholder="Add a private note about this user..."
               rows={3}
+              bind:value={noteDraft}
             />
           </div>
         </div>
