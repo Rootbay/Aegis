@@ -8,7 +8,10 @@
   import CreateCategoryModal from "$lib/components/modals/CreateCategoryModal.svelte";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import {
+    chatMetadataByChatId,
+    chatStore,
+  } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
@@ -42,6 +45,7 @@
     DropdownMenuSeparator,
   } from "$lib/components/ui/dropdown-menu/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
+  import { Badge } from "$lib/components/ui/badge";
   import { SvelteSet } from "svelte/reactivity";
   import {
     Collapsible,
@@ -74,6 +78,7 @@
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
+  import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -86,6 +91,14 @@
   }: { server: Server; onSelectChannel: ChannelSelectHandler } = $props();
 
   const { activeServerChannelId } = chatStore;
+
+  let channelMetadataLookup = $state(new Map<string, ChatMetadata>());
+
+  const unsubscribeChatMetadata = chatMetadataByChatId.subscribe(
+    (metadataMap) => {
+      channelMetadataLookup = new Map(metadataMap);
+    },
+  );
 
   const createGroupContext = getContext<CreateGroupContext | undefined>(
     CREATE_GROUP_CONTEXT_KEY,
@@ -222,6 +235,7 @@
 
   onDestroy(() => {
     if (rafId) cancelAnimationFrame(rafId);
+    unsubscribeChatMetadata();
   });
 
   function handleServerSettingsClick() {
@@ -866,6 +880,8 @@
             <CollapsibleContent>
               {#if server && server.channels && server.channels.length > 0}
                 {#each server.channels.filter((c: Channel) => c.channel_type === "text" && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+                  {@const metadata = channelMetadataLookup.get(channel.id)}
+                  {@const unreadCount = metadata?.unreadCount ?? 0}
                   <div
                     role="button"
                     tabindex="0"
@@ -887,29 +903,38 @@
                         >{channel.name}</span
                       >
                     </div>
-                    <div
-                      class="ml-auto flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-muted-foreground hover:text-foreground"
-                        aria-label="Invite to channel"
-                        onclick={(event) =>
-                          handleInviteToChannelClick(channel, event)}
+                    <div class="ml-auto flex items-center gap-2">
+                      {#if unreadCount > 0}
+                        <Badge
+                          class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                        >
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </Badge>
+                      {/if}
+                      <div
+                        class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
                       >
-                        <Plus size={10} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-muted-foreground hover:text-foreground"
-                        aria-label="Channel settings"
-                        onclick={(event) =>
-                          handleChannelSettingsClick(channel, event)}
-                      >
-                        <Settings size={10} />
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground"
+                          aria-label="Invite to channel"
+                          onclick={(event) =>
+                            handleInviteToChannelClick(channel, event)}
+                        >
+                          <Plus size={10} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground"
+                          aria-label="Channel settings"
+                          onclick={(event) =>
+                            handleChannelSettingsClick(channel, event)}
+                        >
+                          <Settings size={10} />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 {/each}
