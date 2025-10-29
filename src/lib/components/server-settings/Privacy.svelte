@@ -15,6 +15,14 @@
 
   let enableReadReceipts = $state(false);
 
+  $effect(() => {
+    const stored = server?.settings?.enableReadReceipts;
+    const normalized = stored === true;
+    if (enableReadReceipts !== normalized) {
+      enableReadReceipts = normalized;
+    }
+  });
+
   function saveChanges() {
     const settings = {
       enableReadReceipts,

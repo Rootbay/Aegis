@@ -586,6 +586,7 @@ pub struct ServerModerationUpdate {
     pub explicit_content_filter: Option<bool>,
     pub transparent_edits: Option<bool>,
     pub deleted_message_display: Option<String>,
+    pub read_receipts_enabled: Option<bool>,
 }
 
 pub async fn insert_server(pool: &Pool<Sqlite>, server: &Server) -> Result<(), sqlx::Error> {
@@ -677,6 +678,12 @@ pub async fn update_server_moderation(
                 .push("deleted_message_display = ")
                 .push_bind(deleted_message_display);
         }
+        if let Some(read_receipts_enabled) = update.read_receipts_enabled {
+            has_updates = true;
+            separated
+                .push("read_receipts_enabled = ")
+                .push_bind(read_receipts_enabled);
+        }
     }
 
     if !has_updates {
@@ -703,11 +710,12 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
         explicit_content_filter: i64,
         transparent_edits: i64,
         deleted_message_display: String,
+        read_receipts_enabled: Option<i64>,
     }
 
     let server_rows = sqlx::query_as!(
         ServerRow,
-        "SELECT s.id, s.name, s.owner_id, s.created_at, s.icon_url, s.description, s.default_channel_id, s.allow_invites, s.moderation_level, s.explicit_content_filter, s.transparent_edits, s.deleted_message_display FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
+        "SELECT s.id, s.name, s.owner_id, s.created_at, s.icon_url, s.description, s.default_channel_id, s.allow_invites, s.moderation_level, s.explicit_content_filter, s.transparent_edits, s.deleted_message_display, s.read_receipts_enabled FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
         current_user_id
     )
     .fetch_all(pool)
@@ -745,6 +753,9 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
             explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
             transparent_edits: Some(bool_from_i64(server_row.transparent_edits)),
             deleted_message_display: Some(server_row.deleted_message_display.clone()),
+            read_receipts_enabled: server_row
+                .read_receipts_enabled
+                .map(bool_from_i64),
             channels,
             categories,
             members,
@@ -778,11 +789,12 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         explicit_content_filter: i64,
         transparent_edits: i64,
         deleted_message_display: String,
+        read_receipts_enabled: Option<i64>,
     }
 
     let server_row = sqlx::query_as!(
         ServerRow,
-        "SELECT id, name, owner_id, created_at, icon_url, description, default_channel_id, allow_invites, moderation_level, explicit_content_filter, transparent_edits, deleted_message_display FROM servers WHERE id = ?",
+        "SELECT id, name, owner_id, created_at, icon_url, description, default_channel_id, allow_invites, moderation_level, explicit_content_filter, transparent_edits, deleted_message_display, read_receipts_enabled FROM servers WHERE id = ?",
         server_id
     )
     .fetch_one(pool)
@@ -820,6 +832,9 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
         transparent_edits: Some(bool_from_i64(server_row.transparent_edits)),
         deleted_message_display: Some(server_row.deleted_message_display.clone()),
+        read_receipts_enabled: server_row
+            .read_receipts_enabled
+            .map(bool_from_i64),
         channels,
         categories,
         members,

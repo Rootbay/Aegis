@@ -114,6 +114,8 @@ pub struct Server {
     pub transparent_edits: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deleted_message_display: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_receipts_enabled: Option<bool>,
     #[serde(default)]
     pub channels: Vec<Channel>,
     #[serde(default)]

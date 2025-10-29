@@ -7,6 +7,7 @@ import type { ServerInvite } from "./ServerInvite";
 export type ServerModerationSettings = {
   transparentEdits?: boolean;
   deletedMessageDisplay?: "ghost" | "tombstone";
+  enableReadReceipts?: boolean;
   [key: string]: unknown;
 };
 

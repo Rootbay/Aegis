@@ -572,11 +572,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   type ModerationPreferences = {
     transparentEdits: boolean;
     deletedMessageDisplay: "ghost" | "tombstone";
+    readReceiptsEnabled: boolean | null;
   };
 
   const DEFAULT_MODERATION_PREFERENCES: ModerationPreferences = {
     transparentEdits: false,
     deletedMessageDisplay: "ghost",
+    readReceiptsEnabled: null,
   };
 
   const serverModerationPreferences = new Map<string, ModerationPreferences>();
@@ -587,7 +589,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const transparentEdits = settings.transparentEdits === true;
     const deletedMessageDisplay =
       settings.deletedMessageDisplay === "tombstone" ? "tombstone" : "ghost";
-    return { transparentEdits, deletedMessageDisplay };
+    const readReceiptsEnabled =
+      typeof settings.enableReadReceipts === "boolean"
+        ? settings.enableReadReceipts
+        : null;
+    return { transparentEdits, deletedMessageDisplay, readReceiptsEnabled };
   };
 
   const rebuildModerationIndexes = (servers: Server[] | undefined) => {
@@ -2359,7 +2365,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return mutated ? next : existing;
     });
 
-    if (!currentSettings.enableReadReceipts) {
+    const preferences = resolveModerationForChat(messageChatId);
+    const readReceiptsAllowed =
+      preferences.readReceiptsEnabled === null
+        ? currentSettings.enableReadReceipts
+        : preferences.readReceiptsEnabled;
+    if (!readReceiptsAllowed) {
       return;
     }
 

@@ -221,6 +221,17 @@ export function createServerStore(): ServerStore {
         continue;
       }
 
+      if (key === "enableReadReceipts") {
+        const coerced = coerceBoolean(value);
+        if (coerced === undefined) {
+          continue;
+        }
+        base.enableReadReceipts = coerced;
+        moderationPayload.readReceiptsEnabled = coerced;
+        touched = true;
+        continue;
+      }
+
       base[key] = value;
       touched = true;
     }
@@ -381,6 +392,8 @@ export function createServerStore(): ServerStore {
       transparentEdits,
       deleted_message_display,
       deletedMessageDisplay,
+      read_receipts_enabled,
+      readReceiptsEnabled,
       ...rest
     } = s;
     const normalizedMembers: BackendUser[] = Array.isArray(members)
@@ -435,6 +448,16 @@ export function createServerStore(): ServerStore {
     );
     if (deletedSetting) {
       mergedSettings.deletedMessageDisplay = deletedSetting;
+    }
+    const readReceiptsSource =
+      readReceiptsEnabled ??
+      read_receipts_enabled ??
+      mergedSettings.enableReadReceipts;
+    const readReceiptsSetting = coerceBoolean(readReceiptsSource);
+    if (readReceiptsSetting !== undefined) {
+      mergedSettings.enableReadReceipts = readReceiptsSetting;
+    } else {
+      delete mergedSettings.enableReadReceipts;
     }
     const hasSettings = Object.keys(mergedSettings).length > 0;
 
