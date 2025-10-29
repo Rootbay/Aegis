@@ -18,6 +18,8 @@ type BackendUser = {
   public_key?: string;
   bio?: string;
   tag?: string;
+  roles?: string[];
+  role_ids?: string[];
 };
 
 type BackendServerInvite = {
@@ -78,6 +80,10 @@ interface ServerStore extends Readable<ServerStoreState> {
     serverId: string,
     patch: Partial<Server>,
   ) => Promise<ServerUpdateResult>;
+  replaceServerRoles: (
+    serverId: string,
+    roles: Role[],
+  ) => Promise<ServerUpdateResult>;
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   initialize: () => Promise<void>;
   getServer: (serverId: string) => Promise<Server | null>;
@@ -104,12 +110,93 @@ export function createServerStore(): ServerStore {
 
   const banCache = new Map<string, User[]>();
 
-  const fromBackendUser = (u: BackendUser): User => {
+  const normalizeRoleIds = (value: unknown): string[] => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    const ids = new Set<string>();
+    for (const entry of value) {
+      if (typeof entry === "string" && entry.trim().length > 0) {
+        ids.add(entry);
+      }
+    }
+    return Array.from(ids.values());
+  };
+
+  const normalizeRole = (role: Role): Role => {
+    const permissions =
+      role.permissions && typeof role.permissions === "object"
+        ? role.permissions
+        : {};
+    const memberIds = normalizeRoleIds(role.member_ids ?? []);
+    return {
+      ...role,
+      permissions: { ...permissions },
+      member_ids: memberIds,
+    };
+  };
+
+  const normalizeRolesArray = (roles: unknown): Role[] =>
+    Array.isArray(roles) ? (roles as Role[]).map((role) => normalizeRole(role)) : [];
+
+  const buildMemberRoleMap = (roles: Role[]): Map<string, string[]> => {
+    const map = new Map<string, string[]>();
+    for (const role of roles) {
+      for (const memberId of role.member_ids) {
+        if (map.has(memberId)) {
+          map.get(memberId)!.push(role.id);
+        } else {
+          map.set(memberId, [role.id]);
+        }
+      }
+    }
+    return map;
+  };
+
+  const assignRolesToMembers = (
+    members: BackendUser[] | User[] | undefined,
+    roleMap: Map<string, string[]>,
+  ): User[] => {
+    if (!Array.isArray(members)) {
+      return [];
+    }
+    return members.map((member) => {
+      const memberId = member.id;
+      const assignedRoles = roleMap.get(memberId) ?? [];
+      const baseUser =
+        "username" in member
+          ? fromBackendUser(member as BackendUser, assignedRoles)
+          : ({
+              ...(member as User),
+              roles: assignedRoles,
+              role_ids: assignedRoles,
+              roleIds: assignedRoles,
+            } as User);
+      return baseUser;
+    });
+  };
+
+  const applyRoleAssignmentsToServer = (server: Server): Server => {
+    const normalizedRoles = normalizeRolesArray(server.roles ?? []);
+    const roleAssignments = buildMemberRoleMap(normalizedRoles);
+    const enrichedMembers = assignRolesToMembers(server.members, roleAssignments);
+    return {
+      ...server,
+      roles: normalizedRoles,
+      members: enrichedMembers,
+    } as Server;
+  };
+
+  const fromBackendUser = (u: BackendUser, assignedRoleIds: string[] = []): User => {
     const fallbackName = u.username ?? u.name;
     const name =
       fallbackName && fallbackName.trim().length > 0
         ? fallbackName
         : `User-${u.id.slice(0, 4)}`;
+    const backendRoles =
+      normalizeRoleIds(u.role_ids ?? u.roles ?? []) ?? [];
+    const normalizedRoleIds =
+      assignedRoleIds.length > 0 ? assignedRoleIds : backendRoles;
     return {
       id: u.id,
       name,
@@ -118,6 +205,9 @@ export function createServerStore(): ServerStore {
       publicKey: u.public_key ?? undefined,
       bio: u.bio ?? undefined,
       tag: u.tag ?? undefined,
+      roles: normalizedRoleIds,
+      role_ids: normalizedRoleIds,
+      roleIds: normalizedRoleIds,
     };
   };
 
@@ -135,9 +225,8 @@ export function createServerStore(): ServerStore {
     const normalizedChannels: Channel[] = Array.isArray(channels)
       ? (channels as Channel[])
       : [];
-    const normalizedRoles: Role[] = Array.isArray(roles)
-      ? (roles as Role[])
-      : [];
+    const normalizedRoles: Role[] = normalizeRolesArray(roles);
+    const roleAssignments = buildMemberRoleMap(normalizedRoles);
     const normalizedInvites: BackendServerInvite[] = Array.isArray(invites)
       ? invites
       : [];
@@ -158,18 +247,20 @@ export function createServerStore(): ServerStore {
       owner_id: s.owner_id ?? "",
       iconUrl: s.iconUrl,
       channels: normalizedChannels,
-      members: normalizedMembers.map(fromBackendUser),
+      members: assignRolesToMembers(normalizedMembers, roleAssignments),
       roles: normalizedRoles,
       invites: normalizedInvites.map(mapInvite),
     } as Server;
   };
 
   const normalizeServer = (server: Server): Server => ({
-    ...server,
-    invites: server.invites ?? [],
-    channels: server.channels ?? [],
-    members: server.members ?? [],
-    roles: server.roles ?? [],
+    ...applyRoleAssignmentsToServer({
+      ...server,
+      invites: server.invites ?? [],
+      channels: server.channels ?? [],
+      members: server.members ?? [],
+      roles: server.roles ?? [],
+    }),
   });
 
   const cloneServer = (server: Server): Server =>
@@ -265,10 +356,12 @@ export function createServerStore(): ServerStore {
   };
 
   const handleServersUpdate = (updatedServers: Server[]) => {
-    const normalized = updatedServers.map((server) => ({
-      ...server,
-      invites: server.invites ?? [],
-    }));
+    const normalized = updatedServers.map((server) =>
+      normalizeServer({
+        ...server,
+        invites: server.invites ?? [],
+      }),
+    );
     const snapshot = get({ subscribe });
     const filteredBans = Object.fromEntries(
       Object.entries(snapshot.bansByServer).filter(([serverId]) =>
@@ -379,10 +472,16 @@ export function createServerStore(): ServerStore {
           }
 
           if (membersResult !== null) {
-            updatedServer.members = membersResult.map(fromBackendUser);
+            const roleAssignments = buildMemberRoleMap(
+              normalizeRolesArray(updatedServer.roles ?? []),
+            );
+            updatedServer.members = assignRolesToMembers(
+              membersResult,
+              roleAssignments,
+            );
           }
 
-          return updatedServer;
+          return normalizeServer(updatedServer);
         });
         const serverToCache = newServers.find((s) => s.id === serverId);
         if (serverToCache) serverCache.set(serverId, serverToCache);
@@ -531,10 +630,15 @@ export function createServerStore(): ServerStore {
         const filteredMembers = existingMembers.filter(
           (member) => member.id !== memberId,
         );
-        const nextServer = {
+        const updatedRoles = (server.roles ?? []).map((role) => ({
+          ...role,
+          member_ids: role.member_ids.filter((id) => id !== memberId),
+        }));
+        const nextServer = normalizeServer({
           ...server,
           members: filteredMembers,
-        };
+          roles: updatedRoles,
+        });
         serverCache.set(serverId, nextServer);
         return nextServer;
       });
@@ -633,7 +737,11 @@ export function createServerStore(): ServerStore {
     const channelsTouched =
       hasOwn(patch, "channels") && Array.isArray(patch.channels);
 
-    const optimisticServer = applyPatchToServer(previousServer, patch);
+    const normalizedPatch: Partial<Server> = rolesTouched
+      ? { ...patch, roles: normalizeRolesArray(patch.roles ?? []) }
+      : patch;
+
+    const optimisticServer = applyPatchToServer(previousServer, normalizedPatch);
 
     update((state) => {
       const servers = state.servers.map((srv, index) =>
@@ -661,7 +769,7 @@ export function createServerStore(): ServerStore {
         rolesResult = await invoke<Role[]>("update_server_roles", {
           serverId,
           server_id: serverId,
-          roles: patch.roles ?? [],
+          roles: normalizedPatch.roles ?? [],
         });
       }
 
@@ -703,10 +811,10 @@ export function createServerStore(): ServerStore {
         } as Server;
       }
 
-      if (hasOwn(patch, "settings")) {
+      if (hasOwn(normalizedPatch, "settings")) {
         finalServer = {
           ...finalServer,
-          settings: patch.settings,
+          settings: normalizedPatch.settings,
         } as Server;
       } else if (!finalServer.settings && previousServer.settings) {
         finalServer = {
@@ -736,6 +844,75 @@ export function createServerStore(): ServerStore {
       });
 
       console.error("Failed to persist server changes:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
+  const replaceServerRoles = async (
+    serverId: string,
+    roles: Role[],
+  ): Promise<ServerUpdateResult> => {
+    const snapshot = get({ subscribe });
+    const serverIndex = snapshot.servers.findIndex(
+      (srv) => srv.id === serverId,
+    );
+
+    if (serverIndex === -1) {
+      return {
+        success: false,
+        error: `Server ${serverId} not found`,
+      };
+    }
+
+    const previousServer = cloneServer(snapshot.servers[serverIndex]);
+    const normalizedRoles = normalizeRolesArray(roles);
+    const optimisticServer = applyRoleAssignmentsToServer({
+      ...previousServer,
+      roles: normalizedRoles,
+    });
+
+    update((state) => {
+      const servers = state.servers.map((srv, index) =>
+        index === serverIndex ? optimisticServer : srv,
+      );
+      serverCache.set(serverId, optimisticServer);
+      return { ...state, servers };
+    });
+
+    try {
+      const persistedRoles = await invoke<Role[]>("update_server_roles", {
+        serverId,
+        server_id: serverId,
+        roles: normalizedRoles,
+      });
+
+      const finalServer = applyRoleAssignmentsToServer({
+        ...optimisticServer,
+        roles: normalizeRolesArray(persistedRoles),
+      });
+
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? finalServer : srv,
+        );
+        serverCache.set(serverId, finalServer);
+        return { ...state, servers };
+      });
+
+      return { success: true };
+    } catch (error) {
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? previousServer : srv,
+        );
+        serverCache.set(serverId, previousServer);
+        return { ...state, servers };
+      });
+
+      console.error("Failed to update server roles:", error);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -774,6 +951,7 @@ export function createServerStore(): ServerStore {
     removeMemberFromServer,
     removeMember,
     updateServer,
+    replaceServerRoles,
     removeChannelFromServer,
     initialize,
     getServer,

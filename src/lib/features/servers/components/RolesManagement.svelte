@@ -83,6 +83,7 @@
           (acc, perm) => ({ ...acc, [perm]: false }),
           {},
         ),
+        member_ids: [],
       };
       onadd_role?.(newRole);
       newRoleName = "";

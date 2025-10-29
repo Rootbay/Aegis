@@ -140,6 +140,8 @@ pub struct Role {
     pub hoist: bool,
     pub mentionable: bool,
     pub permissions: HashMap<String, bool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub member_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
