@@ -60,6 +60,7 @@ async fn server_metadata_update_persists_columns() {
         name: "general".to_string(),
         channel_type: "text".to_string(),
         private: false,
+        category_id: None,
     };
     database::insert_channel(&pool, &channel)
         .await
@@ -167,6 +168,7 @@ async fn server_channels_replace_round_trip() {
             name: "general".to_string(),
             channel_type: "text".to_string(),
             private: false,
+            category_id: None,
         },
         Channel {
             id: Uuid::new_v4().to_string(),
@@ -174,6 +176,7 @@ async fn server_channels_replace_round_trip() {
             name: "voice".to_string(),
             channel_type: "voice".to_string(),
             private: true,
+            category_id: None,
         },
     ];
 

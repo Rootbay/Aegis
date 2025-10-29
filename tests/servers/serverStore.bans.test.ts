@@ -42,6 +42,7 @@ const baseServer: Server = {
   name: "Test Server",
   owner_id: "owner-1",
   channels: [],
+  categories: [],
   members: [],
   roles: [],
   invites: [],

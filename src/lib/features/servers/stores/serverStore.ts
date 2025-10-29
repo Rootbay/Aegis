@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Server } from "$lib/features/servers/models/Server";
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
+import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
 import type { Role } from "$lib/features/servers/models/Role";
 import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
 import { userStore } from "$lib/stores/userStore";
@@ -33,6 +34,14 @@ type BackendServerInvite = {
   uses: number;
 };
 
+type BackendChannelCategory = {
+  id: string;
+  server_id: string;
+  name: string;
+  position: number;
+  created_at: string;
+};
+
 type BackendServer = {
   id: string;
   name: string;
@@ -47,6 +56,7 @@ type BackendServer = {
   moderation_level?: "None" | "Low" | "Medium" | "High";
   explicit_content_filter?: boolean;
   invites?: BackendServerInvite[];
+  categories?: BackendChannelCategory[];
   [key: string]: unknown;
 };
 
@@ -70,6 +80,7 @@ interface ServerStore extends Readable<ServerStoreState> {
   removeServer: (serverId: string) => void;
   fetchServerDetails: (serverId: string) => Promise<void>;
   addChannelToServer: (serverId: string, channel: Channel) => void;
+  addCategoryToServer: (serverId: string, category: ChannelCategory) => void;
   addInviteToServer: (serverId: string, invite: ServerInvite) => void;
   removeMemberFromServer: (serverId: string, memberId: string) => void;
   removeMember: (
@@ -85,6 +96,7 @@ interface ServerStore extends Readable<ServerStoreState> {
     roles: Role[],
   ) => Promise<ServerUpdateResult>;
   removeChannelFromServer: (serverId: string, channelId: string) => void;
+  removeCategoryFromServer: (serverId: string, categoryId: string) => void;
   initialize: () => Promise<void>;
   getServer: (serverId: string) => Promise<Server | null>;
   fetchBans: (
@@ -211,12 +223,21 @@ export function createServerStore(): ServerStore {
     };
   };
 
+  const sortCategories = (categories: ChannelCategory[]): ChannelCategory[] =>
+    [...categories].sort((a, b) => {
+      if (a.position !== b.position) {
+        return a.position - b.position;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
   const mapServer = (s: BackendServer): Server => {
     const {
       members = [],
       channels = [],
       roles = [],
       invites = [],
+      categories = [],
       ...rest
     } = s;
     const normalizedMembers: BackendUser[] = Array.isArray(members)
@@ -229,6 +250,19 @@ export function createServerStore(): ServerStore {
     const roleAssignments = buildMemberRoleMap(normalizedRoles);
     const normalizedInvites: BackendServerInvite[] = Array.isArray(invites)
       ? invites
+      : [];
+    const normalizedCategories: ChannelCategory[] = Array.isArray(categories)
+      ? sortCategories(
+          (categories as BackendChannelCategory[]).map((category) => ({
+            id: category.id,
+            server_id: category.server_id,
+            name: category.name,
+            position: Number.isFinite(category.position)
+              ? category.position
+              : 0,
+            created_at: category.created_at,
+          })),
+        )
       : [];
     const mapInvite = (invite: BackendServerInvite): ServerInvite => ({
       id: invite.id,
@@ -247,6 +281,7 @@ export function createServerStore(): ServerStore {
       owner_id: s.owner_id ?? "",
       iconUrl: s.iconUrl,
       channels: normalizedChannels,
+      categories: normalizedCategories,
       members: assignRolesToMembers(normalizedMembers, roleAssignments),
       roles: normalizedRoles,
       invites: normalizedInvites.map(mapInvite),
@@ -258,6 +293,7 @@ export function createServerStore(): ServerStore {
       ...server,
       invites: server.invites ?? [],
       channels: server.channels ?? [],
+      categories: sortCategories(server.categories ?? []),
       members: server.members ?? [],
       roles: server.roles ?? [],
     }),
@@ -279,6 +315,9 @@ export function createServerStore(): ServerStore {
       channels: hasOwn(patch, "channels")
         ? (patch.channels ?? [])
         : (original.channels ?? []),
+      categories: hasOwn(patch, "categories")
+        ? (patch.categories ?? [])
+        : (original.categories ?? []),
       members: hasOwn(patch, "members")
         ? (patch.members ?? [])
         : (original.members ?? []),
@@ -413,6 +452,7 @@ export function createServerStore(): ServerStore {
     const withInvites: Server = {
       ...server,
       invites: server.invites ?? [],
+      categories: server.categories ?? [],
     };
     update((s) => ({ ...s, servers: [...s.servers, withInvites] }));
     serverCache.set(withInvites.id, withInvites);
@@ -444,7 +484,7 @@ export function createServerStore(): ServerStore {
     }
     update((s) => ({ ...s, loading: true }));
     try {
-      const [channelsResult, membersResult] = await Promise.all([
+      const [channelsResult, membersResult, categoriesResult] = await Promise.all([
         invoke<Channel[]>("get_channels_for_server", {
           serverId,
           server_id: serverId,
@@ -459,6 +499,16 @@ export function createServerStore(): ServerStore {
           console.error(`Failed to get members for server ${serverId}:`, e);
           return null;
         }),
+        invoke<BackendChannelCategory[]>("get_channel_categories_for_server", {
+          serverId,
+          server_id: serverId,
+        }).catch((e) => {
+          console.error(
+            `Failed to get channel categories for server ${serverId}:`,
+            e,
+          );
+          return null;
+        }),
       ]);
 
       update((s) => {
@@ -469,6 +519,20 @@ export function createServerStore(): ServerStore {
 
           if (channelsResult !== null) {
             updatedServer.channels = channelsResult;
+          }
+
+          if (categoriesResult !== null) {
+            updatedServer.categories = (categoriesResult as BackendChannelCategory[]).map(
+              (category) => ({
+                id: category.id,
+                server_id: category.server_id,
+                name: category.name,
+                position: Number.isFinite(category.position)
+                  ? category.position
+                  : 0,
+                created_at: category.created_at,
+              }),
+            );
           }
 
           if (membersResult !== null) {
@@ -500,6 +564,29 @@ export function createServerStore(): ServerStore {
           ? {
               ...server,
               channels: [...(server.channels || []), channel],
+              invites: server.invites ?? [],
+            }
+          : server,
+      ),
+    }));
+    const server = get({ subscribe }).servers.find((s) => s.id === serverId);
+    if (server) serverCache.set(serverId, server);
+  };
+
+  const addCategoryToServer = (
+    serverId: string,
+    category: ChannelCategory,
+  ) => {
+    update((s) => ({
+      ...s,
+      servers: s.servers.map((server) =>
+        server.id === serverId
+          ? {
+              ...server,
+              categories: sortCategories([
+                ...(server.categories || []),
+                category,
+              ]),
               invites: server.invites ?? [],
             }
           : server,
@@ -938,6 +1025,24 @@ export function createServerStore(): ServerStore {
     });
   };
 
+  const removeCategoryFromServer = (serverId: string, categoryId: string) => {
+    update((s) => {
+      const servers = s.servers.map((server) =>
+        server.id === serverId
+          ? {
+              ...server,
+              categories: (server.categories || []).filter(
+                (category) => category.id !== categoryId,
+              ),
+            }
+          : server,
+      );
+      const updated = servers.find((sv) => sv.id === serverId);
+      if (updated) serverCache.set(serverId, updated);
+      return { ...s, servers };
+    });
+  };
+
   return {
     subscribe,
     handleServersUpdate,
@@ -947,12 +1052,14 @@ export function createServerStore(): ServerStore {
     removeServer,
     fetchServerDetails,
     addChannelToServer,
+    addCategoryToServer,
     addInviteToServer,
     removeMemberFromServer,
     removeMember,
     updateServer,
     replaceServerRoles,
     removeChannelFromServer,
+    removeCategoryFromServer,
     initialize,
     getServer,
     fetchBans,

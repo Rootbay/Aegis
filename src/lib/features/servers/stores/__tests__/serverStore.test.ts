@@ -11,6 +11,7 @@ const baseServer: Server = {
   name: "Server One",
   owner_id: "owner-1",
   channels: [],
+  categories: [],
   members: [],
   roles: [],
 };
@@ -21,6 +22,7 @@ const textChannel: Channel = {
   server_id: baseServer.id,
   channel_type: "text",
   private: false,
+  category_id: null,
 };
 
 describe("serverStore social event helpers", () => {

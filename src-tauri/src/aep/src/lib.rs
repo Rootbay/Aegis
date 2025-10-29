@@ -843,6 +843,7 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 name: "general".to_string(),
                 channel_type: "text".to_string(),
                 private: false,
+                category_id: None,
             };
             database::insert_channel(db_pool, &default_channel).await?;
         }

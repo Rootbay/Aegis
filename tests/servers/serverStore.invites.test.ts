@@ -47,6 +47,7 @@ describe("serverStore invites", () => {
     name: "Test Server",
     owner_id: "user-1",
     channels: [],
+    categories: [],
     members: [],
     roles: [],
     invites: [],
