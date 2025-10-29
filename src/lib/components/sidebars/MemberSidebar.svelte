@@ -50,6 +50,7 @@
     openDetailedProfileModal = () => {},
     roles: providedRoles = [],
     serverId: providedServerId = undefined,
+    context = "server",
   }: {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
@@ -57,23 +58,30 @@
     openDetailedProfileModal?: OpenDetailedProfileHandler;
     roles?: Role[];
     serverId?: string | null;
+    context?: "server" | "group";
   } = $props();
 
+  const isServerContext = $derived(context === "server");
+
   const resolvedServerId = $derived(
-    providedServerId ?? $serverStore.activeServerId ?? null,
+    context === "server"
+      ? providedServerId ?? $serverStore.activeServerId ?? null
+      : providedServerId ?? null,
   );
 
   const resolvedRoles: Role[] = $derived(
-    providedRoles?.length
-      ? providedRoles
-      : (() => {
-          const activeServerId = $serverStore.activeServerId;
-          if (!activeServerId) return [];
-          const activeServer = $serverStore.servers.find(
-            (server) => server.id === activeServerId,
-          );
-          return (activeServer?.roles ?? []) as Role[];
-        })(),
+    context === "server"
+      ? providedRoles?.length
+        ? providedRoles
+        : (() => {
+            const activeServerId = $serverStore.activeServerId;
+            if (!activeServerId) return [];
+            const activeServer = $serverStore.servers.find(
+              (server) => server.id === activeServerId,
+            );
+            return (activeServer?.roles ?? []) as Role[];
+          })()
+      : [],
   );
 
   let groupedMembers = $derived(groupMembersByRole(members, resolvedRoles));
@@ -241,7 +249,11 @@
 <Sidebar
   class="hidden lg:flex"
   data-settings-page={isSettingsPage}
-  aria-label={isSettingsPage ? "Member settings" : "Server members"}
+  aria-label={isSettingsPage
+    ? "Member settings"
+    : context === "server"
+      ? "Server members"
+      : "Group members"}
 >
   {#if isSettingsPage}
     <SidebarHeader>
@@ -349,9 +361,13 @@
                             <UserCardModal
                               profileUser={member}
                               {openDetailedProfileModal}
-                              isServerMemberContext={true}
+                              isServerMemberContext={isServerContext}
                               close={close}
-                              serverId={resolvedServerId ?? undefined}
+                              serverId={
+                                isServerContext
+                                  ? resolvedServerId ?? undefined
+                                  : undefined
+                              }
                             />
                           </Popover.Content>
                         </Popover.Root>

@@ -38,6 +38,7 @@
     HelpCircle,
     Trash2,
     MapPin,
+    PanelRight,
   } from "@lucide/svelte";
   import {
     Popover,
@@ -47,6 +48,7 @@
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
+  import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
@@ -172,6 +174,13 @@
     return (
       $channelDisplayPreferencesStore.get(chat.id)?.hideMemberNames ?? false
     );
+  });
+
+  const memberSidebarVisible = $derived(() => {
+    if (!chat?.id) return false;
+    const state = $memberSidebarVisibilityStore;
+    const entry = state.get(chat.id);
+    return entry !== false;
   });
 
   const activeToken = $derived(() =>
@@ -553,6 +562,11 @@
     } catch (error) {
       console.error("Failed to toggle hide member names:", error);
     }
+  }
+
+  function toggleMemberSidebarVisibility() {
+    if (!chat?.id) return;
+    memberSidebarVisibilityStore.toggleVisibility(chat.id);
   }
 
   function createUserTokenValue(user: User) {
@@ -938,6 +952,23 @@
           onclick={openPinnedMessages}
         >
           <Pin class="w-4 h-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          class={cn(
+            "cursor-pointer",
+            memberSidebarVisible ? "text-cyan-400" : "",
+          )}
+          size="icon"
+          aria-label={
+            memberSidebarVisible
+              ? "Hide Member Sidebar"
+              : "Show Member Sidebar"
+          }
+          onclick={toggleMemberSidebarVisibility}
+          aria-pressed={memberSidebarVisible ? "true" : "false"}
+        >
+          <PanelRight class="w-4 h-4" />
         </Button>
         <Button
           variant="ghost"
