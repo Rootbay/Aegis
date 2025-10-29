@@ -26,11 +26,13 @@
     openDetailedProfileModal,
     isServerMemberContext = false,
     close,
+    serverId = null,
   }: {
     profileUser: User;
     openDetailedProfileModal: OpenDetailedProfileHandler;
     isServerMemberContext?: boolean;
     close?: () => void;
+    serverId?: string | null;
   } = $props();
 
   let showLightbox = $state(false);
@@ -53,6 +55,27 @@
     } catch (error) {
       console.error("Failed to navigate to profile settings:", error);
       toasts.addToast("Failed to open profile settings.", "error");
+    }
+  }
+
+  async function handleManageRoles() {
+    close?.();
+
+    if (!serverId) {
+      toasts.addToast("Server information unavailable.", "error");
+      return;
+    }
+
+    try {
+      const encodedServerId = encodeURIComponent(serverId);
+      const encodedMemberId = encodeURIComponent(profileUser.id);
+      const target = resolve(
+        `/channels/${encodedServerId}/settings?tab=members&focus=${encodedMemberId}`,
+      );
+      await goto(target);
+    } catch (error) {
+      console.error("Failed to open role management:", error);
+      toasts.addToast("Failed to open role management.", "error");
     }
   }
 
@@ -157,9 +180,13 @@
     {/if}
 
     {#if isServerMemberContext}
-      <p class="text-sm text-muted-foreground mt-4">
-        Role assignment controls are not available yet.
-      </p>
+      <Button
+        class="mt-4 w-full"
+        variant="secondary"
+        onclick={() => void handleManageRoles()}
+      >
+        Manage roles
+      </Button>
     {/if}
   </CardContent>
 

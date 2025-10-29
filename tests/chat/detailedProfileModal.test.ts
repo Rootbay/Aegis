@@ -160,6 +160,7 @@ const mocks = vi.hoisted(() => {
     openReportUserModal,
     openProfileReviewsModal,
     createGroupContext,
+    gotoMock: vi.fn(async () => {}),
   };
 });
 
@@ -192,7 +193,7 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
 }));
 
 vi.mock("$app/navigation", () => ({
-  goto: vi.fn(async () => {}),
+  goto: mocks.gotoMock,
 }));
 
 vi.mock("$app/paths", () => ({
@@ -401,5 +402,27 @@ describe("UserCardModal", () => {
 
     expect(close).toHaveBeenCalled();
     expect(openDetailedProfileModal).toHaveBeenCalledWith(profileUser);
+  });
+
+  it("navigates to server member settings when managing roles", async () => {
+    const openDetailedProfileModal = vi.fn();
+    const close = vi.fn();
+
+    const { getByText } = render(UserCardModal, {
+      props: {
+        profileUser,
+        openDetailedProfileModal,
+        isServerMemberContext: true,
+        serverId: "server-123",
+        close,
+      },
+    });
+
+    await fireEvent.click(getByText("Manage roles"));
+
+    expect(close).toHaveBeenCalled();
+    expect(mocks.gotoMock).toHaveBeenCalledWith(
+      "/channels/server-123/settings?tab=members&focus=user-456",
+    );
   });
 });

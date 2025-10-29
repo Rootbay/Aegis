@@ -49,13 +49,19 @@
     openUserCardModal = () => {},
     openDetailedProfileModal = () => {},
     roles: providedRoles = [],
+    serverId: providedServerId = undefined,
   }: {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
     openUserCardModal?: OpenUserCardModalHandler;
     openDetailedProfileModal?: OpenDetailedProfileHandler;
     roles?: Role[];
+    serverId?: string | null;
   } = $props();
+
+  const resolvedServerId = $derived(
+    providedServerId ?? $serverStore.activeServerId ?? null,
+  );
 
   const resolvedRoles: Role[] = $derived(
     providedRoles?.length
@@ -336,11 +342,16 @@
                               </div>
                             </SidebarMenuButton>
                           </Popover.Trigger>
-                          <Popover.Content class="w-auto border-none p-0">
+                          <Popover.Content
+                            let:close
+                            class="w-auto border-none p-0"
+                          >
                             <UserCardModal
                               profileUser={member}
                               {openDetailedProfileModal}
                               isServerMemberContext={true}
+                              close={close}
+                              serverId={resolvedServerId ?? undefined}
                             />
                           </Popover.Content>
                         </Popover.Root>
