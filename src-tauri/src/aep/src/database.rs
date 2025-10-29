@@ -96,6 +96,7 @@ pub struct Message {
     pub content: String,
     pub timestamp: DateTime<Utc>, // ISO 8601 string
     pub read: bool,
+    pub pinned: bool,
     pub attachments: Vec<Attachment>,
     pub reactions: HashMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1165,13 +1166,14 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
     let edited_at_str = message.edited_at.map(|value| value.to_rfc3339());
     let expires_at_str = message.expires_at.map(|value| value.to_rfc3339());
     sqlx::query!(
-        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, pinned, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         message.id,
         message.chat_id,
         message.sender_id,
         message.content,
         timestamp_str,
         message.read,
+        message.pinned,
         edited_at_str,
         message.edited_by,
         expires_at_str,
@@ -1385,6 +1387,22 @@ pub async fn mark_message_as_read(
     Ok(())
 }
 
+pub async fn set_message_pinned(
+    pool: &Pool<Sqlite>,
+    message_id: &str,
+    pinned: bool,
+) -> Result<bool, sqlx::Error> {
+    let result = sqlx::query!(
+        "UPDATE messages SET pinned = ? WHERE id = ?",
+        pinned,
+        message_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
 pub async fn get_message_metadata(
     pool: &Pool<Sqlite>,
     message_id: &str,
@@ -1480,6 +1498,7 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         content: String,
         timestamp: String,
         read: bool,
+        pinned: bool,
         edited_at: Option<String>,
         edited_by: Option<String>,
         expires_at: Option<String>,
@@ -1487,7 +1506,7 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
 
     let messages_raw = sqlx::query_as!(
         MessageRaw,
-        "SELECT id, chat_id, sender_id, content, timestamp, read, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        "SELECT id, chat_id, sender_id, content, timestamp, read, pinned, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         chat_id,
         limit,
         offset
@@ -1533,6 +1552,7 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             content: m_raw.content,
             timestamp,
             read: m_raw.read,
+            pinned: m_raw.pinned,
             attachments: Vec::new(),
             reactions: HashMap::new(),
             edited_at,

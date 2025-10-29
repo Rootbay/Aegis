@@ -4,6 +4,7 @@ import {
   buildLowercaseContent,
   matchNormalizedMessages,
   normalizeSearchQuery,
+  parseSearchQuery,
   type MessageContentCache,
 } from "../../src/lib/features/chat/utils/chatSearch";
 
@@ -83,6 +84,30 @@ describe("normalizeSearchQuery", () => {
   it("returns empty string for whitespace input", () => {
     expect(normalizeSearchQuery("   ")).toBe("");
   });
+
+  it("omits pinned tokens from normalized text", () => {
+    expect(normalizeSearchQuery("pinned:true Hello World")).toBe("hello world");
+  });
+});
+
+describe("parseSearchQuery", () => {
+  it("extracts pinned true filter", () => {
+    const parsed = parseSearchQuery("pinned:true keyword");
+    expect(parsed.filters.pinned).toBe(true);
+    expect(parsed.normalizedText).toBe("keyword");
+  });
+
+  it("extracts pinned false filter", () => {
+    const parsed = parseSearchQuery("discussion pinned:false");
+    expect(parsed.filters.pinned).toBe(false);
+    expect(parsed.normalizedText).toBe("discussion");
+  });
+
+  it("ignores invalid pinned value", () => {
+    const parsed = parseSearchQuery("pinned:maybe sample");
+    expect(parsed.filters.pinned).toBeUndefined();
+    expect(parsed.normalizedText).toBe("pinned:maybe sample".trim().toLowerCase());
+  });
 });
 
 describe("matchNormalizedMessages", () => {
@@ -99,5 +124,32 @@ describe("matchNormalizedMessages", () => {
   it("returns empty array for empty query", () => {
     const normalizedMessages = ["hello world"];
     expect(matchNormalizedMessages(normalizedMessages, "")).toEqual([]);
+  });
+
+  it("returns only pinned matches when filter is true", () => {
+    const normalizedMessages = ["one", "two", "three"];
+    const messages = [
+      { pinned: false },
+      { pinned: true },
+      { pinned: true },
+    ];
+    expect(
+      matchNormalizedMessages(normalizedMessages, "", {
+        pinned: true,
+        messages,
+      }),
+    ).toEqual([1, 2]);
+  });
+
+  it("filters text matches by pinned flag", () => {
+    const normalizedMessages = ["hello world", "hello again"];
+    const messages = [{ pinned: false }, { pinned: true }];
+    const query = normalizeSearchQuery("hello");
+    expect(
+      matchNormalizedMessages(normalizedMessages, query, {
+        pinned: true,
+        messages,
+      }),
+    ).toEqual([1]);
   });
 });

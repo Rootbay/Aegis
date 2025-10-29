@@ -21,6 +21,8 @@ pub async fn run() {
             commands::messages::encrypt_chat_payload,
             commands::messages::decrypt_chat_payload,
             commands::messages::delete_message,
+            commands::messages::pin_message,
+            commands::messages::unpin_message,
             commands::messages::add_reaction,
             commands::messages::remove_reaction,
             commands::messages::send_encrypted_dm,

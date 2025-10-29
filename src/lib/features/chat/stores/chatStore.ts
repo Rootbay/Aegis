@@ -34,6 +34,7 @@ type BackendMessage = {
   content: string;
   timestamp: string | number | Date;
   read?: boolean;
+  pinned?: boolean;
   attachments?: BackendAttachment[];
   reactions?: Record<string, string[]> | null;
   edited_at?: string | number | Date | null;
@@ -125,6 +126,8 @@ interface ChatStore {
   sendMessage: (content: string) => Promise<void>;
   sendMessageWithAttachments: (content: string, files: File[]) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
+  pinMessage: (chatId: string, messageId: string) => Promise<void>;
+  unpinMessage: (chatId: string, messageId: string) => Promise<void>;
   editMessage: (
     chatId: string,
     messageId: string,
@@ -956,6 +959,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const backendExpires = normalizeOptionalDate(
       message.expires_at ?? message.expiresAt,
     );
+    const pinned = Boolean(message.pinned);
     const normalized: Message = {
       id: message.id,
       chatId: message.chat_id ?? message.chatId ?? fallbackChatId,
@@ -963,6 +967,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       content: decoded.content,
       timestamp,
       read: message.read ?? true,
+      pinned,
       pending: false,
       attachments: attachments.length > 0 ? attachments : undefined,
       reactions,
@@ -1418,6 +1423,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       content: content,
       timestamp,
       read: true,
+      pinned: false,
       pending: true,
       expiresAt: optimisticExpiresAt,
     };
@@ -1616,6 +1622,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       content: content,
       timestamp: newMessageTimestamp,
       read: true,
+      pinned: false,
       attachments:
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
@@ -1694,6 +1701,80 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       });
     } catch (e) {
       console.error("Failed to delete message:", e);
+    }
+  };
+
+  const pinMessage = async (targetChatId: string, messageId: string) => {
+    let previous: Message | undefined;
+    let found = false;
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        found = true;
+        previous = message;
+        return { ...message, pinned: true };
+      }),
+    );
+
+    if (!found) {
+      throw new Error("Message not found");
+    }
+
+    try {
+      await invoke("pin_message", {
+        chatId: targetChatId,
+        chat_id: targetChatId,
+        messageId,
+        message_id: messageId,
+      });
+    } catch (error) {
+      if (previous) {
+        updateMessagesForChat(targetChatId, (existing) =>
+          existing.map((message) =>
+            message.id === messageId ? previous! : message,
+          ),
+        );
+      }
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+  };
+
+  const unpinMessage = async (targetChatId: string, messageId: string) => {
+    let previous: Message | undefined;
+    let found = false;
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        found = true;
+        previous = message;
+        return { ...message, pinned: false };
+      }),
+    );
+
+    if (!found) {
+      throw new Error("Message not found");
+    }
+
+    try {
+      await invoke("unpin_message", {
+        chatId: targetChatId,
+        chat_id: targetChatId,
+        messageId,
+        message_id: messageId,
+      });
+    } catch (error) {
+      if (previous) {
+        updateMessagesForChat(targetChatId, (existing) =>
+          existing.map((message) =>
+            message.id === messageId ? previous! : message,
+          ),
+        );
+      }
+      throw error instanceof Error ? error : new Error(String(error));
     }
   };
 
@@ -1935,6 +2016,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       content: decoded.content,
       timestamp: normalizeTimestamp(timestampFromPayload),
       read: sender === me?.id,
+      pinned: Boolean((message as BackendMessage).pinned),
       attachments:
         decoded.attachments && decoded.attachments.length > 0
           ? mapAttachmentPayloads(decoded.attachments)
@@ -2453,6 +2535,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     sendMessage,
     sendMessageWithAttachments,
     deleteMessage,
+    pinMessage,
+    unpinMessage,
     editMessage,
     handleNewMessageEvent,
     handleMessageDeleted,

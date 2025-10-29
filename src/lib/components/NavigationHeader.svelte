@@ -14,7 +14,12 @@
   import { cn } from "$lib/utils";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { userStore } from "$lib/stores/userStore";
-  import { activeChatTypingUsers } from "$lib/features/chat/stores/chatStore";
+  import {
+    chatStore,
+    messagesByChatId,
+    hasMoreByChatId,
+    activeChatTypingUsers,
+  } from "$lib/features/chat/stores/chatStore";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -523,6 +528,14 @@
 
   function openPinnedMessages() {
     if (!chat?.id) return;
+    const existingMessages = $messagesByChatId.get(chat.id) ?? [];
+    const pinnedLoaded = existingMessages.some((message) => message.pinned);
+    const hasMore = $hasMoreByChatId.get(chat.id) ?? false;
+    if (!pinnedLoaded && hasMore) {
+      void chatStore.loadMoreMessages(chat.id).catch((error) => {
+        console.error("Failed to load pinned messages", error);
+      });
+    }
     const pinnedToken: SearchToken = { key: "pinned", value: "true" };
     tokens = [pinnedToken];
     freeText = "";

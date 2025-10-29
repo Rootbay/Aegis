@@ -480,6 +480,7 @@ async fn persist_and_broadcast_message(
         content: message.clone(),
         timestamp: timestamp,
         read: false,
+        pinned: false,
         attachments: db_attachments,
         reactions: HashMap::new(),
         edited_at: None,
@@ -770,6 +771,72 @@ pub async fn get_attachment_bytes(
 }
 
 #[tauri::command]
+pub async fn pin_message(
+    chat_id: String,
+    message_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let metadata = database::get_message_metadata(&state.db_pool, &message_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let metadata = metadata.ok_or_else(|| "Message not found".to_string())?;
+    if metadata.chat_id != chat_id {
+        return Err("Message does not belong to the specified chat".to_string());
+    }
+
+    let updated = database::set_message_pinned(&state.db_pool, &message_id, true)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !updated {
+        return Err("Failed to pin message".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn unpin_message(
+    chat_id: String,
+    message_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let metadata = database::get_message_metadata(&state.db_pool, &message_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let metadata = metadata.ok_or_else(|| "Message not found".to_string())?;
+    if metadata.chat_id != chat_id {
+        return Err("Message does not belong to the specified chat".to_string());
+    }
+
+    let updated = database::set_message_pinned(&state.db_pool, &message_id, false)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !updated {
+        return Err("Failed to unpin message".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn edit_message(
     chat_id: String,
     message_id: String,
@@ -1002,6 +1069,7 @@ mod tests {
             content: "Hello".into(),
             timestamp: Utc::now(),
             read: false,
+            pinned: false,
             attachments: Vec::new(),
             reactions: HashMap::new(),
             edited_at: None,
@@ -1148,6 +1216,7 @@ mod tests {
             content: "Original".into(),
             timestamp: Utc::now(),
             read: false,
+            pinned: false,
             attachments: Vec::new(),
             reactions: HashMap::new(),
             edited_at: None,
@@ -1271,6 +1340,7 @@ pub async fn send_encrypted_dm(
         content: message.clone(),
         timestamp: chrono::Utc::now(),
         read: false,
+        pinned: false,
         attachments: Vec::new(),
         reactions: HashMap::new(),
         edited_at: None,
@@ -1389,6 +1459,7 @@ pub async fn send_encrypted_dm_with_attachments(
         content: message.clone(),
         timestamp,
         read: false,
+        pinned: false,
         attachments: db_attachments,
         reactions: HashMap::new(),
         edited_at: None,
