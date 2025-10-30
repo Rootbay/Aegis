@@ -26,6 +26,12 @@ const userStoreState = writable({
   },
 });
 const getUserMock = vi.fn(async () => null);
+const settingsStoreState = writable({
+  audioInputDeviceId: "",
+  videoInputDeviceId: "",
+  audioOutputDeviceId: "",
+  turnServers: [],
+});
 
 class MockMediaStream {
   private tracks: MediaStreamTrack[];
@@ -36,6 +42,14 @@ class MockMediaStream {
 
   getTracks() {
     return this.tracks;
+  }
+
+  getAudioTracks() {
+    return this.tracks.filter((track) => track.kind === "audio");
+  }
+
+  getVideoTracks() {
+    return this.tracks.filter((track) => track.kind === "video");
   }
 }
 
@@ -106,6 +120,12 @@ vi.mock("$lib/stores/userStore", () => ({
   userStore: {
     subscribe: userStoreState.subscribe,
     getUser: (...args: Parameters<typeof getUserMock>) => getUserMock(...args),
+  },
+}));
+
+vi.mock("$lib/features/settings/stores/settings", () => ({
+  settings: {
+    subscribe: settingsStoreState.subscribe,
   },
 }));
 

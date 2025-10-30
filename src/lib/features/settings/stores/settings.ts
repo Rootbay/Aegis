@@ -34,6 +34,12 @@ export interface AerpRoutingConfig {
   maxHops: number;
 }
 
+export interface TurnServerConfig {
+  urls: string[];
+  username?: string;
+  credential?: string;
+}
+
 export interface AppSettings {
   user: UserSettings;
   enableCommandPalette: boolean;
@@ -96,6 +102,7 @@ export interface AppSettings {
   aerpRouteUpdateIntervalSeconds: number;
   aerpMinRouteQuality: number;
   aerpMaxHops: number;
+  turnServers: TurnServerConfig[];
 }
 
 export const defaultSettings: AppSettings = {
@@ -181,6 +188,7 @@ export const defaultSettings: AppSettings = {
   aerpRouteUpdateIntervalSeconds: 10,
   aerpMinRouteQuality: 0.4,
   aerpMaxHops: 6,
+  turnServers: [],
 };
 
 export const settings = persistentStore<AppSettings>(
@@ -516,6 +524,57 @@ export const setVideoInputDeviceId = (deviceId: string) => {
 
 export const setAudioOutputDeviceId = (deviceId: string) => {
   updateAppSetting("audioOutputDeviceId", deviceId.trim());
+};
+
+function canonicalizeTurnServer(config: TurnServerConfig): TurnServerConfig | null {
+  const urls = (config.urls ?? [])
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0);
+
+  if (urls.length === 0) {
+    return null;
+  }
+
+  const normalized: TurnServerConfig = { urls };
+
+  const username = config.username?.trim();
+  if (username && username.length > 0) {
+    normalized.username = username;
+  }
+
+  const credential = config.credential ?? "";
+  if (credential.length > 0) {
+    normalized.credential = credential;
+  }
+
+  return normalized;
+}
+
+function normalizeTurnServers(configs: TurnServerConfig[]): TurnServerConfig[] {
+  const seen = new Set<string>();
+  const result: TurnServerConfig[] = [];
+
+  for (const config of configs) {
+    const normalized = canonicalizeTurnServer(config);
+    if (!normalized) {
+      continue;
+    }
+
+    const key = `${normalized.urls.join("|")}|${normalized.username ?? ""}|${normalized.credential ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
+export const setTurnServers = (configs: TurnServerConfig[]) => {
+  const normalized = normalizeTurnServers(configs);
+  updateAppSetting("turnServers", normalized);
 };
 
 export const setScreenReaderVerbosity = (

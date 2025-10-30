@@ -7,6 +7,8 @@
     setAudioInputDeviceId,
     setAudioOutputDeviceId,
     setVideoInputDeviceId,
+    setTurnServers,
+    type TurnServerConfig,
   } from "$lib/features/settings/stores/settings";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import { Label } from "$lib/components/ui/label/index.js";
@@ -17,7 +19,9 @@
     SelectTrigger,
   } from "$lib/components/ui/select/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
-  import { AlertCircle, Video, Mic } from "lucide-svelte";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { getEnvTurnServers } from "$lib/features/calls/utils/iceServers";
+  import { AlertCircle, Video, Mic, Plus, Trash2, ServerCog } from "lucide-svelte";
 
   type DeviceOption = {
     deviceId: string;
@@ -35,6 +39,150 @@
   let audioInputId = $state(get(settings).audioInputDeviceId ?? "");
   let videoInputId = $state(get(settings).videoInputDeviceId ?? "");
   let audioOutputId = $state(get(settings).audioOutputDeviceId ?? "");
+
+  type EditableTurnServer = {
+    urls: string;
+    username: string;
+    credential: string;
+  };
+
+  const envTurnServers = getEnvTurnServers();
+
+  function toEditableTurnServer(config: TurnServerConfig): EditableTurnServer {
+    return {
+      urls: config.urls.join(", "),
+      username: config.username ?? "",
+      credential: config.credential ?? "",
+    } satisfies EditableTurnServer;
+  }
+
+  let turnServers = $state<EditableTurnServer[]>(
+    (get(settings).turnServers ?? []).map(toEditableTurnServer),
+  );
+
+  function canonicalizeConfig(config: TurnServerConfig): TurnServerConfig {
+    const urls = config.urls
+      .map((url) => url.trim())
+      .filter((url) => url.length > 0);
+
+    const normalized: TurnServerConfig = { urls };
+    const username = config.username?.trim();
+    if (username && username.length > 0) {
+      normalized.username = username;
+    }
+
+    const credential = config.credential ?? "";
+    if (credential.length > 0) {
+      normalized.credential = credential;
+    }
+
+    return normalized;
+  }
+
+  function toConfig(editable: EditableTurnServer): TurnServerConfig | null {
+    const urls = editable.urls
+      .split(/[\s,]+/)
+      .map((url) => url.trim())
+      .filter((url) => url.length > 0);
+
+    if (urls.length === 0) {
+      return null;
+    }
+
+    return canonicalizeConfig({
+      urls,
+      username: editable.username,
+      credential: editable.credential,
+    });
+  }
+
+  function toConfigs(editables: EditableTurnServer[]): TurnServerConfig[] {
+    const seen = new Set<string>();
+    const result: TurnServerConfig[] = [];
+
+    for (const editable of editables) {
+      const config = toConfig(editable);
+      if (!config) {
+        continue;
+      }
+
+      const key = `${config.urls.join("|")}|${config.username ?? ""}|${config.credential ?? ""}`;
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      result.push(config);
+    }
+
+    return result;
+  }
+
+  function areConfigsEqual(
+    nextConfigs: TurnServerConfig[],
+    existingConfigs: TurnServerConfig[],
+  ) {
+    if (nextConfigs.length !== existingConfigs.length) {
+      return false;
+    }
+
+    return nextConfigs.every((config, index) => {
+      const other = existingConfigs[index];
+      return (
+        other &&
+        config.urls.length === other.urls.length &&
+        config.urls.every((url, urlIndex) => url === other.urls[urlIndex]) &&
+        (config.username ?? "") === (other.username ?? "") &&
+        (config.credential ?? "") === (other.credential ?? "")
+      );
+    });
+  }
+
+  function persistTurnServers() {
+    const desired = toConfigs(turnServers);
+    const current = get(settings).turnServers ?? [];
+
+    if (!areConfigsEqual(desired, current)) {
+      setTurnServers(desired);
+    }
+  }
+
+  function addTurnServer() {
+    turnServers = [
+      ...turnServers,
+      {
+        urls: "",
+        username: "",
+        credential: "",
+      },
+    ];
+  }
+
+  function removeTurnServer(index: number) {
+    turnServers = turnServers.filter((_, idx) => idx !== index);
+    persistTurnServers();
+  }
+
+  function updateTurnServer(
+    index: number,
+    field: keyof EditableTurnServer,
+    value: string,
+  ) {
+    turnServers = turnServers.map((server, idx) =>
+      idx === index ? { ...server, [field]: value } : server,
+    );
+    persistTurnServers();
+  }
+
+  function handleTurnServerInput(
+    index: number,
+    field: keyof EditableTurnServer,
+    event: Event,
+  ) {
+    const target = event.currentTarget as HTMLInputElement | null;
+    if (!target) return;
+    updateTurnServer(index, field, target.value);
+  }
 
   let audioInputDevices = $state<DeviceOption[]>([]);
   let videoInputDevices = $state<DeviceOption[]>([]);
@@ -285,6 +433,10 @@
       audioInputId = value.audioInputDeviceId ?? "";
       videoInputId = value.videoInputDeviceId ?? "";
       audioOutputId = value.audioOutputDeviceId ?? "";
+      const storedTurnServers = value.turnServers ?? [];
+      if (!areConfigsEqual(storedTurnServers, toConfigs(turnServers))) {
+        turnServers = storedTurnServers.map(toEditableTurnServer);
+      }
     });
   }
 
@@ -601,6 +753,126 @@
           ></video>
         </div>
       {/if}
+    </div>
+  </section>
+
+  <section
+    class="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+    aria-labelledby="turn-settings"
+  >
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <Label id="turn-settings" class="text-sm font-medium text-zinc-200">
+          TURN relays
+        </Label>
+        <p class="text-xs text-muted-foreground">
+          Provide TURN servers to keep calls working for users behind strict
+          NATs or firewalls.
+        </p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onclick={() => addTurnServer()}
+        class="flex items-center gap-2"
+      >
+        <Plus class="h-4 w-4" aria-hidden="true" />
+        Add relay
+      </Button>
+    </div>
+
+    {#if envTurnServers.length > 0}
+      <div
+        class="mt-4 space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-100"
+        role="status"
+      >
+        <p class="flex items-center gap-2">
+          <ServerCog class="h-3 w-3" aria-hidden="true" />
+          Environment-provided relays are automatically included:
+        </p>
+        <ul class="space-y-1">
+          {#each envTurnServers as server, index (index)}
+            <li class="flex flex-wrap gap-2">
+              <span class="font-medium text-emerald-50">
+                {Array.isArray(server.urls)
+                  ? server.urls.join(", ")
+                  : server.urls}
+              </span>
+              {#if server.username}
+                <span class="text-emerald-200/80">
+                  ({server.username}
+                  {server.credential ? " • credential set" : ""})
+                </span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/if}
+
+    <div class="mt-4 space-y-4">
+      {#if turnServers.length === 0}
+        <p class="text-xs text-muted-foreground">
+          No TURN relays configured yet. Add at least one to guarantee relay
+          connectivity when peers cannot establish a direct connection.
+        </p>
+      {/if}
+
+      {#each turnServers as server, index (index)}
+        <div class="space-y-3 rounded-lg border border-zinc-800/70 bg-zinc-900/60 p-4">
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div class="sm:col-span-2 space-y-1">
+              <Label class="text-xs text-zinc-400">Relay URLs</Label>
+              <Input
+                value={server.urls}
+                placeholder="turn:relay.example.com:3478"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck={false}
+                on:input={(event) =>
+                  handleTurnServerInput(index, "urls", event)}
+              />
+              <p class="text-[0.65rem] text-muted-foreground">
+                Separate multiple URLs with commas.
+              </p>
+            </div>
+            <div class="space-y-1">
+              <Label class="text-xs text-zinc-400">Username</Label>
+              <Input
+                value={server.username}
+                placeholder="Optional"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck={false}
+                on:input={(event) =>
+                  handleTurnServerInput(index, "username", event)}
+              />
+            </div>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div class="space-y-1">
+              <Label class="text-xs text-zinc-400">Credential</Label>
+              <Input
+                type="password"
+                value={server.credential}
+                placeholder="Optional"
+                autocomplete="new-password"
+                on:input={(event) =>
+                  handleTurnServerInput(index, "credential", event)}
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="justify-self-start text-red-400 hover:bg-red-400/10 hover:text-red-300"
+              onclick={() => removeTurnServer(index)}
+            >
+              <Trash2 class="mr-2 h-4 w-4" aria-hidden="true" />
+              Remove
+            </Button>
+          </div>
+        </div>
+      {/each}
     </div>
   </section>
 </div>
