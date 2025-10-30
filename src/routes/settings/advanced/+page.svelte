@@ -99,7 +99,7 @@
       setEnableCrossDeviceSync(enableCrossDeviceSync);
     }
     if (current.enableIntelligentMeshRouting !== enableMeshRouting) {
-      setEnableIntelligentMeshRouting(enableMeshRouting);
+      void setEnableIntelligentMeshRouting(enableMeshRouting);
     }
     if (current.enableDarkMode !== enableDarkMode) {
       setEnableDarkMode(enableDarkMode);

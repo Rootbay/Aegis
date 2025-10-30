@@ -45,6 +45,13 @@ vi.mock("$lib/stores/connectivityStore", async () => {
       lastDialAttempt: null,
       lastError: null,
     },
+    transportStatus: {
+      bluetoothEnabled: false,
+      wifiDirectEnabled: false,
+      bluetoothPeers: [],
+      wifiDirectPeers: [],
+      localPeerId: null,
+    },
     fallbackActive: false,
     fallbackReason: null,
     lastUpdated: null,

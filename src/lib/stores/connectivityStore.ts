@@ -8,7 +8,13 @@ export type ConnectivityStatus =
   | "mesh-only"
   | "online";
 
-export type ConnectionMedium = "self" | "mesh" | "internet" | "bridge";
+export type ConnectionMedium =
+  | "self"
+  | "mesh"
+  | "internet"
+  | "bridge"
+  | "bluetooth"
+  | "wifi-direct";
 
 export interface MeshPeer {
   id: string;
@@ -38,6 +44,7 @@ export interface ConnectivityEventPayload {
   bridgeSuggested?: boolean;
   reason?: string | null;
   gatewayStatus?: PartialGatewayStatus | null;
+  transports?: PartialTransportStatus | null;
 }
 
 export interface ConnectivityState {
@@ -50,6 +57,7 @@ export interface ConnectivityState {
   links: MeshLink[];
   bridgeSuggested: boolean;
   gatewayStatus: GatewayStatus;
+  transportStatus: TransportStatus;
   fallbackActive: boolean;
   fallbackReason: string | null;
   lastUpdated: number | null;
@@ -96,12 +104,36 @@ type PartialGatewayStatus = {
   lastError?: string | null;
 };
 
+export interface TransportStatus {
+  bluetoothEnabled: boolean;
+  wifiDirectEnabled: boolean;
+  bluetoothPeers: string[];
+  wifiDirectPeers: string[];
+  localPeerId: string | null;
+}
+
+type PartialTransportStatus = {
+  bluetoothEnabled?: boolean | null;
+  wifiDirectEnabled?: boolean | null;
+  bluetoothPeers?: string[] | null;
+  wifiDirectPeers?: string[] | null;
+  localPeerId?: string | null;
+};
+
 const defaultGatewayStatus: GatewayStatus = {
   bridgeModeEnabled: false,
   forwarding: false,
   upstreamPeers: 0,
   lastDialAttempt: null,
   lastError: null,
+};
+
+const defaultTransportStatus: TransportStatus = {
+  bluetoothEnabled: false,
+  wifiDirectEnabled: false,
+  bluetoothPeers: [],
+  wifiDirectPeers: [],
+  localPeerId: null,
 };
 
 type ConnectivityStore = Readable<ConnectivityState> & {
@@ -123,6 +155,7 @@ const initialState: ConnectivityState = {
   links: [],
   bridgeSuggested: false,
   gatewayStatus: { ...defaultGatewayStatus },
+  transportStatus: { ...defaultTransportStatus },
   fallbackActive: false,
   fallbackReason: null,
   lastUpdated: null,
@@ -139,6 +172,13 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
     bridgeSuggested: false,
     gatewayStatus: { ...defaultGatewayStatus },
     reason: "No connectivity data available.",
+    transports: {
+      bluetoothEnabled: false,
+      wifiDirectEnabled: false,
+      bluetoothPeers: [],
+      wifiDirectPeers: [],
+      localPeerId: null,
+    },
   },
   {
     internetReachable: false,
@@ -194,6 +234,13 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
     bridgeSuggested: true,
     gatewayStatus: { ...defaultGatewayStatus },
     reason: "Demo mesh snapshot (no backend events).",
+    transports: {
+      bluetoothEnabled: true,
+      wifiDirectEnabled: false,
+      bluetoothPeers: ["mesh-alpha"],
+      wifiDirectPeers: [],
+      localPeerId: "self",
+    },
   },
   {
     internetReachable: true,
@@ -286,7 +333,21 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
       upstreamPeers: 1,
     },
     reason: "Demo online snapshot (no backend events).",
+    transports: {
+      bluetoothEnabled: true,
+      wifiDirectEnabled: true,
+      bluetoothPeers: ["mesh-alpha"],
+      wifiDirectPeers: ["mesh-relay"],
+      localPeerId: "self",
+    },
   },
+];
+
+const meshConnectionMediums: ConnectionMedium[] = [
+  "mesh",
+  "bluetooth",
+  "wifi-direct",
+  "bridge",
 ];
 
 function normalizePeer(peer: PartialMeshPeer, index: number): MeshPeer {
@@ -358,6 +419,37 @@ function normalizeGatewayStatus(
   };
 }
 
+function normalizeTransportStatus(
+  status?: PartialTransportStatus | null,
+): TransportStatus {
+  if (!status) {
+    return { ...defaultTransportStatus };
+  }
+
+  const bluetoothPeers = Array.isArray(status.bluetoothPeers)
+    ? status.bluetoothPeers.filter(
+        (peer): peer is string => typeof peer === "string" && peer.length > 0,
+      )
+    : defaultTransportStatus.bluetoothPeers;
+
+  const wifiDirectPeers = Array.isArray(status.wifiDirectPeers)
+    ? status.wifiDirectPeers.filter(
+        (peer): peer is string => typeof peer === "string" && peer.length > 0,
+      )
+    : defaultTransportStatus.wifiDirectPeers;
+
+  return {
+    bluetoothEnabled: Boolean(status.bluetoothEnabled),
+    wifiDirectEnabled: Boolean(status.wifiDirectEnabled),
+    bluetoothPeers,
+    wifiDirectPeers,
+    localPeerId:
+      typeof status.localPeerId === "string" && status.localPeerId.length > 0
+        ? status.localPeerId
+        : null,
+  };
+}
+
 function computeStatus(
   state: ConnectivityState,
   payload: ConnectivityEventPayload,
@@ -426,11 +518,14 @@ export function createConnectivityStore(): ConnectivityStore {
         .filter((link): link is MeshLink => Boolean(link));
 
       const gatewayStatus = normalizeGatewayStatus(payload.gatewayStatus);
+      const transportStatus = normalizeTransportStatus(payload.transports);
 
       const meshPeers =
         typeof payload.meshPeers === "number"
           ? payload.meshPeers
-          : peers.filter((peer) => peer.connection === "mesh").length;
+          : peers.filter((peer) =>
+              meshConnectionMediums.includes(peer.connection),
+            ).length;
 
       const totalPeers =
         typeof payload.totalPeers === "number"
@@ -453,6 +548,7 @@ export function createConnectivityStore(): ConnectivityStore {
         links,
         bridgeSuggested: Boolean(payload.bridgeSuggested),
         gatewayStatus,
+        transportStatus,
         fallbackActive: current.fallbackActive,
         fallbackReason: current.fallbackReason,
         lastUpdated: Date.now(),

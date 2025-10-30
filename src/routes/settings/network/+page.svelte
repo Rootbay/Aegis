@@ -46,11 +46,11 @@
     }
 
     if (current.preferWifiDirect !== preferWifiDirect) {
-      setPreferWifiDirect(preferWifiDirect);
+      void setPreferWifiDirect(preferWifiDirect);
     }
 
     if (current.enableIntelligentMeshRouting !== enableIntelligentMeshRouting) {
-      setEnableIntelligentMeshRouting(enableIntelligentMeshRouting);
+      void setEnableIntelligentMeshRouting(enableIntelligentMeshRouting);
     }
 
     if (current.enableResilientFileTransfer !== enableResilientTransfers) {

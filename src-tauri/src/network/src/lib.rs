@@ -1,3 +1,7 @@
+pub mod bluetooth;
+pub mod transports;
+pub mod wifi_direct;
+
 use libp2p::{
     core::upgrade,
     gossipsub::{self, Gossipsub, GossipsubConfig, IdentTopic as Topic, MessageAuthenticity, GossipsubEvent},
@@ -17,6 +21,8 @@ use libp2p::NetworkBehaviour;
 use libp2p::request_response::{self, ProtocolName, RequestResponse, RequestResponseCodec, RequestResponseConfig, RequestResponseEvent};
 use futures::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use std::io;
+
+pub use transports::{TransportMedium, TransportSnapshot};
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "ComposedEvent")]
@@ -115,7 +121,9 @@ pub async fn initialize_network(
     local_key: Keypair,
 ) -> Result<(Swarm<Behaviour>, Topic), Box<dyn Error>> {
     let local_peer_id = libp2p::PeerId::from(local_key.public());
-    
+
+    transports::register_local_peer(local_peer_id.clone());
+
 
     let noise_keys = NoiseKeypair::<X25519Spec>::new().into_authentic(&local_key)?;
 
@@ -169,4 +177,16 @@ pub async fn send_data(
 
 pub fn has_any_peers(swarm: &Swarm<Behaviour>) -> bool {
     swarm.behaviour().gossipsub.all_peers().next().is_some()
+}
+
+pub async fn set_bluetooth_enabled(enabled: bool) -> Result<bool, String> {
+    bluetooth::set_bluetooth_enabled(enabled).await
+}
+
+pub async fn set_wifi_direct_enabled(enabled: bool) -> Result<bool, String> {
+    wifi_direct::set_wifi_direct_enabled(enabled).await
+}
+
+pub fn transport_snapshot() -> TransportSnapshot {
+    transports::snapshot()
 }

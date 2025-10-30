@@ -58,6 +58,21 @@ pub struct ConnectivityGatewayStatus {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct ConnectivityTransportStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bluetooth_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wifi_direct_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bluetooth_peers: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wifi_direct_peers: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_peer_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ConnectivityEventPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub internet_reachable: Option<bool>,
@@ -77,6 +92,8 @@ pub struct ConnectivityEventPayload {
     pub reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gateway_status: Option<ConnectivityGatewayStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transports: Option<ConnectivityTransportStatus>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

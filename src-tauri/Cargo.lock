@@ -4132,6 +4132,8 @@ dependencies = [
  "bytes",
  "futures",
  "libp2p",
+ "once_cell",
+ "parking_lot 0.12.4",
  "serde",
  "serde_json",
  "sha2 0.10.9",

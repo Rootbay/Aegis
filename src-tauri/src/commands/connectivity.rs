@@ -1,4 +1,6 @@
-use aegis_shared_types::{ConnectivityEventPayload, ConnectivityGatewayStatus};
+use aegis_shared_types::{
+    ConnectivityEventPayload, ConnectivityGatewayStatus, ConnectivityTransportStatus,
+};
 use tauri::{AppHandle, Runtime, State};
 
 use crate::commands::state::AppStateContainer;
@@ -22,4 +24,20 @@ pub async fn set_bridge_mode_enabled<R: Runtime>(
     enabled: bool,
 ) -> Result<ConnectivityGatewayStatus, String> {
     crate::connectivity::set_bridge_mode_enabled(&app, enabled).await
+}
+
+#[tauri::command]
+pub async fn set_bluetooth_enabled<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+) -> Result<ConnectivityTransportStatus, String> {
+    crate::connectivity::set_bluetooth_enabled(&app, enabled).await
+}
+
+#[tauri::command]
+pub async fn set_wifi_direct_enabled<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+) -> Result<ConnectivityTransportStatus, String> {
+    crate::connectivity::set_wifi_direct_enabled(&app, enabled).await
 }

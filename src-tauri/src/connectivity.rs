@@ -4,12 +4,15 @@ use std::time::Duration;
 
 use aegis_shared_types::{
     ConnectivityEventPayload, ConnectivityGatewayStatus, ConnectivityLink, ConnectivityPeer,
+    ConnectivityTransportStatus,
 };
 use chrono::{DateTime, Utc};
 use libp2p::{multiaddr::Protocol, swarm::Swarm, Multiaddr, PeerId};
 use once_cell::sync::{Lazy, OnceCell};
 use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::Mutex;
+
+use network::{self, TransportSnapshot};
 
 static SWARM_HANDLE: OnceCell<Arc<Mutex<Swarm<network::Behaviour>>>> = OnceCell::new();
 static SNAPSHOT_STORE: OnceCell<Arc<Mutex<Option<ConnectivityEventPayload>>>> = OnceCell::new();
@@ -102,6 +105,28 @@ fn peer_id_from_multiaddr(addr: &Multiaddr) -> Option<PeerId> {
     None
 }
 
+fn build_transport_status(snapshot: &TransportSnapshot) -> ConnectivityTransportStatus {
+    ConnectivityTransportStatus {
+        bluetooth_enabled: Some(snapshot.bluetooth_enabled),
+        wifi_direct_enabled: Some(snapshot.wifi_direct_enabled),
+        bluetooth_peers: Some(
+            snapshot
+                .bluetooth_peers
+                .iter()
+                .map(|peer| peer.to_base58())
+                .collect(),
+        ),
+        wifi_direct_peers: Some(
+            snapshot
+                .wifi_direct_peers
+                .iter()
+                .map(|peer| peer.to_base58())
+                .collect(),
+        ),
+        local_peer_id: snapshot.local_peer_id.as_ref().map(|peer| peer.to_base58()),
+    }
+}
+
 async fn bridge_state_snapshot() -> Option<BridgeSnapshot> {
     let state = BRIDGE_STATE.clone();
     let guard = state.lock().await;
@@ -156,9 +181,15 @@ async fn collect_and_store_snapshot(
     snapshot_store: &Arc<Mutex<Option<ConnectivityEventPayload>>>,
 ) -> Option<ConnectivityEventPayload> {
     let bridge_snapshot = bridge_state_snapshot().await;
+    let transport_snapshot = network::transport_snapshot();
     let snapshot = {
         let swarm_guard = swarm.lock().await;
-        compute_snapshot(&swarm_guard, local_peer_id, bridge_snapshot.as_ref())
+        compute_snapshot(
+            &swarm_guard,
+            local_peer_id,
+            bridge_snapshot.as_ref(),
+            &transport_snapshot,
+        )
     };
 
     {
@@ -200,6 +231,7 @@ fn compute_snapshot(
     swarm: &Swarm<network::Behaviour>,
     local_peer_id: &PeerId,
     bridge_snapshot: Option<&BridgeSnapshot>,
+    transport_snapshot: &TransportSnapshot,
 ) -> ConnectivityEventPayload {
     let connected: Vec<_> = swarm
         .behaviour()
@@ -209,6 +241,21 @@ fn compute_snapshot(
         .collect();
     let now = Utc::now().to_rfc3339();
     let local_peer_id_b58 = local_peer_id.to_base58();
+
+    let transport_status = build_transport_status(transport_snapshot);
+
+    let mut bluetooth_peers: HashSet<PeerId> =
+        transport_snapshot.bluetooth_peers.iter().cloned().collect();
+    let mut wifi_direct_peers: HashSet<PeerId> = transport_snapshot
+        .wifi_direct_peers
+        .iter()
+        .cloned()
+        .collect();
+
+    if let Some(local) = transport_snapshot.local_peer_id.as_ref() {
+        bluetooth_peers.remove(local);
+        wifi_direct_peers.remove(local);
+    }
 
     let tracked_upstreams: HashSet<PeerId> = bridge_snapshot
         .map(|snapshot| snapshot.tracked_peers.iter().cloned().collect())
@@ -241,7 +288,15 @@ fn compute_snapshot(
     for peer in connected {
         let peer_id_b58 = peer.to_base58();
         let is_upstream = tracked_upstreams.contains(&peer);
-        let connection_type = if is_upstream { "internet" } else { "mesh" };
+        let connection_type = if is_upstream {
+            "internet"
+        } else if bluetooth_peers.contains(&peer) {
+            "bluetooth"
+        } else if wifi_direct_peers.contains(&peer) {
+            "wifi-direct"
+        } else {
+            "mesh"
+        };
 
         peers.push(ConnectivityPeer {
             id: Some(peer_id_b58.clone()),
@@ -264,7 +319,12 @@ fn compute_snapshot(
 
     let mesh_peer_count = peers
         .iter()
-        .filter(|peer| peer.connection.as_deref() == Some("mesh"))
+        .filter(|peer| {
+            matches!(
+                peer.connection.as_deref(),
+                Some("mesh" | "bluetooth" | "wifi-direct" | "bridge")
+            )
+        })
         .count() as u32;
     let total_peers = peers.len() as u32;
     let mesh_reachable = mesh_peer_count > 0;
@@ -294,6 +354,7 @@ fn compute_snapshot(
         bridge_suggested: Some(bridge_suggested),
         reason: None,
         gateway_status: Some(gateway_status),
+        transports: Some(transport_status),
     }
 }
 
@@ -367,4 +428,36 @@ pub async fn set_bridge_mode_enabled<R: Runtime>(
     Ok(snapshot
         .gateway_status
         .unwrap_or_else(ConnectivityGatewayStatus::default))
+}
+
+pub async fn set_bluetooth_enabled<R: Runtime>(
+    app: &AppHandle<R>,
+    enabled: bool,
+) -> Result<ConnectivityTransportStatus, String> {
+    let changed = network::set_bluetooth_enabled(enabled).await?;
+
+    if changed {
+        let snapshot = refresh_connectivity_snapshot(app).await?;
+        Ok(snapshot
+            .transports
+            .unwrap_or_else(ConnectivityTransportStatus::default))
+    } else {
+        Ok(build_transport_status(&network::transport_snapshot()))
+    }
+}
+
+pub async fn set_wifi_direct_enabled<R: Runtime>(
+    app: &AppHandle<R>,
+    enabled: bool,
+) -> Result<ConnectivityTransportStatus, String> {
+    let changed = network::set_wifi_direct_enabled(enabled).await?;
+
+    if changed {
+        let snapshot = refresh_connectivity_snapshot(app).await?;
+        Ok(snapshot
+            .transports
+            .unwrap_or_else(ConnectivityTransportStatus::default))
+    } else {
+        Ok(build_transport_status(&network::transport_snapshot()))
+    }
 }
