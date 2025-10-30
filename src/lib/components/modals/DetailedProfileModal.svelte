@@ -411,8 +411,10 @@
         toasts.addToast("Friendship not found.", "error");
         return;
       }
-      await invoke("remove_friendship", { friendshipId: fs.id });
+      await invoke("remove_friendship", { friendship_id: fs.id });
+      friendStore.removeFriend(profileUser.id);
       toasts.addToast("Friend removed.", "success");
+      await friendStore.initialize();
     } catch (error: any) {
       console.error("Failed to remove friend:", error);
       toasts.addToast(error?.message || "Failed to remove friend.", "error");
