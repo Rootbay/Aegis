@@ -4,6 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::{atomic::AtomicBool, Arc};
 use tauri::{Emitter, Manager, Runtime, State};
 use tokio::sync::{mpsc, Mutex};
@@ -13,7 +14,9 @@ use aegis_shared_types::{AppState, FileTransferMode, User};
 use aep::{database, handle_aep_message, initialize_aep};
 use bs58;
 use e2ee;
-use network::{has_any_peers, initialize_network, send_data, ComposedEvent};
+use network::{
+    has_any_peers, initialize_network, send_data, ComposedEvent, LinkQuality, RoutedFrame,
+};
 use tokio::sync::mpsc::Sender as TokioSender;
 
 use crate::commands::messages::{
@@ -55,10 +58,11 @@ pub async fn initialize_app_state<R: Runtime>(
 
     initialize_aep();
 
-    let (swarm, topic) = initialize_network(identity.keypair().clone())
+    let (swarm, topic, router) = initialize_network(identity.keypair().clone())
         .await
         .map_err(|e| format!("Failed to initialize network: {}", e))?;
     let shared_swarm = Arc::new(Mutex::new(swarm));
+    let router = Arc::new(Mutex::new(router));
 
     let (net_tx, mut net_rx) = mpsc::channel::<Vec<u8>>(100);
     let (file_tx, mut file_rx) = mpsc::channel::<aegis_shared_types::FileTransferCommand>(16);
@@ -114,6 +118,7 @@ pub async fn initialize_app_state<R: Runtime>(
     spawn_connectivity_task(
         app.clone(),
         shared_swarm.clone(),
+        router.clone(),
         identity.peer_id(),
         connectivity_snapshot,
     );
@@ -287,9 +292,11 @@ pub async fn initialize_app_state<R: Runtime>(
     let db_pool_clone = db_pool.clone();
     let state_clone_for_aep = new_state.clone();
     let app_for_emit = app.clone();
+    let local_peer_id_str = state_clone_for_aep.identity.peer_id().to_base58();
     let topic_task = topic.clone();
     let shared_swarm_task = shared_swarm.clone();
     let outbox_task = outbox.clone();
+    let router_task = router.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
         loop {
@@ -298,10 +305,14 @@ pub async fn initialize_app_state<R: Runtime>(
                     if let Some(data) = maybe {
                         let mut swarm = shared_swarm_task.lock().await;
                         if has_any_peers(&swarm) {
-                            if let Err(e) = send_data(&mut swarm, &topic_task, data).await {
+                            let mut router_guard = router_task.lock().await;
+                            if let Err(e) =
+                                send_data(&mut swarm, &topic_task, &mut router_guard, data).await
+                            {
                                 eprintln!("Failed to send data over network: {}", e);
                             }
                         } else {
+                            drop(swarm);
                             let mut queue = outbox_task.lock().await;
                             queue.push_back(data);
                             if queue.len() > MAX_OUTBOX_MESSAGES {
@@ -572,9 +583,50 @@ pub async fn initialize_app_state<R: Runtime>(
                         SwarmEvent::Behaviour(ComposedEvent::Gossipsub(g_event)) => {
                             if let libp2p::gossipsub::GossipsubEvent::Message { propagation_source, message, .. } = g_event {
                                 if message.topic == topic_task.hash() {
-                                    match bincode::deserialize::<AepMessage>(&message.data) {
-                                        Ok(aep_message) => {
-                                            match aep_message.clone() {
+                                    {
+                                        let mut router_guard = router_task.lock().await;
+                                        router_guard.observe_peer(propagation_source.clone());
+                                    }
+                                    let payload_opt = match bincode::deserialize::<RoutedFrame>(&message.data) {
+                                        Ok(RoutedFrame::Broadcast { origin, payload }) => {
+                                            if let Ok(origin_peer) = libp2p::PeerId::from_str(&origin) {
+                                                let mut router_guard = router_task.lock().await;
+                                                router_guard.observe_peer(origin_peer);
+                                            }
+                                            Some(payload)
+                                        }
+                                        Ok(RoutedFrame::Routed { envelope }) => {
+                                            let path_peers: Vec<libp2p::PeerId> = envelope
+                                                .path
+                                                .iter()
+                                                .filter_map(|value| libp2p::PeerId::from_str(value).ok())
+                                                .collect();
+                                            {
+                                                let mut router_guard = router_task.lock().await;
+                                                for peer in &path_peers {
+                                                    router_guard.observe_peer(peer.clone());
+                                                }
+                                            }
+                                            if envelope.destination != local_peer_id_str {
+                                                continue;
+                                            }
+                                            {
+                                                let mut router_guard = router_task.lock().await;
+                                                if !path_peers.is_empty() {
+                                                    router_guard.record_route_success(
+                                                        &path_peers,
+                                                        Some(envelope.metrics.total_latency_ms),
+                                                    );
+                                                }
+                                            }
+                                            Some(envelope.payload.clone())
+                                        }
+                                        Err(_) => Some(message.data.clone()),
+                                    };
+                                    if let Some(payload_bytes) = payload_opt {
+                                        match bincode::deserialize::<AepMessage>(&payload_bytes) {
+                                            Ok(aep_message) => {
+                                                match aep_message.clone() {
                                                 AepMessage::FileTransferRequest { .. } => {}
                                                 AepMessage::FileTransferChunk { .. } => {}
                                                 AepMessage::FileTransferComplete { .. } => {}
@@ -933,17 +985,38 @@ pub async fn initialize_app_state<R: Runtime>(
                                         Err(e) => eprintln!("Failed to deserialize AepMessage: {}", e),
                                     }
                                 }
+                                }
                             }
                         }
                         SwarmEvent::Behaviour(ComposedEvent::Mdns(event)) => {
                             match event {
                                 libp2p::mdns::MdnsEvent::Discovered(list) => {
+                                    let local_peer = state_clone_for_aep.identity.peer_id();
+                                    let mut addresses = Vec::new();
+                                    {
+                                        let mut router_guard = router_task.lock().await;
+                                        for (peer_id, addr) in list {
+                                            router_guard.observe_peer(peer_id.clone());
+                                            router_guard.observe_direct_link(
+                                                local_peer.clone(),
+                                                peer_id,
+                                                LinkQuality::default(),
+                                            );
+                                            addresses.push(addr);
+                                        }
+                                    }
+
                                     let mut swarm = shared_swarm_task.lock().await;
-                                    for (_, addr) in list {
+                                    for addr in addresses {
                                         let _ = libp2p::swarm::Swarm::dial_addr(&mut *swarm, addr);
                                     }
                                 }
-                                libp2p::mdns::MdnsEvent::Expired(_) => {}
+                                libp2p::mdns::MdnsEvent::Expired(list) => {
+                                    let mut router_guard = router_task.lock().await;
+                                    for (peer_id, _) in list {
+                                        router_guard.remove_peer(&peer_id);
+                                    }
+                                }
                             }
                         }
                         SwarmEvent::Behaviour(ComposedEvent::ReqRes(event)) => {
@@ -1196,9 +1269,12 @@ pub async fn initialize_app_state<R: Runtime>(
                     let mut pending = outbox_task.lock().await;
                     if pending.is_empty() { continue; }
                     let mut swarm = shared_swarm_task.lock().await;
+                    let mut router_guard = router_task.lock().await;
                     let mut remaining: Vec<Vec<u8>> = Vec::new();
                     for data in pending.drain(..) {
-                        if let Err(e) = send_data(&mut swarm, &topic_task, data.clone()).await {
+                        if let Err(e) =
+                            send_data(&mut swarm, &topic_task, &mut router_guard, data.clone()).await
+                        {
                             eprintln!("Failed to flush queued data: {}", e);
                             remaining.push(data);
                         }

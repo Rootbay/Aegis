@@ -106,6 +106,7 @@ pub async fn run() {
             commands::connectivity::set_bridge_mode_enabled,
             commands::connectivity::set_bluetooth_enabled,
             commands::connectivity::set_wifi_direct_enabled,
+            commands::connectivity::set_routing_config,
             commands::collaboration::send_collaboration_update,
         ])
         .run(tauri::generate_context!())

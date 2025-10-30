@@ -134,6 +134,22 @@
                     <dt class="font-medium text-foreground">Via</dt>
                     <dd>{peer.via ?? "Direct"}</dd>
                   </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Route quality</dt>
+                    <dd>
+                      {peer.routeQuality !== null
+                        ? `${Math.round(peer.routeQuality * 100)}%`
+                        : "–"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Reliability</dt>
+                    <dd>
+                      {peer.successRate !== null
+                        ? `${Math.round(peer.successRate * 100)}%`
+                        : "–"}
+                    </dd>
+                  </div>
                 </dl>
               </div>
             {/each}
@@ -162,6 +178,7 @@
                   <th class="px-4 py-2 text-left font-medium">Target</th>
                   <th class="px-4 py-2 text-left font-medium">Medium</th>
                   <th class="px-4 py-2 text-left font-medium">Quality</th>
+                  <th class="px-4 py-2 text-left font-medium">Latency</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-border/60 bg-background/80">
@@ -171,6 +188,7 @@
                     <td class="px-4 py-2 text-foreground">{link.target}</td>
                     <td class="px-4 py-2 capitalize text-muted-foreground">{link.medium}</td>
                     <td class="px-4 py-2 text-muted-foreground">{link.quality !== null ? `${Math.round(link.quality * 100)}%` : "–"}</td>
+                    <td class="px-4 py-2 text-muted-foreground">{link.latencyMs !== null ? `${Math.round(link.latencyMs)} ms` : "–"}</td>
                   </tr>
                 {/each}
               </tbody>

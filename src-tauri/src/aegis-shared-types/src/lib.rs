@@ -26,6 +26,10 @@ pub struct ConnectivityPeer {
     pub last_seen: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_gateway: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route_quality: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success_rate: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -39,6 +43,8 @@ pub struct ConnectivityLink {
     pub quality: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub medium: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

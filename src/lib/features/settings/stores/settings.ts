@@ -28,6 +28,12 @@ export interface UserSettings {
 
 export type MessageDensity = "cozy" | "compact";
 
+export interface AerpRoutingConfig {
+  updateIntervalSeconds: number;
+  minRouteQuality: number;
+  maxHops: number;
+}
+
 export interface AppSettings {
   user: UserSettings;
   enableCommandPalette: boolean;
@@ -87,6 +93,9 @@ export interface AppSettings {
   updateReminderIntervalDays: number;
   connectedAccounts: ConnectedAccount[];
   trustedDevices: TrustedDevice[];
+  aerpRouteUpdateIntervalSeconds: number;
+  aerpMinRouteQuality: number;
+  aerpMaxHops: number;
 }
 
 export const defaultSettings: AppSettings = {
@@ -169,6 +178,9 @@ export const defaultSettings: AppSettings = {
       active: true,
     },
   ],
+  aerpRouteUpdateIntervalSeconds: 10,
+  aerpMinRouteQuality: 0.4,
+  aerpMaxHops: 6,
 };
 
 export const settings = persistentStore<AppSettings>(
@@ -199,6 +211,36 @@ export function updateSettings(partial: Partial<AppSettings>) {
     ...current,
     ...partial,
   }));
+}
+
+function sanitizeRoutingConfig(config: AerpRoutingConfig): AerpRoutingConfig {
+  return {
+    updateIntervalSeconds: Math.max(1, Math.round(config.updateIntervalSeconds)),
+    minRouteQuality: Math.min(Math.max(config.minRouteQuality, 0), 1),
+    maxHops: Math.max(1, Math.round(config.maxHops)),
+  };
+}
+
+async function pushRoutingConfig(config: AerpRoutingConfig) {
+  const sanitized = sanitizeRoutingConfig(config);
+  updateSettings({
+    aerpRouteUpdateIntervalSeconds: sanitized.updateIntervalSeconds,
+    aerpMinRouteQuality: sanitized.minRouteQuality,
+    aerpMaxHops: sanitized.maxHops,
+  });
+
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      await invoke("set_routing_config", {
+        updateIntervalSecs: sanitized.updateIntervalSeconds,
+        minQuality: sanitized.minRouteQuality,
+        maxHops: sanitized.maxHops,
+      });
+    }
+  } catch (error) {
+    console.error("Failed to update routing configuration", error);
+  }
 }
 
 function createBooleanSetter<Key extends AppSettingsKey>(key: Key) {
@@ -336,6 +378,51 @@ export async function setPreferWifiDirect(value: boolean) {
     console.error("Failed to update Wi-Fi Direct preference", error);
     updateAppSetting("preferWifiDirect", current);
   }
+}
+
+export async function setRoutingUpdateIntervalSeconds(value: number) {
+  const current = get(settings);
+  const sanitized = Math.max(1, Math.round(value));
+
+  if (current.aerpRouteUpdateIntervalSeconds === sanitized) {
+    return;
+  }
+
+  await pushRoutingConfig({
+    updateIntervalSeconds: sanitized,
+    minRouteQuality: current.aerpMinRouteQuality,
+    maxHops: current.aerpMaxHops,
+  });
+}
+
+export async function setRoutingQualityThreshold(value: number) {
+  const current = get(settings);
+  const sanitized = Math.min(Math.max(value, 0), 1);
+
+  if (Math.abs(current.aerpMinRouteQuality - sanitized) < Number.EPSILON) {
+    return;
+  }
+
+  await pushRoutingConfig({
+    updateIntervalSeconds: current.aerpRouteUpdateIntervalSeconds,
+    minRouteQuality: sanitized,
+    maxHops: current.aerpMaxHops,
+  });
+}
+
+export async function setRoutingMaxHops(value: number) {
+  const current = get(settings);
+  const sanitized = Math.max(1, Math.round(value));
+
+  if (current.aerpMaxHops === sanitized) {
+    return;
+  }
+
+  await pushRoutingConfig({
+    updateIntervalSeconds: current.aerpRouteUpdateIntervalSeconds,
+    minRouteQuality: current.aerpMinRouteQuality,
+    maxHops: sanitized,
+  });
 }
 
 export async function setEnableIntelligentMeshRouting(value: boolean) {

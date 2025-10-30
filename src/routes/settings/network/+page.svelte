@@ -2,6 +2,8 @@
   import { get } from "svelte/store";
   import { Label } from "$lib/components/ui/label/index.js";
   import { Switch } from "$lib/components/ui/switch/index.js";
+  import { Input } from "$lib/components/ui/input/index.js";
+  import { Slider } from "$lib/components/ui/slider/index.js";
   import { toasts } from "$lib/stores/ToastStore";
   import { connectivityStore } from "$lib/stores/connectivityStore";
   import {
@@ -11,6 +13,9 @@
     setEnableBridgeMode,
     setEnableIntelligentMeshRouting,
     setResilientFileTransferEnabled,
+    setRoutingUpdateIntervalSeconds,
+    setRoutingQualityThreshold,
+    setRoutingMaxHops,
   } from "$lib/features/settings/stores/settings";
 
   let enableCrossDeviceSync = $state(get(settings).enableCrossDeviceSync);
@@ -22,6 +27,11 @@
   let enableResilientTransfers = $state(
     get(settings).enableResilientFileTransfer,
   );
+  let routingUpdateInterval = $state(
+    get(settings).aerpRouteUpdateIntervalSeconds,
+  );
+  let routingQualityThreshold = $state(get(settings).aerpMinRouteQuality);
+  let routingMaxHops = $state(get(settings).aerpMaxHops);
   let currentGatewayStatus = $state(get(connectivityStore).gatewayStatus);
   let bridgeSuggested = $state(get(connectivityStore).bridgeSuggested);
   let togglingBridge = $state(false);
@@ -33,6 +43,9 @@
       enableBridgeMode = value.enableBridgeMode;
       enableIntelligentMeshRouting = value.enableIntelligentMeshRouting;
       enableResilientTransfers = value.enableResilientFileTransfer;
+      routingUpdateInterval = value.aerpRouteUpdateIntervalSeconds;
+      routingQualityThreshold = value.aerpMinRouteQuality;
+      routingMaxHops = value.aerpMaxHops;
     });
 
     return () => unsubscribe();
@@ -55,6 +68,18 @@
 
     if (current.enableResilientFileTransfer !== enableResilientTransfers) {
       setResilientFileTransferEnabled(enableResilientTransfers);
+    }
+
+    if (current.aerpRouteUpdateIntervalSeconds !== routingUpdateInterval) {
+      void setRoutingUpdateIntervalSeconds(routingUpdateInterval);
+    }
+
+    if (Math.abs(current.aerpMinRouteQuality - routingQualityThreshold) > Number.EPSILON) {
+      void setRoutingQualityThreshold(routingQualityThreshold);
+    }
+
+    if (current.aerpMaxHops !== routingMaxHops) {
+      void setRoutingMaxHops(routingMaxHops);
     }
   });
 
@@ -263,6 +288,72 @@
       class="shrink-0"
       bind:checked={enableResilientTransfers}
       aria-label="Toggle resilient file transfer"
+    />
+  </section>
+
+  <section class="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <Label class="text-sm font-medium text-zinc-200">
+          Route update cadence
+        </Label>
+        <p class="text-xs text-muted-foreground">
+          Control how frequently AERP refreshes path scores.
+        </p>
+      </div>
+      <span class="text-xs text-muted-foreground">{routingUpdateInterval}s</span>
+    </div>
+    <Slider
+      min={2}
+      max={60}
+      step={1}
+      bind:value={routingUpdateInterval}
+      aria-label="Route update interval in seconds"
+    />
+  </section>
+
+  <section class="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <Label class="text-sm font-medium text-zinc-200">
+          Minimum route quality
+        </Label>
+        <p class="text-xs text-muted-foreground">
+          Paths below this reliability threshold will be ignored.
+        </p>
+      </div>
+      <span class="text-xs text-muted-foreground">
+        {Math.round(routingQualityThreshold * 100)}%
+      </span>
+    </div>
+    <Slider
+      min={0}
+      max={1}
+      step={0.05}
+      bind:value={routingQualityThreshold}
+      aria-label="Minimum acceptable route quality"
+    />
+  </section>
+
+  <section
+    class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
+    <div class="mr-4">
+      <Label class="text-sm font-medium text-zinc-200" for="routing-max-hops">
+        Maximum hops per route
+      </Label>
+      <p class="text-xs text-muted-foreground">
+        Limit how far messages can travel across the mesh.
+      </p>
+    </div>
+    <Input
+      id="routing-max-hops"
+      type="number"
+      min={1}
+      max={16}
+      bind:value={routingMaxHops}
+      aria-label="Maximum route hops"
+      class="w-20"
     />
   </section>
 </div>

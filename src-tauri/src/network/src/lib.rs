@@ -1,7 +1,9 @@
+pub mod aerp;
 pub mod bluetooth;
 pub mod transports;
 pub mod wifi_direct;
 
+use aerp::{AerpRouter, RoutedEnvelope, RoutedFrame};
 use libp2p::{
     core::upgrade,
     gossipsub::{self, Gossipsub, GossipsubConfig, IdentTopic as Topic, MessageAuthenticity, GossipsubEvent},
@@ -16,12 +18,16 @@ use libp2p::{
 };
 use gossipsub::error::PublishError;
 use std::error::Error;
+use std::str::FromStr;
 // Derive macro re-exported at crate root for this libp2p version
 use libp2p::NetworkBehaviour;
 use libp2p::request_response::{self, ProtocolName, RequestResponse, RequestResponseCodec, RequestResponseConfig, RequestResponseEvent};
 use futures::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use std::io;
 
+pub use aerp::{
+    AerpConfig, AerpRouter, LinkQuality, RouteMetrics, RouteSnapshot, RouterSnapshot, RoutedEnvelope, RoutedFrame,
+};
 pub use transports::{TransportMedium, TransportSnapshot};
 
 #[derive(NetworkBehaviour)]
@@ -119,7 +125,7 @@ impl RequestResponseCodec for FileTransferCodec {
 
 pub async fn initialize_network(
     local_key: Keypair,
-) -> Result<(Swarm<Behaviour>, Topic), Box<dyn Error>> {
+) -> Result<(Swarm<Behaviour>, Topic, AerpRouter), Box<dyn Error>> {
     let local_peer_id = libp2p::PeerId::from(local_key.public());
 
     transports::register_local_peer(local_peer_id.clone());
@@ -152,26 +158,72 @@ pub async fn initialize_network(
     let req_res = RequestResponse::new(FileTransferCodec, protocols, rr_cfg);
 
     let behaviour = Behaviour { gossipsub, identify, mdns, req_res };
+    let router = AerpRouter::new(local_peer_id.clone());
+
     let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
-    Ok((swarm, topic))
+    Ok((swarm, topic, router))
 }
 
 pub async fn send_data(
     swarm: &mut Swarm<Behaviour>,
     topic: &Topic,
+    router: &mut AerpRouter,
     data: Vec<u8>,
 ) -> Result<(), Box<dyn Error>> {
-    match swarm.behaviour_mut().gossipsub.publish(topic.clone(), data) {
-        Ok(_) => {}
-        Err(PublishError::InsufficientPeers) => {
-            // No peers yet; treat as a no-op instead of bubbling an error
-            return Ok(());
+    router.recompute_routes();
+    let origin = router.local_peer().to_base58();
+    let routes = router.routes();
+
+    if routes.is_empty() {
+        let frame = RoutedFrame::Broadcast { origin, payload: data };
+        let bytes = bincode::serialize(&frame)?;
+        match swarm.behaviour_mut().gossipsub.publish(topic.clone(), bytes) {
+            Ok(_) => {}
+            Err(PublishError::InsufficientPeers) => return Ok(()),
+            Err(e) => return Err(Box::new(e)),
         }
-        Err(e) => return Err(Box::new(e)),
+        return Ok(());
     }
+
+    let mut any_sent = false;
+    for route in routes {
+        let path_strings: Vec<String> = route
+            .path
+            .iter()
+            .map(|peer| peer.to_base58())
+            .collect();
+        let destination = route.target.to_base58();
+        let envelope = RoutedEnvelope {
+            origin: origin.clone(),
+            destination,
+            path: path_strings,
+            metrics: route.metrics.clone(),
+            payload: data.clone(),
+        };
+        let frame = RoutedFrame::Routed { envelope };
+        let bytes = bincode::serialize(&frame)?;
+        match swarm.behaviour_mut().gossipsub.publish(topic.clone(), bytes) {
+            Ok(_) => {
+                any_sent = true;
+            }
+            Err(PublishError::InsufficientPeers) => continue,
+            Err(e) => return Err(Box::new(e)),
+        }
+    }
+
+    if !any_sent {
+        let fallback = RoutedFrame::Broadcast { origin, payload: data };
+        let bytes = bincode::serialize(&fallback)?;
+        match swarm.behaviour_mut().gossipsub.publish(topic.clone(), bytes) {
+            Ok(_) => {}
+            Err(PublishError::InsufficientPeers) => return Ok(()),
+            Err(e) => return Err(Box::new(e)),
+        }
+    }
+
     Ok(())
 }
 

@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -17,6 +18,7 @@ use network::{self, TransportSnapshot};
 static SWARM_HANDLE: OnceCell<Arc<Mutex<Swarm<network::Behaviour>>>> = OnceCell::new();
 static SNAPSHOT_STORE: OnceCell<Arc<Mutex<Option<ConnectivityEventPayload>>>> = OnceCell::new();
 static LOCAL_PEER_ID: OnceCell<PeerId> = OnceCell::new();
+static ROUTER_HANDLE: OnceCell<Arc<Mutex<network::AerpRouter>>> = OnceCell::new();
 static BRIDGE_STATE: Lazy<Arc<Mutex<BridgeState>>> =
     Lazy::new(|| Arc::new(Mutex::new(BridgeState::new())));
 
@@ -136,12 +138,14 @@ async fn bridge_state_snapshot() -> Option<BridgeSnapshot> {
 pub fn spawn_connectivity_task<R: Runtime>(
     app: AppHandle<R>,
     swarm: Arc<Mutex<Swarm<network::Behaviour>>>,
+    router: Arc<Mutex<network::AerpRouter>>,
     local_peer_id: PeerId,
     snapshot_store: Arc<Mutex<Option<ConnectivityEventPayload>>>,
 ) {
     SWARM_HANDLE.get_or_init(|| swarm.clone());
     SNAPSHOT_STORE.get_or_init(|| snapshot_store.clone());
     LOCAL_PEER_ID.get_or_init(|| local_peer_id.clone());
+    ROUTER_HANDLE.get_or_init(|| router.clone());
 
     {
         let bridge_state = BRIDGE_STATE.clone();
@@ -182,6 +186,12 @@ async fn collect_and_store_snapshot(
 ) -> Option<ConnectivityEventPayload> {
     let bridge_snapshot = bridge_state_snapshot().await;
     let transport_snapshot = network::transport_snapshot();
+    let router_snapshot = if let Some(router) = ROUTER_HANDLE.get() {
+        let guard = router.lock().await;
+        Some(guard.snapshot())
+    } else {
+        None
+    };
     let snapshot = {
         let swarm_guard = swarm.lock().await;
         compute_snapshot(
@@ -189,6 +199,7 @@ async fn collect_and_store_snapshot(
             local_peer_id,
             bridge_snapshot.as_ref(),
             &transport_snapshot,
+            router_snapshot.as_ref(),
         )
     };
 
@@ -232,6 +243,7 @@ fn compute_snapshot(
     local_peer_id: &PeerId,
     bridge_snapshot: Option<&BridgeSnapshot>,
     transport_snapshot: &TransportSnapshot,
+    router_snapshot: Option<&network::RouterSnapshot>,
 ) -> ConnectivityEventPayload {
     let connected: Vec<_> = swarm
         .behaviour()
@@ -271,19 +283,24 @@ fn compute_snapshot(
         .unwrap_or(false);
     let forwarding_active = bridge_mode_enabled && upstream_connected > 0;
 
-    let mut peers = Vec::with_capacity(connected.len() + 1);
-    peers.push(ConnectivityPeer {
-        id: Some(local_peer_id_b58.clone()),
-        label: Some("This Device".to_string()),
-        connection: Some("self".to_string()),
-        hop_count: Some(0),
-        via: None,
-        latency_ms: Some(0),
-        last_seen: Some(now.clone()),
-        is_gateway: Some(forwarding_active),
-    });
+    let mut peer_entries: HashMap<String, ConnectivityPeer> = HashMap::new();
+    peer_entries.insert(
+        local_peer_id_b58.clone(),
+        ConnectivityPeer {
+            id: Some(local_peer_id_b58.clone()),
+            label: Some("This Device".to_string()),
+            connection: Some("self".to_string()),
+            hop_count: Some(0),
+            via: None,
+            latency_ms: Some(0),
+            last_seen: Some(now.clone()),
+            is_gateway: Some(forwarding_active),
+            route_quality: Some(1.0),
+            success_rate: Some(1.0),
+        },
+    );
 
-    let mut links = Vec::with_capacity(connected.len());
+    let mut link_entries: HashMap<(String, String), ConnectivityLink> = HashMap::new();
 
     for peer in connected {
         let peer_id_b58 = peer.to_base58();
@@ -298,24 +315,116 @@ fn compute_snapshot(
             "mesh"
         };
 
-        peers.push(ConnectivityPeer {
-            id: Some(peer_id_b58.clone()),
-            label: None,
-            connection: Some(connection_type.to_string()),
-            hop_count: None,
-            via: Some(local_peer_id_b58.clone()),
-            latency_ms: None,
-            last_seen: Some(now.clone()),
-            is_gateway: Some(is_upstream),
-        });
+        peer_entries
+            .entry(peer_id_b58.clone())
+            .and_modify(|entry| {
+                entry.connection = Some(connection_type.to_string());
+                entry.via = Some(local_peer_id_b58.clone());
+                entry.last_seen = Some(now.clone());
+                entry.is_gateway = Some(is_upstream);
+            })
+            .or_insert(ConnectivityPeer {
+                id: Some(peer_id_b58.clone()),
+                label: None,
+                connection: Some(connection_type.to_string()),
+                hop_count: None,
+                via: Some(local_peer_id_b58.clone()),
+                latency_ms: None,
+                last_seen: Some(now.clone()),
+                is_gateway: Some(is_upstream),
+                route_quality: None,
+                success_rate: None,
+            });
 
-        links.push(ConnectivityLink {
-            source: Some(local_peer_id_b58.clone()),
-            target: Some(peer_id_b58),
-            quality: None,
-            medium: Some(connection_type.to_string()),
-        });
+        link_entries
+            .entry((local_peer_id_b58.clone(), peer_id_b58.clone()))
+            .or_insert(ConnectivityLink {
+                source: Some(local_peer_id_b58.clone()),
+                target: Some(peer_id_b58.clone()),
+                quality: None,
+                medium: Some(connection_type.to_string()),
+                latency_ms: None,
+            });
     }
+
+    if let Some(snapshot) = router_snapshot {
+        for route in &snapshot.routes {
+            let target_id = route.target.to_base58();
+            let via = route.via.as_ref().map(|peer| peer.to_base58());
+            let metrics = &route.metrics;
+            let latency = metrics
+                .total_latency_ms
+                .round()
+                .clamp(0.0, f64::from(u32::MAX));
+            peer_entries
+                .entry(target_id.clone())
+                .and_modify(|entry| {
+                    entry.hop_count = Some(metrics.hop_count);
+                    entry.via = via.clone();
+                    entry.latency_ms = Some(latency as u32);
+                    entry.route_quality = Some(metrics.quality());
+                    entry.success_rate = Some(metrics.reliability as f32);
+                })
+                .or_insert(ConnectivityPeer {
+                    id: Some(target_id.clone()),
+                    label: None,
+                    connection: Some("mesh".to_string()),
+                    hop_count: Some(metrics.hop_count),
+                    via: via.clone(),
+                    latency_ms: Some(latency as u32),
+                    last_seen: Some(now.clone()),
+                    is_gateway: Some(false),
+                    route_quality: Some(metrics.quality()),
+                    success_rate: Some(metrics.reliability as f32),
+                });
+        }
+
+        for link in &snapshot.links {
+            let source = link.source.to_base58();
+            let target = link.target.to_base58();
+            let quality = link.quality.reliability as f32;
+            let latency = link.quality.latency_ms as f32;
+            let entry = link_entries
+                .entry((source.clone(), target.clone()))
+                .or_insert(ConnectivityLink {
+                    source: Some(source.clone()),
+                    target: Some(target.clone()),
+                    quality: None,
+                    medium: Some("mesh".to_string()),
+                    latency_ms: None,
+                });
+            entry.quality = Some(quality.clamp(0.0, 1.0));
+            entry.latency_ms = Some(latency.max(0.0));
+        }
+    }
+
+    let mut peers: Vec<ConnectivityPeer> = peer_entries.into_iter().map(|(_, peer)| peer).collect();
+    peers.sort_by(|a, b| {
+        let a_is_local = a.id.as_deref() == Some(local_peer_id_b58.as_str());
+        let b_is_local = b.id.as_deref() == Some(local_peer_id_b58.as_str());
+        match (a_is_local, b_is_local) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => {
+                a.id.as_ref()
+                    .unwrap_or(&String::new())
+                    .cmp(b.id.as_ref().unwrap_or(&String::new()))
+            }
+        }
+    });
+
+    let mut links: Vec<ConnectivityLink> = link_entries.into_iter().map(|(_, link)| link).collect();
+    links.sort_by(|a, b| {
+        let key_a = (
+            a.source.as_ref().cloned().unwrap_or_default(),
+            a.target.as_ref().cloned().unwrap_or_default(),
+        );
+        let key_b = (
+            b.source.as_ref().cloned().unwrap_or_default(),
+            b.target.as_ref().cloned().unwrap_or_default(),
+        );
+        key_a.cmp(&key_b)
+    });
 
     let mesh_peer_count = peers
         .iter()
@@ -460,4 +569,25 @@ pub async fn set_wifi_direct_enabled<R: Runtime>(
     } else {
         Ok(build_transport_status(&network::transport_snapshot()))
     }
+}
+
+pub async fn set_routing_config<R: Runtime>(
+    app: &AppHandle<R>,
+    update_interval_secs: u64,
+    min_quality: f32,
+    max_hops: u32,
+) -> Result<network::AerpConfig, String> {
+    let router = ROUTER_HANDLE
+        .get()
+        .cloned()
+        .ok_or_else(|| "Routing engine not initialised.".to_string())?;
+
+    let mut guard = router.lock().await;
+    guard.update_parameters(update_interval_secs, min_quality, max_hops as usize);
+    let config = guard.config().clone();
+    drop(guard);
+
+    let _ = refresh_connectivity_snapshot(app).await;
+
+    Ok(config)
 }
