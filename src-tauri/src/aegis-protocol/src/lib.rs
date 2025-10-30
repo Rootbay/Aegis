@@ -70,6 +70,11 @@ pub enum AepMessage {
         created_at: DateTime<Utc>,
         signature: Option<Vec<u8>>,
     },
+    LeaveGroupChat {
+        group_id: String,
+        member_id: String,
+        signature: Option<Vec<u8>>,
+    },
     CreateServer { server: Server, signature: Option<Vec<u8>> },
     JoinServer { server_id: String, user_id: String, signature: Option<Vec<u8>> },
     CreateChannel { channel: Channel, signature: Option<Vec<u8>> },
@@ -225,6 +230,12 @@ pub struct CreateGroupChatData {
     pub creator_id: String,
     pub member_ids: Vec<String>,
     pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LeaveGroupChatData {
+    pub group_id: String,
+    pub member_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

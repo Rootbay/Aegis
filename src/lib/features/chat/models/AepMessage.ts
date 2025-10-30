@@ -198,6 +198,14 @@ export interface CreateGroupChat {
   signature?: BytePayload;
 }
 
+export interface LeaveGroupChat {
+  group_id?: string;
+  groupId?: string;
+  member_id?: string;
+  memberId?: string;
+  signature?: BytePayload;
+}
+
 export interface CreateServer {
   server: Server;
   signature?: BytePayload;
@@ -287,4 +295,5 @@ export interface AepMessage {
   FileTransferError?: FileTransferError;
   MessageReaction?: MessageReaction;
   CreateGroupChat?: CreateGroupChat;
+  LeaveGroupChat?: LeaveGroupChat;
 }

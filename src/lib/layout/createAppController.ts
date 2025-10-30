@@ -546,6 +546,16 @@ export function createAppController(): AppController {
             return;
           }
 
+          if (receivedMessage.LeaveGroupChat) {
+            const leavePayload = receivedMessage.LeaveGroupChat;
+            const groupId = leavePayload.group_id ?? leavePayload.groupId;
+            const memberId = leavePayload.member_id ?? leavePayload.memberId;
+            if (groupId && memberId) {
+              chatStore.handleGroupMemberLeft(groupId, memberId);
+            }
+            return;
+          }
+
           if (receivedMessage.CreateGroupChat) {
             const groupPayload = receivedMessage.CreateGroupChat;
             const groupId =

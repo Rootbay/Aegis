@@ -31,6 +31,7 @@ pub async fn run() {
             commands::messages::rotate_group_key,
             commands::messages::send_encrypted_group_message,
             commands::chats::create_group_dm,
+            commands::chats::leave_group_dm,
             commands::chats::get_group_chats,
             commands::presence::send_presence_update,
             commands::presence::mark_self_presence_local,

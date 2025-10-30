@@ -1,5 +1,5 @@
 use crate::commands::state::AppStateContainer;
-use aegis_protocol::{AepMessage, CreateGroupChatData};
+use aegis_protocol::{AepMessage, CreateGroupChatData, LeaveGroupChatData};
 use aep::database::{self, GroupChat, GroupChatMember, GroupChatRecord};
 use chrono::Utc;
 use serde::Serialize;
@@ -151,4 +151,52 @@ pub async fn get_group_chats(
         .map_err(|e| e.to_string())?;
 
     Ok(records.into_iter().map(map_record_to_payload).collect())
+}
+
+#[tauri::command]
+pub async fn leave_group_dm(
+    group_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+
+    let user_id = state.identity.peer_id().to_base58();
+
+    let removed = database::remove_group_chat_member(&state.db_pool, &group_id, &user_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !removed {
+        return Err("You are not a member of this group.".to_string());
+    }
+
+    let payload = LeaveGroupChatData {
+        group_id: group_id.clone(),
+        member_id: user_id.clone(),
+    };
+    let signing_bytes = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&signing_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let message = AepMessage::LeaveGroupChat {
+        group_id,
+        member_id: user_id,
+        signature: Some(signature),
+    };
+    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
