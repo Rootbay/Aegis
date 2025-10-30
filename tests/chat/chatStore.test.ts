@@ -19,12 +19,51 @@ vi.mock("$lib/features/servers/stores/serverStore", () => {
   };
 });
 
+const encryptionMocks = vi.hoisted(() => {
+  const defaultEncrypt = vi.fn(
+    async ({
+      content,
+      attachments,
+    }: {
+      content: string;
+      attachments: unknown[];
+    }) => ({
+      content,
+      attachments,
+      wasEncrypted: false,
+    }),
+  );
+  const defaultDecode = vi.fn(
+    async ({
+      content,
+      attachments,
+    }: {
+      content: string;
+      attachments?: unknown[] | null;
+    }) => ({
+      content,
+      attachments: attachments ?? undefined,
+      wasEncrypted: false,
+    }),
+  );
+  return {
+    encryptMock: defaultEncrypt,
+    decodeMock: defaultDecode,
+  };
+});
+
+vi.mock("$lib/features/chat/services/chatEncryptionService", () => ({
+  encryptOutgoingMessagePayload: encryptionMocks.encryptMock,
+  decodeIncomingMessagePayload: encryptionMocks.decodeMock,
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
 import { createChatStore } from "../../src/lib/features/chat/stores/chatStore";
 import type { EditMessage } from "../../src/lib/features/chat/models/AepMessage";
+import type { MessageAttachmentPayload } from "../../src/lib/features/chat/services/chatEncryptionService";
 import { invoke } from "@tauri-apps/api/core";
 
 const invokeMock = vi.mocked(invoke);
@@ -51,6 +90,20 @@ const createLocalStorageMock = () => {
 
 let createObjectURLSpy: ReturnType<typeof vi.fn>;
 let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
+
+const createMockFile = (
+  bytes: number[] | Uint8Array,
+  name: string,
+  type: string,
+): File => {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  return {
+    name,
+    size: data.byteLength,
+    type,
+    arrayBuffer: async () => data.slice().buffer,
+  } as unknown as File;
+};
 
 describe("chatStore message editing", () => {
   beforeEach(() => {
@@ -267,5 +320,148 @@ describe("chatStore encrypted message refresh", () => {
       limit: expect.any(Number),
       offset: 0,
     });
+  });
+});
+
+describe("chatStore plaintext encryption fallbacks", () => {
+  beforeEach(() => {
+    createObjectURLSpy = vi.fn(
+      () => `blob:mock-${Math.random().toString(16).slice(2)}`,
+    );
+    revokeObjectURLSpy = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    } as unknown as typeof URL);
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+
+    invokeMock.mockReset();
+    encryptionMocks.encryptMock.mockReset();
+    encryptionMocks.decodeMock.mockReset();
+
+    encryptionMocks.encryptMock.mockImplementation(
+      async ({ content, attachments }) => ({
+        content: `cipher:${content}`,
+        attachments,
+        wasEncrypted: true,
+      }),
+    );
+    encryptionMocks.decodeMock.mockImplementation(async ({ content, attachments }) => ({
+      content,
+      attachments: attachments ?? undefined,
+      wasEncrypted: false,
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  const setupActiveDm = async () => {
+    const store = createChatStore();
+    invokeMock.mockImplementation(async (command) => {
+      if (command === "get_messages") {
+        return [];
+      }
+      return undefined;
+    });
+    await store.setActiveChat("friend-plain", "dm");
+    return store;
+  };
+
+  it("sends plaintext content to fallback command when encrypted send fails", async () => {
+    const store = await setupActiveDm();
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "get_messages") {
+        return [];
+      }
+      if (command === "send_encrypted_dm") {
+        throw new Error("no session");
+      }
+      if (command === "send_direct_message") {
+        return undefined;
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+
+    await store.sendMessage("Plaintext fallback");
+
+    const encryptedCall = invokeMock.mock.calls.find(
+      ([command]) => command === "send_encrypted_dm",
+    );
+    expect(encryptedCall?.[1]).toEqual(
+      expect.objectContaining({ message: "cipher:Plaintext fallback" }),
+    );
+
+    const fallbackCall = invokeMock.mock.calls.find(
+      ([command]) => command === "send_direct_message",
+    );
+    expect(fallbackCall?.[1]).toEqual(
+      expect.objectContaining({ message: "Plaintext fallback" }),
+    );
+  });
+
+  it("sends plaintext attachments to fallback command when encrypted send fails", async () => {
+    const store = await setupActiveDm();
+
+    const originalBytes = new Uint8Array([5, 6, 7, 8]);
+    const attachment = createMockFile(
+      originalBytes,
+      "fallback.bin",
+      "application/octet-stream",
+    );
+
+    encryptionMocks.encryptMock.mockImplementationOnce(
+      async ({
+        content,
+        attachments,
+      }: {
+        content: string;
+        attachments: MessageAttachmentPayload[];
+      }) => ({
+        content: `cipher:${content}`,
+        attachments: attachments.map((item) => ({
+          ...item,
+          data: new Uint8Array((item.data as Uint8Array).map((value) => value ^ 0xff)),
+        })),
+        wasEncrypted: true,
+      }),
+    );
+
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "get_messages") {
+        return [];
+      }
+      if (command === "send_encrypted_dm_with_attachments") {
+        throw new Error("no session");
+      }
+      if (command === "send_direct_message_with_attachments") {
+        expect(payload?.message).toBe("Attachment fallback");
+        const sent = payload?.attachments?.[0]?.data as Uint8Array;
+        expect(Array.from(sent)).toEqual(Array.from(originalBytes));
+        return undefined;
+      }
+      if (command === "send_encrypted_dm") {
+        return undefined;
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+
+    await store.sendMessageWithAttachments("Attachment fallback", [attachment]);
+
+    const encryptedAttachmentCall = invokeMock.mock.calls.find(
+      ([command]) => command === "send_encrypted_dm_with_attachments",
+    );
+    expect(encryptedAttachmentCall?.[1]).toEqual(
+      expect.objectContaining({ message: "cipher:Attachment fallback" }),
+    );
+
+    const fallbackAttachmentCall = invokeMock.mock.calls.find(
+      ([command]) => command === "send_direct_message_with_attachments",
+    );
+    expect(fallbackAttachmentCall?.[1]).toEqual(
+      expect.objectContaining({ message: "Attachment fallback" }),
+    );
   });
 });

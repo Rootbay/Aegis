@@ -1575,8 +1575,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       newMessage,
     ]);
 
+    const plaintextContent = content;
+    const replyPayload = buildReplyMetadataPayload(options);
     let encryptedFailed = false;
-    let backendContent = content;
+    let backendContent = plaintextContent;
     try {
       const encrypted = await encryptOutgoingMessagePayload({
         content,
@@ -1590,10 +1592,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       backendContent = encrypted.wasEncrypted ? encrypted.content : content;
     } catch (error) {
       console.warn("Message content encryption failed, using plaintext", error);
-      backendContent = content;
+      backendContent = plaintextContent;
     }
     try {
-      const replyPayload = buildReplyMetadataPayload(options);
       if (type === "dm") {
         await invoke("send_encrypted_dm", {
           message: backendContent,
@@ -1622,10 +1623,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         error,
       );
       try {
-        const replyPayload = buildReplyMetadataPayload(options);
         if (type === "dm") {
           await invoke("send_direct_message", {
-            message: backendContent,
+            message: plaintextContent,
             recipientId: chatId,
             recipient_id: chatId,
             expiresAt: optimisticExpiresAt,
@@ -1634,7 +1634,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           });
         } else {
           await invoke("send_message", {
-            message: backendContent,
+            message: plaintextContent,
             channelId: channelId,
             channel_id: channelId,
             serverId: chatId,
@@ -1739,7 +1739,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const backendAttachments = attachmentsCombined.map(
       (entry) => entry.backend,
     );
-    let contentForSend = content;
+    const plaintextContent = content;
+    const plaintextAttachments = backendAttachments.map((attachment) => ({
+      ...attachment,
+    }));
+    let contentForSend = plaintextContent;
     let attachmentsForSend = backendAttachments;
     try {
       const encrypted = await encryptOutgoingMessagePayload({
@@ -1808,12 +1812,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             error,
           );
           await invoke("send_direct_message_with_attachments", {
-            message: contentForSend,
+            message: plaintextContent,
             recipientId: chatId,
             recipient_id: chatId,
             expiresAt: optimisticExpiresAt,
             expires_at: optimisticExpiresAt,
-            attachments: attachmentsForSend,
+            attachments: plaintextAttachments,
             ...replyPayload,
           });
         }
