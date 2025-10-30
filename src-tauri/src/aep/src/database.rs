@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::fmt;
 use serde_json;
 use aegis_types::AegisError;
 
@@ -2154,6 +2155,122 @@ impl ServerInviteRow {
             uses: self.uses,
         })
     }
+}
+
+#[derive(Debug)]
+pub enum RedeemServerInviteError {
+    InviteNotFound,
+    InviteExpired,
+    InviteMaxedOut,
+    Database(sqlx::Error),
+}
+
+impl fmt::Display for RedeemServerInviteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RedeemServerInviteError::InviteNotFound => write!(f, "Invite not found"),
+            RedeemServerInviteError::InviteExpired => write!(f, "Invite has expired"),
+            RedeemServerInviteError::InviteMaxedOut => {
+                write!(f, "Invite has reached its maximum number of uses")
+            }
+            RedeemServerInviteError::Database(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for RedeemServerInviteError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            RedeemServerInviteError::Database(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<sqlx::Error> for RedeemServerInviteError {
+    fn from(value: sqlx::Error) -> Self {
+        RedeemServerInviteError::Database(value)
+    }
+}
+
+pub struct RedeemedServerInvite {
+    pub server: Server,
+    pub already_member: bool,
+}
+
+pub async fn redeem_server_invite_by_code(
+    pool: &Pool<Sqlite>,
+    invite_code: &str,
+    user_id: &str,
+) -> Result<RedeemedServerInvite, RedeemServerInviteError> {
+    let mut tx = pool.begin().await?;
+
+    let invite_row = sqlx::query_as!(
+        ServerInviteRow,
+        "SELECT id, server_id, code, created_by, created_at, expires_at, max_uses, uses FROM server_invites WHERE code = ?",
+        invite_code
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let invite_row = match invite_row {
+        Some(row) => row,
+        None => {
+            tx.rollback().await.ok();
+            return Err(RedeemServerInviteError::InviteNotFound);
+        }
+    };
+
+    let invite = invite_row.clone().into_invite()?;
+
+    let already_member: bool = sqlx::query_scalar!(
+        "SELECT COUNT(1) as \"count!: i64\" FROM server_members WHERE server_id = ? AND user_id = ?",
+        invite.server_id,
+        user_id
+    )
+    .fetch_one(&mut *tx)
+    .await?
+        > 0;
+
+    if !already_member {
+        if let Some(expires_at) = invite.expires_at {
+            if expires_at < Utc::now() {
+                tx.rollback().await.ok();
+                return Err(RedeemServerInviteError::InviteExpired);
+            }
+        }
+
+        if let Some(max_uses) = invite.max_uses {
+            if invite.uses >= max_uses {
+                tx.rollback().await.ok();
+                return Err(RedeemServerInviteError::InviteMaxedOut);
+            }
+        }
+
+        sqlx::query!(
+            "INSERT OR IGNORE INTO server_members (server_id, user_id) VALUES (?, ?)",
+            invite.server_id,
+            user_id
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query!(
+            "UPDATE server_invites SET uses = uses + 1 WHERE id = ?",
+            invite.id
+        )
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    let server = get_server_by_id(pool, &invite.server_id).await?;
+
+    Ok(RedeemedServerInvite {
+        server,
+        already_member,
+    })
 }
 
 pub async fn get_invites_for_servers(
