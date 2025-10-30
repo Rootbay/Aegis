@@ -318,10 +318,45 @@ export const setEnableGroupMessageNotifications = createBooleanSetter(
 export const setEnableCrossDeviceSync = createBooleanSetter(
   "enableCrossDeviceSync",
 );
-export const setPreferWifiDirect = createBooleanSetter("preferWifiDirect");
-export const setEnableIntelligentMeshRouting = createBooleanSetter(
-  "enableIntelligentMeshRouting",
-);
+export async function setPreferWifiDirect(value: boolean) {
+  const current = get(settings).preferWifiDirect;
+
+  if (current === value) {
+    return;
+  }
+
+  updateAppSetting("preferWifiDirect", value);
+
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      await invoke("set_wifi_direct_enabled", { enabled: value });
+    }
+  } catch (error) {
+    console.error("Failed to update Wi-Fi Direct preference", error);
+    updateAppSetting("preferWifiDirect", current);
+  }
+}
+
+export async function setEnableIntelligentMeshRouting(value: boolean) {
+  const current = get(settings).enableIntelligentMeshRouting;
+
+  if (current === value) {
+    return;
+  }
+
+  updateAppSetting("enableIntelligentMeshRouting", value);
+
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      await invoke("set_bluetooth_enabled", { enabled: value });
+    }
+  } catch (error) {
+    console.error("Failed to update Bluetooth mesh routing", error);
+    updateAppSetting("enableIntelligentMeshRouting", current);
+  }
+}
 
 export async function setEnableBridgeMode(
   value: Extract<AppSettings["enableBridgeMode"], boolean>,
