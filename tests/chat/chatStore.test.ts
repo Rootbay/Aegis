@@ -176,8 +176,9 @@ describe("chatStore metadata derivations", () => {
 
   it("tracks last activity and unread counts for chats", () => {
     const store = createChatStore();
-    const timestamp1 = "2024-01-01T10:00:00.000Z";
-    const timestamp2 = "2024-01-01T12:00:00.000Z";
+    const now = Date.now();
+    const timestamp1 = new Date(now - 60_000).toISOString();
+    const timestamp2 = new Date(now).toISOString();
     store.handleMessagesUpdate("chat-1", [
       {
         id: "msg-1",
@@ -186,6 +187,7 @@ describe("chatStore metadata derivations", () => {
         content: "Hello there",
         timestamp: timestamp1,
         read: true,
+        pending: false,
       },
       {
         id: "msg-2",
@@ -194,6 +196,7 @@ describe("chatStore metadata derivations", () => {
         content: "Reply",
         timestamp: timestamp2,
         read: false,
+        pending: false,
       },
     ]);
 
@@ -202,5 +205,67 @@ describe("chatStore metadata derivations", () => {
     expect(metadata?.lastMessage?.id).toBe("msg-2");
     expect(metadata?.lastActivityAt).toBe(new Date(timestamp2).toISOString());
     expect(metadata?.unreadCount).toBe(1);
+  });
+});
+
+describe("chatStore encrypted message refresh", () => {
+  beforeEach(() => {
+    createObjectURLSpy = vi.fn(
+      () => `blob:mock-${Math.random().toString(16).slice(2)}`,
+    );
+    revokeObjectURLSpy = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL: createObjectURLSpy,
+      revokeObjectURL: revokeObjectURLSpy,
+    } as unknown as typeof URL);
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "decrypt_chat_payload") {
+        return {
+          content: payload?.content ?? "",
+          attachments: payload?.attachments ?? [],
+          wasEncrypted: true,
+        };
+      }
+      if (command === "get_messages") {
+        const now = new Date().toISOString();
+        return [
+          {
+            id: "encrypted-1",
+            chat_id: payload?.chatId ?? payload?.chat_id ?? "friend-456",
+            sender_id: "friend-456",
+            content: "Encrypted hello",
+            timestamp: now,
+            read: false,
+          },
+        ];
+      }
+      return undefined;
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("hydrates chat history for encrypted direct message events", async () => {
+    const store = createChatStore();
+
+    expect(get(store.activeChatId)).toBeNull();
+
+    await store.refreshChatFromStorage("friend-456", "dm");
+
+    const messages = get(store.messagesByChatId).get("friend-456") ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.content).toBe("Encrypted hello");
+    expect(get(store.activeChatId)).toBeNull();
+    expect(invokeMock).toHaveBeenCalledWith("get_messages", {
+      chatId: "friend-456",
+      chat_id: "friend-456",
+      limit: expect.any(Number),
+      offset: 0,
+    });
   });
 });
