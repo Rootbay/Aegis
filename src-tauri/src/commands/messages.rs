@@ -35,6 +35,12 @@ pub struct AttachmentDescriptor {
 pub struct EncryptedDmPayload {
     pub content: String,
     pub attachments: Vec<AttachmentDescriptor>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to_message_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_snapshot_author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_snapshot_snippet: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -412,6 +418,9 @@ async fn persist_and_broadcast_message(
     conversation_id: Option<String>,
     channel_id: Option<String>,
     server_id: Option<String>,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<chrono::DateTime<Utc>>,
 ) -> Result<(), String> {
     let peer_id = state.identity.peer_id().to_base58();
@@ -483,6 +492,9 @@ async fn persist_and_broadcast_message(
         pinned: false,
         attachments: db_attachments,
         reactions: HashMap::new(),
+        reply_to_message_id: reply_to_message_id.clone(),
+        reply_snapshot_author: reply_snapshot_author.clone(),
+        reply_snapshot_snippet: reply_snapshot_snippet.clone(),
         edited_at: None,
         edited_by: None,
         expires_at: expires_at.clone(),
@@ -501,6 +513,9 @@ async fn persist_and_broadcast_message(
         conversation_id: payload_conversation_id.clone(),
         attachments: protocol_attachments.clone(),
         expires_at: expires_at.clone(),
+        reply_to_message_id: reply_to_message_id.clone(),
+        reply_snapshot_author: reply_snapshot_author.clone(),
+        reply_snapshot_snippet: reply_snapshot_snippet.clone(),
     };
     let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
     let signature = state
@@ -519,6 +534,9 @@ async fn persist_and_broadcast_message(
         conversation_id: payload_conversation_id,
         attachments: protocol_attachments,
         expires_at,
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
@@ -649,6 +667,9 @@ pub async fn send_message(
     message: String,
     channel_id: Option<String>,
     server_id: Option<String>,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
@@ -664,6 +685,9 @@ pub async fn send_message(
         None,
         channel_id,
         server_id,
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
         expires_at,
     )
     .await
@@ -675,6 +699,9 @@ pub async fn send_message_with_attachments(
     attachments: Vec<AttachmentDescriptor>,
     channel_id: Option<String>,
     server_id: Option<String>,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
@@ -690,6 +717,9 @@ pub async fn send_message_with_attachments(
         None,
         channel_id,
         server_id,
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
         expires_at,
     )
     .await
@@ -699,6 +729,9 @@ pub async fn send_message_with_attachments(
 pub async fn send_direct_message(
     recipient_id: String,
     message: String,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
@@ -714,6 +747,9 @@ pub async fn send_direct_message(
         Some(recipient_id),
         None,
         None,
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
         expires_at,
     )
     .await
@@ -724,6 +760,9 @@ pub async fn send_direct_message_with_attachments(
     recipient_id: String,
     message: String,
     attachments: Vec<AttachmentDescriptor>,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
@@ -739,6 +778,9 @@ pub async fn send_direct_message_with_attachments(
         Some(recipient_id),
         None,
         None,
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
         expires_at,
     )
     .await
@@ -1072,6 +1114,9 @@ mod tests {
             pinned: false,
             attachments: Vec::new(),
             reactions: HashMap::new(),
+            reply_to_message_id: None,
+            reply_snapshot_author: None,
+            reply_snapshot_snippet: None,
             edited_at: None,
             edited_by: None,
             expires_at: None,
@@ -1171,6 +1216,9 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
+            None,
         )
         .await;
 
@@ -1219,6 +1267,9 @@ mod tests {
             pinned: false,
             attachments: Vec::new(),
             reactions: HashMap::new(),
+            reply_to_message_id: None,
+            reply_snapshot_author: None,
+            reply_snapshot_snippet: None,
             edited_at: None,
             edited_by: None,
             expires_at: None,
@@ -1323,6 +1374,9 @@ mod tests {
 pub async fn send_encrypted_dm(
     recipient_id: String,
     message: String,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
@@ -1343,6 +1397,9 @@ pub async fn send_encrypted_dm(
         pinned: false,
         attachments: Vec::new(),
         reactions: HashMap::new(),
+        reply_to_message_id: reply_to_message_id.clone(),
+        reply_snapshot_author: reply_snapshot_author.clone(),
+        reply_snapshot_snippet: reply_snapshot_snippet.clone(),
         edited_at: None,
         edited_by: None,
         expires_at,
@@ -1351,12 +1408,21 @@ pub async fn send_encrypted_dm(
         .await
         .map_err(|e| e.to_string())?;
 
+    let payload = EncryptedDmPayload {
+        content: message.clone(),
+        attachments: Vec::new(),
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
+    };
+    let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+
     // Encrypt via E2EE manager
     let pkt = {
         let e2ee_arc = e2ee::init_global_manager();
         let mut mgr = e2ee_arc.lock();
         let pkt = mgr
-            .encrypt_for(&recipient_id, message.as_bytes())
+            .encrypt_for(&recipient_id, &plaintext)
             .map_err(|e| format!("E2EE encrypt error: {e}"))?;
         pkt
     };
@@ -1395,6 +1461,9 @@ pub async fn send_encrypted_dm_with_attachments(
     recipient_id: String,
     message: String,
     attachments: Vec<AttachmentDescriptor>,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
@@ -1462,6 +1531,9 @@ pub async fn send_encrypted_dm_with_attachments(
         pinned: false,
         attachments: db_attachments,
         reactions: HashMap::new(),
+        reply_to_message_id: reply_to_message_id.clone(),
+        reply_snapshot_author: reply_snapshot_author.clone(),
+        reply_snapshot_snippet: reply_snapshot_snippet.clone(),
         edited_at: None,
         edited_by: None,
         expires_at,
@@ -1473,6 +1545,9 @@ pub async fn send_encrypted_dm_with_attachments(
     let payload = EncryptedDmPayload {
         content: message,
         attachments: payload_attachments,
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
     };
     let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
 
@@ -1620,17 +1695,28 @@ pub async fn send_encrypted_group_message(
     server_id: String,
     channel_id: Option<String>,
     message: String,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?.clone();
     let _ = parse_optional_datetime(expires_at)?;
+    let payload = EncryptedDmPayload {
+        content: message,
+        attachments: Vec::new(),
+        reply_to_message_id,
+        reply_snapshot_author,
+        reply_snapshot_snippet,
+    };
+    let serialized_payload = bincode::serialize(&payload).map_err(|e| e.to_string())?;
     // Encrypt using group key
     let (epoch, nonce, ciphertext) = {
         let arc = e2ee::init_global_manager();
         let mgr = arc.lock();
-        mgr.encrypt_group_message(&server_id, &channel_id, message.as_bytes())
+        mgr.encrypt_group_message(&server_id, &channel_id, &serialized_payload)
             .map_err(|e| format!("Group E2EE: {e}"))?
     };
 

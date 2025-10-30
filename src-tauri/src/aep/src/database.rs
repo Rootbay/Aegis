@@ -100,6 +100,12 @@ pub struct Message {
     pub attachments: Vec<Attachment>,
     pub reactions: HashMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to_message_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_snapshot_author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_snapshot_snippet: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub edited_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub edited_by: Option<String>,
@@ -1290,7 +1296,7 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
     let edited_at_str = message.edited_at.map(|value| value.to_rfc3339());
     let expires_at_str = message.expires_at.map(|value| value.to_rfc3339());
     sqlx::query!(
-        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, pinned, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, pinned, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         message.id,
         message.chat_id,
         message.sender_id,
@@ -1298,6 +1304,9 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
         timestamp_str,
         message.read,
         message.pinned,
+        message.reply_to_message_id.as_deref(),
+        message.reply_snapshot_author.as_deref(),
+        message.reply_snapshot_snippet.as_deref(),
         edited_at_str,
         message.edited_by,
         expires_at_str,
@@ -1660,6 +1669,9 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         timestamp: String,
         read: bool,
         pinned: bool,
+        reply_to_message_id: Option<String>,
+        reply_snapshot_author: Option<String>,
+        reply_snapshot_snippet: Option<String>,
         edited_at: Option<String>,
         edited_by: Option<String>,
         expires_at: Option<String>,
@@ -1667,7 +1679,7 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
 
     let messages_raw = sqlx::query_as!(
         MessageRaw,
-        "SELECT id, chat_id, sender_id, content, timestamp, read, pinned, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+        "SELECT id, chat_id, sender_id, content, timestamp, read, pinned, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         chat_id,
         limit,
         offset
@@ -1716,6 +1728,9 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
             pinned: m_raw.pinned,
             attachments: Vec::new(),
             reactions: HashMap::new(),
+            reply_to_message_id: m_raw.reply_to_message_id,
+            reply_snapshot_author: m_raw.reply_snapshot_author,
+            reply_snapshot_snippet: m_raw.reply_snapshot_snippet,
             edited_at,
             edited_by: m_raw.edited_by,
             expires_at,

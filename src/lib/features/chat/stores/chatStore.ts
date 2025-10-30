@@ -607,7 +607,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const serverModerationPreferences = new Map<string, ModerationPreferences>();
   const channelServerIndex = new Map<string, string>();
 
-  const normalizeModerationPreferences = (server: Server): ModerationPreferences => {
+  const normalizeModerationPreferences = (
+    server: Server,
+  ): ModerationPreferences => {
     const settings = server.settings ?? {};
     const transparentEdits = settings.transparentEdits === true;
     const deletedMessageDisplay =
@@ -649,7 +651,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return DEFAULT_MODERATION_PREFERENCES;
     }
     return (
-      serverModerationPreferences.get(serverId) ?? DEFAULT_MODERATION_PREFERENCES
+      serverModerationPreferences.get(serverId) ??
+      DEFAULT_MODERATION_PREFERENCES
     );
   };
 
@@ -1054,14 +1057,17 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const replySnapshotAuthor =
       message.reply_snapshot_author ?? message.replySnapshotAuthor ?? undefined;
     const replySnapshotSnippet =
-      message.reply_snapshot_snippet ?? message.replySnapshotSnippet ?? undefined;
-    const replySnapshot: ReplySnapshot | undefined =
-      replySnapshotAuthor || replySnapshotSnippet
-        ? {
-            author: replySnapshotAuthor ?? undefined,
-            snippet: replySnapshotSnippet ?? undefined,
-          }
-        : undefined;
+      message.reply_snapshot_snippet ??
+      message.replySnapshotSnippet ??
+      undefined;
+    const hasReplySnapshot =
+      replySnapshotAuthor !== undefined || replySnapshotSnippet !== undefined;
+    const replySnapshot: ReplySnapshot | undefined = hasReplySnapshot
+      ? {
+          author: replySnapshotAuthor ?? undefined,
+          snippet: replySnapshotSnippet ?? undefined,
+        }
+      : undefined;
 
     const normalized: Message = {
       id: message.id,
@@ -2247,14 +2253,17 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const replySnapshotAuthor =
       message.reply_snapshot_author ?? message.replySnapshotAuthor ?? undefined;
     const replySnapshotSnippet =
-      message.reply_snapshot_snippet ?? message.replySnapshotSnippet ?? undefined;
-    const replySnapshot: ReplySnapshot | undefined =
-      replySnapshotAuthor || replySnapshotSnippet
-        ? {
-            author: replySnapshotAuthor ?? undefined,
-            snippet: replySnapshotSnippet ?? undefined,
-          }
-        : undefined;
+      message.reply_snapshot_snippet ??
+      message.replySnapshotSnippet ??
+      undefined;
+    const hasReplySnapshot =
+      replySnapshotAuthor !== undefined || replySnapshotSnippet !== undefined;
+    const replySnapshot: ReplySnapshot | undefined = hasReplySnapshot
+      ? {
+          author: replySnapshotAuthor ?? undefined,
+          snippet: replySnapshotSnippet ?? undefined,
+        }
+      : undefined;
 
     const newMessage: Message = {
       id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
@@ -2591,7 +2600,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (preferences.deletedMessageDisplay === "tombstone") {
       const removed: Message[] = [];
       const deletedAt = new Date().toISOString();
-      const initiator = payload.initiator_id ?? payload.initiatorId ?? undefined;
+      const initiator =
+        payload.initiator_id ?? payload.initiatorId ?? undefined;
       updateMessagesForChat(chatId, (existing) =>
         existing.map((message) => {
           if (message.id !== messageId) {
