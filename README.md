@@ -128,6 +128,17 @@ bun tauri dev
 
 This will open the Aegis Messenger application, connected to the Rust backend, and will automatically reload as you make changes to the frontend code.
 
+### TURN relay configuration
+
+Real-time voice and video calls now require at least one TURN relay so peers behind strict NATs or firewalls can connect reliably. Aegis always bundles the public Google STUN service, but you must provision your own TURN infrastructure for production deployments.
+
+You can provide TURN servers in two ways:
+
+- **Environment variable:** set `VITE_TURN_SERVERS` before running `bun tauri dev` or `bun tauri build`. The value can be a JSON object/array describing servers (e.g. `[{"urls":"turn:relay.example.com:3478","username":"relay","credential":"secret"}]`) or a simple comma/space separated list of TURN URLs when no credentials are required.
+- **In-app settings:** navigate to **Settings → Voice & Video** and add TURN relays in the new configuration section. The values are persisted in the secure desktop store so administrators can manage them at runtime.
+
+Each entry accepts one or more TURN URLs plus optional credentials. All configured relays are combined with the default STUN service for every WebRTC session.
+
 ### Building for Production
 
 To build a production-ready executable:

@@ -4,6 +4,8 @@ import { getInvoke, getListen, type InvokeFn } from "$lib/services/tauri";
 import { groupChats } from "$lib/features/chat/stores/chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { userStore } from "$lib/stores/userStore";
+import { settings } from "$lib/features/settings/stores/settings";
+import { getIceServersFromConfig } from "$lib/features/calls/utils/iceServers";
 
 const isBrowser = typeof window !== "undefined";
 
@@ -141,7 +143,12 @@ const INITIAL_STATE: CallState = {
 };
 
 const STATUS_CLEAR_DELAY = 6000;
-const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+
+function resolveIceServers(): RTCIceServer[] {
+  const currentSettings = get(settings);
+  const turnServers = currentSettings.turnServers ?? [];
+  return getIceServersFromConfig(turnServers);
+}
 
 function stopStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => {
@@ -552,7 +559,7 @@ function createCallStore() {
       throw new Error("Unknown participant for call.");
     }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: resolveIceServers() });
     mutateParticipant(peerId, (current) => {
       if (!current) {
         return current;
