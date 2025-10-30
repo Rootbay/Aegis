@@ -136,6 +136,11 @@ interface ChatStore {
     },
   ) => Promise<void>;
   handleMessagesUpdate: (chatId: string, messages: Message[]) => void;
+  refreshChatFromStorage: (
+    chatId: string,
+    chatType: "dm" | "server" | "group",
+    channelId?: string | null,
+  ) => Promise<void>;
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
   sendMessageWithAttachments: (
     content: string,
@@ -2067,6 +2072,28 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const refreshChatFromStorage = async (
+    chatId: string,
+    chatType: "dm" | "server" | "group",
+    channelId?: string | null,
+  ) => {
+    if (!chatId) {
+      return;
+    }
+
+    if (chatType === "server") {
+      const resolvedChannelId =
+        channelId ?? get(serverChannelSelectionsStore).get(chatId) ?? null;
+      if (!resolvedChannelId) {
+        return;
+      }
+      await refreshChatMessages(resolvedChannelId);
+      return;
+    }
+
+    await refreshChatMessages(chatId);
+  };
+
   const normalizeWindowFocus = () => {
     if (typeof document === "undefined") {
       return true;
@@ -2895,6 +2922,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     loadGroupChats,
     leaveGroupChat,
     handleGroupMemberLeft,
+    refreshChatFromStorage,
   };
 }
 

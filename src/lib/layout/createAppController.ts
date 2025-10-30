@@ -531,6 +531,42 @@ export function createAppController(): AppController {
             return;
           }
 
+          if (receivedMessage.EncryptedChatMessage) {
+            const payload = receivedMessage.EncryptedChatMessage;
+            const meId = get(userStore).me?.id ?? null;
+            const senderId = payload.sender ?? null;
+            const recipientId = payload.recipient ?? null;
+            let targetChatId: string | null = null;
+
+            if (meId) {
+              if (senderId === meId) {
+                targetChatId = recipientId;
+              } else if (recipientId === meId) {
+                targetChatId = senderId;
+              }
+            }
+
+            if (!targetChatId) {
+              targetChatId = recipientId ?? senderId ?? null;
+            }
+
+            if (targetChatId) {
+              void chatStore.refreshChatFromStorage(targetChatId, "dm");
+            }
+            return;
+          }
+
+          if (receivedMessage.EncryptedGroupMessage) {
+            const payload = receivedMessage.EncryptedGroupMessage;
+            const serverId = payload.server_id ?? null;
+            const channelId = payload.channel_id ?? null;
+            const targetId = serverId ?? channelId;
+            if (targetId && channelId) {
+              void chatStore.refreshChatFromStorage(targetId, "server", channelId);
+            }
+            return;
+          }
+
           if (receivedMessage.MessageReaction) {
             chatStore.handleReactionUpdate(receivedMessage.MessageReaction);
             return;
