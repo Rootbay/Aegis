@@ -22,11 +22,12 @@
     "@humanspeak/svelte-virtual-list": "^0.3.2",
     "@lucide/svelte": "^0.544.0",
     "@tauri-apps/api": "^2.8.0",
-    "@tauri-apps/plugin-opener": "^2.5.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
+    "@tauri-apps/plugin-opener": "^2.5.0",
     "@tauri-apps/plugin-store": "^2.4.0",
     "html5-qrcode": "^2.3.8",
     "lru-cache": "^11.2.1",
+    "onnxruntime-web": "^1.23.0",
     "qrcode": "^1.5.4",
     "uuid": "^13.0.0",
     "yjs": "^13.6.27"

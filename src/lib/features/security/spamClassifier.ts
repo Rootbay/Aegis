@@ -1,7 +1,10 @@
+import { toasts } from "../../stores/ToastStore";
+import { spamModelInference } from "./spamModelInference";
+
 export const SPAM_FLAG_THRESHOLD = 0.7;
 export const SPAM_AUTO_MUTE_THRESHOLD = 0.9;
 
-type SpamContext = "message" | "friend-request" | "profile";
+export type SpamContext = "message" | "friend-request" | "profile";
 
 export interface SpamClassification {
   score: number;
@@ -17,7 +20,7 @@ interface ScoreOptions {
   subjectId?: string;
 }
 
-interface SpamFeatures {
+export interface SpamFeatures {
   keywordScore: number;
   keywordHits: string[];
   urlCount: number;
@@ -50,7 +53,7 @@ const PUNCTUATION_BURST_REGEX = /([!?])\1{2,}/g;
 const REPEATING_CHAR_REGEX = /(.)\1{3,}/g;
 const WORD_REGEX = /[a-z0-9]+/gi;
 
-class MockSpamModel {
+class HeuristicSpamModel {
   private loaded = false;
 
   async load() {
@@ -123,13 +126,16 @@ function extractFeatures(text: string): SpamFeatures {
   }
 
   const urlMatches = lower.match(URL_REGEX);
-  const punctuationMatches = lower.match(PUNCTUATION_BURST_REGEX);
-  const repeatingMatches = lower.match(REPEATING_CHAR_REGEX);
+  const uppercaseMatches = text.match(/[A-Z]/g) ?? [];
+  const letters = text.match(/[a-zA-Z]/g) ?? [];
 
-  const tokens = lower.match(WORD_REGEX) ?? [];
-  const uppercaseChars = (text.match(/[A-Z]/g) ?? []).length;
-  const alphaChars = (text.match(/[A-Za-z]/g) ?? []).length;
-  const uppercaseRatio = alphaChars === 0 ? 0 : uppercaseChars / alphaChars;
+  const punctuationMatches = text.match(PUNCTUATION_BURST_REGEX);
+  const repeatingMatches = text.match(REPEATING_CHAR_REGEX);
+
+  const words = text.match(WORD_REGEX) ?? [];
+  const tokens = words.filter((word) => word.length > 0);
+
+  const uppercaseRatio = letters.length === 0 ? 0 : uppercaseMatches.length / letters.length;
 
   return {
     keywordScore,
@@ -142,20 +148,111 @@ function extractFeatures(text: string): SpamFeatures {
   };
 }
 
+function buildReasons(features: SpamFeatures, flagged: boolean, usedModel: boolean): string[] {
+  const reasons: string[] = [];
+  if (features.keywordHits.length > 0) {
+    const sample = features.keywordHits.slice(0, 3).join(", ");
+    reasons.push(
+      `Contains spam keywords${
+        features.keywordHits.length > 3 ? " (and more)" : ""
+      }: ${sample}`,
+    );
+  }
+  if (features.urlCount > 0) {
+    reasons.push(
+      `Contains ${features.urlCount} link${features.urlCount > 1 ? "s" : ""}`,
+    );
+  }
+  if (features.uppercaseRatio > 0.6) {
+    reasons.push("High uppercase ratio");
+  }
+  if (features.punctuationBursts > 0) {
+    reasons.push("Repeated punctuation patterns");
+  }
+  if (features.repeatedCharacters > 0) {
+    reasons.push("Repeated characters typical of spam");
+  }
+
+  if (reasons.length === 0 && flagged) {
+    reasons.push(
+      usedModel
+        ? "Model confidence exceeded threshold"
+        : "Heuristic spam score exceeded threshold",
+    );
+  }
+
+  return reasons;
+}
+
+function adjustModelScore(
+  score: number,
+  features: SpamFeatures,
+  context: SpamContext,
+): number {
+  let adjusted = score;
+  if (features.keywordHits.length > 3) {
+    adjusted = Math.min(1, adjusted + 0.05);
+  }
+  if (features.urlCount > 0) {
+    adjusted = Math.min(1, adjusted + Math.min(0.06, features.urlCount * 0.025));
+  }
+  if (features.uppercaseRatio > 0.75) {
+    adjusted = Math.min(1, adjusted + 0.02);
+  }
+  if (context === "friend-request" && features.keywordScore > 0.4) {
+    adjusted = Math.min(1, adjusted + 0.04);
+  }
+  return adjusted;
+}
+
+function adjustHeuristicScore(score: number, features: SpamFeatures): number {
+  let adjusted = score;
+  if (features.keywordHits.length > 2) {
+    adjusted = Math.min(1, adjusted + 0.08);
+  }
+  if (features.urlCount > 1) {
+    adjusted = Math.min(1, adjusted + 0.06);
+  }
+  return adjusted;
+}
+
 export class SpamClassifier {
-  private model = new MockSpamModel();
-  private loaded = false;
+  private heuristicModel = new HeuristicSpamModel();
+  private useHeuristics = false;
+  private modelWarningShown = false;
   private cache = new Map<string, SpamClassification>();
 
   async loadModel() {
-    if (!this.loaded) {
-      await this.model.load();
-      this.loaded = true;
+    if (this.useHeuristics) {
+      await this.heuristicModel.load();
+      return;
+    }
+
+    const loaded = await spamModelInference.ensureLoaded();
+    if (!loaded) {
+      this.activateFallback();
+      await this.heuristicModel.load();
     }
   }
 
   clearCache() {
     this.cache.clear();
+  }
+
+  private activateFallback(error?: unknown) {
+    if (!this.useHeuristics) {
+      this.useHeuristics = true;
+      if (!this.modelWarningShown && typeof window !== "undefined") {
+        toasts.addToast(
+          "Advanced spam detection unavailable. Reverting to heuristics.",
+          "warning",
+        );
+        this.modelWarningShown = true;
+      }
+      if (error) {
+        console.warn("Falling back to heuristic spam detection", error);
+      }
+    }
   }
 
   private buildCacheKey(text: string, options: ScoreOptions): string {
@@ -164,6 +261,23 @@ export class SpamClassifier {
       context: options.context ?? "message",
       subjectId: options.subjectId ?? null,
     });
+  }
+
+  private async runModel(
+    features: SpamFeatures,
+    context: SpamContext,
+  ): Promise<number | null> {
+    if (this.useHeuristics) {
+      return null;
+    }
+    try {
+      const score = await spamModelInference.run(features, context);
+      return clamp(score, 0, 1);
+    } catch (error) {
+      this.activateFallback(error);
+      await this.heuristicModel.load();
+      return null;
+    }
   }
 
   async scoreText(
@@ -190,49 +304,26 @@ export class SpamClassifier {
 
     await this.loadModel();
     const features = extractFeatures(normalized);
-    const rawScore = this.model.predict(features, context);
 
-    let adjustedScore = rawScore;
-    if (features.keywordHits.length > 2) {
-      adjustedScore = Math.min(1, adjustedScore + 0.08);
-    }
-    if (features.urlCount > 1) {
-      adjustedScore = Math.min(1, adjustedScore + 0.06);
-    }
-
-    const flagged = adjustedScore >= SPAM_FLAG_THRESHOLD;
-    const autoMuted = adjustedScore >= SPAM_AUTO_MUTE_THRESHOLD;
-
-    const reasons: string[] = [];
-    if (features.keywordHits.length > 0) {
-      const sample = features.keywordHits.slice(0, 3).join(", ");
-      reasons.push(
-        `Contains spam keywords${
-          features.keywordHits.length > 3 ? " (and more)" : ""
-        }: ${sample}`,
-      );
-    }
-    if (features.urlCount > 0) {
-      reasons.push(
-        `Contains ${features.urlCount} link${features.urlCount > 1 ? "s" : ""}`,
-      );
-    }
-    if (features.uppercaseRatio > 0.6) {
-      reasons.push("High uppercase ratio");
-    }
-    if (features.punctuationBursts > 0) {
-      reasons.push("Repeated punctuation patterns");
-    }
-    if (features.repeatedCharacters > 0) {
-      reasons.push("Repeated characters typical of spam");
+    let score = await this.runModel(features, context);
+    let usedModel = true;
+    if (score === null) {
+      await this.heuristicModel.load();
+      const heuristicScore = this.heuristicModel.predict(features, context);
+      score = adjustHeuristicScore(heuristicScore, features);
+      usedModel = false;
+    } else {
+      score = adjustModelScore(score, features, context);
     }
 
-    if (reasons.length === 0 && flagged) {
-      reasons.push("Heuristic spam score exceeded threshold");
-    }
+    score = Number(clamp(score, 0, 1).toFixed(3));
+
+    const flagged = score >= SPAM_FLAG_THRESHOLD;
+    const autoMuted = score >= SPAM_AUTO_MUTE_THRESHOLD;
+    const reasons = buildReasons(features, flagged, usedModel);
 
     const classification: SpamClassification = {
-      score: Number(adjustedScore.toFixed(3)),
+      score,
       label: flagged ? "spam" : "ham",
       flagged,
       autoMuted,

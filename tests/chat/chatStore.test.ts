@@ -1,4 +1,36 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import type { SpamClassification } from "../../src/lib/features/security/spamClassifier";
+import { spamSamples } from "../fixtures/spamSamples";
+
+const spamClassifierMock = vi.hoisted(() => ({
+  scoreText: vi.fn<[
+    string,
+    { context?: string | undefined; subjectId?: string | undefined },
+  ], Promise<SpamClassification>>(),
+  clearCache: vi.fn(),
+  loadModel: vi.fn(),
+  isFlagged: vi.fn((score: number) => score >= 0.7),
+  shouldAutoMute: vi.fn((score: number) => score >= 0.9),
+}));
+
+vi.mock("../../src/lib/features/security/spamClassifier", () => ({
+  spamClassifier: spamClassifierMock,
+}));
+
+const mutedFriendsModule = vi.hoisted(() => {
+  const store = {
+    isMuted: vi.fn().mockReturnValue(false),
+    mute: vi.fn(),
+    unmute: vi.fn(),
+  };
+  return { store, module: { mutedFriendsStore: store } };
+});
+
+vi.mock("$lib/features/friends/stores/mutedFriendsStore", () => mutedFriendsModule.module);
+vi.mock(
+  "../../src/lib/features/friends/stores/mutedFriendsStore",
+  () => mutedFriendsModule.module,
+);
 import { get, writable } from "svelte/store";
 
 vi.mock("$lib/stores/userStore", () => {
@@ -67,6 +99,24 @@ import type { MessageAttachmentPayload } from "../../src/lib/features/chat/servi
 import { invoke } from "@tauri-apps/api/core";
 
 const invokeMock = vi.mocked(invoke);
+const mutedFriendsStoreMock = mutedFriendsModule.store;
+
+beforeEach(() => {
+  spamClassifierMock.scoreText.mockReset();
+  spamClassifierMock.clearCache.mockReset();
+  spamClassifierMock.loadModel.mockReset();
+  mutedFriendsStoreMock.isMuted.mockReset();
+  mutedFriendsStoreMock.isMuted.mockReturnValue(false);
+  mutedFriendsStoreMock.mute.mockReset();
+  spamClassifierMock.scoreText.mockResolvedValue({
+    score: 0.12,
+    label: "ham",
+    flagged: false,
+    autoMuted: false,
+    reasons: [],
+    context: "message",
+  });
+});
 
 const createLocalStorageMock = () => {
   const storage = new Map<string, string>();
@@ -258,6 +308,79 @@ describe("chatStore metadata derivations", () => {
     expect(metadata?.lastMessage?.id).toBe("msg-2");
     expect(metadata?.lastActivityAt).toBe(new Date(timestamp2).toISOString());
     expect(metadata?.unreadCount).toBe(1);
+  });
+});
+
+describe("chatStore spam classification", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "decrypt_chat_payload") {
+        return {
+          content: payload?.content ?? "",
+          attachments: payload?.attachments ?? [],
+          wasEncrypted: true,
+        };
+      }
+      return undefined;
+    });
+  });
+
+  it("stores classifier metadata for ham content", async () => {
+    const store = createChatStore();
+    spamClassifierMock.scoreText.mockResolvedValueOnce({
+      score: 0.18,
+      label: "ham",
+      flagged: false,
+      autoMuted: false,
+      reasons: [],
+      context: "message",
+    });
+
+    await store.handleNewMessageEvent({
+      id: "ham-1",
+      sender: "friend-1",
+      content: spamSamples.hamMessage,
+      timestamp: new Date().toISOString(),
+      conversation_id: "chat-1",
+    });
+
+    const messages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(messages).toHaveLength(1);
+    const message = messages[0];
+    expect(message?.isSpamFlagged).toBe(false);
+    expect(message?.spamMuted).toBe(false);
+    expect(message?.spamScore).toBeCloseTo(0.18, 2);
+    expect(message?.spamReasons ?? []).toHaveLength(0);
+  });
+
+  it("auto mutes classifier-flagged spam", async () => {
+    const store = createChatStore();
+    spamClassifierMock.scoreText.mockResolvedValueOnce({
+      score: 0.94,
+      label: "spam",
+      flagged: true,
+      autoMuted: true,
+      reasons: ["Contains spam keywords"],
+      context: "message",
+    });
+
+    await store.handleNewMessageEvent({
+      id: "spam-1",
+      sender: "spammer-1",
+      content: spamSamples.spamMessage,
+      timestamp: new Date().toISOString(),
+      conversation_id: "chat-99",
+    });
+
+    const messages = get(store.messagesByChatId).get("chat-99") ?? [];
+    expect(messages).toHaveLength(1);
+    const message = messages[0];
+    expect(message?.isSpamFlagged).toBe(true);
+    expect(message?.spamMuted).toBe(true);
+    expect(message?.spamDecision).toBe("auto-muted");
+    expect(message?.spamReasons).toContain("Contains spam keywords");
+    expect(mutedFriendsStoreMock.mute).toHaveBeenCalledWith("spammer-1");
   });
 });
 
