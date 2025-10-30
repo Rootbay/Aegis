@@ -237,6 +237,67 @@ describe("ServerSidebar context menus", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders categories with their channels", () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "ops",
+          channel_type: "text" as const,
+          private: false,
+          category_id: "category-1",
+        },
+        {
+          id: "channel-2",
+          server_id: "server-1",
+          name: "briefing",
+          channel_type: "voice" as const,
+          private: false,
+          category_id: "category-1",
+        },
+        {
+          id: "channel-3",
+          server_id: "server-1",
+          name: "general",
+          channel_type: "text" as const,
+          private: false,
+          category_id: null,
+        },
+      ],
+      categories: [
+        {
+          id: "category-1",
+          server_id: "server-1",
+          name: "Operations",
+          position: 1,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const { getByText, queryAllByText } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    expect(getByText("Operations")).toBeTruthy();
+    expect(getByText("ops")).toBeTruthy();
+    expect(getByText("briefing")).toBeTruthy();
+    expect(queryAllByText("ops")).toHaveLength(1);
+    expect(queryAllByText("briefing")).toHaveLength(1);
+    expect(getByText("Text Channels")).toBeTruthy();
+    expect(getByText("general")).toBeTruthy();
+  });
+
   it("generates and copies a server invite from the channel context menu", async () => {
     const invite = {
       id: "invite-1",
@@ -259,10 +320,11 @@ describe("ServerSidebar context menus", () => {
           id: "channel-1",
           server_id: "server-1",
           name: "general",
-          channel_type: "text",
+          channel_type: "text" as const,
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
       invites: [],
@@ -312,6 +374,7 @@ describe("ServerSidebar context menus", () => {
       name: "Test Server",
       owner_id: "user-1",
       channels: [],
+      categories: [],
       members: [],
       roles: [],
       invites: [],
@@ -350,17 +413,18 @@ describe("ServerSidebar context menus", () => {
           id: "channel-1",
           server_id: "server-1",
           name: "general",
-          channel_type: "text",
+          channel_type: "text" as const,
           private: false,
         },
         {
           id: "channel-2",
           server_id: "server-1",
           name: "briefing",
-          channel_type: "voice",
+          channel_type: "voice" as const,
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
       invites: [],
@@ -387,17 +451,18 @@ describe("ServerSidebar context menus", () => {
           id: "channel-1",
           server_id: "server-1",
           name: "general",
-          channel_type: "text",
+          channel_type: "text" as const,
           private: false,
         },
         {
           id: "channel-2",
           server_id: "server-1",
           name: "briefing",
-          channel_type: "voice",
+          channel_type: "voice" as const,
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
       invites: [],
@@ -440,17 +505,18 @@ describe("ServerSidebar context menus", () => {
           id: "channel-1",
           server_id: "server-1",
           name: "general",
-          channel_type: "text",
+          channel_type: "text" as const,
           private: false,
         },
         {
           id: "channel-2",
           server_id: "server-1",
           name: "briefing",
-          channel_type: "voice",
+          channel_type: "voice" as const,
           private: false,
         },
       ],
+      categories: [],
       members: [],
       roles: [],
       invites: [],

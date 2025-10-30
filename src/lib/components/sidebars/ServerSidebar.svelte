@@ -15,6 +15,7 @@
   import { callStore } from "$lib/features/calls/stores/callStore";
   import { toasts } from "$lib/stores/ToastStore";
   import type { Channel } from "$lib/features/channels/models/Channel";
+  import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
   import {
     Bell,
@@ -126,6 +127,8 @@
 
   let textChannelsCollapsed = $state(false);
   let voiceChannelsCollapsed = $state(false);
+  let collapsedCategoryIds = new SvelteSet<string>();
+  let lastCollapsedServerId = $state<string | null>(null);
   let hideMutedChannels = $state(false);
   let mutedChannelIds = new SvelteSet<string>();
   let lastLoadedPreferencesKey = $state<string | null>(null);
@@ -149,6 +152,52 @@
     } catch (error) {
       console.error("Failed to persist sidebar state", error);
     }
+  }
+
+  function isCategoryCollapsed(categoryId: string) {
+    return collapsedCategoryIds.has(categoryId);
+  }
+
+  function setCategoryCollapsed(categoryId: string, collapsed: boolean) {
+    const next = new SvelteSet(collapsedCategoryIds);
+    if (collapsed) {
+      next.add(categoryId);
+    } else {
+      next.delete(categoryId);
+    }
+    collapsedCategoryIds = next;
+  }
+
+  function collapseAllCategories() {
+    const categories = server?.categories ?? [];
+    collapsedCategoryIds = new SvelteSet(
+      categories.map((category: ChannelCategory) => category.id),
+    );
+    textChannelsCollapsed = true;
+    voiceChannelsCollapsed = true;
+    persistCollapsedState(TEXT_COLLAPSED_KEY, true);
+    persistCollapsedState(VOICE_COLLAPSED_KEY, true);
+  }
+
+  function getSortedCategories() {
+    return [...(server?.categories ?? [])].sort(
+      (a: ChannelCategory, b: ChannelCategory) => {
+        if (a.position !== b.position) return a.position - b.position;
+        return a.name.localeCompare(b.name);
+      },
+    );
+  }
+
+  function getVisibleChannels(
+    categoryId: string | null,
+    type: "text" | "voice",
+  ) {
+    return (server?.channels ?? []).filter((channel: Channel) => {
+      const matchesType = channel.channel_type === type;
+      const matchesCategory = (channel.category_id ?? null) === categoryId;
+      const isVisible = !hideMutedChannels || !mutedChannelIds.has(channel.id);
+      return matchesType && matchesCategory && isVisible;
+    });
   }
 
   function gotoResolved(path: string) {
@@ -245,6 +294,44 @@
           error,
         );
       });
+  });
+
+  $effect(() => {
+    if (!server?.id) {
+      if (collapsedCategoryIds.size > 0) {
+        collapsedCategoryIds = new SvelteSet<string>();
+        lastCollapsedServerId = null;
+      }
+      return;
+    }
+
+    if (lastCollapsedServerId !== server.id) {
+      collapsedCategoryIds = new SvelteSet<string>();
+      lastCollapsedServerId = server.id;
+      return;
+    }
+
+    const validIds = new Set(
+      (server.categories ?? []).map((category: ChannelCategory) => category.id),
+    );
+
+    if (collapsedCategoryIds.size === 0) {
+      return;
+    }
+
+    let changed = false;
+    const next = new Set<string>();
+    for (const id of collapsedCategoryIds) {
+      if (validIds.has(id)) {
+        next.add(id);
+      } else {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      collapsedCategoryIds = new SvelteSet(next);
+    }
   });
 
   onDestroy(() => {
@@ -465,6 +552,23 @@
       case "create_category":
         showCreateCategoryModal = true;
         break;
+      case "collapse_category": {
+        if (categoryId === "text-channels") {
+          textChannelsCollapsed = true;
+          persistCollapsedState(TEXT_COLLAPSED_KEY, true);
+          break;
+        }
+        if (categoryId === "voice-channels") {
+          voiceChannelsCollapsed = true;
+          persistCollapsedState(VOICE_COLLAPSED_KEY, true);
+          break;
+        }
+        setCategoryCollapsed(categoryId, true);
+        break;
+      }
+      case "collapse_all":
+        collapseAllCategories();
+        break;
       case "delete_category": {
         const exists = Array.isArray(server.categories)
           ? server.categories.some((category) => category.id === categoryId)
@@ -477,6 +581,27 @@
           break;
         }
         void deleteCategory(categoryId);
+        break;
+      }
+      case "copy_id": {
+        if (categoryId === "text-channels" || categoryId === "voice-channels") {
+          toasts.addToast("No category ID for default sections.", "info");
+          break;
+        }
+        const clipboard =
+          typeof navigator === "undefined" ? null : navigator.clipboard;
+        if (!clipboard || typeof clipboard.writeText !== "function") {
+          toasts.addToast("Clipboard unavailable.", "error");
+          break;
+        }
+        clipboard
+          .writeText(categoryId)
+          .then(() => {
+            toasts.addToast("Category ID copied.", "success");
+          })
+          .catch(() => {
+            toasts.addToast("Failed to copy category ID.", "error");
+          });
         break;
       }
       default:
@@ -867,6 +992,173 @@
 
       <SidebarContent class="flex">
         <ScrollArea class="h-full w-full px-2">
+          {@const categories = getSortedCategories()}
+          {#if categories.length > 0}
+            {#each categories as category (category.id)}
+              {@const collapsed = isCategoryCollapsed(category.id)}
+              <Collapsible
+                open={!collapsed}
+                onOpenChange={(value) => setCategoryCollapsed(category.id, !value)}
+              >
+                <div class="flex justify-between items-center py-1 mt-4">
+                  <CollapsibleTrigger
+                    class="flex items-center group cursor-pointer"
+                  >
+                    <h3
+                      class="text-sm font-semibold text-muted-foreground uppercase group-hover:text-foreground select-none"
+                      class:text-foreground={showCategoryContextMenu &&
+                        contextMenuCategoryId === category.id}
+                      oncontextmenu={(e) =>
+                        handleCategoryContextMenu(e, category.id)}
+                    >
+                      {category.name}
+                    </h3>
+                    <ChevronDown
+                      size={10}
+                      class={`ml-1 transition-transform duration-200 ${collapsed
+                        ? 'rotate-[-90deg]'
+                        : ''}`}
+                    />
+                  </CollapsibleTrigger>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Create Channel"
+                    onclick={handleCreateChannelClick}
+                  >
+                    <Plus size={12} />
+                  </Button>
+                </div>
+
+                <CollapsibleContent>
+                  {@const textChannels = getVisibleChannels(category.id, "text")}
+                  {@const voiceChannels = getVisibleChannels(category.id, "voice")}
+                  {#if textChannels.length === 0 && voiceChannels.length === 0}
+                    <p class="text-xs text-muted-foreground px-2 py-1">
+                      No channels in this category yet.
+                    </p>
+                  {/if}
+
+                  {#each textChannels as channel (channel.id)}
+                    {@const metadata = channelMetadataLookup.get(channel.id)}
+                    {@const unreadCount = metadata?.unreadCount ?? 0}
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                        $activeServerChannelId === channel.id
+                          ? "bg-primary/80 text-foreground"
+                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                      onclick={() => onSelectChannel(server.id, channel.id)}
+                      onkeydown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          onSelectChannel(server.id, channel.id);
+                        }
+                      }}
+                      oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                    >
+                      <div class="flex items-center truncate">
+                        <Hash size={10} class="mr-1" />
+                        <span class="truncate select-none ml-2">{channel.name}</span>
+                      </div>
+                      <div class="ml-auto flex items-center gap-2">
+                        {#if unreadCount > 0}
+                          <Badge
+                            class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                          >
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </Badge>
+                        {/if}
+                        <div
+                          class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="text-muted-foreground hover:text-foreground"
+                            aria-label="Invite to channel"
+                            onclick={(event) =>
+                              handleInviteToChannelClick(channel, event)}
+                          >
+                            <Plus size={10} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="text-muted-foreground hover:text-foreground"
+                            aria-label="Channel settings"
+                            onclick={(event) =>
+                              handleChannelSettingsClick(channel, event)}
+                          >
+                            <Settings size={10} />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  {/each}
+
+                  {#each voiceChannels as channel (channel.id)}
+                    {@const activeCall = $callStore.activeCall}
+                    {@const isActiveVoiceChannel =
+                      activeCall &&
+                      activeCall.chatType === "channel" &&
+                      activeCall.type === "voice" &&
+                      activeCall.status !== "ended" &&
+                      activeCall.status !== "error" &&
+                      activeCall.chatId === channel.id}
+                    <div
+                      role="button"
+                      tabindex="0"
+                      class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                        isActiveVoiceChannel
+                          ? "bg-primary/80 text-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                      data-active={isActiveVoiceChannel ? "true" : undefined}
+                      onclick={() => handleVoiceChannelClick(channel)}
+                      onkeydown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          handleVoiceChannelClick(channel);
+                        }
+                      }}
+                      oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                    >
+                      <div class="flex items-center truncate">
+                        <Mic size={12} class="mr-1" />
+                        <span class="truncate select-none ml-2">{channel.name}</span>
+                      </div>
+                      <div
+                        class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground"
+                          aria-label="Invite to channel"
+                          onclick={(event) =>
+                            handleInviteToChannelClick(channel, event)}
+                        >
+                          <Plus size={10} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          class="text-muted-foreground hover:text-foreground"
+                          aria-label="Channel settings"
+                          onclick={(event) =>
+                            handleChannelSettingsClick(channel, event)}
+                        >
+                          <Settings size={10} />
+                        </Button>
+                      </div>
+                    </div>
+                  {/each}
+                </CollapsibleContent>
+              </Collapsible>
+            {/each}
+          {/if}
+
           <Collapsible
             open={!textChannelsCollapsed}
             onOpenChange={(value) => {
@@ -906,7 +1198,12 @@
 
             <CollapsibleContent>
               {#if server && server.channels && server.channels.length > 0}
-                {#each server.channels.filter((c: Channel) => c.channel_type === "text" && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+                {#each server.channels.filter(
+                    (c: Channel) =>
+                      c.channel_type === "text" &&
+                      (c.category_id ?? null) === null &&
+                      (!hideMutedChannels || !mutedChannelIds.has(c.id)),
+                  ) as channel (channel.id)}
                   {@const metadata = channelMetadataLookup.get(channel.id)}
                   {@const unreadCount = metadata?.unreadCount ?? 0}
                   <div
@@ -1015,7 +1312,12 @@
 
             <CollapsibleContent>
               {#if server && server.channels && server.channels.length > 0}
-                {#each server.channels.filter((c: Channel) => c.channel_type === "voice" && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+                {#each server.channels.filter(
+                    (c: Channel) =>
+                      c.channel_type === "voice" &&
+                      (c.category_id ?? null) === null &&
+                      (!hideMutedChannels || !mutedChannelIds.has(c.id)),
+                  ) as channel (channel.id)}
                   {@const activeCall = $callStore.activeCall}
                   {@const isActiveVoiceChannel =
                     activeCall &&
@@ -1103,7 +1405,6 @@
     y={contextMenuY}
     categoryId={contextMenuCategoryId}
     onaction={handleCategoryAction}
-    onclose={() => (showCategoryContextMenu = false)}
   />
 {/if}
 
