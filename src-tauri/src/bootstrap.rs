@@ -675,35 +675,46 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 let message_id = uuid::Uuid::new_v4().to_string();
                                                                 let timestamp = chrono::Utc::now();
                                                                 let mut db_attachments = Vec::new();
-                                                                let content = if let Ok(payload) = bincode::deserialize::<EncryptedDmPayload>(&plaintext) {
-                                                                    for descriptor in payload.attachments.into_iter() {
-                                                                        if descriptor.data.is_empty() {
-                                                                            continue;
+                                                                let (content, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet) =
+                                                                    if let Ok(payload) = bincode::deserialize::<EncryptedDmPayload>(&plaintext) {
+                                                                        for descriptor in payload.attachments.into_iter() {
+                                                                            if descriptor.data.is_empty() {
+                                                                                continue;
+                                                                            }
+                                                                            let data_len = descriptor.data.len() as u64;
+                                                                            let effective_size = if descriptor.size == 0 { data_len } else { descriptor.size };
+                                                                            let sanitized_size = if effective_size == data_len {
+                                                                                effective_size
+                                                                            } else {
+                                                                                data_len
+                                                                            };
+                                                                            let attachment_id = uuid::Uuid::new_v4().to_string();
+                                                                            db_attachments.push(database::Attachment {
+                                                                                id: attachment_id,
+                                                                                message_id: message_id.clone(),
+                                                                                name: descriptor.name.clone(),
+                                                                                content_type: descriptor.content_type.clone(),
+                                                                                size: sanitized_size,
+                                                                                data: Some(descriptor.data),
+                                                                            });
                                                                         }
-                                                                        let data_len = descriptor.data.len() as u64;
-                                                                        let effective_size = if descriptor.size == 0 { data_len } else { descriptor.size };
-                                                                        let sanitized_size = if effective_size == data_len {
-                                                                            effective_size
-                                                                        } else {
-                                                                            data_len
-                                                                        };
-                                                                        let attachment_id = uuid::Uuid::new_v4().to_string();
-                                                                        db_attachments.push(database::Attachment {
-                                                                            id: attachment_id,
-                                                                            message_id: message_id.clone(),
-                                                                            name: descriptor.name.clone(),
-                                                                            content_type: descriptor.content_type.clone(),
-                                                                            size: sanitized_size,
-                                                                            data: Some(descriptor.data),
-                                                                        });
-                                                                    }
-                                                                    payload.content
-                                                                } else {
-                                                                    match String::from_utf8(plaintext.clone()) {
-                                                                        Ok(text) => text,
-                                                                        Err(_) => String::from_utf8_lossy(&plaintext).to_string(),
-                                                                    }
-                                                                };
+                                                                        (
+                                                                            payload.content,
+                                                                            payload.reply_to_message_id,
+                                                                            payload.reply_snapshot_author,
+                                                                            payload.reply_snapshot_snippet,
+                                                                        )
+                                                                    } else {
+                                                                        (
+                                                                            match String::from_utf8(plaintext.clone()) {
+                                                                                Ok(text) => text,
+                                                                                Err(_) => String::from_utf8_lossy(&plaintext).to_string(),
+                                                                            },
+                                                                            None,
+                                                                            None,
+                                                                            None,
+                                                                        )
+                                                                    };
 
                                                                 let new_message = database::Message {
                                                                     id: message_id,
@@ -715,6 +726,9 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                     pinned: false,
                                                                     attachments: db_attachments,
                                                                     reactions: std::collections::HashMap::new(),
+                                                                    reply_to_message_id,
+                                                                    reply_snapshot_author,
+                                                                    reply_snapshot_snippet,
                                                                     edited_at: None,
                                                                     edited_by: None,
                                                                     expires_at: None,
@@ -932,16 +946,35 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         };
                                                         if let Some(plaintext) = plaintext_opt {
                                                             let chat_id = channel_id.clone().unwrap_or_else(|| server_id.clone());
+                                                            let (content, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet) =
+                                                                if let Ok(payload) = bincode::deserialize::<EncryptedDmPayload>(&plaintext) {
+                                                                    (
+                                                                        payload.content,
+                                                                        payload.reply_to_message_id,
+                                                                        payload.reply_snapshot_author,
+                                                                        payload.reply_snapshot_snippet,
+                                                                    )
+                                                                } else {
+                                                                    (
+                                                                        String::from_utf8_lossy(&plaintext).to_string(),
+                                                                        None,
+                                                                        None,
+                                                                        None,
+                                                                    )
+                                                                };
                                                             let new_message = database::Message {
                                                                 id: uuid::Uuid::new_v4().to_string(),
                                                                 chat_id,
                                                                 sender_id: sender.clone(),
-                                                                content: String::from_utf8_lossy(&plaintext).to_string(),
+                                                                content,
                                                                 timestamp: chrono::Utc::now(),
                                                                 read: false,
                                                                 pinned: false,
                                                                 attachments: Vec::new(),
                                                                 reactions: std::collections::HashMap::new(),
+                                                                reply_to_message_id,
+                                                                reply_snapshot_author,
+                                                                reply_snapshot_snippet,
                                                                 edited_at: None,
                                                                 edited_by: None,
                                                                 expires_at: None,

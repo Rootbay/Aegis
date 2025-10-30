@@ -13,6 +13,9 @@ pub enum AepMessage {
         conversation_id: Option<String>,
         attachments: Vec<AttachmentPayload>,
         expires_at: Option<DateTime<Utc>>,
+        reply_to_message_id: Option<String>,
+        reply_snapshot_author: Option<String>,
+        reply_snapshot_snippet: Option<String>,
         signature: Option<Vec<u8>>,
     },
     // Signal-style E2EE payload for direct messages
@@ -249,6 +252,12 @@ pub struct ChatMessageData {
     pub conversation_id: Option<String>,
     pub attachments: Vec<AttachmentPayload>,
     pub expires_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_to_message_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_snapshot_author: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_snapshot_snippet: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

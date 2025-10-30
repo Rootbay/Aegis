@@ -3,10 +3,10 @@ import type { SpamClassification } from "../../src/lib/features/security/spamCla
 import { spamSamples } from "../fixtures/spamSamples";
 
 const spamClassifierMock = vi.hoisted(() => ({
-  scoreText: vi.fn<[
-    string,
-    { context?: string | undefined; subjectId?: string | undefined },
-  ], Promise<SpamClassification>>(),
+  scoreText: vi.fn<
+    [string, { context?: string | undefined; subjectId?: string | undefined }],
+    Promise<SpamClassification>
+  >(),
   clearCache: vi.fn(),
   loadModel: vi.fn(),
   isFlagged: vi.fn((score: number) => score >= 0.7),
@@ -26,7 +26,10 @@ const mutedFriendsModule = vi.hoisted(() => {
   return { store, module: { mutedFriendsStore: store } };
 });
 
-vi.mock("$lib/features/friends/stores/mutedFriendsStore", () => mutedFriendsModule.module);
+vi.mock(
+  "$lib/features/friends/stores/mutedFriendsStore",
+  () => mutedFriendsModule.module,
+);
 vi.mock(
   "../../src/lib/features/friends/stores/mutedFriendsStore",
   () => mutedFriendsModule.module,
@@ -469,11 +472,13 @@ describe("chatStore plaintext encryption fallbacks", () => {
         wasEncrypted: true,
       }),
     );
-    encryptionMocks.decodeMock.mockImplementation(async ({ content, attachments }) => ({
-      content,
-      attachments: attachments ?? undefined,
-      wasEncrypted: false,
-    }));
+    encryptionMocks.decodeMock.mockImplementation(
+      async ({ content, attachments }) => ({
+        content,
+        attachments: attachments ?? undefined,
+        wasEncrypted: false,
+      }),
+    );
   });
 
   afterEach(() => {
@@ -546,7 +551,9 @@ describe("chatStore plaintext encryption fallbacks", () => {
         content: `cipher:${content}`,
         attachments: attachments.map((item) => ({
           ...item,
-          data: new Uint8Array((item.data as Uint8Array).map((value) => value ^ 0xff)),
+          data: new Uint8Array(
+            (item.data as Uint8Array).map((value) => value ^ 0xff),
+          ),
         })),
         wasEncrypted: true,
       }),
@@ -586,5 +593,58 @@ describe("chatStore plaintext encryption fallbacks", () => {
     expect(fallbackAttachmentCall?.[1]).toEqual(
       expect.objectContaining({ message: "Attachment fallback" }),
     );
+  });
+});
+
+describe("chatStore reply metadata mapping", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("preserves reply snapshot metadata when loading messages", async () => {
+    const backendMessage = {
+      id: "reply-1",
+      chat_id: "chat-reply",
+      sender_id: "user-123",
+      content: "reply body",
+      timestamp: new Date().toISOString(),
+      reply_to_message_id: "target-42",
+      reply_snapshot_author: "Original",
+      reply_snapshot_snippet: "Snippet text",
+    };
+
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "get_messages") {
+        expect(payload?.chatId ?? payload?.chat_id).toBe("chat-reply");
+        return [backendMessage];
+      }
+      if (command === "decrypt_chat_payload") {
+        return {
+          content: payload?.content ?? "",
+          attachments: payload?.attachments ?? [],
+          wasEncrypted: false,
+        };
+      }
+      return undefined;
+    });
+
+    const store = createChatStore();
+
+    await store.loadMoreMessages("chat-reply");
+
+    const messages = get(store.messagesByChatId).get("chat-reply") ?? [];
+    expect(messages).toHaveLength(1);
+    const [message] = messages;
+    expect(message.replyToMessageId).toBe("target-42");
+    expect(message.replySnapshot).toEqual({
+      author: "Original",
+      snippet: "Snippet text",
+    });
   });
 });
