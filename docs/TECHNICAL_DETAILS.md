@@ -119,6 +119,7 @@ Server owners can create and manage roles with granular permissions.
 - **Channel Types:** Create text and voice channels.
 - **Private Channels:** Create channels that are only visible to specific roles.
 - **Channel Settings:** Configure channel names, topics, and permissions.
+- **Voice Channel Calls:** Selecting a voice channel in the server sidebar immediately launches a voice call session for that room, keeping active calls highlighted for quick re-entry.
 
 ### User Moderation
 

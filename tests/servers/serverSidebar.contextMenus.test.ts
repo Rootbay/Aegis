@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import ChannelContextMenuMock from "../mocks/ChannelContextMenu.svelte";
 import ServerBackgroundContextMenuMock from "../mocks/ServerBackgroundContextMenu.svelte";
 import CategoryContextMenuMock from "../mocks/CategoryContextMenu.svelte";
+import Passthrough from "../mocks/Passthrough.svelte";
 
 const { mockGoto } = vi.hoisted(() => ({ mockGoto: vi.fn() }));
 const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
@@ -34,6 +35,78 @@ const {
   toggleHideNamesMock: vi.fn(async () => true),
   setActiveChannelForServerMock: vi.fn(),
 }));
+
+const {
+  callStoreMock,
+  startCallMock,
+  resetCallStoreState,
+  setCallStoreState,
+  createInitialCallState,
+  getCallStoreState,
+} = vi.hoisted(() => {
+  const subscribers: ((value: any) => void)[] = [];
+
+  const startCallMock = vi.fn();
+  const setCallModalOpenMock = vi.fn();
+  const initializeMock = vi.fn();
+
+  const createInitialCallState = () => ({
+    activeCall: null,
+    deviceAvailability: { audioInput: true, videoInput: true },
+    permissions: {
+      audio: "granted" as PermissionState | "unknown",
+      video: "granted" as PermissionState | "unknown",
+      checking: false,
+    },
+    localMedia: {
+      audioEnabled: true,
+      videoEnabled: true,
+      audioAvailable: true,
+      videoAvailable: true,
+    },
+    showCallModal: false,
+  });
+
+  let state = createInitialCallState();
+
+  const notify = () => {
+    subscribers.forEach((run) => run(state));
+  };
+
+  const subscribe = (run: (value: any) => void) => {
+    run(state);
+    subscribers.push(run);
+    return () => {
+      const index = subscribers.indexOf(run);
+      if (index !== -1) {
+        subscribers.splice(index, 1);
+      }
+    };
+  };
+
+  return {
+    callStoreMock: {
+      subscribe,
+      startCall: (...args: unknown[]) => startCallMock(...args),
+      setCallModalOpen: setCallModalOpenMock,
+      initialize: initializeMock,
+    },
+    startCallMock,
+    resetCallStoreState: () => {
+      state = createInitialCallState();
+      notify();
+      startCallMock.mockReset();
+      setCallModalOpenMock.mockReset();
+      initializeMock.mockReset();
+    },
+    setCallStoreState: (nextState: any) => {
+      state = nextState;
+      notify();
+    },
+    createInitialCallState,
+    getCallStoreState: () => state,
+  };
+});
 
 class ResizeObserverMock {
   observe() {}
@@ -74,6 +147,14 @@ vi.mock("$lib/components/context-menus/CategoryContextMenu.svelte", () => ({
   default: CategoryContextMenuMock,
 }));
 
+vi.mock("$lib/components/modals/CreateCategoryModal.svelte", () => ({
+  default: Passthrough,
+}));
+
+vi.mock("$lib/components/modals/ServerEventModal.svelte", () => ({
+  default: Passthrough,
+}));
+
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: {
     subscribe: () => () => {},
@@ -99,6 +180,12 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
     },
     setActiveChannelForServer: setActiveChannelForServerMock,
   },
+  chatMetadataByChatId: {
+    subscribe: (run: (value: Map<string, unknown>) => void) => {
+      run(new Map());
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$lib/features/channels/stores/channelDisplayPreferencesStore", () => ({
@@ -108,7 +195,12 @@ vi.mock("$lib/features/channels/stores/channelDisplayPreferencesStore", () => ({
   },
 }));
 
+vi.mock("$lib/features/calls/stores/callStore", () => ({
+  callStore: callStoreMock,
+}));
+
 import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
+import { tick } from "svelte";
 
 describe("ServerSidebar context menus", () => {
   const createLocalStorageMock = () => {
@@ -138,6 +230,7 @@ describe("ServerSidebar context menus", () => {
       },
     });
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    resetCallStoreState();
   });
 
   afterEach(() => {
@@ -245,5 +338,159 @@ describe("ServerSidebar context menus", () => {
       "Manage categories from the Channels tab.",
       "info",
     );
+  });
+
+  it("renders voice channels with their own section", () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "general",
+          channel_type: "text",
+          private: false,
+        },
+        {
+          id: "channel-2",
+          server_id: "server-1",
+          name: "briefing",
+          channel_type: "voice",
+          private: false,
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const { getByText } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    expect(getByText("Voice Channels")).toBeTruthy();
+    expect(getByText("briefing")).toBeTruthy();
+  });
+
+  it("starts a voice call when selecting a voice channel", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "general",
+          channel_type: "text",
+          private: false,
+        },
+        {
+          id: "channel-2",
+          server_id: "server-1",
+          name: "briefing",
+          channel_type: "voice",
+          private: false,
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const onSelectChannel = vi.fn();
+
+    const { getByText } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel,
+      },
+    });
+
+    const voiceLabel = getByText("briefing");
+    const voiceButton = voiceLabel.closest('[role="button"]');
+    expect(voiceButton).toBeTruthy();
+
+    await fireEvent.click(voiceButton!);
+
+    expect(onSelectChannel).toHaveBeenCalledWith("server-1", "channel-2");
+    await waitFor(() => {
+      expect(startCallMock).toHaveBeenCalledWith({
+        chatId: "channel-2",
+        chatName: "briefing",
+        chatType: "channel",
+        type: "voice",
+        serverId: "server-1",
+      });
+    });
+  });
+
+  it("marks the active voice channel when a call is running", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "general",
+          channel_type: "text",
+          private: false,
+        },
+        {
+          id: "channel-2",
+          server_id: "server-1",
+          name: "briefing",
+          channel_type: "voice",
+          private: false,
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const baseState = createInitialCallState();
+    setCallStoreState({
+      ...baseState,
+      activeCall: {
+        chatId: "channel-2",
+        chatName: "briefing",
+        chatType: "channel",
+        type: "voice",
+        status: "in-call",
+        startedAt: Date.now(),
+        connectedAt: Date.now(),
+        endedAt: null,
+        endReason: undefined,
+        error: undefined,
+        localStream: null,
+        callId: "call-123",
+        direction: "outgoing",
+        participants: new Map(),
+      },
+    });
+
+    expect(getCallStoreState().activeCall?.chatId).toBe("channel-2");
+
+    const { getByText } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    await tick();
+
+    const voiceLabel = getByText("briefing");
+    const voiceButton = voiceLabel.closest('[role="button"]');
+    expect(voiceButton).toBeTruthy();
+    expect(voiceButton?.getAttribute("data-active")).toBe("true");
   });
 });

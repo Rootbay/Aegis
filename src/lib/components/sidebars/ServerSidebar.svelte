@@ -12,6 +12,7 @@
     chatMetadataByChatId,
     chatStore,
   } from "$lib/features/chat/stores/chatStore";
+  import { callStore } from "$lib/features/calls/stores/callStore";
   import { toasts } from "$lib/stores/ToastStore";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
@@ -124,6 +125,7 @@
   let selectedChannelForContextMenu = $state<Channel | null>(null);
 
   let textChannelsCollapsed = $state(false);
+  let voiceChannelsCollapsed = $state(false);
   let hideMutedChannels = $state(false);
   let mutedChannelIds = new SvelteSet<string>();
   let lastLoadedPreferencesKey = $state<string | null>(null);
@@ -138,6 +140,16 @@
   let sidebarWidth = $state(initialSidebarWidth);
 
   const TEXT_COLLAPSED_KEY = "serverSidebar.textCollapsed";
+  const VOICE_COLLAPSED_KEY = "serverSidebar.voiceCollapsed";
+
+  function persistCollapsedState(key: string, collapsed: boolean) {
+    if (!browser) return;
+    try {
+      localStorage.setItem(key, collapsed.toString());
+    } catch (error) {
+      console.error("Failed to persist sidebar state", error);
+    }
+  }
 
   function gotoResolved(path: string) {
     // eslint-disable-next-line svelte/no-navigation-without-resolve
@@ -202,6 +214,8 @@
       if (tc !== null) textChannelsCollapsed = tc === "true";
       const hm = localStorage.getItem("serverSidebar.hideMuted");
       if (hm !== null) hideMutedChannels = hm === "true";
+      const vc = localStorage.getItem(VOICE_COLLAPSED_KEY);
+      if (vc !== null) voiceChannelsCollapsed = vc === "true";
     } catch (e) {
       void e;
     }
@@ -755,6 +769,18 @@
     event?.stopPropagation();
     gotoResolved(`/channels/${server.id}/settings?tab=channels`);
   }
+
+  function handleVoiceChannelClick(channel: Channel) {
+    onSelectChannel(server.id, channel.id);
+    void callStore.startCall({
+      chatId: channel.id,
+      chatName: channel.name,
+      chatType: "channel",
+      type: "voice",
+      serverId: server.id,
+    });
+  }
+
 </script>
 
 <ServerBackgroundContextMenu onaction={handleServerBackgroundAction}>
@@ -845,6 +871,7 @@
             open={!textChannelsCollapsed}
             onOpenChange={(value) => {
               textChannelsCollapsed = !value;
+              persistCollapsedState(TEXT_COLLAPSED_KEY, textChannelsCollapsed);
             }}
           >
             <div class="flex justify-between items-center py-1 mt-4">
@@ -941,6 +968,112 @@
               {:else}
                 <p class="text-xs text-muted-foreground px-2 py-1">
                   No text channels yet.
+                </p>
+              {/if}
+            </CollapsibleContent>
+          </Collapsible>
+
+          <Collapsible
+            open={!voiceChannelsCollapsed}
+            onOpenChange={(value) => {
+              voiceChannelsCollapsed = !value;
+              persistCollapsedState(VOICE_COLLAPSED_KEY, voiceChannelsCollapsed);
+            }}
+          >
+            <div class="flex justify-between items-center py-1 mt-6">
+              <CollapsibleTrigger
+                class="flex items-center group cursor-pointer"
+              >
+                <h3
+                  class="text-sm font-semibold text-muted-foreground uppercase group-hover:text-foreground select-none"
+                  class:text-foreground={showCategoryContextMenu &&
+                    contextMenuCategoryId === "voice-channels"}
+                  oncontextmenu={(e) =>
+                    handleCategoryContextMenu(e, "voice-channels")}
+                >
+                  Voice Channels
+                </h3>
+                <ChevronDown
+                  size={10}
+                  class="ml-1 transition-transform duration-200 {voiceChannelsCollapsed
+                    ? 'rotate-[-90deg]'
+                    : ''}"
+                />
+              </CollapsibleTrigger>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Create Voice Channel"
+                onclick={() => {
+                  newChannelType = "voice";
+                  handleCreateChannelClick();
+                }}
+              >
+                <Plus size={12} />
+              </Button>
+            </div>
+
+            <CollapsibleContent>
+              {#if server && server.channels && server.channels.length > 0}
+                {#each server.channels.filter((c: Channel) => c.channel_type === "voice" && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+                  {@const activeCall = $callStore.activeCall}
+                  {@const isActiveVoiceChannel =
+                    activeCall &&
+                    activeCall.chatType === "channel" &&
+                    activeCall.type === "voice" &&
+                    activeCall.status !== "ended" &&
+                    activeCall.status !== "error" &&
+                    activeCall.chatId === channel.id}
+                  <div
+                    role="button"
+                    tabindex="0"
+                    class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md {isActiveVoiceChannel
+                      ? 'bg-primary/80 text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                    data-active={isActiveVoiceChannel ? "true" : undefined}
+                    onclick={() => handleVoiceChannelClick(channel)}
+                    onkeydown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        handleVoiceChannelClick(channel);
+                      }
+                    }}
+                    oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                  >
+                    <div class="flex items-center truncate">
+                      <Mic size={12} class="mr-1" />
+                      <span class="truncate select-none ml-2"
+                        >{channel.name}</span
+                      >
+                    </div>
+                    <div
+                      class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="text-muted-foreground hover:text-foreground"
+                        aria-label="Invite to channel"
+                        onclick={(event) =>
+                          handleInviteToChannelClick(channel, event)}
+                      >
+                        <Plus size={10} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="text-muted-foreground hover:text-foreground"
+                        aria-label="Channel settings"
+                        onclick={(event) =>
+                          handleChannelSettingsClick(channel, event)}
+                      >
+                        <Settings size={10} />
+                      </Button>
+                    </div>
+                  </div>
+                {/each}
+              {:else}
+                <p class="text-xs text-muted-foreground px-2 py-1">
+                  No voice channels yet.
                 </p>
               {/if}
             </CollapsibleContent>
