@@ -25,6 +25,8 @@ export interface MeshPeer {
   latencyMs: number | null;
   lastSeen: string | null;
   isGateway: boolean;
+  routeQuality: number | null;
+  successRate: number | null;
 }
 
 export interface MeshLink {
@@ -32,6 +34,7 @@ export interface MeshLink {
   target: string;
   quality: number | null;
   medium: Exclude<ConnectionMedium, "self">;
+  latencyMs: number | null;
 }
 
 export interface ConnectivityEventPayload {
@@ -61,6 +64,9 @@ export interface ConnectivityState {
   fallbackActive: boolean;
   fallbackReason: string | null;
   lastUpdated: number | null;
+  bestRouteQuality: number | null;
+  averageRouteQuality: number | null;
+  averageSuccessRate: number | null;
 }
 
 type PartialMeshPeer = {
@@ -75,6 +81,10 @@ type PartialMeshPeer = {
   last_seen?: string | null;
   isGateway?: boolean | null;
   is_gateway?: boolean | null;
+  routeQuality?: number | null;
+  route_quality?: number | null;
+  successRate?: number | null;
+  success_rate?: number | null;
 };
 
 type PartialMeshLink = {
@@ -83,6 +93,8 @@ type PartialMeshLink = {
   quality?: number | null;
   medium?: ConnectionMedium | null;
   type?: ConnectionMedium | null;
+  latencyMs?: number | null;
+  latency_ms?: number | null;
 };
 
 export interface GatewayStatus {
@@ -159,6 +171,9 @@ const initialState: ConnectivityState = {
   fallbackActive: false,
   fallbackReason: null,
   lastUpdated: null,
+  bestRouteQuality: null,
+  averageRouteQuality: null,
+  averageSuccessRate: null,
 };
 
 const fallbackSnapshots: ConnectivityEventPayload[] = [
@@ -355,6 +370,18 @@ function normalizePeer(peer: PartialMeshPeer, index: number): MeshPeer {
   const lastSeen = peer.lastSeen ?? peer.last_seen ?? null;
   const latencyMs = peer.latencyMs ?? peer.latency_ms ?? null;
   const connection = peer.connection ?? "mesh";
+  const routeQuality =
+    typeof peer.routeQuality === "number"
+      ? peer.routeQuality
+      : typeof peer.route_quality === "number"
+        ? peer.route_quality
+        : null;
+  const successRate =
+    typeof peer.successRate === "number"
+      ? peer.successRate
+      : typeof peer.success_rate === "number"
+        ? peer.success_rate
+        : null;
 
   return {
     id,
@@ -365,6 +392,8 @@ function normalizePeer(peer: PartialMeshPeer, index: number): MeshPeer {
     latencyMs: typeof latencyMs === "number" ? latencyMs : null,
     lastSeen,
     isGateway: Boolean(peer.isGateway ?? peer.is_gateway ?? false),
+    routeQuality,
+    successRate,
   };
 }
 
@@ -379,6 +408,12 @@ function normalizeLink(link: PartialMeshLink): MeshLink | null {
     target: link.target,
     quality: typeof link.quality === "number" ? link.quality : null,
     medium: medium === "self" ? "mesh" : medium,
+    latencyMs:
+      typeof link.latencyMs === "number"
+        ? link.latencyMs
+        : typeof link.latency_ms === "number"
+          ? link.latency_ms
+          : null,
   };
 }
 
@@ -538,6 +573,26 @@ export function createConnectivityStore(): ConnectivityStore {
           ? payload.internetReachable
           : gatewayStatus.forwarding;
 
+      const qualities = peers
+        .map((peer) => peer.routeQuality)
+        .filter((value): value is number => typeof value === "number");
+      const bestRouteQuality =
+        qualities.length > 0 ? Math.max(...qualities) : null;
+      const averageRouteQuality =
+        qualities.length > 0
+          ? qualities.reduce((total, value) => total + value, 0) /
+            qualities.length
+          : null;
+
+      const successRates = peers
+        .map((peer) => peer.successRate)
+        .filter((value): value is number => typeof value === "number");
+      const averageSuccessRate =
+        successRates.length > 0
+          ? successRates.reduce((total, value) => total + value, 0) /
+            successRates.length
+          : null;
+
       return {
         status,
         internetReachable,
@@ -552,6 +607,9 @@ export function createConnectivityStore(): ConnectivityStore {
         fallbackActive: current.fallbackActive,
         fallbackReason: current.fallbackReason,
         lastUpdated: Date.now(),
+        bestRouteQuality,
+        averageRouteQuality,
+        averageSuccessRate,
       } satisfies ConnectivityState;
     });
   };

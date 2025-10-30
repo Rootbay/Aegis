@@ -41,3 +41,13 @@ pub async fn set_wifi_direct_enabled<R: Runtime>(
 ) -> Result<ConnectivityTransportStatus, String> {
     crate::connectivity::set_wifi_direct_enabled(&app, enabled).await
 }
+
+#[tauri::command]
+pub async fn set_routing_config<R: Runtime>(
+    app: AppHandle<R>,
+    update_interval_secs: u64,
+    min_quality: f32,
+    max_hops: u32,
+) -> Result<network::AerpConfig, String> {
+    crate::connectivity::set_routing_config(&app, update_interval_secs, min_quality, max_hops).await
+}

@@ -34,6 +34,22 @@ The Aegis Protocol (AEP) is a custom-built protocol for secure, decentralized co
 
 Aegis uses a custom mesh routing protocol called AERP (Aegis Efficient Routing Protocol). AERP is a reactive routing protocol that is optimized for low-power, low-bandwidth devices. It is designed to be resilient to network changes and can quickly adapt to new network topologies.
 
+AERP maintains a weighted graph of recently observed peers and updates link scores every few seconds. Each candidate path is scored using:
+
+- **Hop count** – longer routes incur a configurable penalty.
+- **Cumulative latency** – moving averages are tracked for every edge.
+- **Reliability** – success/failure ratios and delivery confirmations adjust per-link confidence.
+
+The router exposes a snapshot API used by the connectivity UI to display hop counts, path quality, and per-link latency. Configuration is persisted as part of the application settings and surfaced in the Network Settings panel:
+
+| Setting | Description | Default |
+| --- | --- | --- |
+| `aerpRouteUpdateIntervalSeconds` | How often the router recomputes candidate paths and emits refreshed metrics. | `10` seconds |
+| `aerpMinRouteQuality` | Minimum confidence (0–1) required before a path is considered viable. | `0.4` |
+| `aerpMaxHops` | Maximum hop count for multi-hop forwarding. | `6` |
+
+Users can tune these values to prefer ultra-stable links (raise the quality floor) or faster convergence (shorten the interval). Every change is pushed to the Rust backend through the `set_routing_config` command, which immediately refreshes the connectivity snapshot so the UI reflects the new routing posture.
+
 ### On-Device AI
 
 Aegis uses a lightweight, on-device AI model for spam prevention. The model is trained to detect spam and malicious contact requests without sending any data to a server. This ensures that your privacy is protected while still providing a high level of security.

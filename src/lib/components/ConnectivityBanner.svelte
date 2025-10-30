@@ -67,9 +67,19 @@
   });
 
   const meshSummary = $derived(() => {
-    const meshPart = `Mesh peers: ${state.meshPeers}`;
-    const totalPart = `Total peers: ${state.totalPeers}`;
-    return `${meshPart} • ${totalPart}`;
+    const parts = [
+      `Mesh peers: ${state.meshPeers}`,
+      `Total peers: ${state.totalPeers}`,
+    ];
+    if (state.bestRouteQuality !== null) {
+      parts.push(`Best route ${Math.round(state.bestRouteQuality * 100)}%`);
+    }
+    if (state.averageSuccessRate !== null) {
+      parts.push(
+        `Avg reliability ${Math.round(state.averageSuccessRate * 100)}%`,
+      );
+    }
+    return parts.join(" • ");
   });
 
   const bridgeTone = $derived(() => {
