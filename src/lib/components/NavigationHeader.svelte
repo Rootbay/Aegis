@@ -39,16 +39,25 @@
     Trash2,
     MapPin,
     PanelRight,
+    MoreVertical,
+    LogOut,
   } from "@lucide/svelte";
   import {
     Popover,
     PopoverTrigger,
     PopoverContent,
   } from "$lib/components/ui/popover";
+  import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+  } from "$lib/components/ui/dropdown-menu";
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
   import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
+  import { toasts } from "$lib/stores/ToastStore";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
@@ -168,6 +177,7 @@
   let freeText = $state("");
   let activeTokenIndex = $state<number | null>(null);
   let suppressStoreSync = false;
+  let leaveGroupPending = $state(false);
 
   const hideMemberNamesActive = $derived(() => {
     if (!chat?.id) return false;
@@ -561,6 +571,32 @@
       await channelDisplayPreferencesStore.toggleHideMemberNames(chat.id);
     } catch (error) {
       console.error("Failed to toggle hide member names:", error);
+    }
+  }
+
+  async function handleLeaveGroup() {
+    if (!chat || chat.type !== "group" || leaveGroupPending) {
+      return;
+    }
+
+    const groupId = chat.id;
+    const displayName = chat.name?.trim?.() ? chat.name : "this group";
+    const confirmed = confirm(`Leave the group "${displayName}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    leaveGroupPending = true;
+    try {
+      await chatStore.leaveGroupChat(groupId);
+      toasts.addToast(`You left ${displayName}.`, "info");
+    } catch (error: any) {
+      console.error("Failed to leave group:", error);
+      const message =
+        error?.message ?? "Failed to leave group. Please try again.";
+      toasts.addToast(message, "error");
+    } finally {
+      leaveGroupPending = false;
     }
   }
 
@@ -983,6 +1019,33 @@
         >
           <Users class="w-4 h-4" />
         </Button>
+        {#if chat.type === "group"}
+          <DropdownMenu>
+            <DropdownMenuTrigger>
+              <Button
+                variant="ghost"
+                class="cursor-pointer"
+                size="icon"
+                aria-label="Group options"
+                disabled={leaveGroupPending}
+              >
+                <MoreVertical class="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent class="w-44 text-sm">
+              <DropdownMenuItem
+                class="cursor-pointer text-destructive"
+                onselect={() => {
+                  if (!leaveGroupPending) {
+                    void handleLeaveGroup();
+                  }
+                }}
+              >
+                <LogOut class="mr-2 h-3.5 w-3.5" /> Leave group
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        {/if}
       {/if}
 
       <div class="w-[260px]">

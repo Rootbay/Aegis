@@ -183,6 +183,8 @@ interface ChatStore {
   ) => void;
   handleGroupChatCreated: (chat: BackendGroupChat) => GroupChatSummary;
   loadGroupChats: () => Promise<void>;
+  leaveGroupChat: (groupId: string) => Promise<void>;
+  handleGroupMemberLeft: (groupId: string, memberId: string) => void;
   groupChats: Readable<Map<string, GroupChatSummary>>;
 }
 
@@ -2715,6 +2717,82 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const removeGroupChat = (groupId: string) => {
+    if (!groupId) return;
+
+    const isActiveGroup =
+      get(activeChatType) === "group" && get(activeChatId) === groupId;
+
+    if (isActiveGroup) {
+      clearActiveChat();
+    } else {
+      dropChatHistory(groupId);
+    }
+
+    typingByChatIdStore.update((map) => {
+      if (!map.has(groupId)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.delete(groupId);
+      return next;
+    });
+
+    groupChatsStore.update((map) => {
+      if (!map.has(groupId)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.delete(groupId);
+      return next;
+    });
+  };
+
+  const handleGroupMemberLeft = (groupId: string, memberId: string) => {
+    if (!groupId || !memberId) {
+      return;
+    }
+
+    const selfId = get(userStore).me?.id;
+    if (selfId && memberId === selfId) {
+      removeGroupChat(groupId);
+      return;
+    }
+
+    groupChatsStore.update((map) => {
+      const summary = map.get(groupId);
+      if (!summary) {
+        return map;
+      }
+      if (!summary.memberIds.includes(memberId)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.set(groupId, {
+        ...summary,
+        memberIds: summary.memberIds.filter((id) => id !== memberId),
+      });
+      return next;
+    });
+  };
+
+  const leaveGroupChat = async (groupId: string) => {
+    if (!groupId) return;
+
+    const me = get(userStore).me;
+    if (!me) {
+      throw new Error("You must be signed in to leave a group chat.");
+    }
+
+    try {
+      await invoke("leave_group_dm", { groupId, group_id: groupId });
+      handleGroupMemberLeft(groupId, me.id);
+    } catch (error) {
+      console.error("Failed to leave group chat:", error);
+      throw error;
+    }
+  };
+
   const addReaction = async (
     targetChatId: string,
     messageId: string,
@@ -2815,6 +2893,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     overrideSpamDecision,
     handleGroupChatCreated,
     loadGroupChats,
+    leaveGroupChat,
+    handleGroupMemberLeft,
   };
 }
 

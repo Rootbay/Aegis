@@ -1471,6 +1471,43 @@ pub async fn get_group_chats_for_user(
     Ok(records)
 }
 
+pub async fn remove_group_chat_member(
+    pool: &Pool<Sqlite>,
+    group_chat_id: &str,
+    user_id: &str,
+) -> Result<bool, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    let delete_result = sqlx::query!(
+        "DELETE FROM group_chat_members WHERE group_chat_id = ? AND user_id = ?",
+        group_chat_id,
+        user_id
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    if delete_result.rows_affected() == 0 {
+        tx.rollback().await?;
+        return Ok(false);
+    }
+
+    let remaining: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(1) as \"count!: i64\" FROM group_chat_members WHERE group_chat_id = ?",
+        group_chat_id
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+
+    if remaining == 0 {
+        sqlx::query!("DELETE FROM group_chats WHERE id = ?", group_chat_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+    Ok(true)
+}
+
 pub async fn delete_message(pool: &Pool<Sqlite>, message_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM messages WHERE id = ?", message_id)
         .execute(pool)

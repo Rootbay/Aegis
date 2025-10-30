@@ -2,7 +2,7 @@
 use sqlx::{Pool, Sqlite};
 use aegis_shared_types::{AppState, FileTransferMode, IncomingFile};
 use std::path::Path;
-use aegis_protocol::{AepMessage, ChatMessageData, DeleteMessageData, MessageDeletionScope, MessageEditData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
+use aegis_protocol::{AepMessage, ChatMessageData, DeleteMessageData, MessageDeletionScope, MessageEditData, MessageReactionData, PeerDiscoveryData, PresenceUpdateData, ReactionAction, FriendRequestData, FriendRequestResponseData, BlockUserData, UnblockUserData, RemoveFriendshipData, CreateGroupChatData, LeaveGroupChatData, CreateServerData, JoinServerData, CreateChannelData, DeleteChannelData, DeleteServerData, SendServerInviteData};
 use aegis_types::AegisError;
 use libp2p::identity::PublicKey;
 use aegis_core::services;
@@ -831,6 +831,49 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                 .collect();
 
             database::upsert_group_chat(db_pool, &chat, &members).await?;
+        }
+        AepMessage::LeaveGroupChat {
+            group_id,
+            member_id,
+            signature,
+        } => {
+            let payload = LeaveGroupChatData {
+                group_id: group_id.clone(),
+                member_id: member_id.clone(),
+            };
+            let payload_bytes =
+                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+            let public_key = fetch_public_key_for_user(db_pool, &member_id).await?;
+
+            if let Some(sig) = signature {
+                if !public_key.verify(&payload_bytes, &sig) {
+                    eprintln!(
+                        "Invalid signature for leave group chat message from user: {}",
+                        member_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "Invalid signature for leave group chat message.".to_string(),
+                    ));
+                }
+            } else {
+                eprintln!(
+                    "Missing signature for leave group chat message from user: {}",
+                    member_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Missing signature for leave group chat message.".to_string(),
+                ));
+            }
+
+            let removed =
+                database::remove_group_chat_member(db_pool, &group_id, &member_id).await?;
+            if !removed {
+                eprintln!(
+                    "Leave group chat message received but membership not found: group {} member {}",
+                    group_id,
+                    member_id
+                );
+            }
         }
         AepMessage::CreateServer { server, signature } => {
             let create_server_data = CreateServerData { server: server.clone() };
