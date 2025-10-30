@@ -55,6 +55,7 @@ pub async fn run() {
             commands::servers::get_servers,
             commands::messages::get_messages,
             commands::messages::get_attachment_bytes,
+            commands::messages::resolve_link_preview,
             commands::servers::get_channels_for_server,
             commands::servers::get_channel_categories_for_server,
             commands::servers::get_members_for_server,
