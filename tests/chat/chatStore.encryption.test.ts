@@ -205,7 +205,7 @@ describe("chatStore encrypted messaging", () => {
     expect(invokeMock).toHaveBeenCalledWith(
       "send_direct_message",
       expect.objectContaining({
-        message: "cipher:Fallback message",
+        message: "Fallback message",
         recipientId: "friend-2",
         recipient_id: "friend-2",
       }),
@@ -269,7 +269,7 @@ describe("chatStore encrypted messaging", () => {
     );
     expect(invokeMock).toHaveBeenCalledWith(
       "send_direct_message_with_attachments",
-      expect.objectContaining({ message: "cipher:Attachment fallback" }),
+      expect.objectContaining({ message: "Attachment fallback" }),
     );
   });
 
