@@ -167,6 +167,7 @@ interface ServerStore extends Readable<ServerStoreState> {
     },
   ) => void;
   addServer: (server: Server) => void;
+  upsertServerFromBackend: (server: BackendServer) => Server;
   removeServer: (serverId: string) => void;
   fetchServerDetails: (serverId: string) => Promise<void>;
   addChannelToServer: (serverId: string, channel: Channel) => void;
@@ -884,6 +885,25 @@ export function createServerStore(): ServerStore {
     serverCache.set(withInvites.id, withInvites);
   };
 
+  const upsertServerFromBackend = (backendServer: BackendServer): Server => {
+    const mapped = normalizeServer(mapServer(backendServer));
+    update((state) => {
+      const existingIndex = state.servers.findIndex(
+        (server) => server.id === mapped.id,
+      );
+      if (existingIndex === -1) {
+        serverCache.set(mapped.id, mapped);
+        return { ...state, servers: [...state.servers, mapped] };
+      }
+      const nextServers = state.servers.map((server, index) =>
+        index === existingIndex ? mapped : server,
+      );
+      serverCache.set(mapped.id, mapped);
+      return { ...state, servers: nextServers };
+    });
+    return mapped;
+  };
+
   const removeServer = (serverId: string) => {
     update((s) => {
       const { [serverId]: _removed, ...restBans } = s.bansByServer;
@@ -1537,6 +1557,7 @@ export function createServerStore(): ServerStore {
     setActiveServer,
     updateServerMemberPresence,
     addServer,
+    upsertServerFromBackend,
     removeServer,
     fetchServerDetails,
     addChannelToServer,

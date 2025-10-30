@@ -30,9 +30,21 @@
   let serverName = $state("");
   let serverIcon = $state<File | null>(null);
   let serverIconPreview = $state<string | null>(null);
+  let joining = $state(false);
+  let joinError = $state<string | null>(null);
 
   let trimmedInviteLink = $derived(inviteLink.trim());
   let trimmedServerName = $derived(serverName.trim());
+
+  type BackendServer = Parameters<
+    (typeof serverStore)["upsertServerFromBackend"]
+  >[0];
+
+  type RedeemInviteResponse = {
+    server: BackendServer;
+    already_member?: boolean;
+    alreadyMember?: boolean;
+  };
 
   const viewCopy = {
     main: {
@@ -65,37 +77,67 @@
     { id: "template-10", name: "Art & Design" },
   ];
 
-  async function joinServer() {
-    const serverIdToJoin = trimmedInviteLink;
-    if (!serverIdToJoin || !$userStore.me) {
-      console.error("Cannot join server: missing invite link or user context.");
-      return;
+  function extractInviteCode(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
     }
 
     try {
-      await invoke("join_server", {
-        server_id: serverIdToJoin,
-        user_id: $userStore.me.id,
-      });
+      const url = new URL(trimmed);
+      const explicitCode =
+        url.searchParams.get("code") ?? url.searchParams.get("invite");
+      if (explicitCode && explicitCode.trim()) {
+        return explicitCode.trim();
+      }
 
-      const newServer: Server = {
-        id: serverIdToJoin,
-        name: `Joined Server (${serverIdToJoin})`,
-        iconUrl:
-          "https://api.dicebear.com/8.x/bottts-neutral/svg?seed=" +
-          encodeURIComponent(serverIdToJoin),
-        owner_id: "unknown",
-        members: [$userStore.me],
-        channels: [],
-        categories: [],
-        roles: [],
-      };
+      const segments = url.pathname.split("/").filter(Boolean);
+      if (segments.length > 0) {
+        return segments[segments.length - 1];
+      }
+    } catch {
+      const candidate = trimmed.replace(/\s+/g, "");
+      if (/^[A-Za-z0-9_-]{4,}$/.test(candidate)) {
+        return candidate;
+      }
+    }
 
-      serverStore.addServer(newServer);
-      serverStore.setActiveServer(newServer.id);
+    return null;
+  }
+
+  async function joinServer(event?: Event) {
+    event?.preventDefault?.();
+    if (!$userStore.me) {
+      joinError = "You need to be signed in to join a server.";
+      return;
+    }
+
+    const inviteCode = extractInviteCode(trimmedInviteLink);
+    if (!inviteCode) {
+      joinError = "Enter a valid invite URL or code.";
+      return;
+    }
+
+    joining = true;
+    joinError = null;
+    try {
+      const response = await invoke<RedeemInviteResponse>(
+        "redeem_server_invite",
+        { code: inviteCode },
+      );
+
+      const server = serverStore.upsertServerFromBackend(response.server);
+      serverStore.setActiveServer(server.id);
+      inviteLink = "";
       closeModal();
     } catch (error) {
       console.error("Failed to join server:", error);
+      joinError =
+        error instanceof Error
+          ? error.message
+          : "Failed to join server. Please try again.";
+    } finally {
+      joining = false;
     }
   }
 
@@ -194,13 +236,16 @@
         <Button
           variant="secondary"
           class="w-full"
-          onclick={() => (modalView = "joinLink")}
+          onclick={() => {
+            joinError = null;
+            modalView = "joinLink";
+          }}
         >
           Join with Link
         </Button>
       </div>
     {:else if modalView === "joinLink"}
-      <div class="space-y-4">
+      <form class="space-y-4" onsubmit={joinServer}>
         <div class="space-y-2">
           <Label for="inviteLink">Enter Invite Link</Label>
           <Input
@@ -208,7 +253,11 @@
             type="text"
             placeholder="e.g., https://aegis.com/inv/aegis-community"
             bind:value={inviteLink}
+            aria-invalid={joinError ? "true" : "false"}
           />
+          {#if joinError}
+            <p class="text-sm text-destructive">{joinError}</p>
+          {/if}
         </div>
 
         <div
@@ -222,26 +271,29 @@
             >
           </p>
         </div>
-      </div>
 
-      <DialogFooter class="mt-6 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          type="button"
-          class="gap-2"
-          onclick={() => (modalView = "main")}
-        >
-          <ArrowLeft size={14} />
-          Back
-        </Button>
-        <Button
-          type="button"
-          onclick={joinServer}
-          disabled={!trimmedInviteLink}
-        >
-          Join
-        </Button>
-      </DialogFooter>
+        <DialogFooter class="mt-6 flex items-center justify-between">
+          <Button
+            variant="ghost"
+            type="button"
+            class="gap-2"
+            onclick={() => {
+              modalView = "main";
+              joinError = null;
+            }}
+          >
+            <ArrowLeft size={14} />
+            Back
+          </Button>
+          <Button type="submit" disabled={joining || !trimmedInviteLink}>
+            {#if joining}
+              Joining...
+            {:else}
+              Join
+            {/if}
+          </Button>
+        </DialogFooter>
+      </form>
     {:else}
       <div class="space-y-6">
         <div class="flex flex-col items-center gap-3">
@@ -283,20 +335,20 @@
       </div>
 
       <DialogFooter class="mt-6 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          type="button"
-          class="gap-2"
-          onclick={() => (modalView = "main")}
-        >
+          <Button
+            variant="ghost"
+            type="button"
+            class="gap-2"
+            onclick={() => (modalView = "main")}
+          >
           <ArrowLeft size={14} />
           Back
         </Button>
-        <Button
-          type="button"
-          onclick={createNewServer}
-          disabled={!trimmedServerName}
-        >
+          <Button
+            type="button"
+            onclick={createNewServer}
+            disabled={!trimmedServerName}
+          >
           Create
         </Button>
       </DialogFooter>

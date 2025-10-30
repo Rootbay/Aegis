@@ -3,8 +3,9 @@ use aegis_protocol::AepMessage;
 use aegis_shared_types::AppState;
 use aep::database;
 use aep::database::{
-    ChannelCategory, ChannelDisplayPreference, ServerEvent, ServerEventPatch, ServerInvite,
-    ServerMetadataUpdate, ServerModerationUpdate, ServerWebhook, ServerWebhookPatch,
+    ChannelCategory, ChannelDisplayPreference, RedeemServerInviteError, RedeemedServerInvite,
+    ServerEvent, ServerEventPatch, ServerInvite, ServerMetadataUpdate, ServerModerationUpdate,
+    ServerWebhook, ServerWebhookPatch,
 };
 use aep::user_service;
 use chrono::{DateTime, Utc};
@@ -46,6 +47,41 @@ impl From<ServerInvite> for ServerInviteResponse {
             uses: value.uses,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedeemServerInviteResponse {
+    pub server: database::Server,
+    pub already_member: bool,
+}
+
+async fn broadcast_join_event(
+    state: &AppState,
+    server_id: &str,
+    user_id: &str,
+) -> Result<(), String> {
+    let join_server_data = aegis_protocol::JoinServerData {
+        server_id: server_id.to_string(),
+        user_id: user_id.to_string(),
+    };
+    let join_server_bytes = bincode::serialize(&join_server_data).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&join_server_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let aep_message = AepMessage::JoinServer {
+        server_id: server_id.to_string(),
+        user_id: user_id.to_string(),
+        signature: Some(signature),
+    };
+    let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized_message)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -594,28 +630,48 @@ pub async fn join_server(
         .await
         .map_err(|e| e.to_string())?;
 
-    let join_server_data = aegis_protocol::JoinServerData {
-        server_id: server_id.clone(),
-        user_id: my_id.clone(),
-    };
-    let join_server_bytes = bincode::serialize(&join_server_data).map_err(|e| e.to_string())?;
-    let signature = state
-        .identity
-        .keypair()
-        .sign(&join_server_bytes)
-        .map_err(|e| e.to_string())?;
+    broadcast_join_event(&state, &server_id, &my_id).await
+}
 
-    let aep_message = AepMessage::JoinServer {
-        server_id,
-        user_id: my_id,
-        signature: Some(signature),
-    };
-    let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    state
-        .network_tx
-        .send(serialized_message)
+#[tauri::command]
+pub async fn redeem_server_invite(
+    code: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<RedeemServerInviteResponse, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    let my_id = state.identity.peer_id().to_base58();
+    let redemption = database::redeem_server_invite_by_code(&state.db_pool, &code, &my_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|err| match err {
+            RedeemServerInviteError::InviteNotFound => {
+                "Invite not found or no longer valid.".to_string()
+            }
+            RedeemServerInviteError::InviteExpired => "This invite has expired.".to_string(),
+            RedeemServerInviteError::InviteMaxedOut => {
+                "This invite has reached its maximum number of uses.".to_string()
+            }
+            RedeemServerInviteError::Database(e) => e.to_string(),
+        })?;
+
+    let RedeemedServerInvite {
+        server,
+        already_member,
+    } = redemption;
+
+    if !already_member {
+        broadcast_join_event(&state, &server.id, &my_id).await?;
+    }
+
+    Ok(RedeemServerInviteResponse {
+        server,
+        already_member,
+    })
 }
 
 #[tauri::command]
