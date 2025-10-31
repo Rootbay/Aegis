@@ -1,9 +1,8 @@
 use libp2p::futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
 use std::collections::{HashMap, VecDeque};
-use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{atomic::AtomicBool, Arc};
 use tauri::{Emitter, Manager, Runtime, State};
@@ -29,30 +28,14 @@ use crate::connectivity::{
 };
 use crate::settings_store;
 
-const MAX_OUTBOX_MESSAGES: usize = 256;
-const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
-const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
-const MAX_UNAPPROVED_BUFFER_BYTES: u64 = 8_388_608; // 8 MiB
-const DEFAULT_CHUNK_SIZE: usize = 128 * 1024;
-const OUTGOING_STATE_DIR: &str = "outgoing_transfers";
-const INCOMING_STATE_DIR: &str = "incoming_transfers";
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-struct OutgoingResilientMetadata {
-    next_index: u64,
-    bytes_sent: u64,
-    chunk_size: usize,
-    file_size: u64,
-    safe_filename: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-struct IncomingResilientMetadata {
-    file_size: u64,
-    chunk_size: usize,
-    chunks: HashMap<u64, usize>,
-    safe_filename: String,
-}
+use super::{
+    broadcast_group_key_update, cleanup_incoming_state, load_incoming_resilient_chunks,
+    load_outgoing_metadata, mode_to_str, persist_incoming_metadata, persist_outgoing_metadata,
+    rotate_and_broadcast_group_key, sanitize_filename, write_incoming_chunk,
+    IncomingResilientMetadata, OutgoingResilientMetadata, DEFAULT_CHUNK_SIZE, INCOMING_STATE_DIR,
+    MAX_FILE_SIZE_BYTES, MAX_INFLIGHT_FILE_BYTES, MAX_OUTBOX_MESSAGES, MAX_UNAPPROVED_BUFFER_BYTES,
+    OUTGOING_STATE_DIR,
+};
 
 pub async fn initialize_app_state<R: Runtime>(
     app: tauri::AppHandle<R>,
@@ -1406,225 +1389,4 @@ pub async fn initialize_app_state<R: Runtime>(
     });
 
     Ok(())
-}
-
-fn mode_to_str(mode: FileTransferMode) -> &'static str {
-    match mode {
-        FileTransferMode::Basic => "basic",
-        FileTransferMode::Resilient => "resilient",
-    }
-}
-
-fn load_outgoing_metadata(path: &Path) -> Result<OutgoingResilientMetadata, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
-}
-
-fn persist_outgoing_metadata(
-    path: &Path,
-    metadata: &OutgoingResilientMetadata,
-) -> Result<(), String> {
-    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    std::fs::write(path, bytes).map_err(|e| e.to_string())
-}
-
-fn load_incoming_resilient_chunks(
-    meta_path: &Path,
-    data_path: &Path,
-) -> Result<(IncomingResilientMetadata, HashMap<u64, Vec<u8>>), String> {
-    if !meta_path.exists() || !data_path.exists() {
-        return Ok((IncomingResilientMetadata::default(), HashMap::new()));
-    }
-
-    let bytes = std::fs::read(meta_path).map_err(|e| e.to_string())?;
-    let metadata: IncomingResilientMetadata =
-        serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    let chunk_size = if metadata.chunk_size == 0 {
-        DEFAULT_CHUNK_SIZE
-    } else {
-        metadata.chunk_size
-    };
-
-    let mut file = std::fs::File::open(data_path).map_err(|e| e.to_string())?;
-    let mut chunks: HashMap<u64, Vec<u8>> = HashMap::new();
-    for (index, length) in metadata.chunks.iter() {
-        let offset = (*index as u64).saturating_mul(chunk_size as u64);
-        file.seek(SeekFrom::Start(offset))
-            .map_err(|e| e.to_string())?;
-        let mut buf = vec![0u8; *length];
-        file.read_exact(&mut buf).map_err(|e| e.to_string())?;
-        chunks.insert(*index, buf);
-    }
-
-    Ok((metadata, chunks))
-}
-
-fn persist_incoming_metadata(
-    path: &Path,
-    metadata: &IncomingResilientMetadata,
-) -> Result<(), String> {
-    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    std::fs::write(path, bytes).map_err(|e| e.to_string())
-}
-
-fn write_incoming_chunk(path: &Path, index: u64, data: &[u8]) -> Result<(), String> {
-    let mut file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(path)
-        .map_err(|e| e.to_string())?;
-    let offset = index.saturating_mul(DEFAULT_CHUNK_SIZE as u64);
-    file.seek(SeekFrom::Start(offset))
-        .map_err(|e| e.to_string())?;
-    file.write_all(data).map_err(|e| e.to_string())
-}
-
-fn cleanup_incoming_state(staging_path: &Option<PathBuf>, metadata_path: &Option<PathBuf>) {
-    if let Some(path) = staging_path {
-        if path.exists() {
-            let _ = std::fs::remove_file(path);
-        }
-    }
-    if let Some(path) = metadata_path {
-        if path.exists() {
-            let _ = std::fs::remove_file(path);
-        }
-    }
-}
-
-fn sanitize_filename(input: &str) -> String {
-    let candidate = Path::new(input)
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("file");
-
-    let mut sanitized = String::with_capacity(candidate.len());
-    for ch in candidate.chars() {
-        if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ' | '(' | ')') {
-            sanitized.push(ch);
-        } else {
-            sanitized.push('_');
-        }
-    }
-
-    while sanitized.starts_with('.') || sanitized.starts_with('_') {
-        sanitized.remove(0);
-        if sanitized.is_empty() {
-            break;
-        }
-    }
-
-    sanitized.truncate(128);
-
-    if sanitized.is_empty() || sanitized.chars().all(|c| c == '_' || c == '.') {
-        format!("file-{}", chrono::Utc::now().timestamp())
-    } else {
-        sanitized
-    }
-}
-
-async fn broadcast_group_key_update(
-    db_pool: &sqlx::Pool<sqlx::Sqlite>,
-    identity: crypto::identity::Identity,
-    net_tx: &TokioSender<Vec<u8>>,
-    server_id: &str,
-    channel_id: &Option<String>,
-) -> Result<(), String> {
-    let (epoch, key_bytes) = {
-        let arc = e2ee::init_global_manager();
-        let mgr = arc.lock();
-        mgr.get_group_key(server_id, channel_id)
-            .ok_or_else(|| "Missing group key for broadcast".to_string())?
-    };
-    let issuer_id = identity.peer_id().to_base58();
-
-    let members = aep::database::get_server_members(db_pool, server_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut slots: Vec<aegis_protocol::EncryptedDmSlot> = Vec::new();
-    for m in members {
-        if m.id == issuer_id {
-            continue;
-        }
-        let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock();
-        if let Ok(pkt) = mgr.encrypt_for(&m.id, &key_bytes) {
-            slots.push(aegis_protocol::EncryptedDmSlot {
-                recipient: m.id,
-                init: pkt.init,
-                enc_header: pkt.enc_header,
-                enc_content: pkt.enc_content,
-            });
-        }
-    }
-
-    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots))
-        .map_err(|e| e.to_string())?;
-    let signature = identity
-        .keypair()
-        .sign(&payload)
-        .map_err(|e| e.to_string())?;
-
-    let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
-        server_id: server_id.to_string(),
-        channel_id: channel_id.clone(),
-        epoch,
-        slots,
-        signature: Some(signature),
-    };
-    let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
-    net_tx.send(bytes).await.map_err(|e| e.to_string())
-}
-
-async fn rotate_and_broadcast_group_key(
-    db_pool: &sqlx::Pool<sqlx::Sqlite>,
-    identity: crypto::identity::Identity,
-    net_tx: &TokioSender<Vec<u8>>,
-    server_id: &str,
-    channel_id: &Option<String>,
-    epoch: u64,
-) -> Result<(), String> {
-    let key = {
-        let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock();
-        mgr.generate_and_set_group_key(server_id, channel_id, epoch)
-    };
-    let issuer_id = identity.peer_id().to_base58();
-
-    let members = aep::database::get_server_members(db_pool, server_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut slots: Vec<aegis_protocol::EncryptedDmSlot> = Vec::new();
-    for m in members {
-        if m.id == issuer_id {
-            continue;
-        }
-        let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock();
-        if let Ok(pkt) = mgr.encrypt_for(&m.id, &key) {
-            slots.push(aegis_protocol::EncryptedDmSlot {
-                recipient: m.id,
-                init: pkt.init,
-                enc_header: pkt.enc_header,
-                enc_content: pkt.enc_content,
-            });
-        }
-    }
-
-    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots))
-        .map_err(|e| e.to_string())?;
-    let signature = identity
-        .keypair()
-        .sign(&payload)
-        .map_err(|e| e.to_string())?;
-
-    let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
-        server_id: server_id.to_string(),
-        channel_id: channel_id.clone(),
-        epoch,
-        slots,
-        signature: Some(signature),
-    };
-    let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
-    net_tx.send(bytes).await.map_err(|e| e.to_string())
 }
