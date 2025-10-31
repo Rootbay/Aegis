@@ -147,6 +147,26 @@ pub fn spawn_connectivity_task<R: Runtime>(
     LOCAL_PEER_ID.get_or_init(|| local_peer_id.clone());
     ROUTER_HANDLE.get_or_init(|| router.clone());
 
+    let mut transport_events = network::subscribe_transport_events();
+    {
+        let swarm_clone = swarm.clone();
+        let snapshot_store_clone = snapshot_store.clone();
+        let app_clone = app.clone();
+        let local_peer_id_clone = local_peer_id.clone();
+        tokio::spawn(async move {
+            while transport_events.recv().await.is_ok() {
+                if let Some(snapshot) =
+                    collect_and_store_snapshot(&swarm_clone, &local_peer_id_clone, &snapshot_store_clone)
+                        .await
+                {
+                    if let Err(error) = app_clone.emit("connectivity-status", snapshot.clone()) {
+                        eprintln!("Failed to emit connectivity snapshot: {}", error);
+                    }
+                }
+            }
+        });
+    }
+
     {
         let bridge_state = BRIDGE_STATE.clone();
         tokio::spawn(async move {
