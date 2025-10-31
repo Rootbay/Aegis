@@ -1,7 +1,14 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { Link, Mic, SendHorizontal, Square, Users } from "@lucide/svelte";
+  import {
+    Link,
+    Loader2,
+    Mic,
+    SendHorizontal,
+    Square,
+    Users,
+  } from "@lucide/svelte";
   import { invoke } from "@tauri-apps/api/core";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
@@ -118,6 +125,8 @@
   let showLightbox = $state(false);
   let lightboxImageUrl = $state("");
   let loadingMoreMessages = $state(false);
+  let historyLoadPromise: Promise<boolean> | null = null;
+  let pendingScrollTarget: string | null = null;
   let canTriggerTopLoad = $state(true);
   let lastTopLoad = 0;
   let attachedFiles = $state<File[]>([]);
@@ -419,38 +428,25 @@
       notifyMessagesViewed();
     }
 
-    const topThreshold = 24;
-    const hasMore = chat?.id ? ($hasMoreByChatId.get(chat.id) ?? true) : false;
-    const awayThreshold = topThreshold * 8;
+    const topThreshold = TOP_LOAD_THRESHOLD_PX;
+    const hasMore = hasMoreHistory;
+    const awayThreshold = topThreshold * TOP_LOAD_AWAY_MULTIPLIER;
     if (!loadingMoreMessages && el.scrollTop > awayThreshold) {
       canTriggerTopLoad = true;
     }
     const now = Date.now();
     if (
       !loadingMoreMessages &&
+      !historyLoadPromise &&
       hasMore &&
       canTriggerTopLoad &&
       now - lastTopLoad > LOAD_COOLDOWN_MS &&
       el.scrollTop <= topThreshold &&
       chat?.id
     ) {
-      loadingMoreMessages = true;
       canTriggerTopLoad = false;
       lastTopLoad = now;
-      const oldScrollHeight = el.scrollHeight;
-      const oldScrollTop = el.scrollTop;
-      chatStore.loadMoreMessages(chat.id).finally(() => {
-        if (viewportEl) {
-          requestAnimationFrame(() => {
-            const newScrollHeight = viewportEl!.scrollHeight;
-            const delta = newScrollHeight - oldScrollHeight;
-            let nextTop = oldScrollTop + (Number.isFinite(delta) ? delta : 0);
-            if (nextTop <= topThreshold) nextTop = topThreshold + 1;
-            viewportEl!.scrollTop = nextTop;
-          });
-        }
-        loadingMoreMessages = false;
-      });
+      void loadOlderMessages({ preserveScroll: true });
     }
   };
 
@@ -1268,6 +1264,9 @@
     showLightbox = true;
   }
 
+  const TOP_LOAD_THRESHOLD_PX = 24;
+  const TOP_LOAD_AWAY_MULTIPLIER = 8;
+
   function scrollToBottom() {
     const count = currentChatMessages?.length ?? 0;
     if (count && listRef && typeof listRef.scroll === "function") {
@@ -1278,24 +1277,127 @@
     }
   }
 
-  function scrollToMessage(messageId: string) {
-    if (!messageId) {
-      return;
-    }
+  function attemptScrollToMessage(messageId: string) {
+    if (!messageId) return false;
 
     const messages = currentChatMessages || [];
     const index = messages.findIndex((msg) => msg.id === messageId);
     if (listRef && typeof listRef.scroll === "function" && index !== -1) {
       listRef.scroll({ index, align: "center", smoothScroll: true });
-      return;
+      return true;
     }
 
     const element = document.getElementById(`message-${messageId}`);
-    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      return true;
+    }
+
+    return false;
+  }
+
+  type HistoryLoadOptions = {
+    preserveScroll?: boolean;
+  };
+
+  async function loadOlderMessages(options: HistoryLoadOptions = {}) {
+    const targetChatId = chat?.id;
+    if (!targetChatId) return false;
+    if (historyLoadPromise) {
+      return historyLoadPromise;
+    }
+
+    const beforeCount = currentChatMessages?.length ?? 0;
+    const previousScroll =
+      options.preserveScroll && viewportEl
+        ? {
+            element: viewportEl,
+            scrollTop: viewportEl.scrollTop,
+            scrollHeight: viewportEl.scrollHeight,
+          }
+        : null;
+
+    const loadTask = (async () => {
+      loadingMoreMessages = true;
+      try {
+        await chatStore.loadMoreMessages(targetChatId);
+        await tick();
+        if (
+          previousScroll &&
+          viewportEl &&
+          viewportEl === previousScroll.element
+        ) {
+          requestAnimationFrame(() => {
+            if (!viewportEl || viewportEl !== previousScroll.element) return;
+            const newScrollHeight = viewportEl.scrollHeight;
+            const delta = newScrollHeight - previousScroll.scrollHeight;
+            let nextTop =
+              previousScroll.scrollTop + (Number.isFinite(delta) ? delta : 0);
+            if (nextTop <= TOP_LOAD_THRESHOLD_PX) {
+              nextTop = TOP_LOAD_THRESHOLD_PX + 1;
+            }
+            viewportEl.scrollTop = nextTop;
+          });
+        }
+        const afterCount = currentChatMessages?.length ?? 0;
+        return afterCount > beforeCount;
+      } finally {
+        loadingMoreMessages = false;
+        historyLoadPromise = null;
+      }
+    })();
+
+    historyLoadPromise = loadTask;
+    return loadTask;
+  }
+
+  async function scrollToMessage(messageId: string) {
+    if (!messageId) {
+      return;
+    }
+
+    pendingScrollTarget = messageId;
+
+    if (attemptScrollToMessage(messageId)) {
+      if (pendingScrollTarget === messageId) {
+        pendingScrollTarget = null;
+      }
+      return;
+    }
+
+    const MAX_HISTORY_ATTEMPTS = 10;
+    let attempt = 0;
+    while (
+      pendingScrollTarget === messageId &&
+      hasMoreHistory &&
+      attempt < MAX_HISTORY_ATTEMPTS
+    ) {
+      attempt += 1;
+      const loaded = await loadOlderMessages();
+      if (pendingScrollTarget !== messageId) {
+        return;
+      }
+      if (!loaded) {
+        break;
+      }
+      await tick();
+      if (attemptScrollToMessage(messageId)) {
+        break;
+      }
+    }
+
+    if (pendingScrollTarget === messageId) {
+      attemptScrollToMessage(messageId);
+      pendingScrollTarget = null;
+    }
   }
 
   let currentChatMessages = $derived(
     chat ? $messagesByChatId.get(chat.id) || [] : [],
+  );
+
+  let hasMoreHistory = $derived(
+    chat?.id ? ($hasMoreByChatId.get(chat.id) ?? true) : false,
   );
 
   let isChatLoading = $derived(
@@ -1591,8 +1693,11 @@
               : senderInfo?.avatar}
             {@const displayableUser = isMe ? $userStore.me : senderInfo}
             {#if loadingMoreMessages && index === 0}
-              <div class="text-center text-muted-foreground py-2">
-                Loading older messages...
+              <div
+                class="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground"
+              >
+                <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <span>Loading previous messages…</span>
               </div>
             {/if}
             <div
@@ -1749,7 +1854,7 @@
                           type="button"
                           class="mb-2 w-full rounded-md bg-black/20 px-3 py-2 text-left text-xs text-white/80 hover:bg-black/30 focus:outline-none"
                           onclick={() =>
-                            scrollToMessage(msg.replyToMessageId ?? "")}
+                            void scrollToMessage(msg.replyToMessageId ?? "")}
                         >
                           <p
                             class="font-semibold text-[0.65rem] uppercase tracking-wide text-white/60"
