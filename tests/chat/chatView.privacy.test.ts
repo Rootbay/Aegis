@@ -1129,3 +1129,217 @@ describe("ChatView reactions", () => {
     }
   });
 });
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe("ChatView history loading", () => {
+  beforeEach(() => {
+    resetChatViewState();
+  });
+
+  it("loads older messages when the reply target is outside the current window", async () => {
+    const chatModule = getChatStoreModule();
+
+    const chatId = "chat-history";
+    const friend: Friend = {
+      id: "friend-history",
+      name: "History Helper",
+      avatar: "https://example.com/history.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const olderMessage: Message = {
+      id: "msg-history-older",
+      chatId,
+      senderId: friend.id,
+      content: "This is the older message",
+      timestamp: "2024-01-01T00:00:00.000Z",
+      read: true,
+    };
+
+    const newerMessage: Message = {
+      id: "msg-history-newer",
+      chatId,
+      senderId: friend.id,
+      content: "Replying to an old message",
+      timestamp: "2024-01-01T00:10:00.000Z",
+      read: true,
+      replyToMessageId: olderMessage.id,
+      replySnapshot: {
+        author: friend.name,
+        snippet: olderMessage.content,
+      },
+    };
+
+    messagesByChatId.set(new Map([[chatId, [newerMessage]]]));
+    hasMoreByChatId.set(new Map([[chatId, true]]));
+
+    const loadMoreSpy = vi
+      .spyOn(chatModule.chatStore, "loadMoreMessages")
+      .mockImplementation(async (targetChatId) => {
+        if (targetChatId !== chatId) return;
+        await Promise.resolve();
+        messagesByChatId.update((current) => {
+          const next = new Map(current);
+          const existing = next.get(chatId) ?? [];
+          if (!existing.some((msg) => msg.id === olderMessage.id)) {
+            next.set(chatId, [olderMessage, ...existing]);
+          }
+          return next;
+        });
+        hasMoreByChatId.update((current) => {
+          const next = new Map(current);
+          next.set(chatId, false);
+          return next;
+        });
+      });
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [newerMessage],
+    };
+
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
+
+    try {
+      render(ChatView, { props: { chat } });
+
+      const replyButton = await screen.findByRole("button", {
+        name: /Replying to/,
+      });
+
+      await fireEvent.click(replyButton);
+
+      await screen.findByText("Loading previous messages…");
+
+      await waitFor(() => {
+        expect(loadMoreSpy).toHaveBeenCalledWith(chatId);
+      });
+
+      await waitFor(() => {
+        expect(scrollSpy).toHaveBeenCalledWith({
+          behavior: "smooth",
+          block: "center",
+        });
+      });
+
+      expect(screen.getByText(olderMessage.content)).toBeInTheDocument();
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      loadMoreSpy.mockRestore();
+    }
+  });
+
+  it("avoids duplicate history fetches while a load is already in progress", async () => {
+    const chatModule = getChatStoreModule();
+
+    const chatId = "chat-history-duplicate";
+    const friend: Friend = {
+      id: "friend-history-dup",
+      name: "History Duplicate",
+      avatar: "https://example.com/history-dup.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const olderMessage: Message = {
+      id: "msg-history-dup-older",
+      chatId,
+      senderId: friend.id,
+      content: "Old duplicate message",
+      timestamp: "2024-01-02T00:00:00.000Z",
+      read: true,
+    };
+
+    const newerMessage: Message = {
+      id: "msg-history-dup-newer",
+      chatId,
+      senderId: friend.id,
+      content: "Another reply to an old message",
+      timestamp: "2024-01-02T00:10:00.000Z",
+      read: true,
+      replyToMessageId: olderMessage.id,
+      replySnapshot: {
+        author: friend.name,
+        snippet: olderMessage.content,
+      },
+    };
+
+    messagesByChatId.set(new Map([[chatId, [newerMessage]]]));
+    hasMoreByChatId.set(new Map([[chatId, true]]));
+
+    const deferred = createDeferred<void>();
+
+    const loadMoreSpy = vi
+      .spyOn(chatModule.chatStore, "loadMoreMessages")
+      .mockImplementation(async (targetChatId) => {
+        if (targetChatId !== chatId) return;
+        await deferred.promise;
+        messagesByChatId.update((current) => {
+          const next = new Map(current);
+          const existing = next.get(chatId) ?? [];
+          if (!existing.some((msg) => msg.id === olderMessage.id)) {
+            next.set(chatId, [olderMessage, ...existing]);
+          }
+          return next;
+        });
+        hasMoreByChatId.update((current) => {
+          const next = new Map(current);
+          next.set(chatId, false);
+          return next;
+        });
+      });
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [newerMessage],
+    };
+
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
+
+    try {
+      render(ChatView, { props: { chat } });
+
+      const replyButton = await screen.findByRole("button", {
+        name: /Replying to/,
+      });
+
+      await fireEvent.click(replyButton);
+      await fireEvent.click(replyButton);
+
+      expect(loadMoreSpy).toHaveBeenCalledTimes(1);
+
+      deferred.resolve();
+
+      await waitFor(() => {
+        expect(scrollSpy).toHaveBeenCalled();
+      });
+
+      expect(screen.getByText(olderMessage.content)).toBeInTheDocument();
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+      loadMoreSpy.mockRestore();
+    }
+  });
+});

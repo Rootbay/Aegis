@@ -158,6 +158,16 @@ const createMockFile = (
   } as unknown as File;
 };
 
+const createDeferred = <T>() => {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
 describe("chatStore message editing", () => {
   beforeEach(() => {
     createObjectURLSpy = vi.fn(
@@ -646,5 +656,48 @@ describe("chatStore reply metadata mapping", () => {
       author: "Original",
       snippet: "Snippet text",
     });
+  });
+});
+
+describe("chatStore history loading", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("prevents duplicate fetches when a history load is already running", async () => {
+    const store = createChatStore();
+    const deferred = createDeferred<any[]>();
+
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "get_messages") {
+        return deferred.promise;
+      }
+      if (command === "decrypt_chat_payload") {
+        return {
+          content: payload?.content ?? "",
+          attachments: payload?.attachments ?? [],
+          wasEncrypted: false,
+        };
+      }
+      return undefined;
+    });
+
+    const promiseA = store.loadMoreMessages("chat-history-guard");
+    const promiseB = store.loadMoreMessages("chat-history-guard");
+
+    deferred.resolve([]);
+
+    await Promise.all([promiseA, promiseB]);
+
+    const fetchCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "get_messages",
+    );
+    expect(fetchCalls).toHaveLength(1);
   });
 });
