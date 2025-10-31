@@ -523,8 +523,34 @@
     }
   }
 
-  function removeFriend(user: Friend) {
-    friendStore.removeFriend(user.id);
+  async function removeFriend(user: Friend) {
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to remove friends.", "error");
+      return;
+    }
+
+    const usesFallbackId = user.friendshipId == null;
+    const friendshipId = usesFallbackId ? user.id : user.friendshipId;
+
+    if (!friendshipId) {
+      toasts.addToast("Unable to determine friendship identifier.", "error");
+      return;
+    }
+
+    try {
+      await invoke("remove_friendship", { friendship_id: friendshipId });
+      friendStore.removeFriend(user.id);
+      mutedFriendsStore.unmute(user.id);
+      toasts.addToast("Friend removed.", "success");
+      await friendStore.initialize();
+    } catch (error: any) {
+      console.error("Failed to remove friend:", error);
+      toasts.addToast(
+        error?.message ?? "Failed to remove friend.",
+        "error",
+      );
+    }
   }
 
   async function blockUserAction(user: User | Friend) {

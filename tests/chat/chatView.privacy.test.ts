@@ -1,10 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
 
 import Passthrough from "../mocks/Passthrough.svelte";
 import MessageAuthorNameStub from "../mocks/MessageAuthorNameStub.svelte";
 import VirtualListStub from "../mocks/VirtualListStub.svelte";
+import ContextMenuActionDispatcher from "../mocks/ContextMenuActionDispatcher.svelte";
+
+import { invoke } from "@tauri-apps/api/core";
 
 vi.mock("$app/environment", () => ({
   browser: false,
@@ -126,7 +129,7 @@ vi.mock(
 );
 
 vi.mock("$lib/components/context-menus/BaseContextMenu.svelte", () => ({
-  default: Passthrough,
+  default: ContextMenuActionDispatcher,
 }));
 
 vi.mock("$lib/features/chat/components/MessageAuthorName.svelte", () => ({
@@ -236,15 +239,20 @@ function getMutedFriendsModule() {
 
     globalThis.__mutedFriendsModule = {
       mutedFriendsStore: {
-        isMuted: (id: string) => muted.has(id),
-        mute: (id: string) => {
+        isMuted: vi.fn((id: string) => muted.has(id)),
+        mute: vi.fn((id: string) => {
           muted.add(id);
-        },
-        unmute: (id: string) => {
+        }),
+        unmute: vi.fn((id: string) => {
           muted.delete(id);
-        },
+        }),
       },
-      __resetMutedFriends: () => muted.clear(),
+      __resetMutedFriends: () => {
+        muted.clear();
+        globalThis.__mutedFriendsModule.mutedFriendsStore.isMuted.mockClear();
+        globalThis.__mutedFriendsModule.mutedFriendsStore.mute.mockClear();
+        globalThis.__mutedFriendsModule.mutedFriendsStore.unmute.mockClear();
+      },
     };
   }
   return globalThis.__mutedFriendsModule;
@@ -255,10 +263,17 @@ vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () => getMute
 
 function getFriendStoreModule() {
   if (!globalThis.__friendStoreModule) {
+    const removeFriend = vi.fn();
+    const initialize = vi.fn(async () => {});
+
     globalThis.__friendStoreModule = {
       friendStore: {
-        removeFriend: () => {},
-        initialize: () => Promise.resolve(),
+        removeFriend,
+        initialize,
+      },
+      __resetFriendStore: () => {
+        removeFriend.mockClear();
+        initialize.mockClear();
       },
     };
   }
@@ -305,10 +320,17 @@ vi.mock("../../src/lib/features/servers/stores/serverStore", () => getServerStor
 
 function getToastModule() {
   if (!globalThis.__toastModule) {
+    const addToast = vi.fn();
+    const showErrorToast = vi.fn();
+
     globalThis.__toastModule = {
       toasts: {
-        addToast: () => {},
-        showErrorToast: () => {},
+        addToast,
+        showErrorToast,
+      },
+      __resetToasts: () => {
+        addToast.mockClear();
+        showErrorToast.mockClear();
       },
     };
   }
@@ -394,27 +416,17 @@ function resetChatViewState() {
     online: true,
   });
   __resetMutedFriends();
+  const friendModule = getFriendStoreModule();
+  friendModule.__resetFriendStore?.();
+  const toastModule = getToastModule();
+  toastModule.__resetToasts?.();
+  vi.mocked(invoke).mockReset();
+  vi.mocked(invoke).mockResolvedValue(null as never);
 }
 
 describe("ChatView privacy preferences", () => {
   beforeEach(() => {
-    const baseline = structuredClone(defaultSettings);
-    baseline.showMessageAvatars = true;
-    baseline.showMessageTimestamps = true;
-    settings.set(baseline);
-
-    messagesByChatId.set(new Map());
-    hasMoreByChatId.set(new Map());
-    loadingStateByChat.set(new Map());
-    chatSearchStore.reset();
-    __setUser({
-      id: "user-current",
-      name: "Current User",
-      avatar: "https://example.com/me.png",
-      online: true,
-    });
-    __resetMutedFriends();
-
+    resetChatViewState();
     mockExtractFirstLink.mockReset();
     mockExtractFirstLink.mockImplementation(() => null);
     mockGetLinkPreviewMetadata.mockReset();
@@ -525,21 +537,10 @@ describe("ChatView link previews", () => {
   };
 
   beforeEach(() => {
+    resetChatViewState();
     const baseline = structuredClone(defaultSettings);
     baseline.enableLinkPreviews = true;
     settings.set(baseline);
-
-    messagesByChatId.set(new Map());
-    hasMoreByChatId.set(new Map());
-    loadingStateByChat.set(new Map());
-    chatSearchStore.reset();
-    __setUser({
-      id: "user-current",
-      name: "Current User",
-      avatar: "https://example.com/me.png",
-      online: true,
-    });
-    __resetMutedFriends();
 
     mockExtractFirstLink.mockReset();
     mockExtractFirstLink.mockImplementation(() => null);
@@ -630,5 +631,192 @@ describe("ChatView link previews", () => {
     expect(title).toBeTruthy();
     expect(screen.getByText(previewMetadata.siteName)).toBeTruthy();
     expect(screen.getByText(previewMetadata.description)).toBeTruthy();
+  });
+});
+
+describe("ChatView friend removal", () => {
+  beforeEach(() => {
+    resetChatViewState();
+  });
+
+  function renderChatWithFriend(friend: Friend) {
+    const chatId = `chat-${friend.id}`;
+    const message: Message = {
+      id: `msg-${friend.id}`,
+      chatId,
+      senderId: friend.id,
+      content: `Hello from ${friend.name}`,
+      timestamp: new Date().toISOString(),
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    return { chatId, message };
+  }
+
+  function triggerLatestContextAction(action: string) {
+    const registry =
+      ((globalThis as any).__contextMenuRegistry as Array<{
+        trigger: (action: string) => void;
+        hasAction: (action: string) => boolean;
+      }>) ?? [];
+    for (let i = registry.length - 1; i >= 0; i -= 1) {
+      const entry = registry[i];
+      if (entry?.hasAction(action)) {
+        entry.trigger(action);
+        break;
+      }
+    }
+  }
+
+  it("invokes backend removal before updating stores", async () => {
+    const friend: Friend = {
+      id: "friend-success",
+      name: "Successful Friend",
+      avatar: "https://example.com/success.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+      friendshipId: "friendship-success",
+    };
+
+    renderChatWithFriend(friend);
+
+    const nameButton = (await screen.findByText(friend.name)) as HTMLButtonElement;
+
+    await fireEvent.contextMenu(nameButton);
+    await tick();
+    triggerLatestContextAction("remove_friend");
+
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(invoke)
+          .mock.calls.some(([command]) => command === "remove_friendship"),
+      ).toBe(true);
+    });
+
+    const removeCall = vi
+      .mocked(invoke)
+      .mock.calls.find(([command]) => command === "remove_friendship");
+
+    expect(removeCall?.[1]).toEqual({ friendship_id: friend.friendshipId });
+
+    const friendModule = getFriendStoreModule();
+    const mutedModule = getMutedFriendsModule();
+    const toastModule = getToastModule();
+
+    expect(friendModule.friendStore.removeFriend).toHaveBeenCalledWith(friend.id);
+    expect(friendModule.friendStore.initialize).toHaveBeenCalledTimes(1);
+    expect(mutedModule.mutedFriendsStore.unmute).toHaveBeenCalledWith(friend.id);
+    expect(toastModule.toasts.addToast).toHaveBeenCalledWith(
+      "Friend removed.",
+      "success",
+    );
+
+    const invokeOrder = vi.mocked(invoke).mock.invocationCallOrder[0];
+    const removeOrder =
+      friendModule.friendStore.removeFriend.mock.invocationCallOrder[0];
+    expect(invokeOrder).toBeLessThan(removeOrder);
+  });
+
+  it("falls back to the friend id when no friendship id is provided", async () => {
+    const friend: Friend = {
+      id: "friend-fallback",
+      name: "Fallback Friend",
+      avatar: "https://example.com/fallback.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+      friendshipId: undefined,
+    };
+
+    renderChatWithFriend(friend);
+
+    const nameButton = (await screen.findByText(friend.name)) as HTMLButtonElement;
+
+    await fireEvent.contextMenu(nameButton);
+    await tick();
+    triggerLatestContextAction("remove_friend");
+
+    await waitFor(() => {
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("remove_friendship", {
+        friendship_id: friend.id,
+      });
+    });
+  });
+
+  it("shows an error toast when removal fails", async () => {
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "remove_friendship") {
+        throw new Error("Removal failed");
+      }
+      return null as never;
+    });
+
+    const friend: Friend = {
+      id: "friend-error",
+      name: "Error Friend",
+      avatar: "https://example.com/error.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+      friendshipId: "friendship-error",
+    };
+
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    renderChatWithFriend(friend);
+
+    const nameButton = (await screen.findByText(friend.name)) as HTMLButtonElement;
+
+    await fireEvent.contextMenu(nameButton);
+    await tick();
+    triggerLatestContextAction("remove_friend");
+
+    const toastModule = getToastModule();
+    const friendModule = getFriendStoreModule();
+    const mutedModule = getMutedFriendsModule();
+
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(invoke)
+          .mock.calls.some(([command]) => command === "remove_friendship"),
+      ).toBe(true);
+    });
+
+    const removeCall = vi
+      .mocked(invoke)
+      .mock.calls.find(([command]) => command === "remove_friendship");
+
+    expect(removeCall?.[1]).toEqual({ friendship_id: friend.friendshipId });
+
+    await waitFor(() => {
+      expect(toastModule.toasts.addToast).toHaveBeenCalled();
+    });
+
+    const [[message, level]] = toastModule.toasts.addToast.mock.calls;
+    expect(message).toBe("Removal failed");
+    expect(level).toBe("error");
+
+    expect(friendModule.friendStore.removeFriend).not.toHaveBeenCalled();
+    expect(friendModule.friendStore.initialize).not.toHaveBeenCalled();
+    expect(mutedModule.mutedFriendsStore.unmute).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });
