@@ -12,6 +12,7 @@
   } from "$lib/components/ui/card";
   import { Separator } from "$lib/components/ui/separator";
   import { AlertTriangle, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
+  import MeshGraph from "./MeshGraph.svelte";
 
   const stateStore = connectivityStore;
   const statusMessageStore = connectivityStore.statusMessage;
@@ -87,6 +88,22 @@
           <p class="text-muted-foreground">Total reachable peers</p>
           <p class="mt-1 text-2xl font-semibold">{$stateStore.totalPeers}</p>
         </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Mesh topology</CardTitle>
+        <CardDescription>
+          Live graph of peers and the quality of the routes connecting them.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <p class="text-sm text-muted-foreground">
+          Node size reflects hop proximity while color intensity represents route quality or
+          success rate. Link thickness indicates reported signal quality.
+        </p>
+        <MeshGraph peers={peerList()} links={linkList()} />
       </CardContent>
     </Card>
 
