@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
 
@@ -153,7 +159,9 @@ describe("ChatView drafts", () => {
       messages: [],
     };
 
-    const { rerender, container } = render(ChatView, { props: { chat: chatA } });
+    const { rerender, container } = render(ChatView, {
+      props: { chat: chatA },
+    });
 
     const composerA = (await screen.findByPlaceholderText(
       `Message @${friendA.name}`,
@@ -217,6 +225,75 @@ describe("ChatView drafts", () => {
   });
 });
 
+describe("ChatView mentions", () => {
+  beforeEach(() => {
+    resetChatViewState();
+    mockExtractFirstLink.mockReset();
+    mockExtractFirstLink.mockImplementation(() => null);
+    mockGetLinkPreviewMetadata.mockReset();
+    mockGetLinkPreviewMetadata.mockResolvedValue(null);
+  });
+
+  it("replaces the active mention query with the selected member", async () => {
+    const members: User[] = [
+      {
+        id: "user-naomi",
+        name: "Naomi Naylor",
+        avatar: "https://example.com/naomi.png",
+        online: true,
+      },
+      {
+        id: "user-nate",
+        name: "Nate North",
+        avatar: "https://example.com/nate.png",
+        online: true,
+      },
+    ];
+
+    const chat: Chat = {
+      type: "group",
+      id: "chat-mentions",
+      name: "Dev Team",
+      ownerId: "owner-1",
+      memberIds: members.map((member) => member.id),
+      members,
+      messages: [],
+    };
+
+    messagesByChatId.set(new Map([[chat.id, []]]));
+
+    render(ChatView, { props: { chat } });
+
+    const composer = (await screen.findByPlaceholderText(
+      `Message ${chat.name}`,
+    )) as HTMLTextAreaElement;
+
+    const draft = "Ping @na to review";
+    const cursorPosition = "Ping @na".length;
+
+    composer.value = draft;
+    composer.setSelectionRange(cursorPosition, cursorPosition);
+
+    await fireEvent.input(composer, {
+      target: {
+        value: draft,
+        selectionStart: cursorPosition,
+        selectionEnd: cursorPosition,
+      },
+    });
+
+    const suggestionButton = await screen.findByRole("button", {
+      name: /Naomi Naylor/i,
+    });
+
+    await fireEvent.click(suggestionButton);
+
+    expect(composer.value).toBe(`Ping <@${members[0].id}> to review`);
+    expect(composer.selectionStart).toBe(`Ping <@${members[0].id}>`.length);
+    expect(screen.queryByRole("button", { name: /Naomi Naylor/i })).toBeNull();
+  });
+});
+
 const linkPreviewMocks = vi.hoisted(() => ({
   extractFirstLink: vi.fn<
     (content: string | null | undefined) => string | null
@@ -230,7 +307,6 @@ vi.mock("$lib/features/chat/utils/linkPreviews", () => linkPreviewMocks);
 
 const mockExtractFirstLink = linkPreviewMocks.extractFirstLink;
 const mockGetLinkPreviewMetadata = linkPreviewMocks.getLinkPreviewMetadata;
-
 
 vi.mock("@lucide/svelte", () => ({
   Link: Passthrough,
@@ -257,26 +333,17 @@ vi.mock("$lib/components/media/FilePreview.svelte", () => ({
   default: Passthrough,
 }));
 
-vi.mock(
-  "$lib/features/chat/components/FileTransferApprovals.svelte",
-  () => ({
-    default: Passthrough,
-  }),
-);
+vi.mock("$lib/features/chat/components/FileTransferApprovals.svelte", () => ({
+  default: Passthrough,
+}));
 
-vi.mock(
-  "$lib/features/chat/components/FileTransferHistory.svelte",
-  () => ({
-    default: Passthrough,
-  }),
-);
+vi.mock("$lib/features/chat/components/FileTransferHistory.svelte", () => ({
+  default: Passthrough,
+}));
 
-vi.mock(
-  "$lib/features/calls/components/CallStatusBanner.svelte",
-  () => ({
-    default: Passthrough,
-  }),
-);
+vi.mock("$lib/features/calls/components/CallStatusBanner.svelte", () => ({
+  default: Passthrough,
+}));
 
 vi.mock("$lib/components/context-menus/BaseContextMenu.svelte", () => ({
   default: ContextMenuActionDispatcher,
@@ -316,7 +383,9 @@ function getChatStoreModule() {
 }
 
 vi.mock("$lib/features/chat/stores/chatStore", () => getChatStoreModule());
-vi.mock("../../src/lib/features/chat/stores/chatStore", () => getChatStoreModule());
+vi.mock("../../src/lib/features/chat/stores/chatStore", () =>
+  getChatStoreModule(),
+);
 
 function getChatSearchModule() {
   if (!globalThis.__chatSearchModule) {
@@ -348,8 +417,12 @@ function getChatSearchModule() {
   return globalThis.__chatSearchModule;
 }
 
-vi.mock("$lib/features/chat/stores/chatSearchStore", () => getChatSearchModule());
-vi.mock("../../src/lib/features/chat/stores/chatSearchStore", () => getChatSearchModule());
+vi.mock("$lib/features/chat/stores/chatSearchStore", () =>
+  getChatSearchModule(),
+);
+vi.mock("../../src/lib/features/chat/stores/chatSearchStore", () =>
+  getChatSearchModule(),
+);
 
 function getUserStoreModule() {
   if (!globalThis.__userStoreModule) {
@@ -408,8 +481,12 @@ function getMutedFriendsModule() {
   return globalThis.__mutedFriendsModule;
 }
 
-vi.mock("$lib/features/friends/stores/mutedFriendsStore", () => getMutedFriendsModule());
-vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () => getMutedFriendsModule());
+vi.mock("$lib/features/friends/stores/mutedFriendsStore", () =>
+  getMutedFriendsModule(),
+);
+vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () =>
+  getMutedFriendsModule(),
+);
 
 function getFriendStoreModule() {
   if (!globalThis.__friendStoreModule) {
@@ -430,8 +507,12 @@ function getFriendStoreModule() {
   return globalThis.__friendStoreModule;
 }
 
-vi.mock("$lib/features/friends/stores/friendStore", () => getFriendStoreModule());
-vi.mock("../../src/lib/features/friends/stores/friendStore", () => getFriendStoreModule());
+vi.mock("$lib/features/friends/stores/friendStore", () =>
+  getFriendStoreModule(),
+);
+vi.mock("../../src/lib/features/friends/stores/friendStore", () =>
+  getFriendStoreModule(),
+);
 
 function getCallStoreModule() {
   if (!globalThis.__callStoreModule) {
@@ -450,7 +531,9 @@ function getCallStoreModule() {
 }
 
 vi.mock("$lib/features/calls/stores/callStore", () => getCallStoreModule());
-vi.mock("../../src/lib/features/calls/stores/callStore", () => getCallStoreModule());
+vi.mock("../../src/lib/features/calls/stores/callStore", () =>
+  getCallStoreModule(),
+);
 
 function getServerStoreModule() {
   if (!globalThis.__serverStoreModule) {
@@ -465,8 +548,12 @@ function getServerStoreModule() {
   return globalThis.__serverStoreModule;
 }
 
-vi.mock("$lib/features/servers/stores/serverStore", () => getServerStoreModule());
-vi.mock("../../src/lib/features/servers/stores/serverStore", () => getServerStoreModule());
+vi.mock("$lib/features/servers/stores/serverStore", () =>
+  getServerStoreModule(),
+);
+vi.mock("../../src/lib/features/servers/stores/serverStore", () =>
+  getServerStoreModule(),
+);
 
 function getToastModule() {
   if (!globalThis.__toastModule) {
@@ -501,7 +588,9 @@ function getContextMenuModule() {
 }
 
 vi.mock("$lib/features/chat/utils/contextMenu", () => getContextMenuModule());
-vi.mock("../../src/lib/features/chat/utils/contextMenu", () => getContextMenuModule());
+vi.mock("../../src/lib/features/chat/utils/contextMenu", () =>
+  getContextMenuModule(),
+);
 
 function getCollabModule() {
   if (!globalThis.__collabModule) {
@@ -512,12 +601,17 @@ function getCollabModule() {
   return globalThis.__collabModule;
 }
 
-vi.mock("$lib/features/collaboration/collabDocumentStore", () => getCollabModule());
-vi.mock("../../src/lib/features/collaboration/collabDocumentStore", () => getCollabModule());
+vi.mock("$lib/features/collaboration/collabDocumentStore", () =>
+  getCollabModule(),
+);
+vi.mock("../../src/lib/features/collaboration/collabDocumentStore", () =>
+  getCollabModule(),
+);
 
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Friend } from "$lib/features/friends/models/Friend";
 import type { Message } from "$lib/features/chat/models/Message";
+import type { User } from "$lib/features/auth/models/User";
 
 import ChatView from "$lib/features/chat/components/ChatView.svelte";
 import { resetChatDrafts } from "$lib/features/chat/utils/chatDraftStore";
@@ -621,9 +715,7 @@ describe("ChatView privacy preferences", () => {
     await waitFor(() => {
       const container = getMessageContainer(message.content);
       expect(
-        container.querySelector<HTMLImageElement>(
-          "img[alt='Alice Example']",
-        ),
+        container.querySelector<HTMLImageElement>("img[alt='Alice Example']"),
       ).not.toBeNull();
     });
 
@@ -653,9 +745,7 @@ describe("ChatView privacy preferences", () => {
     await waitFor(() => {
       const container = getMessageContainer(message.content);
       expect(
-        container.querySelector<HTMLImageElement>(
-          "img[alt='Alice Example']",
-        ),
+        container.querySelector<HTMLImageElement>("img[alt='Alice Example']"),
       ).toBeNull();
     });
 
@@ -830,7 +920,9 @@ describe("ChatView friend removal", () => {
 
     renderChatWithFriend(friend);
 
-    const nameButton = (await screen.findByText(friend.name)) as HTMLButtonElement;
+    const nameButton = (await screen.findByText(
+      friend.name,
+    )) as HTMLButtonElement;
 
     await fireEvent.contextMenu(nameButton);
     await tick();
@@ -854,9 +946,13 @@ describe("ChatView friend removal", () => {
     const mutedModule = getMutedFriendsModule();
     const toastModule = getToastModule();
 
-    expect(friendModule.friendStore.removeFriend).toHaveBeenCalledWith(friend.id);
+    expect(friendModule.friendStore.removeFriend).toHaveBeenCalledWith(
+      friend.id,
+    );
     expect(friendModule.friendStore.initialize).toHaveBeenCalledTimes(1);
-    expect(mutedModule.mutedFriendsStore.unmute).toHaveBeenCalledWith(friend.id);
+    expect(mutedModule.mutedFriendsStore.unmute).toHaveBeenCalledWith(
+      friend.id,
+    );
     expect(toastModule.toasts.addToast).toHaveBeenCalledWith(
       "Friend removed.",
       "success",
@@ -882,7 +978,9 @@ describe("ChatView friend removal", () => {
 
     renderChatWithFriend(friend);
 
-    const nameButton = (await screen.findByText(friend.name)) as HTMLButtonElement;
+    const nameButton = (await screen.findByText(
+      friend.name,
+    )) as HTMLButtonElement;
 
     await fireEvent.contextMenu(nameButton);
     await tick();
@@ -914,11 +1012,15 @@ describe("ChatView friend removal", () => {
       friendshipId: "friendship-error",
     };
 
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
 
     renderChatWithFriend(friend);
 
-    const nameButton = (await screen.findByText(friend.name)) as HTMLButtonElement;
+    const nameButton = (await screen.findByText(
+      friend.name,
+    )) as HTMLButtonElement;
 
     await fireEvent.contextMenu(nameButton);
     await tick();

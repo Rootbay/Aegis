@@ -47,6 +47,10 @@
     saveChatDraft,
     type ChatDraft,
   } from "$lib/features/chat/utils/chatDraftStore";
+  import {
+    createMentionSuggestionsStore,
+    type MentionCandidate,
+  } from "$lib/features/chat/stores/mentionSuggestions";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -166,6 +170,37 @@
   let editingTextarea: HTMLTextAreaElement | null = $state(null);
   let replyTargetMessageId = $state<string | null>(null);
   let replyPreview = $state<ReplyPreview | null>(null);
+  const mentionSuggestions = createMentionSuggestionsStore();
+
+  const mentionableMembers = $derived(() => {
+    if (!chat) return [] as MentionCandidate[];
+    if (chat.type === "dm") {
+      return chat.friend
+        ? [
+            {
+              id: chat.friend.id,
+              name: chat.friend.name,
+              avatar: chat.friend.avatar,
+              tag: chat.friend.tag,
+            },
+          ]
+        : [];
+    }
+    if (chat.type === "group" || chat.type === "channel") {
+      return (chat.members ?? []).map((member) => ({
+        id: member.id,
+        name: member.name,
+        avatar: member.avatar,
+        tag: member.tag,
+      }));
+    }
+    return [];
+  });
+
+  $effect(() => {
+    mentionableMembers;
+    mentionSuggestions.close();
+  });
 
   const notifyMessagesViewed = () => {
     if (!chat) return;
@@ -222,20 +257,50 @@
     () => moderationPreferences.deletedMessageDisplay === "tombstone",
   );
 
+  const updateMentionSuggestions = (cursorPosition?: number) => {
+    if (!mentionableMembers.length) {
+      mentionSuggestions.close();
+      return;
+    }
+    if (!textareaRef) {
+      mentionSuggestions.updateInput(
+        messageInput,
+        cursorPosition ?? messageInput.length,
+        mentionableMembers,
+      );
+      return;
+    }
+    const cursor =
+      typeof cursorPosition === "number"
+        ? cursorPosition
+        : (textareaRef.selectionStart ?? messageInput.length);
+    mentionSuggestions.updateInput(messageInput, cursor, mentionableMembers);
+  };
+
   const handleComposerFocus = () => {
     if (!typingActive) {
       typingActive = true;
       void chatStore.sendTypingIndicator(true);
     }
     scheduleTypingStop();
+    updateMentionSuggestions();
   };
 
-  const handleComposerInput = () => {
+  const handleComposerInput = (event?: Event) => {
     if (!typingActive) {
       typingActive = true;
       void chatStore.sendTypingIndicator(true);
     }
     scheduleTypingStop();
+    if (
+      event &&
+      "target" in event &&
+      event.target instanceof HTMLTextAreaElement
+    ) {
+      updateMentionSuggestions(event.target.selectionStart ?? undefined);
+    } else {
+      updateMentionSuggestions();
+    }
   };
 
   const handleComposerBlur = () => {
@@ -244,6 +309,101 @@
       void chatStore.sendTypingIndicator(false);
     }
     resetTypingTimer();
+    mentionSuggestions.close();
+  };
+
+  const handleComposerPointerUp = () => {
+    updateMentionSuggestions();
+  };
+
+  const handleComposerKeyup = (event: KeyboardEvent) => {
+    if (
+      event.key === "ArrowLeft" ||
+      event.key === "ArrowRight" ||
+      event.key === "Home" ||
+      event.key === "End"
+    ) {
+      updateMentionSuggestions();
+    }
+  };
+
+  const handleMentionSelection = (index?: number) => {
+    const candidate = mentionSuggestions.select(index);
+    const state = get(mentionSuggestions);
+    if (!candidate || !state.active) {
+      return;
+    }
+    const start = state.triggerIndex;
+    const end = state.cursorIndex;
+    if (start < 0 || end < start) {
+      mentionSuggestions.close();
+      return;
+    }
+    const mentionToken = `<@${candidate.id}>`;
+    const before = messageInput.slice(0, start);
+    const after = messageInput.slice(end);
+    const needsTrailingSpace = after.length === 0 || !/^\s/.test(after);
+    const insertion = `${mentionToken}${needsTrailingSpace ? " " : ""}`;
+    messageInput = `${before}${insertion}${after}`;
+    mentionSuggestions.close();
+    if (!typingActive) {
+      typingActive = true;
+      void chatStore.sendTypingIndicator(true);
+    }
+    queueMicrotask(() => {
+      if (textareaRef) {
+        const caret =
+          start + mentionToken.length + (needsTrailingSpace ? 1 : 0);
+        textareaRef.focus();
+        textareaRef.setSelectionRange(caret, caret);
+      }
+    });
+    adjustTextareaHeight();
+    scheduleTypingStop();
+  };
+
+  const handleComposerKeydown = (event: KeyboardEvent) => {
+    const state = get(mentionSuggestions);
+    if (state.active) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        mentionSuggestions.moveSelection(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        mentionSuggestions.moveSelection(-1);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        handleMentionSelection();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        mentionSuggestions.close();
+        return;
+      }
+    }
+
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    if (event.isComposing) {
+      return;
+    }
+
+    const hasExplicitNewlineModifier = event.shiftKey || event.ctrlKey;
+    const hasOtherModifier = event.altKey || event.metaKey;
+
+    if (hasExplicitNewlineModifier || hasOtherModifier) {
+      return;
+    }
+
+    event.preventDefault();
+    sendMessage(event);
   };
 
   const onScroll = () => {
@@ -610,10 +770,7 @@
       await friendStore.initialize();
     } catch (error: any) {
       console.error("Failed to remove friend:", error);
-      toasts.addToast(
-        error?.message ?? "Failed to remove friend.",
-        "error",
-      );
+      toasts.addToast(error?.message ?? "Failed to remove friend.", "error");
     }
   }
 
@@ -1046,6 +1203,7 @@
 
   async function sendMessage(event: Event) {
     event.preventDefault();
+    mentionSuggestions.close();
     if (
       (messageInput.trim() === "" && attachedFiles.length === 0) ||
       !chat ||
@@ -1414,9 +1572,7 @@
         <VirtualList
           items={currentChatMessages}
           mode="bottomToTop"
-          defaultEstimatedItemHeight={
-            messageDensity === "compact" ? 64 : 80
-          }
+          defaultEstimatedItemHeight={messageDensity === "compact" ? 64 : 80}
           viewportClass={densityClass(
             "virtual-list-viewport p-4 chat-viewport",
             "virtual-list-viewport p-2 chat-viewport",
@@ -1445,9 +1601,7 @@
               id={`message-${msg.id}`}
             >
               <div
-                class={`flex items-start ${
-                  isMe ? "flex-row-reverse" : ""
-                } ${
+                class={`flex items-start ${isMe ? "flex-row-reverse" : ""} ${
                   showMessageAvatars
                     ? densityClass("gap-3", "gap-2")
                     : densityClass("gap-0", "gap-1")
@@ -1553,7 +1707,8 @@
                           · removed by
                           {msg.deletedBy === myId
                             ? "you"
-                            : memberById.get(msg.deletedBy)?.name ?? "a moderator"}
+                            : (memberById.get(msg.deletedBy)?.name ??
+                              "a moderator")}
                         {/if}
                         {#if msg.deletedAt}
                           ·
@@ -1593,13 +1748,18 @@
                         <button
                           type="button"
                           class="mb-2 w-full rounded-md bg-black/20 px-3 py-2 text-left text-xs text-white/80 hover:bg-black/30 focus:outline-none"
-                          onclick={() => scrollToMessage(msg.replyToMessageId ?? "")}
+                          onclick={() =>
+                            scrollToMessage(msg.replyToMessageId ?? "")}
                         >
-                          <p class="font-semibold text-[0.65rem] uppercase tracking-wide text-white/60">
+                          <p
+                            class="font-semibold text-[0.65rem] uppercase tracking-wide text-white/60"
+                          >
                             Replying to {msg.replySnapshot?.author ?? "message"}
                           </p>
                           {#if msg.replySnapshot?.snippet}
-                            <p class="mt-1 text-sm text-white/90 overflow-hidden text-ellipsis whitespace-nowrap">
+                            <p
+                              class="mt-1 text-sm text-white/90 overflow-hidden text-ellipsis whitespace-nowrap"
+                            >
                               {msg.replySnapshot.snippet}
                             </p>
                           {/if}
@@ -1657,7 +1817,9 @@
                           {msg.content}
                         </p>
                         {#if $settings.enableLinkPreviews}
-                          {@const previewUrl = extractFirstLink(msg.content ?? "")}
+                          {@const previewUrl = extractFirstLink(
+                            msg.content ?? "",
+                          )}
                           {#if previewUrl}
                             <div class="mt-2">
                               <LinkPreview url={previewUrl} />
@@ -1667,12 +1829,18 @@
                       {/if}
                       {#if showTransparentEditHistory && msg.editHistory?.length}
                         {@const historyEntries = [...msg.editHistory].reverse()}
-                        <div class="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs text-white/80">
-                          <p class="text-[0.625rem] uppercase tracking-wide opacity-70">
+                        <div
+                          class="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs text-white/80"
+                        >
+                          <p
+                            class="text-[0.625rem] uppercase tracking-wide opacity-70"
+                          >
                             Edit history
                           </p>
                           {#each historyEntries as previous, historyIndex (historyIndex)}
-                            <p class="whitespace-pre-wrap break-words text-white/80">
+                            <p
+                              class="whitespace-pre-wrap break-words text-white/80"
+                            >
                               {previous}
                             </p>
                           {/each}
@@ -1874,48 +2042,75 @@
           >
             <Link size={12} />
           </button>
-          <textarea
-            rows="1"
-            placeholder={`Message ${
-              chat.type === "dm"
-                ? `@${chat.friend.name}`
-                : chat.type === "group"
-                  ? chat.name
-                  : `#${chat.name}`
-            }`}
-            class="flex-grow bg-transparent resize-none focus:outline-none mx-2 text-white placeholder-zinc-400"
-            bind:value={messageInput}
-            bind:this={textareaRef}
-            oninput={(event) => {
-              adjustTextareaHeight(event);
-              handleComposerInput();
-            }}
-            onfocus={(event) => {
-              adjustTextareaHeight(event);
-              handleComposerFocus();
-            }}
-            onblur={handleComposerBlur}
-            title="Press Enter to send. Use Shift+Enter for a newline."
-            onkeydown={(e) => {
-              if (e.key !== "Enter") {
-                return;
-              }
-
-              if (e.isComposing) {
-                return;
-              }
-
-              const hasExplicitNewlineModifier = e.shiftKey || e.ctrlKey;
-              const hasOtherModifier = e.altKey || e.metaKey;
-
-              if (hasExplicitNewlineModifier || hasOtherModifier) {
-                return;
-              }
-
-              e.preventDefault();
-              sendMessage(e);
-            }}
-          ></textarea>
+          <div class="relative mx-2 flex-1">
+            <textarea
+              rows="1"
+              placeholder={`Message ${
+                chat.type === "dm"
+                  ? `@${chat.friend.name}`
+                  : chat.type === "group"
+                    ? chat.name
+                    : `#${chat.name}`
+              }`}
+              class="w-full bg-transparent resize-none focus:outline-none text-white placeholder-zinc-400"
+              bind:value={messageInput}
+              bind:this={textareaRef}
+              oninput={(event) => {
+                adjustTextareaHeight(event);
+                handleComposerInput(event);
+              }}
+              onfocus={(event) => {
+                adjustTextareaHeight(event);
+                handleComposerFocus();
+              }}
+              onblur={handleComposerBlur}
+              onkeyup={handleComposerKeyup}
+              onpointerup={handleComposerPointerUp}
+              title="Press Enter to send. Use Shift+Enter for a newline."
+              onkeydown={handleComposerKeydown}
+            ></textarea>
+            {#if $mentionSuggestions.active}
+              <div
+                class="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-hidden rounded-md border border-zinc-700/70 bg-zinc-900/95 shadow-lg backdrop-blur"
+              >
+                <ul class="max-h-48 overflow-auto py-1">
+                  {#each $mentionSuggestions.suggestions as suggestion, index (suggestion.id)}
+                    <li>
+                      <button
+                        type="button"
+                        class={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white/90 hover:bg-zinc-700/60 ${
+                          index === $mentionSuggestions.activeIndex
+                            ? "bg-zinc-700/80"
+                            : ""
+                        }`}
+                        onpointerdown|preventDefault={() =>
+                          handleMentionSelection(index)}
+                        onclick={() => handleMentionSelection(index)}
+                      >
+                        {#if suggestion.avatar}
+                          <img
+                            src={suggestion.avatar}
+                            alt={suggestion.name}
+                            class="h-6 w-6 rounded-full object-cover"
+                          />
+                        {/if}
+                        <div class="min-w-0">
+                          <p class="truncate text-sm font-medium text-white">
+                            {suggestion.name}
+                          </p>
+                          {#if suggestion.tag}
+                            <p class="text-xs text-zinc-400">
+                              @{suggestion.tag}
+                            </p>
+                          {/if}
+                        </div>
+                      </button>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          </div>
           {#if isRecording}
             <div
               class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400"
