@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use aegis_shared_types::{
     ConnectivityEventPayload, ConnectivityGatewayStatus, ConnectivityLink, ConnectivityPeer,
-    ConnectivityTransportStatus,
+    ConnectivityTransportStatus, RelayRecord, RelaySnapshot,
 };
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use libp2p::{multiaddr::Protocol, swarm::Swarm, Multiaddr, PeerId};
@@ -19,6 +19,7 @@ static SWARM_HANDLE: OnceCell<Arc<Mutex<Swarm<network::Behaviour>>>> = OnceCell:
 static SNAPSHOT_STORE: OnceCell<Arc<Mutex<Option<ConnectivityEventPayload>>>> = OnceCell::new();
 static LOCAL_PEER_ID: OnceCell<PeerId> = OnceCell::new();
 static ROUTER_HANDLE: OnceCell<Arc<Mutex<network::AerpRouter>>> = OnceCell::new();
+static RELAY_STORE: OnceCell<Arc<Mutex<Vec<RelayRecord>>>> = OnceCell::new();
 static BRIDGE_STATE: Lazy<Arc<Mutex<BridgeState>>> =
     Lazy::new(|| Arc::new(Mutex::new(BridgeState::new())));
 
@@ -224,6 +225,7 @@ async fn collect_and_store_snapshot(
     } else {
         None
     };
+    let relay_snapshots = current_relay_snapshots().await;
     let snapshot = {
         let swarm_guard = swarm.lock().await;
         compute_snapshot(
@@ -232,6 +234,7 @@ async fn collect_and_store_snapshot(
             bridge_snapshot.as_ref(),
             &transport_snapshot,
             router_snapshot.as_ref(),
+            relay_snapshots,
         )
     };
 
@@ -276,6 +279,7 @@ fn compute_snapshot(
     bridge_snapshot: Option<&BridgeSnapshot>,
     transport_snapshot: &TransportSnapshot,
     router_snapshot: Option<&network::RouterSnapshot>,
+    relay_snapshots: Option<Vec<RelaySnapshot>>,
 ) -> ConnectivityEventPayload {
     let connected: Vec<_> = swarm
         .behaviour()
@@ -485,6 +489,10 @@ fn compute_snapshot(
 
     let bridge_suggested = mesh_peer_count > 0 && !forwarding_active;
 
+    let relay_payload = relay_snapshots
+        .map(|entries| entries.into_iter().filter(|entry| entry.status.is_some()).collect())
+        .filter(|entries: &Vec<RelaySnapshot>| !entries.is_empty());
+
     ConnectivityEventPayload {
         internet_reachable: Some(forwarding_active),
         mesh_reachable: Some(mesh_reachable),
@@ -496,7 +504,25 @@ fn compute_snapshot(
         reason: None,
         gateway_status: Some(gateway_status),
         transports: Some(transport_status),
+        relays: relay_payload,
     }
+}
+
+async fn current_relay_snapshots() -> Option<Vec<RelaySnapshot>> {
+    if let Some(store) = RELAY_STORE.get() {
+        let guard = store.lock().await;
+        if guard.is_empty() {
+            None
+        } else {
+            Some(guard.iter().map(|record| record.to_snapshot()).collect())
+        }
+    } else {
+        None
+    }
+}
+
+pub fn set_relay_store(store: Arc<Mutex<Vec<RelayRecord>>>) {
+    let _ = RELAY_STORE.set(store);
 }
 
 fn forwarding_active(bridge_snapshot: Option<&BridgeSnapshot>, upstream_connected: u32) -> bool {

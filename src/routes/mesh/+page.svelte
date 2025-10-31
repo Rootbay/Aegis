@@ -13,12 +13,14 @@
   import { Separator } from "$lib/components/ui/separator";
   import { AlertTriangle, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
   import MeshGraph from "./MeshGraph.svelte";
+  import type { RelayStatus } from "$lib/features/settings/models/relay";
 
   const stateStore = connectivityStore;
   const statusMessageStore = connectivityStore.statusMessage;
 
   const peerList = $derived(() => $stateStore.peers);
   const linkList = $derived(() => $stateStore.links);
+  const relayList = $derived(() => $stateStore.relays);
 
   const statusIcon = $derived(() => {
     switch ($stateStore.status) {
@@ -58,6 +60,32 @@
         return "outline" as const;
     }
   });
+
+  const relayStatusVariant = (status: RelayStatus | undefined) => {
+    switch (status) {
+      case "healthy":
+        return "default" as const;
+      case "degraded":
+        return "secondary" as const;
+      case "offline":
+        return "destructive" as const;
+      default:
+        return "outline" as const;
+    }
+  };
+
+  const relayStatusLabel = (status: RelayStatus | undefined) => {
+    switch (status) {
+      case "healthy":
+        return "Healthy";
+      case "degraded":
+        return "Degraded";
+      case "offline":
+        return "Offline";
+      default:
+        return "Unknown";
+    }
+  };
 </script>
 
 <div class="flex h-full flex-col overflow-y-auto">
@@ -79,7 +107,7 @@
           {statusLabel()}
         </Badge>
       </CardHeader>
-      <CardContent class="grid gap-4 md:grid-cols-2">
+      <CardContent class="grid gap-4 md:grid-cols-3">
         <div class="rounded-lg border border-border/60 bg-muted/40 p-4 text-sm">
           <p class="text-muted-foreground">Mesh peers</p>
           <p class="mt-1 text-2xl font-semibold">{$stateStore.meshPeers}</p>
@@ -87,6 +115,10 @@
         <div class="rounded-lg border border-border/60 bg-muted/40 p-4 text-sm">
           <p class="text-muted-foreground">Total reachable peers</p>
           <p class="mt-1 text-2xl font-semibold">{$stateStore.totalPeers}</p>
+        </div>
+        <div class="rounded-lg border border-border/60 bg-muted/40 p-4 text-sm">
+          <p class="text-muted-foreground">Active relays</p>
+          <p class="mt-1 text-2xl font-semibold">{$stateStore.activeRelayCount}</p>
         </div>
       </CardContent>
     </Card>
@@ -168,6 +200,86 @@
                     </dd>
                   </div>
                 </dl>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Relays</CardTitle>
+        <CardDescription>
+          Registered relay endpoints and their reported health.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {#if relayList().length === 0}
+          <div class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground">
+            <AlertTriangle class="size-4" />
+            No relay telemetry reported yet.
+          </div>
+        {:else}
+          <div class="space-y-3">
+            {#each relayList() as relay (relay.id)}
+              <div class="rounded-lg border border-border/60 bg-background/80 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-medium text-foreground">{relay.label}</p>
+                    <p class="text-xs text-muted-foreground break-words">
+                      {relay.urls.join(", ")}
+                    </p>
+                  </div>
+                  <Badge variant={relayStatusVariant(relay.status)}>
+                    {relayStatusLabel(relay.status)}
+                  </Badge>
+                </div>
+                <dl class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <dt class="font-medium text-foreground">Scope</dt>
+                    <dd>{relay.scope === "global" ? "Global" : "Server-specific"}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Last check</dt>
+                    <dd>
+                      {relay.lastCheckedAt
+                        ? new Date(relay.lastCheckedAt).toLocaleString()
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Latency</dt>
+                    <dd>
+                      {typeof relay.latencyMs === "number"
+                        ? `${relay.latencyMs} ms`
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Uptime</dt>
+                    <dd>
+                      {typeof relay.uptimePercent === "number"
+                        ? `${relay.uptimePercent.toFixed(1)}%`
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Credentials</dt>
+                    <dd>{relay.hasCredential ? "Stored" : "None"}</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-foreground">Servers</dt>
+                    <dd>
+                      {relay.serverIds.length > 0
+                        ? relay.serverIds.join(", ")
+                        : "Global"}
+                    </dd>
+                  </div>
+                </dl>
+                {#if relay.error}
+                  <p class="mt-3 text-xs text-rose-400">{relay.error}</p>
+                {/if}
               </div>
             {/each}
           </div>

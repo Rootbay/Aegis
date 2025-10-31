@@ -100,6 +100,130 @@ pub struct ConnectivityEventPayload {
     pub gateway_status: Option<ConnectivityGatewayStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<ConnectivityTransportStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relays: Option<Vec<RelaySnapshot>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RelayScope {
+    Global,
+    Server,
+}
+
+impl Default for RelayScope {
+    fn default() -> Self {
+        RelayScope::Global
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RelayStatus {
+    Unknown,
+    Healthy,
+    Degraded,
+    Offline,
+}
+
+impl Default for RelayStatus {
+    fn default() -> Self {
+        RelayStatus::Unknown
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayConfig {
+    pub id: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub urls: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credential: Option<String>,
+    #[serde(default)]
+    pub scope: RelayScope,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub server_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayHealth {
+    #[serde(default)]
+    pub status: RelayStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checked_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uptime_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl Default for RelayHealth {
+    fn default() -> Self {
+        RelayHealth {
+            status: RelayStatus::Unknown,
+            last_checked_at: None,
+            latency_ms: None,
+            uptime_percent: None,
+            error: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RelayRecord {
+    pub config: RelayConfig,
+    #[serde(default)]
+    pub health: RelayHealth,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RelaySnapshot {
+    pub id: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub urls: Vec<String>,
+    pub scope: RelayScope,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub server_ids: Vec<String>,
+    #[serde(default)]
+    pub has_credential: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<RelayStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checked_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uptime_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl RelayRecord {
+    pub fn to_snapshot(&self) -> RelaySnapshot {
+        RelaySnapshot {
+            id: self.config.id.clone(),
+            label: self.config.label.clone(),
+            urls: self.config.urls.clone(),
+            scope: self.config.scope,
+            server_ids: self.config.server_ids.clone(),
+            has_credential: self.config.username.is_some() || self.config.credential.is_some(),
+            status: Some(self.health.status),
+            last_checked_at: self.health.last_checked_at.clone(),
+            latency_ms: self.health.latency_ms,
+            uptime_percent: self.health.uptime_percent,
+            error: self.health.error.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -208,6 +332,7 @@ pub struct AppState {
     pub app_data_dir: PathBuf,
     pub connectivity_snapshot: Arc<Mutex<Option<ConnectivityEventPayload>>>,
     pub voice_memos_enabled: Arc<AtomicBool>,
+    pub relays: Arc<Mutex<Vec<RelayRecord>>>,
 }
 
 #[derive(Clone)]

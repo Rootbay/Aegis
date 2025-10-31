@@ -24,8 +24,10 @@ use crate::commands::messages::{
 };
 use crate::connectivity::{
     bridge_can_forward_to, emit_bridge_snapshot, note_bridge_forward_attempt,
-    note_bridge_forward_failure, note_bridge_forward_success, spawn_connectivity_task,
+    note_bridge_forward_failure, note_bridge_forward_success, set_relay_store,
+    spawn_connectivity_task,
 };
+use crate::settings_store;
 
 const MAX_OUTBOX_MESSAGES: usize = 256;
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
@@ -85,17 +87,21 @@ pub async fn initialize_app_state<R: Runtime>(
         std::fs::create_dir_all(&outgoing_dir).map_err(|e| e.to_string())?;
     }
     let settings_path = app_data_dir.join("settings.json");
-    let initial_acl = if let Ok(bytes) = std::fs::read(&settings_path) {
-        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
-            match json.get("file_acl_policy").and_then(|v| v.as_str()) {
-                Some("friends_only") => aegis_shared_types::FileAclPolicy::FriendsOnly,
-                _ => aegis_shared_types::FileAclPolicy::Everyone,
-            }
-        } else {
-            aegis_shared_types::FileAclPolicy::Everyone
+    let persisted_settings = match settings_store::load_settings(&settings_path) {
+        Ok(settings) => settings,
+        Err(error) => {
+            eprintln!(
+                "Failed to load persisted settings ({}). Using defaults.",
+                error
+            );
+            settings_store::PersistedSettings::default()
         }
-    } else {
-        aegis_shared_types::FileAclPolicy::Everyone
+    };
+
+    let initial_acl = match persisted_settings.file_acl_policy.as_deref() {
+        Some("friends_only") => aegis_shared_types::FileAclPolicy::FriendsOnly,
+        Some("everyone") => aegis_shared_types::FileAclPolicy::Everyone,
+        _ => aegis_shared_types::FileAclPolicy::Everyone,
     };
     let db_path = app_data_dir.join("aegis.db");
     let db_pool = database::initialize_db(db_path)
@@ -114,9 +120,12 @@ pub async fn initialize_app_state<R: Runtime>(
         app_data_dir: app_data_dir.clone(),
         connectivity_snapshot: connectivity_snapshot.clone(),
         voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+        relays: Arc::new(Mutex::new(persisted_settings.relays.clone())),
     };
 
     *state_container.0.lock().await = Some(new_state.clone());
+
+    set_relay_store(new_state.relays.clone());
 
     spawn_connectivity_task(
         app.clone(),

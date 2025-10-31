@@ -1,11 +1,15 @@
 <script lang="ts">
   import { get } from "svelte/store";
+  import { onMount } from "svelte";
   import { Label } from "$lib/components/ui/label/index.js";
   import { Switch } from "$lib/components/ui/switch/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Slider } from "$lib/components/ui/slider/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Badge } from "$lib/components/ui/badge";
   import { toasts } from "$lib/stores/ToastStore";
   import { connectivityStore } from "$lib/stores/connectivityStore";
+  import { relayStore } from "$lib/features/settings/stores/relayStore";
   import {
     settings,
     setEnableCrossDeviceSync,
@@ -17,6 +21,11 @@
     setRoutingQualityThreshold,
     setRoutingMaxHops,
   } from "$lib/features/settings/stores/settings";
+  import type {
+    RelayConfig,
+    RelayScope,
+    RelayStatus,
+  } from "$lib/features/settings/models/relay";
 
   let enableCrossDeviceSync = $state(get(settings).enableCrossDeviceSync);
   let preferWifiDirect = $state(get(settings).preferWifiDirect);
@@ -35,6 +44,137 @@
   let currentGatewayStatus = $state(get(connectivityStore).gatewayStatus);
   let bridgeSuggested = $state(get(connectivityStore).bridgeSuggested);
   let togglingBridge = $state(false);
+  let relayLabel = $state("");
+  let relayUrls = $state("");
+  let relayScope = $state<RelayScope>("global");
+  let relayUsername = $state("");
+  let relayCredential = $state("");
+  let relayServerIds = $state("");
+  let savingRelay = $state(false);
+  let deletingRelay = $state<Record<string, boolean>>({});
+  let refreshingRelay = $state<Record<string, boolean>>({});
+  const relays = $derived(() => $relayStore.relays);
+  const relayLoading = $derived(() => $relayStore.loading);
+
+  onMount(() => {
+    void relayStore.initialize();
+  });
+
+  const relayStatusVariant = (status: RelayStatus) => {
+    switch (status) {
+      case "healthy":
+        return "default" as const;
+      case "degraded":
+        return "secondary" as const;
+      case "offline":
+        return "destructive" as const;
+      default:
+        return "outline" as const;
+    }
+  };
+
+  const relayStatusLabel = (status: RelayStatus) => {
+    switch (status) {
+      case "healthy":
+        return "Healthy";
+      case "degraded":
+        return "Degraded";
+      case "offline":
+        return "Offline";
+      default:
+        return "Unknown";
+    }
+  };
+
+  const relayScopeLabel = (scope: RelayScope) =>
+    scope === "global" ? "Global" : "Server-specific";
+
+  const parseList = (value: string) =>
+    value
+      .split(/[\s,]+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+  const formatTimestamp = (value: string | null | undefined) => {
+    if (!value) {
+      return "—";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+    return date.toLocaleString();
+  };
+
+  async function handleAddRelay() {
+    if (savingRelay) {
+      return;
+    }
+    const label = relayLabel.trim();
+    const urls = parseList(relayUrls);
+
+    if (!label || urls.length === 0) {
+      toasts.addToast("Relay label and at least one URL are required.", "warning");
+      return;
+    }
+
+    const config: RelayConfig = {
+      id: "",
+      label,
+      urls,
+      username: relayUsername.trim() || undefined,
+      credential: relayCredential.trim() || undefined,
+      scope: relayScope,
+      serverIds: parseList(relayServerIds),
+    };
+
+    savingRelay = true;
+    try {
+      const record = await relayStore.registerRelay(config);
+      if (record) {
+        relayLabel = "";
+        relayUrls = "";
+        relayUsername = "";
+        relayCredential = "";
+        relayServerIds = "";
+        relayScope = "global";
+        toasts.addToast(`Relay "${record.config.label}" saved.`, "success");
+      }
+    } finally {
+      savingRelay = false;
+    }
+  }
+
+  async function handleRemoveRelay(relayId: string, label: string) {
+    if (deletingRelay[relayId]) {
+      return;
+    }
+    deletingRelay = { ...deletingRelay, [relayId]: true };
+    try {
+      const removed = await relayStore.removeRelay(relayId);
+      if (removed) {
+        toasts.addToast(`Removed relay "${label}".`, "info");
+      }
+    } finally {
+      deletingRelay = { ...deletingRelay, [relayId]: false };
+    }
+  }
+
+  async function handleRefreshRelay(relayId: string, status: RelayStatus) {
+    if (refreshingRelay[relayId]) {
+      return;
+    }
+    refreshingRelay = { ...refreshingRelay, [relayId]: true };
+    try {
+      await relayStore.updateRelayHealth({ relayId, status });
+    } finally {
+      refreshingRelay = { ...refreshingRelay, [relayId]: false };
+    }
+  }
+
+  async function handleReloadRelays() {
+    await relayStore.refresh();
+  }
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
@@ -355,5 +495,220 @@
       aria-label="Maximum route hops"
       class="w-20"
     />
+  </section>
+
+  <section class="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-zinc-100">Relay endpoints</h2>
+        <p class="text-sm text-muted-foreground">
+          Register mesh relays to provide connectivity for remote peers.
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        class="gap-2"
+        onclick={handleReloadRelays}
+        disabled={relayLoading()}
+        aria-label="Refresh relay list"
+      >
+        {relayLoading() ? "Refreshing…" : "Refresh"}
+      </Button>
+    </div>
+
+    {#if relayLoading() && relays().length === 0}
+      <div
+        class="rounded-lg border border-dashed border-zinc-700/60 bg-zinc-900/70 px-4 py-8 text-sm text-muted-foreground"
+      >
+        Loading relay configuration…
+      </div>
+    {:else if relays().length === 0}
+      <div
+        class="rounded-lg border border-dashed border-zinc-700/60 bg-zinc-900/70 px-4 py-8 text-sm text-muted-foreground"
+      >
+        No relays configured yet. Add at least one to guarantee connectivity for
+        peers behind strict NATs.
+      </div>
+    {:else}
+      <div class="space-y-4">
+        {#each relays() as relay (relay.config.id)}
+          <div class="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-foreground">
+                  {relay.config.label}
+                </p>
+                <p class="text-xs text-muted-foreground break-words">
+                  {relay.config.urls.join(", ")}
+                </p>
+              </div>
+              <Badge variant={relayStatusVariant(relay.health.status)}>
+                {relayStatusLabel(relay.health.status)}
+              </Badge>
+            </div>
+            <dl class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <dt class="font-medium text-foreground">Scope</dt>
+                <dd>{relayScopeLabel(relay.config.scope)}</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-foreground">Last health check</dt>
+                <dd>{formatTimestamp(relay.health.lastCheckedAt)}</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-foreground">Latency</dt>
+                <dd>
+                  {relay.health.latencyMs !== null
+                    ? `${relay.health.latencyMs} ms`
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-foreground">Uptime</dt>
+                <dd>
+                  {relay.health.uptimePercent !== null
+                    ? `${relay.health.uptimePercent.toFixed(1)}%`
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-foreground">Servers</dt>
+                <dd>
+                  {relay.config.serverIds.length > 0
+                    ? relay.config.serverIds.join(", ")
+                    : "Global"}
+                </dd>
+              </div>
+              <div>
+                <dt class="font-medium text-foreground">Credentials</dt>
+                <dd>
+                  {relay.config.username
+                    ? `Username: ${relay.config.username}`
+                    : "None"}
+                </dd>
+              </div>
+            </dl>
+            {#if relay.health.error}
+              <p class="mt-3 text-xs text-rose-400">
+                {relay.health.error}
+              </p>
+            {/if}
+            <div class="mt-4 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                class="gap-1"
+                onclick={() =>
+                  handleRefreshRelay(relay.config.id, relay.health.status)}
+                disabled={refreshingRelay[relay.config.id]}
+              >
+                {refreshingRelay[relay.config.id] ? "Updating…" : "Refresh health"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                class="gap-1"
+                onclick={() =>
+                  handleRemoveRelay(relay.config.id, relay.config.label)}
+                disabled={deletingRelay[relay.config.id]}
+              >
+                {deletingRelay[relay.config.id] ? "Removing…" : "Remove"}
+              </Button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="border-t border-zinc-800 pt-6">
+      <h3 class="text-base font-semibold text-zinc-100">Register new relay</h3>
+      <p class="mt-1 text-xs text-muted-foreground">
+        Separate multiple URLs or server IDs with commas or spaces.
+      </p>
+      <form
+        class="mt-4 grid gap-4 sm:grid-cols-2"
+        onsubmit|preventDefault={handleAddRelay}
+      >
+        <div class="sm:col-span-1">
+          <Label for="relay-label" class="text-xs uppercase tracking-wide text-muted-foreground">
+            Label
+          </Label>
+          <Input
+            id="relay-label"
+            placeholder="Campus relay"
+            bind:value={relayLabel}
+            required
+          />
+        </div>
+        <div class="sm:col-span-1">
+          <Label for="relay-scope" class="text-xs uppercase tracking-wide text-muted-foreground">
+            Scope
+          </Label>
+          <select
+            id="relay-scope"
+            bind:value={relayScope}
+            class="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+          >
+            <option value="global">Global</option>
+            <option value="server">Server-specific</option>
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <Label for="relay-urls" class="text-xs uppercase tracking-wide text-muted-foreground">
+            Relay URLs
+          </Label>
+          <Input
+            id="relay-urls"
+            placeholder="turn:relay.example.com:3478 turn:backup.example.com:3478"
+            bind:value={relayUrls}
+            required
+          />
+        </div>
+        <div>
+          <Label for="relay-username" class="text-xs uppercase tracking-wide text-muted-foreground">
+            Username (optional)
+          </Label>
+          <Input
+            id="relay-username"
+            placeholder="relay-user"
+            bind:value={relayUsername}
+          />
+        </div>
+        <div>
+          <Label for="relay-credential" class="text-xs uppercase tracking-wide text-muted-foreground">
+            Credential (optional)
+          </Label>
+          <Input
+            id="relay-credential"
+            type="password"
+            placeholder="secret"
+            bind:value={relayCredential}
+          />
+        </div>
+        <div class="sm:col-span-2">
+          <Label for="relay-servers" class="text-xs uppercase tracking-wide text-muted-foreground">
+            Server IDs (optional)
+          </Label>
+          <Input
+            id="relay-servers"
+            placeholder="server-123 server-456"
+            bind:value={relayServerIds}
+            disabled={relayScope === "global"}
+          />
+        </div>
+        <div class="sm:col-span-2 flex items-center gap-3">
+          <Button type="submit" disabled={savingRelay}>
+            {savingRelay ? "Saving…" : "Add relay"}
+          </Button>
+          <p class="text-xs text-muted-foreground">
+            Stored securely in the desktop keychain.
+          </p>
+        </div>
+      </form>
+    </div>
   </section>
 </div>

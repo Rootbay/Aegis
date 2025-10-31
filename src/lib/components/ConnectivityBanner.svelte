@@ -72,6 +72,9 @@
       `Mesh peers: ${state.meshPeers}`,
       `Total peers: ${state.totalPeers}`,
     ];
+    if (state.activeRelayCount > 0) {
+      parts.push(`Relays: ${state.activeRelayCount}`);
+    }
     if (state.bestRouteQuality !== null) {
       parts.push(`Best route ${Math.round(state.bestRouteQuality * 100)}%`);
     }

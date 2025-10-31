@@ -5,16 +5,21 @@ import type {
   ServerAuditLogEntry,
   ServerEmoji,
   ServerModerationSettings,
+  ServerRelayParticipation,
   ServerSticker,
   ServerWidgetSettings,
-} from "$lib/features/servers/models/Server";
-import type { User } from "$lib/features/auth/models/User";
-import type { Channel } from "$lib/features/channels/models/Channel";
-import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
-import type { Role } from "$lib/features/servers/models/Role";
-import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
-import { userStore } from "$lib/stores/userStore";
-import { serverCache } from "$lib/utils/cache";
+} from "../models/Server";
+import type { User } from "../../auth/models/User";
+import type { Channel } from "../../channels/models/Channel";
+import type { ChannelCategory } from "../../channels/models/ChannelCategory";
+import type { Role } from "../models/Role";
+import type { ServerInvite } from "../models/ServerInvite";
+import { userStore } from "../../../stores/userStore";
+import { serverCache } from "../../../utils/cache";
+import type {
+  RelayRecord,
+  RelayStatus,
+} from "../../settings/models/relay";
 
 type BackendUser = {
   id: string;
@@ -148,6 +153,7 @@ interface ServerStoreState {
   loading: boolean;
   activeServerId: string | null;
   bansByServer: Record<string, User[]>;
+  relayParticipationByServer: Record<string, ServerRelayParticipation[]>;
 }
 
 export type ServerUpdateResult = {
@@ -158,6 +164,7 @@ export type ServerUpdateResult = {
 interface ServerStore extends Readable<ServerStoreState> {
   handleServersUpdate: (servers: Server[]) => void;
   setActiveServer: (serverId: string | null) => void;
+  applyRelayBindings: (relays: RelayRecord[]) => void;
   updateServerMemberPresence: (
     userId: string,
     presence: {
@@ -210,6 +217,7 @@ export function createServerStore(): ServerStore {
         ? localStorage.getItem("activeServerId")
         : null,
     bansByServer: {},
+    relayParticipationByServer: {},
   });
 
   const banCache = new Map<string, User[]>();
@@ -238,6 +246,41 @@ export function createServerStore(): ServerStore {
     }
     return undefined;
   };
+
+  const computeRelayParticipation = (
+    relays: RelayRecord[],
+  ): Record<string, ServerRelayParticipation[]> => {
+    const result: Record<string, ServerRelayParticipation[]> = {};
+    relays.forEach((relay) => {
+      relay.config.serverIds.forEach((serverId) => {
+        if (!result[serverId]) {
+          result[serverId] = [];
+        }
+        result[serverId] = [
+          ...result[serverId],
+          {
+            relayId: relay.config.id,
+            label: relay.config.label,
+            scope: relay.config.scope,
+            status: relay.health.status,
+            lastCheckedAt: relay.health.lastCheckedAt ?? null,
+          },
+        ];
+      });
+    });
+    Object.values(result).forEach((list) => {
+      list.sort((a, b) => a.label.localeCompare(b.label));
+    });
+    return result;
+  };
+
+  const attachRelayParticipation = (
+    server: Server,
+    map: Record<string, ServerRelayParticipation[]>,
+  ): Server => ({
+    ...server,
+    relayParticipation: map[server.id] ?? [],
+  });
 
   const coerceNumber = (value: unknown): number | undefined => {
     if (typeof value === "number" && Number.isFinite(value)) {
@@ -675,8 +718,9 @@ export function createServerStore(): ServerStore {
     } as Server;
   };
 
-  const normalizeServer = (server: Server): Server => ({
-    ...applyRoleAssignmentsToServer({
+  const normalizeServer = (server: Server): Server => {
+    const participationMap = get({ subscribe }).relayParticipationByServer;
+    const normalized = applyRoleAssignmentsToServer({
       ...server,
       invites: server.invites ?? [],
       channels: server.channels ?? [],
@@ -687,8 +731,10 @@ export function createServerStore(): ServerStore {
       stickers: server.stickers ?? [],
       widgetSettings: server.widgetSettings ?? null,
       auditLog: server.auditLog ?? [],
-    }),
-  });
+    });
+
+    return attachRelayParticipation(normalized, participationMap);
+  };
 
   const cloneServer = (server: Server): Server =>
     JSON.parse(JSON.stringify(normalizeServer(server))) as Server;
@@ -798,13 +844,17 @@ export function createServerStore(): ServerStore {
   };
 
   const handleServersUpdate = (updatedServers: Server[]) => {
-    const normalized = updatedServers.map((server) =>
-      normalizeServer({
-        ...server,
-        invites: server.invites ?? [],
-      }),
-    );
     const snapshot = get({ subscribe });
+    const relayMap = snapshot.relayParticipationByServer;
+    const normalized = updatedServers.map((server) =>
+      attachRelayParticipation(
+        normalizeServer({
+          ...server,
+          invites: server.invites ?? [],
+        }),
+        relayMap,
+      ),
+    );
     const filteredBans = Object.fromEntries(
       Object.entries(snapshot.bansByServer).filter(([serverId]) =>
         normalized.some((server) => server.id === serverId),
@@ -822,7 +872,19 @@ export function createServerStore(): ServerStore {
       loading: false,
       activeServerId: snapshot.activeServerId,
       bansByServer: filteredBans,
+      relayParticipationByServer: relayMap,
     });
+  };
+
+  const applyRelayBindings = (relays: RelayRecord[]) => {
+    const participation = computeRelayParticipation(relays);
+    update((state) => ({
+      ...state,
+      relayParticipationByServer: participation,
+      servers: state.servers.map((server) =>
+        attachRelayParticipation(server, participation),
+      ),
+    }));
   };
 
   const setActiveServer = (serverId: string | null) => {
@@ -1555,6 +1617,7 @@ export function createServerStore(): ServerStore {
     subscribe,
     handleServersUpdate,
     setActiveServer,
+    applyRelayBindings,
     updateServerMemberPresence,
     addServer,
     upsertServerFromBackend,
