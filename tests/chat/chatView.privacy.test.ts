@@ -45,6 +45,34 @@ function createWritable<T>(initialValue: T) {
   };
 }
 
+function createFileList(...files: File[]): FileList {
+  const fileList: Partial<FileList> = {
+    length: files.length,
+    item: (index: number) => files[index] ?? null,
+  };
+
+  files.forEach((file, index) => {
+    (fileList as any)[index] = file;
+  });
+
+  return fileList as FileList;
+}
+
+function triggerLatestContextAction(action: string) {
+  const registry =
+    ((globalThis as any).__contextMenuRegistry as Array<{
+      trigger: (action: string) => void;
+      hasAction: (action: string) => boolean;
+    }>) ?? [];
+  for (let i = registry.length - 1; i >= 0; i -= 1) {
+    const entry = registry[i];
+    if (entry?.hasAction(action)) {
+      entry.trigger(action);
+      break;
+    }
+  }
+}
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
@@ -65,6 +93,128 @@ vi.mock("@tauri-apps/plugin-store", () => {
   }
 
   return { Store };
+});
+
+describe("ChatView drafts", () => {
+  beforeEach(() => {
+    resetChatViewState();
+    mockExtractFirstLink.mockReset();
+    mockExtractFirstLink.mockImplementation(() => null);
+    mockGetLinkPreviewMetadata.mockReset();
+    mockGetLinkPreviewMetadata.mockResolvedValue(null);
+  });
+
+  it("persists composer text, attachments, and reply target per chat", async () => {
+    const friendA: Friend = {
+      id: "friend-drafts-a",
+      name: "Drafting Alice",
+      avatar: "https://example.com/alice.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const friendB: Friend = {
+      id: "friend-drafts-b",
+      name: "Drafting Bob",
+      avatar: "https://example.com/bob.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const chatAId = "chat-drafts-a";
+    const chatBId = "chat-drafts-b";
+
+    const messageA: Message = {
+      id: "msg-drafts-a",
+      chatId: chatAId,
+      senderId: friendA.id,
+      content: "Hello from drafts",
+      timestamp: new Date().toISOString(),
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatAId, [messageA]]]));
+
+    const chatA: Chat = {
+      type: "dm",
+      id: chatAId,
+      friend: friendA,
+      messages: [messageA],
+    };
+
+    const chatB: Chat = {
+      type: "dm",
+      id: chatBId,
+      friend: friendB,
+      messages: [],
+    };
+
+    const { rerender, container } = render(ChatView, { props: { chat: chatA } });
+
+    const composerA = (await screen.findByPlaceholderText(
+      `Message @${friendA.name}`,
+    )) as HTMLTextAreaElement;
+
+    await fireEvent.input(composerA, {
+      target: { value: "Saved draft for Alice" },
+    });
+
+    await tick();
+    const initialHeight = composerA.style.height;
+
+    const fileInput = container.querySelector(
+      "input[type='file']",
+    ) as HTMLInputElement;
+
+    const attachment = new File(["content"], "draft.txt", {
+      type: "text/plain",
+    });
+
+    Object.defineProperty(fileInput, "files", {
+      value: createFileList(attachment),
+      configurable: true,
+    });
+    await fireEvent.change(fileInput);
+
+    expect(screen.queryByText("Attachments")).not.toBeNull();
+
+    const messageButton = (await screen.findByRole("button", {
+      name: "Message options",
+    })) as HTMLButtonElement;
+
+    await fireEvent.contextMenu(messageButton);
+    await tick();
+    triggerLatestContextAction("reply_message");
+
+    await screen.findByText(`Replying to ${friendA.name}`);
+
+    await rerender({ chat: chatB });
+    await tick();
+
+    const composerB = (await screen.findByPlaceholderText(
+      `Message @${friendB.name}`,
+    )) as HTMLTextAreaElement;
+
+    expect(composerB.value).toBe("");
+    expect(screen.queryByText("Attachments")).toBeNull();
+    expect(screen.queryByText(`Replying to ${friendA.name}`)).toBeNull();
+
+    await rerender({ chat: chatA });
+    await tick();
+
+    const restoredComposer = (await screen.findByPlaceholderText(
+      `Message @${friendA.name}`,
+    )) as HTMLTextAreaElement;
+
+    expect(restoredComposer.value).toBe("Saved draft for Alice");
+    expect(restoredComposer.style.height).toBe(initialHeight);
+    expect(screen.queryByText("Attachments")).not.toBeNull();
+    expect(screen.queryByText(`Replying to ${friendA.name}`)).not.toBeNull();
+  });
 });
 
 const linkPreviewMocks = vi.hoisted(() => ({
@@ -370,6 +520,7 @@ import type { Friend } from "$lib/features/friends/models/Friend";
 import type { Message } from "$lib/features/chat/models/Message";
 
 import ChatView from "$lib/features/chat/components/ChatView.svelte";
+import { resetChatDrafts } from "$lib/features/chat/utils/chatDraftStore";
 import {
   defaultSettings,
   settings,
@@ -409,6 +560,7 @@ function resetChatViewState() {
   hasMoreByChatId.set(new Map());
   loadingStateByChat.set(new Map());
   chatSearchStore.reset();
+  resetChatDrafts();
   __setUser({
     id: "user-current",
     name: "Current User",
@@ -662,21 +814,6 @@ describe("ChatView friend removal", () => {
     render(ChatView, { props: { chat } });
 
     return { chatId, message };
-  }
-
-  function triggerLatestContextAction(action: string) {
-    const registry =
-      ((globalThis as any).__contextMenuRegistry as Array<{
-        trigger: (action: string) => void;
-        hasAction: (action: string) => boolean;
-      }>) ?? [];
-    for (let i = registry.length - 1; i >= 0; i -= 1) {
-      const entry = registry[i];
-      if (entry?.hasAction(action)) {
-        entry.trigger(action);
-        break;
-      }
-    }
   }
 
   it("invokes backend removal before updating stores", async () => {
