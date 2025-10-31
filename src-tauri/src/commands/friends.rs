@@ -27,6 +27,12 @@ pub struct MuteUserResult {
     pub spam_score: Option<f32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IgnoreUserResult {
+    pub target_user_id: String,
+    pub ignored: bool,
+}
+
 #[tauri::command]
 pub async fn send_friend_request(
     current_user_id: String,
@@ -314,6 +320,41 @@ pub async fn mute_user(
     drop(state_guard);
 
     mute_user_internal(state, current_user_id, target_user_id, muted, spam_score).await
+}
+
+#[tauri::command]
+pub async fn ignore_user(
+    current_user_id: String,
+    target_user_id: String,
+    ignored: bool,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<IgnoreUserResult, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    drop(state_guard);
+
+    ignore_user_internal(state, current_user_id, target_user_id, ignored).await
+}
+
+async fn ignore_user_internal(
+    state: AppState,
+    current_user_id: String,
+    target_user_id: String,
+    ignored: bool,
+) -> Result<IgnoreUserResult, String> {
+    let my_id = state.identity.peer_id().to_base58();
+    if current_user_id != my_id {
+        return Err("Caller identity mismatch".to_string());
+    }
+
+    if current_user_id == target_user_id {
+        return Err("Cannot ignore yourself.".to_string());
+    }
+
+    Ok(IgnoreUserResult {
+        target_user_id,
+        ignored,
+    })
 }
 
 async fn mute_user_internal(
@@ -615,6 +656,27 @@ mod tests {
         assert!(result.muted);
         assert_eq!(result.target_user_id, target_id);
         assert!(result.spam_score.is_none());
+    }
+
+    #[tokio::test]
+    async fn ignore_user_internal_validates_identity() {
+        let temp = tempdir().expect("tempdir");
+        let db_pool = aep::database::initialize_db(temp.path().join("ignore.db"))
+            .await
+            .expect("init db");
+
+        let identity = Identity::generate();
+        let my_id = identity.peer_id().to_base58();
+        let target_id = Uuid::new_v4().to_string();
+
+        let (app_state, _rx) = build_app_state(identity.clone(), db_pool);
+
+        let result = ignore_user_internal(app_state, my_id.clone(), target_id.clone(), true)
+            .await
+            .expect("ignore user");
+
+        assert!(result.ignored);
+        assert_eq!(result.target_user_id, target_id);
     }
 
     #[tokio::test]

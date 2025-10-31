@@ -7,6 +7,7 @@
   import { userStore } from "$lib/stores/userStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
+  import { ignoredUsersStore } from "$lib/features/friends/stores/ignoredUsersStore";
   import { userNotesStore } from "$lib/features/friends/stores/userNotesStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
@@ -196,6 +197,29 @@
   let servers = $derived<Server[]>($serverStore.servers ?? []);
   let sendingInvite = $state(false);
 
+  let ignoredUsers = $state<Set<string>>(new Set());
+  const isIgnored = $derived(() => {
+    const id = profileUser?.id;
+    if (!id) {
+      return false;
+    }
+    return ignoredUsers.has(id);
+  });
+
+  const unsubscribeIgnoredUsers = ignoredUsersStore.subscribe((ids) => {
+    ignoredUsers = ids;
+  });
+
+  $effect(() => {
+    if (!profileUser?.id) {
+      return;
+    }
+    const nextIgnored = isIgnored;
+    if (profileUser.isIgnored !== nextIgnored) {
+      profileUser = { ...profileUser, isIgnored: nextIgnored };
+    }
+  });
+
   const createGroupContext = getContext<CreateGroupContext | undefined>(
     CREATE_GROUP_CONTEXT_KEY,
   );
@@ -212,6 +236,7 @@
 
   onDestroy(() => {
     unsubscribeNotes();
+    unsubscribeIgnoredUsers();
     if (notePersistTimeout) {
       clearTimeout(notePersistTimeout);
       notePersistTimeout = undefined;
@@ -424,6 +449,10 @@
   async function sendMessage() {
     try {
       if (!profileUser?.id) return;
+      if (isIgnored) {
+        toasts.addToast("You have ignored this user.", "info");
+        return;
+      }
       await chatStore.setActiveChat(profileUser.id, "dm");
       close();
     } catch (e) {
@@ -491,9 +520,35 @@
           }
           break;
         }
-        case "ignore":
-          toasts.addToast("User ignored (local only).", "info");
+        case "ignore": {
+          const meId = $userStore.me?.id;
+          if (!meId || !profileUser?.id) {
+            toasts.addToast(
+              "You must be signed in to update ignore status.",
+              "error",
+            );
+            break;
+          }
+
+          const currentlyIgnored = ignoredUsersStore.isIgnored(profileUser.id);
+
+          await invoke("ignore_user", {
+            current_user_id: meId,
+            target_user_id: profileUser.id,
+            ignored: !currentlyIgnored,
+          });
+
+          if (currentlyIgnored) {
+            ignoredUsersStore.unignore(profileUser.id);
+            profileUser = { ...profileUser, isIgnored: false };
+            toasts.addToast("User unignored.", "success");
+          } else {
+            ignoredUsersStore.ignore(profileUser.id);
+            profileUser = { ...profileUser, isIgnored: true };
+            toasts.addToast("User ignored.", "success");
+          }
           break;
+        }
         case "invite_to_server":
           openInvitePicker();
           break;
@@ -702,17 +757,17 @@
                 ><Plus class="mr-2 h-4 w-4" /> Edit Profile</Button
               >
             {:else if isFriend}
-              <Button onclick={sendMessage}
+              <Button onclick={sendMessage} disabled={isIgnored}
                 ><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button
               >
               <Button variant="destructive" size="icon" onclick={removeFriend}
                 ><Trash class="h-4 w-4" /></Button
               >
             {:else}
-              <Button onclick={addFriend}
+              <Button onclick={addFriend} disabled={isIgnored}
                 ><Plus class="mr-2 h-4 w-4" /> Add Friend</Button
               >
-              <Button onclick={sendMessage}
+              <Button onclick={sendMessage} disabled={isIgnored}
                 ><SendHorizontal class="mr-2 h-4 w-4" /> Message</Button
               >
             {/if}
@@ -725,6 +780,9 @@
           </div>
 
           <div class="flex flex-wrap gap-2 mb-4">
+            {#if isIgnored}
+              <Badge variant="destructive">Ignored</Badge>
+            {/if}
             <Badge variant="secondary">Member since 2021</Badge>
             <Badge variant="outline">Premium</Badge>
           </div>
@@ -937,6 +995,7 @@
     x={userOptionsMenuX}
     y={userOptionsMenuY}
     show={showUserOptionsMenu}
+    ignored={isIgnored}
     onclose={() => (showUserOptionsMenu = false)}
     onaction={handleUserOptionAction}
   />

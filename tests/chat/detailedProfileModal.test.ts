@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
         };
       case "block_user":
       case "mute_user":
+      case "ignore_user":
         return null;
       default:
         return null;
@@ -111,6 +112,60 @@ const mocks = vi.hoisted(() => {
     clear: vi.fn(),
   };
 
+  const ignoredUsers = new Set<string>();
+  const ignoredSubscribers: ((value: Set<string>) => void)[] = [];
+  const emitIgnored = () => {
+    const snapshot = new Set(ignoredUsers);
+    ignoredSubscribers.forEach((subscriber) => subscriber(snapshot));
+  };
+
+  const ignoredUsersStoreMock = {
+    subscribe(run: (value: Set<string>) => void) {
+      ignoredSubscribers.push(run);
+      run(new Set(ignoredUsers));
+      return () => {
+        const index = ignoredSubscribers.indexOf(run);
+        if (index >= 0) {
+          ignoredSubscribers.splice(index, 1);
+        }
+      };
+    },
+    ignore: vi.fn((userId: string) => {
+      if (!userId) return;
+      ignoredUsers.add(userId);
+      emitIgnored();
+    }),
+    unignore: vi.fn((userId: string) => {
+      if (!userId) return;
+      ignoredUsers.delete(userId);
+      emitIgnored();
+    }),
+    toggle: vi.fn((userId: string) => {
+      if (!userId) return;
+      if (ignoredUsers.has(userId)) {
+        ignoredUsers.delete(userId);
+      } else {
+        ignoredUsers.add(userId);
+      }
+      emitIgnored();
+    }),
+    isIgnored: vi.fn((userId: string) => ignoredUsers.has(userId)),
+    clear: vi.fn(() => {
+      ignoredUsers.clear();
+      emitIgnored();
+    }),
+  };
+
+  const resetIgnoredUsers = () => {
+    ignoredUsersStoreMock.ignore.mockClear();
+    ignoredUsersStoreMock.unignore.mockClear();
+    ignoredUsersStoreMock.toggle.mockClear();
+    ignoredUsersStoreMock.isIgnored.mockClear();
+    ignoredUsersStoreMock.clear.mockClear();
+    ignoredUsers.clear();
+    emitIgnored();
+  };
+
   const serverStoreValue = {
     servers: [],
     loading: false,
@@ -154,6 +209,7 @@ const mocks = vi.hoisted(() => {
     userStoreMock,
     friendStoreMock,
     mutedFriendsStoreMock,
+    ignoredUsersStoreMock,
     serverStoreMock,
     chatStoreMock,
     openCreateGroupModal,
@@ -161,6 +217,7 @@ const mocks = vi.hoisted(() => {
     openProfileReviewsModal,
     createGroupContext,
     gotoMock: vi.fn(async () => {}),
+    resetIgnoredUsers,
   };
 });
 
@@ -182,6 +239,10 @@ vi.mock("$lib/features/friends/stores/friendStore", () => ({
 
 vi.mock("$lib/features/friends/stores/mutedFriendsStore", () => ({
   mutedFriendsStore: mocks.mutedFriendsStoreMock,
+}));
+
+vi.mock("$lib/features/friends/stores/ignoredUsersStore", () => ({
+  ignoredUsersStore: mocks.ignoredUsersStoreMock,
 }));
 
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
@@ -230,6 +291,7 @@ describe("Detailed profile modal integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.invoke.mockImplementation(mocks.defaultInvoke);
+    mocks.resetIgnoredUsers();
   });
 
   it("renders DetailedProfileModal via AppModals and handles actions", async () => {
@@ -327,6 +389,76 @@ describe("Detailed profile modal integration", () => {
     await fireEvent.click(getByLabelText("Close"));
 
     expect(closeModal).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores and unignores a user while updating the UI", async () => {
+    const closeModal = vi.fn();
+
+    const { getByLabelText, getByText, findByText, queryByText } = render(
+      AppModals,
+      {
+        props: {
+          activeModal: "detailedProfile",
+          modalProps: {
+            profileUser,
+            mutualFriends: [],
+            mutualServers: [],
+            mutualGroups: [],
+            isFriend: false,
+            isMyProfile: false,
+          },
+          closeModal,
+        },
+      },
+    );
+
+    await findByText("Add Friend");
+
+    const messageButton = getByText("Message") as HTMLButtonElement;
+    expect(messageButton.disabled).toBe(false);
+    expect(queryByText("Ignored")).toBeNull();
+
+    await fireEvent.click(getByLabelText("More options"));
+    await fireEvent.click(await findByText("Ignore"));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith("ignore_user", {
+        current_user_id: "current-user",
+        target_user_id: profileUser.id,
+        ignored: true,
+      });
+      expect(mocks.ignoredUsersStoreMock.ignore).toHaveBeenCalledWith(
+        profileUser.id,
+      );
+      expect(mocks.addToast).toHaveBeenCalledWith("User ignored.", "success");
+    });
+
+    await waitFor(() => {
+      expect(messageButton.disabled).toBe(true);
+    });
+
+    expect(await findByText("Ignored")).toBeTruthy();
+
+    await fireEvent.click(getByLabelText("More options"));
+    await fireEvent.click(await findByText("Unignore"));
+
+    await waitFor(() => {
+      expect(mocks.invoke).toHaveBeenCalledWith("ignore_user", {
+        current_user_id: "current-user",
+        target_user_id: profileUser.id,
+        ignored: false,
+      });
+      expect(mocks.ignoredUsersStoreMock.unignore).toHaveBeenCalledWith(
+        profileUser.id,
+      );
+      expect(mocks.addToast).toHaveBeenCalledWith("User unignored.", "success");
+    });
+
+    await waitFor(() => {
+      expect(messageButton.disabled).toBe(false);
+    });
+
+    expect(queryByText("Ignored")).toBeNull();
   });
 
   it("renders mutual friends when backend supplies data", async () => {
