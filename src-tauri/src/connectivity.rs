@@ -490,7 +490,12 @@ fn compute_snapshot(
     let bridge_suggested = mesh_peer_count > 0 && !forwarding_active;
 
     let relay_payload = relay_snapshots
-        .map(|entries| entries.into_iter().filter(|entry| entry.status.is_some()).collect())
+        .map(|entries| {
+            entries
+                .into_iter()
+                .filter(|entry| entry.status.is_some())
+                .collect()
+        })
         .filter(|entries: &Vec<RelaySnapshot>| !entries.is_empty());
 
     ConnectivityEventPayload {

@@ -1,11 +1,7 @@
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::{
-    AddGroupChatMembersData,
-    AepMessage,
-    CreateGroupChatData,
-    LeaveGroupChatData,
-    RemoveGroupChatMemberData,
-    RenameGroupChatData,
+    AddGroupChatMembersData, AepMessage, CreateGroupChatData, LeaveGroupChatData,
+    RemoveGroupChatMemberData, RenameGroupChatData,
 };
 use aep::database::{self, GroupChat, GroupChatMember, GroupChatRecord};
 use chrono::Utc;
@@ -226,13 +222,9 @@ pub async fn add_group_dm_member(
 
     let adder_id = state.identity.peer_id().to_base58();
 
-    let added_members = database::add_group_chat_members(
-        &state.db_pool,
-        &group_id,
-        &member_ids,
-    )
-    .await
-    .map_err(|e| e.to_string())?;
+    let added_members = database::add_group_chat_members(&state.db_pool, &group_id, &member_ids)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if added_members.is_empty() {
         return Err("No new members were added.".to_string());
