@@ -13,4 +13,5 @@ export interface User {
   roleIds?: string[];
   statusMessage?: string | null;
   location?: string | null;
+  isIgnored?: boolean;
 }

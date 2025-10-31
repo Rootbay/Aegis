@@ -7,12 +7,13 @@
     show = false,
     onaction = undefined,
     onclose = undefined,
+    ignored = false,
   } = $props();
 
-  const menuItems = [
+  const menuItems = $derived(() => [
     { label: "Invite to Server", action: "invite_to_server" },
     { label: "View Reviews", action: "view_reviews" },
-    { label: "Ignore", action: "ignore" },
+    { label: ignored ? "Unignore" : "Ignore", action: "ignore" },
     { label: "Mute User", action: "mute_user" },
     { isSeparator: true },
     { label: "Block", action: "block", isDestructive: true },
@@ -20,7 +21,7 @@
     { isSeparator: true },
     { label: "Copy User ID", action: "copy_user_id" },
     { label: "Add to Group", action: "add_to_group" },
-  ];
+  ]);
 </script>
 
 <BaseContextMenu {x} {y} {show} {menuItems} {onclose} {onaction} />

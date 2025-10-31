@@ -42,6 +42,8 @@ pub async fn run() {
             commands::friends::block_user,
             commands::friends::unblock_user,
             commands::friends::remove_friendship,
+            commands::friends::mute_user,
+            commands::friends::ignore_user,
             commands::friends::get_friendships_for_user,
             commands::servers::create_server,
             commands::servers::join_server,
