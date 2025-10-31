@@ -19,6 +19,8 @@
     Mic,
     MicOff,
     Timer,
+    MonitorUp,
+    MonitorStop,
   } from "@lucide/svelte";
   import {
     callStore,
@@ -33,7 +35,7 @@
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
 
-  const state = $callStore;
+  const callStateSnapshot = $callStore;
   const activeCall = $callStore.activeCall;
 
   let duration = $state(0);
@@ -64,17 +66,33 @@
     };
   }
 
+  type ParticipantView = CallParticipant & {
+    userId: string;
+    displayStream: MediaStream | null;
+  };
+
   const participants = $derived(() => {
     const call = $callStore.activeCall;
     if (!call) {
-      return [] as (CallParticipant & { userId: string })[];
+      return [] as ParticipantView[];
     }
     return Array.from(call.participants.entries()).map(
       ([userId, participant]) => ({
         ...participant,
         userId,
+        displayStream:
+          participant.screenShareStream ?? participant.remoteStream,
       }),
     );
+  });
+
+  const videoParticipants = $derived(() => {
+    if (!activeCall || activeCall.type !== "video") {
+      return [] as ParticipantView[];
+    }
+    return participants
+      .slice()
+      .sort((a, b) => Number(b.isScreenSharing) - Number(a.isScreenSharing));
   });
 
   function beginTimer(call: ActiveCall | null) {
@@ -142,7 +160,19 @@
       $callStore.localMedia.videoAvailable &&
       $callStore.activeCall?.type === "video",
   );
+  const isScreenSharing = $derived($callStore.localMedia.screenSharing);
+  const canShareScreen = $derived(
+    Boolean(
+      activeCall &&
+        activeCall.type === "video" &&
+        isActive &&
+        $callStore.localMedia.screenShareAvailable,
+    ),
+  );
   function describeParticipant(participant: CallParticipant) {
+    if (participant.isScreenSharing) {
+      return "Presenting";
+    }
     switch (participant.status) {
       case "invited":
         return "Invited";
@@ -163,7 +193,7 @@
 </script>
 
 <Dialog
-  open={state.showCallModal && Boolean(activeCall)}
+  open={callStateSnapshot.showCallModal && Boolean(activeCall)}
   onOpenChange={handleOpenChange}
 >
   {#if activeCall}
@@ -194,35 +224,61 @@
         {#if activeCall.type === "video"}
           <div class="space-y-3">
             <div class="grid gap-3 sm:grid-cols-2">
-              {#if participants.length === 0}
+              {#if videoParticipants.length === 0}
                 <div
                   class="flex h-40 items-center justify-center rounded-md border border-border bg-muted/40 text-sm text-muted-foreground"
                 >
                   Waiting for participants...
                 </div>
               {/if}
-              {#each participants as participant (participant.userId)}
+              {#each videoParticipants as participant (participant.userId)}
                 <div
-                  class="relative h-40 overflow-hidden rounded-md border border-border bg-black"
+                  class={`relative h-40 overflow-hidden rounded-md border border-border bg-black ${
+                    participant.isScreenSharing ? "ring-2 ring-primary" : ""
+                  }`}
                 >
                   <video
-                    use:mediaStream={participant.remoteStream}
+                    use:mediaStream={participant.displayStream}
                     autoplay
                     playsinline
                     class="h-full w-full object-cover"
                   ></video>
+                  {#if participant.isScreenSharing}
+                    <div
+                      class="absolute top-2 left-2 rounded bg-black/60 px-2 py-1 text-xs font-medium text-white"
+                    >
+                      Presenting
+                    </div>
+                  {/if}
                   <div
                     class="absolute top-2 right-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
                   >
                     {describeParticipant(participant)}
                   </div>
-                  {#if !participant.remoteStream}
+                  {#if !participant.displayStream}
                     <div
                       class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-xs text-muted-foreground"
                     >
                       <Video class="h-6 w-6" />
                       <span>{participant.name ?? participant.userId}</span>
                     </div>
+                  {/if}
+                  {#if participant.isScreenSharing && participant.remoteStream && participant.displayStream !== participant.remoteStream}
+                    <video
+                      use:mediaStream={participant.remoteStream}
+                      autoplay
+                      playsinline
+                      muted
+                      class="absolute bottom-2 right-2 h-16 w-24 rounded border border-white/40 object-cover shadow-lg"
+                    ></video>
+                  {/if}
+                  {#if participant.screenShareStream}
+                    <audio
+                      use:mediaStream={participant.remoteStream}
+                      autoplay
+                      playsinline
+                      class="sr-only"
+                    ></audio>
                   {/if}
                   <div
                     class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
@@ -243,6 +299,13 @@
                 muted
                 class="absolute inset-0 h-full w-full object-cover"
               ></video>
+              {#if isScreenSharing}
+                <div
+                  class="absolute top-2 left-2 rounded bg-black/60 px-2 py-1 text-xs font-medium text-white"
+                >
+                  You are sharing your screen
+                </div>
+              {/if}
               <div
                 class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white"
               >
@@ -322,14 +385,14 @@
                     <Button
                       type="button"
                       size="icon"
-                      variant={localMedia.audioEnabled ? "secondary" : "outline"}
+                      variant={localMedia.audioEnabled
+                        ? "secondary"
+                        : "outline"}
                       class="cursor-pointer"
                       aria-pressed={localMedia.audioEnabled}
-                      aria-label={
-                        localMedia.audioEnabled
-                          ? "Mute microphone"
-                          : "Unmute microphone"
-                      }
+                      aria-label={localMedia.audioEnabled
+                        ? "Mute microphone"
+                        : "Unmute microphone"}
                       disabled={!canToggleAudio}
                       onclick={() => callStore.toggleMute()}
                     >
@@ -352,14 +415,14 @@
                       <Button
                         type="button"
                         size="icon"
-                        variant={localMedia.videoEnabled ? "secondary" : "outline"}
+                        variant={localMedia.videoEnabled
+                          ? "secondary"
+                          : "outline"}
                         class="cursor-pointer"
                         aria-pressed={localMedia.videoEnabled}
-                        aria-label={
-                          localMedia.videoEnabled
-                            ? "Disable camera"
-                            : "Enable camera"
-                        }
+                        aria-label={localMedia.videoEnabled
+                          ? "Disable camera"
+                          : "Enable camera"}
                         disabled={!canToggleVideo}
                         onclick={() => callStore.toggleCamera()}
                       >
@@ -376,9 +439,47 @@
                         : "Enable camera"}
                     </TooltipContent>
                   </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant={isScreenSharing ? "secondary" : "outline"}
+                        class="cursor-pointer"
+                        aria-pressed={isScreenSharing}
+                        aria-label={isScreenSharing
+                          ? "Stop screen sharing"
+                          : "Start screen sharing"}
+                        disabled={!canShareScreen}
+                        onclick={() => void callStore.toggleScreenShare()}
+                      >
+                        {#if isScreenSharing}
+                          <MonitorStop class="h-4 w-4" />
+                        {:else}
+                          <MonitorUp class="h-4 w-4" />
+                        {/if}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {isScreenSharing
+                        ? "Stop screen sharing"
+                        : "Start screen sharing"}
+                    </TooltipContent>
+                  </Tooltip>
                 {/if}
               </div>
             </TooltipProvider>
+            {#if isScreenSharing}
+              <Button
+                type="button"
+                variant="outline"
+                class="cursor-pointer"
+                onclick={() => callStore.stopScreenShare()}
+              >
+                <MonitorStop class="mr-2 h-4 w-4" />
+                Stop Sharing
+              </Button>
+            {/if}
             <Button
               type="button"
               variant="destructive"

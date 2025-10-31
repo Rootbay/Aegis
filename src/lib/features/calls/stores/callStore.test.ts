@@ -34,10 +34,13 @@ const settingsStoreState = writable({
 });
 
 class MockMediaStream {
+  static nextId = 1;
   private tracks: MediaStreamTrack[];
+  id: string;
 
   constructor(tracks: MediaStreamTrack[] = []) {
     this.tracks = tracks;
+    this.id = `mock-stream-${MockMediaStream.nextId++}`;
   }
 
   getTracks() {
@@ -51,6 +54,14 @@ class MockMediaStream {
   getVideoTracks() {
     return this.tracks.filter((track) => track.kind === "video");
   }
+
+  addTrack(track: MediaStreamTrack) {
+    this.tracks.push(track);
+  }
+
+  removeTrack(track: MediaStreamTrack) {
+    this.tracks = this.tracks.filter((candidate) => candidate !== track);
+  }
 }
 
 class MockRTCPeerConnection {
@@ -63,7 +74,17 @@ class MockRTCPeerConnection {
   ontrack: ((event: RTCTrackEvent) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
   connectionState: RTCPeerConnectionState = "new";
-  addTrack = vi.fn();
+  senders: RTCRtpSender[] = [];
+  addTrack = vi.fn((track: MediaStreamTrack, stream: MediaStream) => {
+    const sender = {
+      track,
+      transport: null,
+      rtcpTransport: null,
+      replaceTrack: vi.fn(),
+    } as unknown as RTCRtpSender;
+    this.senders.push(sender);
+    return sender;
+  });
   createOffer = vi.fn(async () => ({ type: "offer", sdp: "offer-sdp" }));
   createAnswer = vi.fn(async () => ({ type: "answer", sdp: "answer-sdp" }));
   setLocalDescription = vi.fn(async (desc: RTCSessionDescriptionInit) => {
@@ -73,6 +94,9 @@ class MockRTCPeerConnection {
     this.remoteDescription = desc;
   });
   addIceCandidate = vi.fn(async () => undefined);
+  removeTrack = vi.fn((sender: RTCRtpSender) => {
+    this.senders = this.senders.filter((candidate) => candidate !== sender);
+  });
   close = vi.fn(() => {
     this.connectionState = "closed";
   });
@@ -156,6 +180,7 @@ describe("callStore signaling", () => {
     });
 
     MockRTCPeerConnection.instances = [];
+    MockMediaStream.nextId = 1;
     globalThis.MediaStream = MockMediaStream;
     globalThis.RTCPeerConnection =
       MockRTCPeerConnection as unknown as typeof RTCPeerConnection;
@@ -184,6 +209,7 @@ describe("callStore signaling", () => {
           { kind: "audioinput" },
           { kind: "videoinput" },
         ]),
+        getDisplayMedia: vi.fn(async () => new MockMediaStream([audioTrack])),
         addEventListener: vi.fn(),
         removeEventListener: vi.fn(),
       } as unknown as MediaDevices,
@@ -409,6 +435,91 @@ describe("callStore signaling", () => {
     const state = get(callStore);
     expect(state.activeCall?.status).toBe("error");
     expect(showErrorToastMock).toHaveBeenCalledWith("Remote failure");
+
+    callStore.reset();
+  });
+
+  it("starts and stops screen sharing for active video calls", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+    const getDisplayMediaMock = navigator.mediaDevices
+      .getDisplayMedia as ReturnType<typeof vi.fn>;
+
+    const screenTrack = {
+      kind: "video",
+      stop: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaStreamTrack;
+
+    getDisplayMediaMock.mockResolvedValueOnce(
+      new MockMediaStream([screenTrack]),
+    );
+
+    await callStore.startCall({
+      chatId: "peer-video",
+      chatName: "Peer Video",
+      chatType: "dm",
+      type: "video",
+      members: [{ id: "peer-video", name: "Peer Video" }],
+    });
+
+    const started = await callStore.toggleScreenShare();
+    expect(started).toBe(true);
+    expect(getDisplayMediaMock).toHaveBeenCalled();
+
+    const peer = MockRTCPeerConnection.instances[0];
+    expect(peer.addTrack).toHaveBeenCalled();
+
+    let state = get(callStore);
+    expect(state.localMedia.screenSharing).toBe(true);
+
+    callStore.stopScreenShare();
+
+    state = get(callStore);
+    expect(state.localMedia.screenSharing).toBe(false);
+    expect(screenTrack.stop).toHaveBeenCalled();
+    expect(peer.removeTrack).toHaveBeenCalled();
+
+    callStore.reset();
+  });
+
+  it("stops screen sharing automatically when the capture stream ends", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+    const getDisplayMediaMock = navigator.mediaDevices
+      .getDisplayMedia as ReturnType<typeof vi.fn>;
+
+    const endedHandlers: Array<() => void> = [];
+    const screenTrack = {
+      kind: "video",
+      stop: vi.fn(),
+      addEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === "ended" || event === "inactive") {
+          endedHandlers.push(handler);
+        }
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaStreamTrack;
+
+    getDisplayMediaMock.mockResolvedValueOnce(
+      new MockMediaStream([screenTrack]),
+    );
+
+    await callStore.startCall({
+      chatId: "peer-video", // reuse id is fine within test scope
+      chatName: "Peer Video",
+      chatType: "dm",
+      type: "video",
+      members: [{ id: "peer-video", name: "Peer Video" }],
+    });
+
+    await callStore.toggleScreenShare();
+
+    expect(endedHandlers).not.toHaveLength(0);
+
+    endedHandlers.forEach((handler) => handler());
+
+    const state = get(callStore);
+    expect(state.localMedia.screenSharing).toBe(false);
 
     callStore.reset();
   });

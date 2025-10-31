@@ -33,6 +33,8 @@ export interface CallParticipant {
   name?: string;
   status: ParticipantStatus;
   remoteStream: MediaStream | null;
+  screenShareStream: MediaStream | null;
+  isScreenSharing: boolean;
   peerConnection: RTCPeerConnection | null;
   error?: string;
   joinedAt: number | null;
@@ -74,6 +76,8 @@ interface CallState {
     videoEnabled: boolean;
     audioAvailable: boolean;
     videoAvailable: boolean;
+    screenSharing: boolean;
+    screenShareAvailable: boolean;
   };
   showCallModal: boolean;
 }
@@ -138,6 +142,8 @@ const INITIAL_STATE: CallState = {
     videoEnabled: true,
     audioAvailable: false,
     videoAvailable: false,
+    screenSharing: false,
+    screenShareAvailable: false,
   },
   showCallModal: false,
 };
@@ -197,15 +203,19 @@ function createCallStore() {
 
   let initialized = false;
   let activeStream: MediaStream | null = null;
+  let screenShareStream: MediaStream | null = null;
+  let screenShareSenders = new Map<string, RTCRtpSender[]>();
   let signalUnsubscribe: (() => void) | null = null;
   let invokeFn: InvokeFn | null = null;
   let activeCallId: string | null = null;
   let deviceChangeUnsubscribe: (() => void) | null = null;
   let dismissalTimer: ReturnType<typeof setTimeout> | null = null;
   let participantStates = new Map<string, InternalParticipant>();
-  let pendingIncomingOffer:
-    | { senderId: string; callId: string; signal: OfferSignal }
-    | null = null;
+  let pendingIncomingOffer: {
+    senderId: string;
+    callId: string;
+    signal: OfferSignal;
+  } | null = null;
 
   function syncLocalMediaState(stream: MediaStream | null) {
     const audioTracks = stream?.getAudioTracks() ?? [];
@@ -217,10 +227,34 @@ function createCallStore() {
     update((state) => ({
       ...state,
       localMedia: {
+        ...state.localMedia,
         audioEnabled,
         videoEnabled,
         audioAvailable: audioTracks.length > 0,
         videoAvailable: videoTracks.length > 0,
+      },
+    }));
+  }
+
+  function syncScreenShareState(active: boolean) {
+    update((state) => ({
+      ...state,
+      localMedia: {
+        ...state.localMedia,
+        screenSharing: active,
+      },
+    }));
+  }
+
+  function updateScreenShareAvailability() {
+    const available =
+      isBrowser &&
+      typeof navigator.mediaDevices?.getDisplayMedia === "function";
+    update((state) => ({
+      ...state,
+      localMedia: {
+        ...state.localMedia,
+        screenShareAvailable: available,
       },
     }));
   }
@@ -300,12 +334,26 @@ function createCallStore() {
       console.warn("Failed to close peer connection", error);
     }
     stopStream(existing.remoteStream);
+    stopStream(existing.screenShareStream);
+    const senders = screenShareSenders.get(peerId) ?? [];
+    if (existing.peerConnection && senders.length) {
+      senders.forEach((sender) => {
+        try {
+          existing.peerConnection?.removeTrack(sender);
+        } catch (error) {
+          console.warn("Failed to remove screen share sender", error);
+        }
+      });
+    }
+    screenShareSenders.delete(peerId);
     mutateParticipant(peerId, (participant) => {
       if (!participant) {
         return participant;
       }
       participant.peerConnection = null;
       participant.remoteStream = null;
+      participant.screenShareStream = null;
+      participant.isScreenSharing = false;
       participant.pendingCandidates = [];
       return participant;
     });
@@ -324,14 +372,18 @@ function createCallStore() {
         console.warn("Failed to close peer connection", error);
       }
       stopStream(participant.remoteStream);
+      stopStream(participant.screenShareStream);
       participantStates.set(peerId, {
         ...participant,
         peerConnection: null,
         remoteStream: null,
+        screenShareStream: null,
+        isScreenSharing: false,
         pendingCandidates: [],
       });
     });
     participantStates.clear();
+    screenShareSenders.clear();
     activeCallId = null;
     pendingIncomingOffer = null;
     update((state) => {
@@ -569,6 +621,23 @@ function createCallStore() {
       return current;
     });
 
+    if (screenShareStream) {
+      const senders: RTCRtpSender[] = [];
+      screenShareStream.getTracks().forEach((track) => {
+        try {
+          const sender = pc.addTrack(track, screenShareStream);
+          if (sender) {
+            senders.push(sender);
+          }
+        } catch (error) {
+          console.warn("Failed to publish screen share track", error);
+        }
+      });
+      if (senders.length) {
+        screenShareSenders.set(peerId, senders);
+      }
+    }
+
     pc.onicecandidate = (event) => {
       if (!event.candidate) {
         return;
@@ -610,26 +679,63 @@ function createCallStore() {
     pc.ontrack = (event) => {
       const [stream] = event.streams;
       const remote = stream ?? new MediaStream([event.track]);
-      remote.getTracks().forEach((track) => {
-        track.onended = () => {
-          mutateParticipant(peerId, (current) => {
-            if (!current) {
-              return current;
-            }
-            if (current.remoteStream === remote) {
-              stopStream(current.remoteStream);
-              current.remoteStream = null;
-            }
+
+      const handleTrackEnded = () => {
+        mutateParticipant(peerId, (current) => {
+          if (!current) {
             return current;
-          });
-        };
-      });
+          }
+          if (
+            current.screenShareStream &&
+            current.screenShareStream.id === remote.id
+          ) {
+            stopStream(current.screenShareStream);
+            current.screenShareStream = null;
+            current.isScreenSharing = false;
+          } else if (
+            current.remoteStream &&
+            current.remoteStream.id === remote.id
+          ) {
+            stopStream(current.remoteStream);
+            current.remoteStream = null;
+          }
+          return current;
+        });
+      };
+
+      if (typeof event.track.addEventListener === "function") {
+        event.track.addEventListener("ended", handleTrackEnded);
+        event.track.addEventListener("inactive", handleTrackEnded);
+      } else {
+        event.track.onended = handleTrackEnded;
+      }
 
       mutateParticipant(peerId, (current) => {
         if (!current) {
           return current;
         }
-        current.remoteStream = remote;
+
+        const existingRemote = current.remoteStream;
+        const existingShare = current.screenShareStream;
+
+        const shouldTreatAsScreenShare =
+          event.track.kind === "video" &&
+          existingRemote &&
+          existingRemote.id !== remote.id;
+
+        if (shouldTreatAsScreenShare) {
+          if (existingShare && existingShare.id !== remote.id) {
+            stopStream(existingShare);
+          }
+          current.screenShareStream = remote;
+          current.isScreenSharing = true;
+        } else if (!existingRemote || existingRemote.id === remote.id) {
+          current.remoteStream = remote;
+        } else {
+          current.screenShareStream = remote;
+          current.isScreenSharing = event.track.kind === "video";
+        }
+
         return current;
       });
     };
@@ -770,6 +876,7 @@ function createCallStore() {
     if (!isBrowser || initialized) return;
     initialized = true;
     await Promise.all([refreshPermissions(), refreshDevices()]);
+    updateScreenShareAvailability();
 
     if (navigator.mediaDevices?.addEventListener) {
       const handleDeviceChange = () => {
@@ -1083,6 +1190,8 @@ function createCallStore() {
         name: invitee.name ?? invitee.id,
         status: "invited",
         remoteStream: null,
+        screenShareStream: null,
+        isScreenSharing: false,
         peerConnection: null,
         error: undefined,
         joinedAt: null,
@@ -1337,6 +1446,8 @@ function createCallStore() {
         name: signal.chatName ?? senderId,
         status: "invited",
         remoteStream: null,
+        screenShareStream: null,
+        isScreenSharing: false,
         peerConnection: null,
         error: undefined,
         joinedAt: null,
@@ -1377,6 +1488,8 @@ function createCallStore() {
             name: signal.chatName ?? senderId,
             status: "connecting",
             remoteStream: null,
+            screenShareStream: null,
+            isScreenSharing: false,
             peerConnection: null,
             error: undefined,
             joinedAt: null,
@@ -1641,7 +1754,158 @@ function createCallStore() {
     }
   }
 
+  async function startScreenShare(): Promise<boolean> {
+    if (!isBrowser) {
+      return false;
+    }
+
+    const state = get(store);
+    const call = state.activeCall;
+    if (
+      !call ||
+      call.status === "ended" ||
+      call.status === "ending" ||
+      call.status === "error"
+    ) {
+      toasts.showErrorToast(
+        "Screen sharing is only available during an active call.",
+      );
+      return false;
+    }
+
+    if (screenShareStream) {
+      return true;
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      toasts.showErrorToast("Screen sharing is not supported in this browser.");
+      updateScreenShareAvailability();
+      return false;
+    }
+
+    let stream: MediaStream | null = null;
+
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 30 },
+        audio: call.type === "video",
+      });
+
+      if (!stream.getTracks().length) {
+        stopStream(stream);
+        toasts.showErrorToast("No screen capture tracks were provided.");
+        return false;
+      }
+
+      screenShareStream = stream;
+      screenShareSenders = new Map();
+
+      const handleShareEnded = () => {
+        stopScreenShare({ reason: "revoked" });
+      };
+
+      stream.getTracks().forEach((track) => {
+        if (typeof track.addEventListener === "function") {
+          track.addEventListener("ended", handleShareEnded);
+          track.addEventListener("inactive", handleShareEnded);
+        } else {
+          track.onended = handleShareEnded;
+        }
+      });
+
+      participantStates.forEach((participant, peerId) => {
+        if (!participant.peerConnection) {
+          screenShareSenders.delete(peerId);
+          return;
+        }
+        const senders: RTCRtpSender[] = [];
+        stream?.getTracks().forEach((track) => {
+          try {
+            const sender = participant.peerConnection?.addTrack(track, stream);
+            if (sender) {
+              senders.push(sender);
+            }
+          } catch (error) {
+            console.warn("Failed to publish screen share track", error);
+          }
+        });
+        if (senders.length) {
+          screenShareSenders.set(peerId, senders);
+        }
+      });
+
+      syncScreenShareState(true);
+      toasts.addToast("Started sharing your screen.", "info");
+      return true;
+    } catch (error) {
+      if (stream) {
+        stopStream(stream);
+      }
+      const message =
+        error instanceof DOMException
+          ? error.name === "NotAllowedError"
+            ? "Screen sharing permission was denied."
+            : error.message
+          : error instanceof Error
+            ? error.message
+            : "Unable to start screen sharing.";
+      toasts.showErrorToast(message);
+      screenShareStream = null;
+      screenShareSenders.clear();
+      syncScreenShareState(false);
+      return false;
+    }
+  }
+
+  function stopScreenShare({
+    reason = "manual",
+  }: { reason?: "manual" | "revoked" | "cleanup" } = {}) {
+    const wasSharing = Boolean(screenShareStream);
+    if (!screenShareStream) {
+      syncScreenShareState(false);
+      return;
+    }
+
+    participantStates.forEach((participant, peerId) => {
+      const senders = screenShareSenders.get(peerId) ?? [];
+      if (!senders.length || !participant.peerConnection) {
+        return;
+      }
+      senders.forEach((sender) => {
+        try {
+          participant.peerConnection?.removeTrack(sender);
+        } catch (error) {
+          console.warn("Failed to remove screen share sender", error);
+        }
+      });
+    });
+
+    screenShareSenders.clear();
+    stopStream(screenShareStream);
+    screenShareStream = null;
+    syncScreenShareState(false);
+
+    if (!wasSharing) {
+      return;
+    }
+
+    if (reason === "manual") {
+      toasts.addToast("Stopped sharing your screen.", "info");
+    } else if (reason === "revoked") {
+      toasts.addToast("Screen sharing ended.", "warning");
+    }
+  }
+
+  async function toggleScreenShare(): Promise<boolean> {
+    if (screenShareStream) {
+      stopScreenShare({ reason: "manual" });
+      return false;
+    }
+    return startScreenShare();
+  }
+
   function cleanupMedia() {
+    stopScreenShare({ reason: "cleanup" });
     stopStream(activeStream);
     activeStream = null;
     syncLocalMediaState(null);
@@ -1753,7 +2017,10 @@ function createCallStore() {
     invokeFn = null;
     initialized = false;
     participantStates = new Map();
+    screenShareStream = null;
+    screenShareSenders = new Map();
     set(INITIAL_STATE);
+    updateScreenShareAvailability();
   }
 
   return {
@@ -1774,6 +2041,8 @@ function createCallStore() {
     disableCamera,
     enableCamera,
     toggleCamera,
+    toggleScreenShare,
+    stopScreenShare,
     describeStatus: (call: ActiveCall | null) => describeCallStatus(call),
     reset,
   };
