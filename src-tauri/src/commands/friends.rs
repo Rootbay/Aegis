@@ -524,12 +524,7 @@ async fn get_friendships_for_user_internal(
 mod tests {
     use super::*;
     use aegis_shared_types::{
-        AppState,
-        FileAclPolicy,
-        IncomingFile,
-        PendingDeviceProvisioning,
-        TrustedDeviceRecord,
-        User,
+        AppState, FileAclPolicy, IncomingFile, PendingDeviceProvisioning, TrustedDeviceRecord, User,
     };
     use aep::user_service;
     use bs58;

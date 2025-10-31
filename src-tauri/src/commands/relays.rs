@@ -1,9 +1,7 @@
 use crate::commands::state::AppStateContainer;
 use crate::connectivity;
 use crate::settings_store;
-use aegis_shared_types::{
-    FileAclPolicy, RelayConfig, RelayHealth, RelayRecord, RelayStatus,
-};
+use aegis_shared_types::{FileAclPolicy, RelayConfig, RelayHealth, RelayRecord, RelayStatus};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -174,7 +172,10 @@ pub async fn update_relay_health(
     Ok(updated)
 }
 
-async fn persist_relays(state: &aegis_shared_types::AppState, relays: Vec<RelayRecord>) -> Result<(), String> {
+async fn persist_relays(
+    state: &aegis_shared_types::AppState,
+    relays: Vec<RelayRecord>,
+) -> Result<(), String> {
     let settings_path = state.app_data_dir.join("settings.json");
     let mut persisted = settings_store::load_settings(&settings_path)
         .unwrap_or_else(|_| settings_store::PersistedSettings::default());

@@ -1,14 +1,8 @@
 use crate::commands::state::AppStateContainer;
 use crate::settings_store;
 use aegis_shared_types::{
-    AppState,
-    DevicePairingStage,
-    DeviceProvisioningBundle,
-    DeviceProvisioningState,
-    DeviceTrustStatus,
-    PendingDeviceLink,
-    PendingDeviceProvisioning,
-    TrustedDeviceRecord,
+    AppState, DevicePairingStage, DeviceProvisioningBundle, DeviceProvisioningState,
+    DeviceTrustStatus, PendingDeviceLink, PendingDeviceProvisioning, TrustedDeviceRecord,
 };
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, Duration, Utc};
@@ -21,32 +15,9 @@ use uuid::Uuid;
 const PROVISIONING_TTL_MINUTES: i64 = 10;
 const CODE_PHRASE_WORDS: usize = 4;
 const CODE_WORD_LIST: &[&str] = &[
-    "aurora",
-    "bamboo",
-    "cedar",
-    "drift",
-    "ember",
-    "fable",
-    "gadget",
-    "harbor",
-    "ion",
-    "juniper",
-    "kepler",
-    "lumen",
-    "mesa",
-    "nova",
-    "onyx",
-    "prairie",
-    "quartz",
-    "ripple",
-    "solstice",
-    "tundra",
-    "umbra",
-    "velvet",
-    "willow",
-    "xenon",
-    "yonder",
-    "zephyr",
+    "aurora", "bamboo", "cedar", "drift", "ember", "fable", "gadget", "harbor", "ion", "juniper",
+    "kepler", "lumen", "mesa", "nova", "onyx", "prairie", "quartz", "ripple", "solstice", "tundra",
+    "umbra", "velvet", "willow", "xenon", "yonder", "zephyr",
 ];
 
 #[derive(serde::Serialize)]
@@ -78,7 +49,12 @@ fn normalize_phrase(input: &str) -> String {
 fn generate_code_phrase() -> String {
     let mut rng = thread_rng();
     (0..CODE_PHRASE_WORDS)
-        .map(|_| CODE_WORD_LIST.choose(&mut rng).unwrap_or(&"aurora").to_string())
+        .map(|_| {
+            CODE_WORD_LIST
+                .choose(&mut rng)
+                .unwrap_or(&"aurora")
+                .to_string()
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -405,7 +381,10 @@ pub async fn complete_device_sync(
         })
         .unwrap_or_else(|| TrustedDeviceRecord {
             id: bundle_id.clone(),
-            name: requesting.as_ref().map(|r| r.name.clone()).unwrap_or_else(|| "Linked device".into()),
+            name: requesting
+                .as_ref()
+                .map(|r| r.name.clone())
+                .unwrap_or_else(|| "Linked device".into()),
             platform: requesting
                 .as_ref()
                 .map(|r| r.platform.clone())

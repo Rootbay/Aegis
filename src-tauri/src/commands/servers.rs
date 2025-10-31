@@ -1082,11 +1082,7 @@ pub async fn delete_server_webhook(
 mod tests {
     use super::*;
     use aegis_shared_types::{
-        AppState,
-        FileAclPolicy,
-        IncomingFile,
-        PendingDeviceProvisioning,
-        Server,
+        AppState, FileAclPolicy, IncomingFile, PendingDeviceProvisioning, Server,
         TrustedDeviceRecord,
     };
     use crypto::identity::Identity;
