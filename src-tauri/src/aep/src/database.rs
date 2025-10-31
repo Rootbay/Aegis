@@ -722,7 +722,25 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
 
     let server_rows = sqlx::query_as!(
         ServerRow,
-        "SELECT s.id, s.name, s.owner_id, s.created_at, s.icon_url, s.description, s.default_channel_id, s.allow_invites, s.moderation_level, s.explicit_content_filter, s.transparent_edits, s.deleted_message_display, s.read_receipts_enabled FROM servers s JOIN server_members sm ON s.id = sm.server_id WHERE sm.user_id = ?",
+        r#"
+        SELECT
+            s.id,
+            s.name,
+            s.owner_id,
+            s.created_at,
+            s.icon_url,
+            s.description,
+            s.default_channel_id,
+            s.allow_invites as "allow_invites!: i64",
+            s.moderation_level,
+            s.explicit_content_filter as "explicit_content_filter!: i64",
+            s.transparent_edits as "transparent_edits!: i64",
+            s.deleted_message_display,
+            s.read_receipts_enabled as "read_receipts_enabled?: i64"
+        FROM servers s
+        JOIN server_members sm ON s.id = sm.server_id
+        WHERE sm.user_id = ?
+        "#,
         current_user_id
     )
     .fetch_all(pool)
@@ -801,7 +819,24 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
 
     let server_row = sqlx::query_as!(
         ServerRow,
-        "SELECT id, name, owner_id, created_at, icon_url, description, default_channel_id, allow_invites, moderation_level, explicit_content_filter, transparent_edits, deleted_message_display, read_receipts_enabled FROM servers WHERE id = ?",
+        r#"
+        SELECT
+            id,
+            name,
+            owner_id,
+            created_at,
+            icon_url,
+            description,
+            default_channel_id,
+            allow_invites as "allow_invites!: i64",
+            moderation_level,
+            explicit_content_filter as "explicit_content_filter!: i64",
+            transparent_edits as "transparent_edits!: i64",
+            deleted_message_display,
+            read_receipts_enabled as "read_receipts_enabled?: i64"
+        FROM servers
+        WHERE id = ?
+        "#,
         server_id
     )
     .fetch_one(pool)
@@ -983,6 +1018,7 @@ pub async fn update_server_event(
 }
 
 pub async fn insert_channel(pool: &Pool<Sqlite>, channel: &Channel) -> Result<(), sqlx::Error> {
+    let category_id = channel.category_id.clone();
     sqlx::query!(
         "INSERT INTO channels (id, server_id, name, channel_type, private, category_id) VALUES (?, ?, ?, ?, ?, ?)",
         channel.id,
@@ -990,7 +1026,7 @@ pub async fn insert_channel(pool: &Pool<Sqlite>, channel: &Channel) -> Result<()
         channel.name,
         channel.channel_type,
         channel.private,
-        channel.category_id.clone(),
+        category_id,
     )
     .execute(pool)
     .await?;
@@ -1136,6 +1172,7 @@ pub async fn replace_server_channels(
         .await?;
 
     for channel in channels {
+        let category_id = channel.category_id.clone();
         sqlx::query!(
             "INSERT INTO channels (id, server_id, name, channel_type, private, category_id) VALUES (?, ?, ?, ?, ?, ?)",
             channel.id,
@@ -1143,7 +1180,7 @@ pub async fn replace_server_channels(
             channel.name,
             channel.channel_type,
             channel.private,
-            channel.category_id.clone(),
+            category_id,
         )
         .execute(&mut *tx)
         .await?;
@@ -1296,6 +1333,12 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
     let timestamp_str = message.timestamp.to_rfc3339();
     let edited_at_str = message.edited_at.map(|value| value.to_rfc3339());
     let expires_at_str = message.expires_at.map(|value| value.to_rfc3339());
+    let reply_to_id = message.reply_to_message_id.clone();
+    let reply_snapshot_author = message.reply_snapshot_author.clone();
+    let reply_snapshot_snippet = message.reply_snapshot_snippet.clone();
+    let reply_to_id_ref = reply_to_id.as_deref();
+    let reply_snapshot_author_ref = reply_snapshot_author.as_deref();
+    let reply_snapshot_snippet_ref = reply_snapshot_snippet.as_deref();
     sqlx::query!(
         "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, pinned, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         message.id,
@@ -1305,9 +1348,9 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
         timestamp_str,
         message.read,
         message.pinned,
-        message.reply_to_message_id.as_deref(),
-        message.reply_snapshot_author.as_deref(),
-        message.reply_snapshot_snippet.as_deref(),
+        reply_to_id_ref,
+        reply_snapshot_author_ref,
+        reply_snapshot_snippet_ref,
         edited_at_str,
         message.edited_by,
         expires_at_str,
@@ -2497,15 +2540,17 @@ pub async fn insert_review(
     pool: &Pool<Sqlite>,
     review: &NewReview,
 ) -> Result<(), sqlx::Error> {
+    let subject = review.subject.as_str().to_owned();
+    let created_at = review.created_at.to_rfc3339();
     sqlx::query!(
         "INSERT INTO reviews (id, subject_type, subject_id, author_id, rating, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         review.id,
-        review.subject.as_str(),
+        subject,
         review.subject_id,
         review.author_id,
         review.rating,
         review.content,
-        review.created_at.to_rfc3339(),
+        created_at,
     )
     .execute(pool)
     .await?;

@@ -5,8 +5,8 @@ use tauri::{AppHandle, State};
 use crate::commands::state::AppStateContainer;
 
 use super::{
-    ensure_pending, get_app_state, is_expired, persist_trusted_devices_snapshot, to_state,
-    CommandResult, DeviceSyncResult,
+    ensure_pending, get_app_state, is_expired, persist_trusted_devices_snapshot, CommandResult,
+    DeviceSyncResult,
 };
 
 #[tauri::command]

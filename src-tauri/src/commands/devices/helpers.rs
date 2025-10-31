@@ -19,7 +19,7 @@ const CODE_WORD_LIST: &[&str] = &[
     "umbra", "velvet", "willow", "xenon", "yonder", "zephyr",
 ];
 
-pub(super) async fn get_app_state(
+pub(crate) async fn get_app_state(
     state_container: State<'_, AppStateContainer>,
 ) -> CommandResult<AppState> {
     let guard = state_container.0.lock().await;
@@ -29,7 +29,7 @@ pub(super) async fn get_app_state(
         .ok_or_else(|| "State not initialized".to_string())
 }
 
-pub(super) fn normalize_phrase(input: &str) -> String {
+pub(crate) fn normalize_phrase(input: &str) -> String {
     input
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|segment| !segment.is_empty())
@@ -38,7 +38,7 @@ pub(super) fn normalize_phrase(input: &str) -> String {
         .join(" ")
 }
 
-pub(super) fn generate_code_phrase() -> String {
+pub(crate) fn generate_code_phrase() -> String {
     (0..CODE_PHRASE_WORDS)
         .filter_map(|_| CODE_WORD_LIST.choose(&mut thread_rng()))
         .map(|word| word.to_string())
@@ -46,7 +46,7 @@ pub(super) fn generate_code_phrase() -> String {
         .join(" ")
 }
 
-pub(super) fn create_bundle(bundle_id: &str, code_phrase: &str) -> DeviceProvisioningBundle {
+pub(crate) fn create_bundle(bundle_id: &str, code_phrase: &str) -> DeviceProvisioningBundle {
     let created_at = Utc::now();
     let expires_at = created_at + Duration::minutes(PROVISIONING_TTL_MINUTES);
     let qr_payload = format!(
@@ -64,10 +64,10 @@ pub(super) fn create_bundle(bundle_id: &str, code_phrase: &str) -> DeviceProvisi
     }
 }
 
-pub(super) fn to_state(pending: &PendingDeviceProvisioning) -> DeviceProvisioningState {
+pub(crate) fn to_state(pending: &PendingDeviceProvisioning) -> DeviceProvisioningState {
     DeviceProvisioningState {
         bundle: pending.bundle.clone(),
-        stage: pending.stage,
+        stage: pending.stage.clone(),
         requesting_device: pending.requesting_device.clone(),
         status_message: pending.status_message.clone(),
     }
@@ -79,13 +79,13 @@ pub(super) fn parse_expires_at(bundle: &DeviceProvisioningBundle) -> Option<Date
         .map(|dt| dt.with_timezone(&Utc))
 }
 
-pub(super) fn is_expired(bundle: &DeviceProvisioningBundle, now: DateTime<Utc>) -> bool {
+pub(crate) fn is_expired(bundle: &DeviceProvisioningBundle, now: DateTime<Utc>) -> bool {
     parse_expires_at(bundle)
         .map(|expires| expires <= now)
         .unwrap_or(true)
 }
 
-pub(super) fn ensure_pending<'a>(
+pub(crate) fn ensure_pending<'a>(
     pending: &'a mut HashMap<String, PendingDeviceProvisioning>,
     bundle_id: &str,
 ) -> CommandResult<&'a mut PendingDeviceProvisioning> {
@@ -94,7 +94,7 @@ pub(super) fn ensure_pending<'a>(
         .ok_or_else(|| "Provisioning bundle not found or expired".to_string())
 }
 
-pub(super) async fn persist_trusted_devices_snapshot(
+pub(crate) async fn persist_trusted_devices_snapshot(
     app: &AppHandle,
     state: &AppState,
     snapshot: Vec<aegis_shared_types::TrustedDeviceRecord>,

@@ -3,10 +3,9 @@ pub mod bluetooth;
 pub mod transports;
 pub mod wifi_direct;
 
-use aerp::{AerpRouter, RoutedEnvelope, RoutedFrame};
 use libp2p::{
     core::upgrade,
-    gossipsub::{self, Gossipsub, GossipsubConfig, IdentTopic as Topic, MessageAuthenticity, GossipsubEvent},
+    gossipsub::{self, Gossipsub, GossipsubConfig, MessageAuthenticity, GossipsubEvent},
     identify,
     identity::Keypair,
     mdns,
@@ -18,7 +17,6 @@ use libp2p::{
 };
 use gossipsub::error::PublishError;
 use std::error::Error;
-use std::str::FromStr;
 // Derive macro re-exported at crate root for this libp2p version
 use libp2p::NetworkBehaviour;
 use libp2p::request_response::{self, ProtocolName, RequestResponse, RequestResponseCodec, RequestResponseConfig, RequestResponseEvent};
@@ -28,6 +26,7 @@ use std::io;
 pub use aerp::{
     AerpConfig, AerpRouter, LinkQuality, RouteMetrics, RouteSnapshot, RouterSnapshot, RoutedEnvelope, RoutedFrame,
 };
+pub type Topic = gossipsub::IdentTopic;
 pub use transports::{TransportMedium, TransportSnapshot};
 
 #[derive(NetworkBehaviour)]

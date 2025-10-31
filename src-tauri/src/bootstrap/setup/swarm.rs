@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use libp2p::futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::sync::{mpsc, Mutex};
 
 use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};

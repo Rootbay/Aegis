@@ -73,27 +73,34 @@ impl TransportManager {
 
     pub fn set_enabled(&self, medium: TransportMedium, enabled: bool) -> bool {
         let mut guard = self.inner.write();
-        let (flag, peers) = match medium {
-            TransportMedium::Tcp => return false,
+        match medium {
+            TransportMedium::Tcp => false,
             TransportMedium::Bluetooth => {
-                (&mut guard.bluetooth_enabled, &mut guard.bluetooth_peers)
+                let changed = guard.bluetooth_enabled != enabled;
+                guard.bluetooth_enabled = enabled;
+
+                if !enabled {
+                    guard.bluetooth_peers.clear();
+                } else if let Some(local) = guard.local_peer_id.clone() {
+                    // Track the local peer so UI components can reflect advertising state.
+                    guard.bluetooth_peers.insert(local);
+                }
+
+                changed
             }
             TransportMedium::WifiDirect => {
-                (&mut guard.wifi_direct_enabled, &mut guard.wifi_direct_peers)
+                let changed = guard.wifi_direct_enabled != enabled;
+                guard.wifi_direct_enabled = enabled;
+
+                if !enabled {
+                    guard.wifi_direct_peers.clear();
+                } else if let Some(local) = guard.local_peer_id.clone() {
+                    guard.wifi_direct_peers.insert(local);
+                }
+
+                changed
             }
-        };
-
-        let changed = *flag != enabled;
-        *flag = enabled;
-
-        if !enabled {
-            peers.clear();
-        } else if let Some(local) = guard.local_peer_id.clone() {
-            // Track the local peer so UI components can reflect advertising state.
-            peers.insert(local);
         }
-
-        changed
     }
 
     pub fn clear_medium(&self, medium: TransportMedium) {

@@ -41,12 +41,6 @@ pub async fn set_bluetooth_enabled(enabled: bool) -> Result<bool, String> {
             return Ok(false);
         }
 
-        #[cfg(feature = "bluetooth")]
-        {
-            let worker = BluetoothWorker::start().await?;
-            BLUETOOTH_WORKER.lock().await.replace(worker);
-        }
-
         #[cfg(not(feature = "bluetooth"))]
         {
             return Err(
@@ -54,9 +48,18 @@ pub async fn set_bluetooth_enabled(enabled: bool) -> Result<bool, String> {
             );
         }
 
-        let changed = transports::set_medium_enabled(TransportMedium::Bluetooth, true);
-        *guard = true;
-        Ok(changed)
+        #[cfg(feature = "bluetooth")]
+        {
+            let worker = BluetoothWorker::start().await?;
+            BLUETOOTH_WORKER.lock().await.replace(worker);
+
+            let changed = transports::set_medium_enabled(TransportMedium::Bluetooth, true);
+            *guard = true;
+            return Ok(changed);
+        }
+
+        #[allow(unreachable_code)]
+        Ok(false)
     } else if *guard {
         let changed = transports::set_medium_enabled(TransportMedium::Bluetooth, false);
         transports::clear_medium(TransportMedium::Bluetooth);

@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::mpsc::{Receiver, Sender as TokioSender};
 
 use aegis_protocol::AepMessage;

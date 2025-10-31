@@ -68,9 +68,11 @@ pub fn initialise_runtime(
     let runtime = ConnectivityRuntime::new(swarm, router, local_peer_id, snapshot_store);
 
     if RUNTIME.set(runtime.clone()).is_err() {
-        eprintln!("Connectivity runtime already initialised; overwriting with new instance.");
-        let _ = RUNTIME.take();
-        let _ = RUNTIME.set(runtime.clone());
+        eprintln!("Connectivity runtime already initialised; reusing existing instance.");
+        return RUNTIME
+            .get()
+            .cloned()
+            .expect("Connectivity runtime should exist");
     }
 
     runtime

@@ -3,6 +3,8 @@ pub mod commands;
 pub mod connectivity;
 pub mod settings_store;
 
+pub use network;
+
 use crate::commands::state::AppStateContainer;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

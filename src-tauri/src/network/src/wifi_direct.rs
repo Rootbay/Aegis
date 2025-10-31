@@ -53,12 +53,6 @@ pub async fn set_wifi_direct_enabled(enabled: bool) -> Result<bool, String> {
             return Ok(false);
         }
 
-        #[cfg(feature = "wifi-direct")]
-        {
-            let worker = WifiDirectWorker::start().await?;
-            WIFI_DIRECT_WORKER.lock().await.replace(worker);
-        }
-
         #[cfg(not(feature = "wifi-direct"))]
         {
             return Err(
@@ -66,9 +60,18 @@ pub async fn set_wifi_direct_enabled(enabled: bool) -> Result<bool, String> {
             );
         }
 
-        let changed = transports::set_medium_enabled(TransportMedium::WifiDirect, true);
-        *guard = true;
-        Ok(changed)
+        #[cfg(feature = "wifi-direct")]
+        {
+            let worker = WifiDirectWorker::start().await?;
+            WIFI_DIRECT_WORKER.lock().await.replace(worker);
+
+            let changed = transports::set_medium_enabled(TransportMedium::WifiDirect, true);
+            *guard = true;
+            return Ok(changed);
+        }
+
+        #[allow(unreachable_code)]
+        Ok(false)
     } else if *guard {
         let changed = transports::set_medium_enabled(TransportMedium::WifiDirect, false);
         transports::clear_medium(TransportMedium::WifiDirect);

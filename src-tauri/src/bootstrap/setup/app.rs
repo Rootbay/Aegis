@@ -16,7 +16,7 @@ use super::state::build_app_state;
 use super::swarm::spawn_swarm_processing;
 use super::tasks::{spawn_event_dispatcher, spawn_group_key_rotation};
 
-pub(super) async fn initialize_app_state<R: Runtime>(
+pub(crate) async fn initialize_app_state<R: Runtime>(
     app: AppHandle<R>,
     password: &str,
     state_container: State<'_, AppStateContainer>,

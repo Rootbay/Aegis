@@ -12,7 +12,7 @@ use reqwest::{
 };
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
-use tauri::{path::BaseDirectory, AppHandle};
+use tauri::{path::BaseDirectory, AppHandle, Manager};
 use tokio::{fs, sync::OnceCell};
 use tracing::warn;
 

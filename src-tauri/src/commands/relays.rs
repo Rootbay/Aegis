@@ -47,7 +47,7 @@ pub async fn register_relay(
     payload: RelayRegistration,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<RelayRecord, String> {
-    let mut state_guard = state_container.0.lock().await;
+    let state_guard = state_container.0.lock().await;
     let state = state_guard
         .as_ref()
         .ok_or_else(|| "State not initialized".to_string())?
@@ -101,7 +101,7 @@ pub async fn remove_relay(
     relay_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let mut state_guard = state_container.0.lock().await;
+    let state_guard = state_container.0.lock().await;
     let state = state_guard
         .as_ref()
         .ok_or_else(|| "State not initialized".to_string())?
@@ -131,7 +131,7 @@ pub async fn update_relay_health(
     payload: RelayHealthUpdate,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<RelayRecord, String> {
-    let mut state_guard = state_container.0.lock().await;
+    let state_guard = state_container.0.lock().await;
     let state = state_guard
         .as_ref()
         .ok_or_else(|| "State not initialized".to_string())?

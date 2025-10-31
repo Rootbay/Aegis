@@ -348,7 +348,7 @@ pub struct TrustedDeviceRecord {
     pub fingerprint: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DevicePairingStage {
     BundleIssued,
@@ -356,6 +356,12 @@ pub enum DevicePairingStage {
     Approved,
     Completed,
     Expired,
+}
+
+impl Default for DevicePairingStage {
+    fn default() -> Self {
+        DevicePairingStage::BundleIssued
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

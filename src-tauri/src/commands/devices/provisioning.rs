@@ -1,6 +1,5 @@
 use aegis_shared_types::{DevicePairingStage, DeviceProvisioningState, PendingDeviceProvisioning};
 use base64::{engine::general_purpose, Engine as _};
-use chrono::Utc;
 use tauri::State;
 
 use crate::commands::state::AppStateContainer;

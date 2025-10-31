@@ -6,12 +6,12 @@ mod provisioning;
 mod sync;
 mod types;
 
-pub use approvals::{approve_device_request, decline_device_request, request_device_link};
-pub use inventory::list_trusted_devices;
-pub use management::{cancel_device_provisioning, forget_trusted_device, revoke_trusted_device};
-pub use provisioning::initiate_device_provisioning;
-pub use sync::complete_device_sync;
-pub use types::{DeviceInventorySnapshot, DeviceSyncResult};
+pub use approvals::*;
+pub use inventory::*;
+pub use management::*;
+pub use provisioning::*;
+pub use sync::*;
+pub use types::*;
 
 pub(super) use helpers::{
     create_bundle, ensure_pending, generate_code_phrase, get_app_state, is_expired,

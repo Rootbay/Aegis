@@ -25,6 +25,8 @@ pub(super) async fn initialize_identity_state(
         public_key: Some(my_pubkey_b58.clone()),
         bio: None,
         tag: None,
+        status_message: None,
+        location: None,
     };
 
     if let Ok(existing) = user_service::get_user(db_pool, &my_peer_id).await {
@@ -83,9 +85,11 @@ async fn broadcast_prekey_bundle(
         std::fs::create_dir_all(&e2ee_dir).map_err(|e| e.to_string())?;
     }
     let mgr_arc = e2ee::init_with_dir(&e2ee_dir);
-    let mut mgr = mgr_arc.lock();
-    let bundle = mgr.generate_prekey_bundle(8);
-    let bundle_bytes = bincode::serialize(&bundle).map_err(|e| e.to_string())?;
+    let bundle_bytes = {
+        let mut mgr = mgr_arc.lock();
+        let bundle = mgr.generate_prekey_bundle(8);
+        bincode::serialize(&bundle).map_err(|e| e.to_string())?
+    };
 
     let signature = identity
         .keypair()

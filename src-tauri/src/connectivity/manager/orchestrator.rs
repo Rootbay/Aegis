@@ -30,7 +30,8 @@ pub async fn collect_and_store_snapshot(
     let relay_snapshots = relay_snapshots().await;
 
     let snapshot = {
-        let swarm_guard = runtime.swarm().lock().await;
+        let swarm = runtime.swarm();
+        let swarm_guard = swarm.lock().await;
         compute_snapshot(
             &swarm_guard,
             &runtime.local_peer_id(),
