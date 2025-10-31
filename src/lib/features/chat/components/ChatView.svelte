@@ -36,6 +36,10 @@
   import { get, derived } from "svelte/store";
   import {
     buildLowercaseContent,
+    buildUserLookup,
+    buildChannelLookup,
+    DEFAULT_AUTHOR_TYPES,
+    DEFAULT_HAS_TOKENS,
     matchNormalizedMessages,
     parseSearchQuery,
     type MessageContentCache,
@@ -1410,6 +1414,71 @@
     buildLowercaseContent(currentChatMessages || [], messageContentCache),
   );
 
+  const searchUsers = $derived(() => {
+    const entries = new Map<string, { id: string; name?: string | null; tag?: string | null }>();
+    if (!chat) {
+      return [] as { id: string; name?: string | null; tag?: string | null }[];
+    }
+    if (chat.type === "dm" && chat.friend) {
+      entries.set(chat.friend.id, {
+        id: chat.friend.id,
+        name: chat.friend.name ?? chat.friend.id,
+        tag: chat.friend.tag ?? null,
+      });
+    }
+    if ((chat.type === "group" || chat.type === "channel") && chat.members) {
+      chat.members.forEach((member) => {
+        entries.set(member.id, {
+          id: member.id,
+          name: member.name ?? member.id,
+          tag: member.tag ?? null,
+        });
+      });
+    }
+    const currentUser = $userStore.me;
+    if (currentUser) {
+      entries.set(currentUser.id, {
+        id: currentUser.id,
+        name: currentUser.name ?? currentUser.id,
+        tag: currentUser.tag ?? null,
+      });
+    }
+    return Array.from(entries.values());
+  });
+
+  const userLookup = $derived(() => buildUserLookup(searchUsers()));
+
+  const searchChannels = $derived(() => {
+    if (!chat) {
+      return [] as { id: string; name?: string | null }[];
+    }
+    switch (chat.type) {
+      case "channel":
+        return [{ id: chat.id, name: chat.name }];
+      case "group":
+        return [{ id: chat.id, name: chat.name }];
+      case "dm":
+      default:
+        return [
+          {
+            id: chat.id,
+            name: chat.friend?.name ?? chat.id,
+          },
+        ];
+    }
+  });
+
+  const channelLookup = $derived(() => buildChannelLookup(searchChannels()));
+
+  const searchParseOptions = $derived(() => ({
+    lookups: {
+      users: userLookup(),
+      channels: channelLookup(),
+    },
+    allowedHas: DEFAULT_HAS_TOKENS,
+    allowedAuthorTypes: DEFAULT_AUTHOR_TYPES,
+  }));
+
   let callForChat = $derived(() => {
     if (!chat?.id) return null;
     const activeCall = $callStore.activeCall;
@@ -1434,17 +1503,20 @@
     callStore.dismissCall();
   }
 
-  let parsedSearchQuery = $derived(parseSearchQuery($chatSearchQueryStore));
+  let parsedSearchQuery = $derived(
+    parseSearchQuery($chatSearchQueryStore, searchParseOptions()),
+  );
   let normalizedQuery = $derived(parsedSearchQuery.normalizedText);
-  let pinnedFilter = $derived(parsedSearchQuery.filters.pinned);
+  let activeSearchFilters = $derived(parsedSearchQuery.filters);
 
   let chatSearchMatches = $derived(() => {
     if (!chat?.id) {
       return [];
     }
     return matchNormalizedMessages(normalizedMessages, normalizedQuery, {
-      pinned: pinnedFilter ?? undefined,
+      filters: activeSearchFilters,
       messages: currentChatMessages || [],
+      cache: messageContentCache,
     });
   });
 

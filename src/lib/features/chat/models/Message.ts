@@ -14,12 +14,15 @@ export interface ReplySnapshot {
   snippet?: string;
 }
 
+export type MessageAuthorType = "user" | "bot" | "webhook";
+
 export interface Message {
   id: string;
   chatId: string;
   senderId: string;
   content: string;
   timestamp: string;
+  timestampMs?: number;
   read: boolean;
   pinned?: boolean;
   attachments?: AttachmentMeta[];
@@ -28,6 +31,7 @@ export interface Message {
   editedAt?: string;
   editedBy?: string;
   expiresAt?: string;
+  authorType?: MessageAuthorType;
   spamScore?: number;
   isSpamFlagged?: boolean;
   spamReasons?: string[];
