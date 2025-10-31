@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aegis_shared_types::RelayRecord;
+use aegis_shared_types::{RelayRecord, TrustedDeviceRecord};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -11,6 +11,8 @@ pub struct PersistedSettings {
     pub file_acl_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relays: Vec<RelayRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trusted_devices: Vec<TrustedDeviceRecord>,
 }
 
 impl PersistedSettings {

@@ -1333,7 +1333,14 @@ pub async fn delete_message(
 mod tests {
     use super::*;
     use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};
-    use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, User};
+    use aegis_shared_types::{
+        AppState,
+        FileAclPolicy,
+        IncomingFile,
+        PendingDeviceProvisioning,
+        TrustedDeviceRecord,
+        User,
+    };
     use aep::user_service;
     use bs58;
     use chrono::Utc;
@@ -1360,6 +1367,12 @@ mod tests {
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         }
     }
 
@@ -1386,6 +1399,12 @@ mod tests {
             app_data_dir: temp_dir.into_path(),
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         };
 
         let chat_id = "chat-abc".to_string();
@@ -1452,6 +1471,12 @@ mod tests {
             app_data_dir: temp_dir.into_path(),
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         };
 
         let chat_id = "chat-typing".to_string();
@@ -1558,6 +1583,12 @@ mod tests {
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         };
 
         delete_message_internal(
@@ -1711,6 +1742,12 @@ mod tests {
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         };
 
         let new_content = "Edited message".to_string();

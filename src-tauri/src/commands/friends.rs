@@ -523,7 +523,14 @@ async fn get_friendships_for_user_internal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, User};
+    use aegis_shared_types::{
+        AppState,
+        FileAclPolicy,
+        IncomingFile,
+        PendingDeviceProvisioning,
+        TrustedDeviceRecord,
+        User,
+    };
     use aep::user_service;
     use bs58;
     use crypto::identity::Identity;
@@ -552,6 +559,12 @@ mod tests {
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         };
         (app_state, network_rx)
     }

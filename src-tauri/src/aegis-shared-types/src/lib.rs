@@ -321,6 +321,86 @@ pub struct ChannelCategory {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceTrustStatus {
+    Active,
+    Revoked,
+    PendingApproval,
+}
+
+impl Default for DeviceTrustStatus {
+    fn default() -> Self {
+        DeviceTrustStatus::Active
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustedDeviceRecord {
+    pub id: String,
+    pub name: String,
+    pub platform: String,
+    pub status: DeviceTrustStatus,
+    pub added_at: String,
+    pub last_seen: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DevicePairingStage {
+    BundleIssued,
+    AwaitingApproval,
+    Approved,
+    Completed,
+    Expired,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceProvisioningBundle {
+    pub bundle_id: String,
+    pub created_at: String,
+    pub expires_at: String,
+    pub qr_payload: String,
+    pub code_phrase: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingDeviceLink {
+    pub name: String,
+    pub platform: String,
+    pub requested_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingDeviceProvisioning {
+    pub bundle: DeviceProvisioningBundle,
+    pub escrow_ciphertext: String,
+    pub stage: DevicePairingStage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requesting_device: Option<PendingDeviceLink>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_message: Option<String>,
+    #[serde(skip)]
+    pub code_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceProvisioningState {
+    pub bundle: DeviceProvisioningBundle,
+    pub stage: DevicePairingStage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requesting_device: Option<PendingDeviceLink>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_message: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub identity: Identity,
@@ -333,6 +413,9 @@ pub struct AppState {
     pub connectivity_snapshot: Arc<Mutex<Option<ConnectivityEventPayload>>>,
     pub voice_memos_enabled: Arc<AtomicBool>,
     pub relays: Arc<Mutex<Vec<RelayRecord>>>,
+    pub trusted_devices: Arc<Mutex<Vec<TrustedDeviceRecord>>>,
+    pub pending_device_bundles:
+        Arc<Mutex<HashMap<String, PendingDeviceProvisioning>>>,
 }
 
 #[derive(Clone)]
