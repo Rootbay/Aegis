@@ -5,7 +5,7 @@
     authStore,
     authPersistenceStore,
   } from "$lib/features/auth/stores/authStore";
-  import { KeyRound, QrCode, ShieldCheck } from "@lucide/svelte";
+  import { KeyRound, QrCode, ShieldCheck, Upload, Undo2 } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
@@ -15,11 +15,32 @@
     AlertDescription,
     AlertTitle,
   } from "$lib/components/ui/alert/index.js";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar/index.js";
+
+  const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+  const ACCEPTED_AVATAR_TYPES = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+    "image/svg+xml",
+  ]);
 
   let displayName = $state("");
   let profileBio = $state("");
   let profileMessage = $state<string | null>(null);
   let savingProfile = $state(false);
+
+  let avatarUrl = $state("");
+  let avatarPreview = $state<string | null>(null);
+  let avatarFile = $state<File | null>(null);
+  let avatarError = $state<string | null>(null);
+  let avatarFileInput = $state<HTMLInputElement | null>(null);
 
   let totpCode = $state("");
   let totpSecret = $state<string | null>(null);
@@ -51,7 +72,33 @@
     if (me) {
       displayName = me.name;
       profileBio = me.bio ?? "";
+      avatarPreview = me.avatar;
+      avatarUrl = me.avatar;
     }
+  });
+
+  $effect(() => {
+    const trimmed = avatarUrl.trim();
+    const me = $userStore.me;
+
+    if (avatarFile) {
+      return;
+    }
+
+    if (!trimmed) {
+      avatarPreview = me?.avatar ?? null;
+      avatarError = null;
+      return;
+    }
+
+    if (isValidAvatarInput(trimmed)) {
+      avatarPreview = trimmed;
+      avatarError = null;
+      return;
+    }
+
+    avatarError =
+      "Please provide a valid image URL (http, https, or data URI).";
   });
 
   async function saveProfile(event: Event) {
@@ -60,11 +107,24 @@
     if (!me) return;
     savingProfile = true;
     profileMessage = null;
+    if (avatarError) {
+      profileMessage = "Resolve avatar issues before saving.";
+      savingProfile = false;
+      return;
+    }
+
+    const trimmedName = displayName.trim();
+    const trimmedBio = profileBio.trim();
+    const trimmedAvatar = avatarUrl.trim();
+    const fallbackAvatar = avatarPreview ?? me.avatar;
+    const resolvedAvatar =
+      trimmedAvatar.length > 0 ? trimmedAvatar : fallbackAvatar;
     try {
       await userStore.updateProfile({
         ...me,
-        name: displayName,
-        bio: profileBio,
+        name: trimmedName,
+        bio: trimmedBio,
+        avatar: resolvedAvatar ?? me.avatar,
       });
       profileMessage = "Profile updated.";
     } catch (error) {
@@ -72,6 +132,88 @@
         error instanceof Error ? error.message : "Failed to update profile.";
     } finally {
       savingProfile = false;
+    }
+  }
+
+  function handleAvatarUrlInput(event: Event) {
+    const target = event.currentTarget as HTMLInputElement;
+    avatarFile = null;
+    avatarUrl = target.value;
+  }
+
+  function resetAvatarSelection() {
+    const me = $userStore.me;
+    avatarFile = null;
+    avatarUrl = me?.avatar ?? "";
+    avatarPreview = me?.avatar ?? null;
+    avatarError = null;
+    if (avatarFileInput) {
+      avatarFileInput.value = "";
+    }
+  }
+
+  function isValidAvatarInput(value: string) {
+    if (value.startsWith("data:image/")) {
+      return true;
+    }
+    try {
+      const url = new URL(value);
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result;
+        if (typeof result === "string") {
+          resolve(result);
+        } else {
+          reject(new Error("Unsupported file result."));
+        }
+      };
+      reader.onerror = () => {
+        reject(reader.error ?? new Error("Failed to read file."));
+      };
+      reader.readAsDataURL(file);
+    });
+
+  async function handleAvatarUpload(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    avatarError = null;
+
+    if (!file) {
+      return;
+    }
+
+    if (file.type && !ACCEPTED_AVATAR_TYPES.has(file.type)) {
+      avatarError = "Unsupported image type. Use PNG, JPG, GIF, SVG, or WebP.";
+      input.value = "";
+      avatarFile = null;
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      avatarError = "Avatar images must be 2 MB or smaller.";
+      input.value = "";
+      avatarFile = null;
+      return;
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      avatarFile = file;
+      avatarPreview = dataUrl;
+      avatarUrl = dataUrl;
+    } catch (error) {
+      console.error("Failed to read avatar file", error);
+      avatarError = "We couldn't read that image. Please try a different file.";
+      avatarFile = null;
+      input.value = "";
     }
   }
 
@@ -132,6 +274,73 @@
     </div>
 
     <form class="grid gap-4 md:grid-cols-2" onsubmit={saveProfile}>
+      <div class="md:col-span-2 space-y-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <Avatar class="size-24 border border-zinc-800 bg-zinc-950/80">
+            <AvatarImage
+              src={avatarPreview ?? undefined}
+              alt={`Avatar preview for ${displayName || $userStore.me?.name || "your profile"}`}
+            />
+            <AvatarFallback class="text-xl font-semibold uppercase">
+              {(displayName || $userStore.me?.name || "?")?.slice(0, 2)}
+            </AvatarFallback>
+          </Avatar>
+          <div class="space-y-3 flex-1">
+            <div class="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                class="gap-2"
+                onclick={() => avatarFileInput?.click()}
+                disabled={savingProfile}
+              >
+                <Upload size={16} />
+                Upload image
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                class="gap-2"
+                onclick={resetAvatarSelection}
+                disabled={savingProfile || !$userStore.me?.avatar}
+              >
+                <Undo2 size={16} />
+                Reset
+              </Button>
+            </div>
+            <div class="space-y-2">
+              <label
+                for="avatar-url"
+                class="text-xs uppercase text-zinc-500"
+                >Image URL</label
+              >
+              <Input
+                id="avatar-url"
+                type="url"
+                value={avatarUrl}
+                oninput={handleAvatarUrlInput}
+                placeholder="https://example.com/avatar.png"
+                disabled={savingProfile}
+                aria-invalid={avatarError ? "true" : undefined}
+              />
+            </div>
+            <p class="text-xs text-zinc-500">
+              PNG, JPG, GIF, SVG, or WebP up to 2 MB. Data URLs are also
+              supported.
+            </p>
+            {#if avatarError}
+              <p class="text-sm text-destructive">{avatarError}</p>
+            {/if}
+          </div>
+        </div>
+        <input
+          bind:this={avatarFileInput}
+          type="file"
+          class="sr-only"
+          accept="image/*"
+          onchange={handleAvatarUpload}
+        />
+      </div>
       <div class="space-y-2">
         <label for="display-name" class="text-sm font-medium text-zinc-300"
           >Display name</label

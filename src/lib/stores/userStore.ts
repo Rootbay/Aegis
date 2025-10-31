@@ -5,6 +5,9 @@ import { toasts } from "$lib/stores/ToastStore";
 import { userCache } from "$lib/utils/cache";
 import { presenceStore } from "$lib/features/presence/presenceStore";
 
+const FALLBACK_AVATAR = (id: string) =>
+  `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${id}`;
+
 type BackendUser = {
   id: string;
   username?: string;
@@ -49,10 +52,18 @@ function createUserStore(): UserStore {
     loading: false,
   });
 
+  const ensureAvatar = (id: string, avatar?: string | null) => {
+    const trimmed = avatar?.trim();
+    if (trimmed && trimmed.length > 0) {
+      return trimmed;
+    }
+    return FALLBACK_AVATAR(id);
+  };
+
   const toBackendUser = (u: User) => ({
     id: u.id,
     username: u.name,
-    avatar: u.avatar,
+    avatar: ensureAvatar(u.id, u.avatar),
     is_online: u.online,
     public_key: u.publicKey ?? undefined,
     bio: u.bio ?? undefined,
@@ -70,7 +81,7 @@ function createUserStore(): UserStore {
     return {
       id: u.id,
       name,
-      avatar: u.avatar,
+      avatar: ensureAvatar(u.id, u.avatar),
       online: u.is_online ?? u.online ?? false,
       publicKey: u.public_key ?? undefined,
       bio: u.bio ?? undefined,
@@ -205,10 +216,14 @@ function createUserStore(): UserStore {
 
   const updateProfile = async (updatedUser: User) => {
     try {
-      await invoke("update_user_profile", { user: toBackendUser(updatedUser) });
-      update((state) => ({ ...state, me: updatedUser }));
-      userCache.set(updatedUser.id, updatedUser);
-      presenceStore.syncFromUser(updatedUser);
+      const normalizedUser: User = {
+        ...updatedUser,
+        avatar: ensureAvatar(updatedUser.id, updatedUser.avatar),
+      };
+      await invoke("update_user_profile", { user: toBackendUser(normalizedUser) });
+      update((state) => ({ ...state, me: normalizedUser }));
+      userCache.set(normalizedUser.id, normalizedUser);
+      presenceStore.syncFromUser(normalizedUser);
       toasts.addToast("Profile updated successfully!", "success");
     } catch (error) {
       console.error("Failed to update user profile:", error);
