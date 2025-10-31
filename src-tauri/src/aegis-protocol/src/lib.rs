@@ -78,6 +78,12 @@ pub enum AepMessage {
         member_id: String,
         signature: Option<Vec<u8>>,
     },
+    RenameGroupChat {
+        group_id: String,
+        name: Option<String>,
+        updater_id: String,
+        signature: Option<Vec<u8>>,
+    },
     CreateServer { server: Server, signature: Option<Vec<u8>> },
     JoinServer { server_id: String, user_id: String, signature: Option<Vec<u8>> },
     CreateChannel { channel: Channel, signature: Option<Vec<u8>> },
@@ -239,6 +245,13 @@ pub struct CreateGroupChatData {
 pub struct LeaveGroupChatData {
     pub group_id: String,
     pub member_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RenameGroupChatData {
+    pub group_id: String,
+    pub name: Option<String>,
+    pub updater_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

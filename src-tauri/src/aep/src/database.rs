@@ -1481,6 +1481,97 @@ pub async fn get_group_chats_for_user(
     Ok(records)
 }
 
+pub async fn is_group_chat_member(
+    pool: &Pool<Sqlite>,
+    group_chat_id: &str,
+    user_id: &str,
+) -> Result<bool, sqlx::Error> {
+    let count: i64 = sqlx::query_scalar!(
+        "SELECT COUNT(1) as \"count!: i64\" FROM group_chat_members WHERE group_chat_id = ? AND user_id = ?",
+        group_chat_id,
+        user_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(count > 0)
+}
+
+pub async fn update_group_chat_name(
+    pool: &Pool<Sqlite>,
+    group_chat_id: &str,
+    name: Option<String>,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE group_chats SET name = ? WHERE id = ?",
+        name,
+        group_chat_id
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_group_chat_record(
+    pool: &Pool<Sqlite>,
+    group_chat_id: &str,
+) -> Result<Option<GroupChatRecord>, sqlx::Error> {
+    #[derive(FromRow)]
+    struct GroupChatRow {
+        id: String,
+        name: Option<String>,
+        owner_id: String,
+        created_at: String,
+    }
+
+    let chat_row = sqlx::query_as!(
+        GroupChatRow,
+        r#"
+        SELECT id, name, owner_id, created_at as "created_at: String"
+        FROM group_chats
+        WHERE id = ?
+        "#,
+        group_chat_id,
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = chat_row else {
+        return Ok(None);
+    };
+
+    let created_at = parse_timestamp(&row.created_at)?;
+
+    #[derive(FromRow)]
+    struct MemberRow {
+        user_id: String,
+    }
+
+    let member_rows = sqlx::query_as!(
+        MemberRow,
+        "SELECT user_id FROM group_chat_members WHERE group_chat_id = ? ORDER BY added_at ASC",
+        group_chat_id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let member_ids = member_rows
+        .into_iter()
+        .map(|row| row.user_id)
+        .collect();
+
+    Ok(Some(GroupChatRecord {
+        chat: GroupChat {
+            id: row.id,
+            name: row.name,
+            owner_id: row.owner_id,
+            created_at,
+        },
+        member_ids,
+    }))
+}
+
 pub async fn remove_group_chat_member(
     pool: &Pool<Sqlite>,
     group_chat_id: &str,

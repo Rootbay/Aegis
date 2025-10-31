@@ -1,0 +1,289 @@
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { get, writable } from "svelte/store";
+
+vi.mock("$lib/stores/userStore", () => {
+  const state = writable({ me: { id: "user-123", name: "Test User" } });
+  return {
+    userStore: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+vi.mock("../../src/lib/stores/userStore", () => {
+  const state = writable({ me: { id: "user-123", name: "Test User" } });
+  return {
+    userStore: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+
+vi.mock("$lib/features/servers/stores/serverStore", () => {
+  const state = writable({ activeServerId: null });
+  return {
+    serverStore: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+vi.mock("../../src/lib/features/servers/stores/serverStore", () => {
+  const state = writable({ activeServerId: null });
+  return {
+    serverStore: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+
+vi.mock("$lib/features/friends/stores/friendStore", () => {
+  const state = writable({ friends: [], loading: false });
+  return {
+    friendStore: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+vi.mock("../../src/lib/features/friends/stores/friendStore", () => {
+  const state = writable({ friends: [], loading: false });
+  return {
+    friendStore: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+
+vi.mock("$lib/features/settings/stores/settings", () => {
+  const state = writable({ ephemeralMessageDuration: null });
+  return {
+    settings: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+vi.mock("../../src/lib/features/settings/stores/settings", () => {
+  const state = writable({ ephemeralMessageDuration: null });
+  return {
+    settings: {
+      subscribe: state.subscribe,
+    },
+  };
+});
+
+vi.mock("$lib/features/friends/stores/mutedFriendsStore", () => ({
+  mutedFriendsStore: {
+    isMuted: vi.fn().mockReturnValue(false),
+    mute: vi.fn(),
+    unmute: vi.fn(),
+    subscribe: (run: (value: unknown) => void) => {
+      run(undefined);
+      return () => {};
+    },
+  },
+}));
+vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () => ({
+  mutedFriendsStore: {
+    isMuted: vi.fn().mockReturnValue(false),
+    mute: vi.fn(),
+    unmute: vi.fn(),
+    subscribe: (run: (value: unknown) => void) => {
+      run(undefined);
+      return () => {};
+    },
+  },
+}));
+
+vi.mock("$lib/features/chat/services/chatEncryptionService", () => ({
+  encryptOutgoingMessagePayload: vi.fn(async ({
+    content,
+    attachments,
+  }: {
+    content: string;
+    attachments: unknown[];
+  }) => ({
+    content,
+    attachments,
+    wasEncrypted: false,
+  })),
+  decodeIncomingMessagePayload: vi.fn(async ({
+    content,
+    attachments,
+  }: {
+    content: string;
+    attachments?: unknown[] | null;
+  }) => ({
+    content,
+    attachments: attachments ?? undefined,
+    wasEncrypted: false,
+  })),
+}));
+vi.mock("../../src/lib/features/chat/services/chatEncryptionService", () => ({
+  encryptOutgoingMessagePayload: vi.fn(async ({
+    content,
+    attachments,
+  }: {
+    content: string;
+    attachments: unknown[];
+  }) => ({
+    content,
+    attachments,
+    wasEncrypted: false,
+  })),
+  decodeIncomingMessagePayload: vi.fn(async ({
+    content,
+    attachments,
+  }: {
+    content: string;
+    attachments?: unknown[] | null;
+  }) => ({
+    content,
+    attachments: attachments ?? undefined,
+    wasEncrypted: false,
+  })),
+}));
+
+vi.mock("$lib/utils/nativeNotification", () => ({
+  showNativeNotification: vi.fn(),
+}));
+vi.mock("../../src/lib/utils/nativeNotification", () => ({
+  showNativeNotification: vi.fn(),
+}));
+
+vi.mock("$lib/features/security/spamClassifier", () => ({
+  spamClassifier: {
+    scoreText: vi.fn(async () => ({
+      score: 0,
+      label: "ham",
+      flagged: false,
+      autoMuted: false,
+      reasons: [],
+      context: "message",
+    })),
+    clearCache: vi.fn(),
+    loadModel: vi.fn(),
+    isFlagged: vi.fn(() => false),
+    shouldAutoMute: vi.fn(() => false),
+  },
+}));
+vi.mock("../../src/lib/features/security/spamClassifier", () => ({
+  spamClassifier: {
+    scoreText: vi.fn(async () => ({
+      score: 0,
+      label: "ham",
+      flagged: false,
+      autoMuted: false,
+      reasons: [],
+      context: "message",
+    })),
+    clearCache: vi.fn(),
+    loadModel: vi.fn(),
+    isFlagged: vi.fn(() => false),
+    shouldAutoMute: vi.fn(() => false),
+  },
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { createChatStore } from "../../src/lib/features/chat/stores/chatStore";
+import type { BackendGroupChat } from "../../src/lib/features/chat/stores/chatStore";
+import { invoke } from "@tauri-apps/api/core";
+
+const invokeMock = vi.mocked(invoke);
+
+const createLocalStorageMock = () => {
+  const storage = new Map<string, string>();
+  return {
+    getItem: (key: string) => (storage.has(key) ? storage.get(key)! : null),
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+    removeItem: (key: string) => {
+      storage.delete(key);
+    },
+    clear: () => {
+      storage.clear();
+    },
+    key: (index: number) => Array.from(storage.keys())[index] ?? null,
+    get length() {
+      return storage.size;
+    },
+  } satisfies Storage;
+};
+
+describe("chatStore group chat management", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:mock"),
+      revokeObjectURL: vi.fn(),
+    } as unknown as typeof URL);
+    invokeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  const seedGroup = (store: ReturnType<typeof createChatStore>) => {
+    const createdAt = new Date().toISOString();
+    const summary = store.handleGroupChatCreated({
+      id: "group-1",
+      name: "Initial name",
+      owner_id: "user-123",
+      created_at: createdAt,
+      member_ids: ["user-123", "user-456"],
+    } satisfies BackendGroupChat);
+    return { createdAt, summary };
+  };
+
+  it("updates the group summary when a rename succeeds", async () => {
+    const store = createChatStore();
+    const { createdAt } = seedGroup(store);
+
+    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+      expect(command).toBe("rename_group_dm");
+      expect(payload).toMatchObject({
+        groupId: "group-1",
+        group_id: "group-1",
+        name: "Renamed group",
+      });
+      return {
+        id: "group-1",
+        name: "Renamed group",
+        owner_id: "user-123",
+        created_at: createdAt,
+        member_ids: ["user-123", "user-456"],
+      } satisfies BackendGroupChat;
+    });
+
+    const summary = await store.renameGroupChat("group-1", "Renamed group");
+
+    expect(summary.name).toBe("Renamed group");
+    const entry = get(store.groupChats).get("group-1");
+    expect(entry?.name).toBe("Renamed group");
+  });
+
+  it("trims whitespace before invoking the rename command", async () => {
+    const store = createChatStore();
+    const { createdAt, summary } = seedGroup(store);
+
+    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+      expect(command).toBe("rename_group_dm");
+      expect(payload?.name).toBe("Updated title");
+      return {
+        id: "group-1",
+        name: "Updated title",
+        owner_id: summary.ownerId,
+        created_at: createdAt,
+        member_ids: summary.memberIds,
+      } satisfies BackendGroupChat;
+    });
+
+    await store.renameGroupChat("group-1", "  Updated title   ");
+
+    const entry = get(store.groupChats).get("group-1");
+    expect(entry?.name).toBe("Updated title");
+  });
+});

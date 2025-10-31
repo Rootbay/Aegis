@@ -1,5 +1,5 @@
 use crate::commands::state::AppStateContainer;
-use aegis_protocol::{AepMessage, CreateGroupChatData, LeaveGroupChatData};
+use aegis_protocol::{AepMessage, CreateGroupChatData, LeaveGroupChatData, RenameGroupChatData};
 use aep::database::{self, GroupChat, GroupChatMember, GroupChatRecord};
 use chrono::Utc;
 use serde::Serialize;
@@ -199,4 +199,76 @@ pub async fn leave_group_dm(
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn rename_group_dm(
+    group_id: String,
+    name: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<GroupChatPayload, String> {
+    if group_id.trim().is_empty() {
+        return Err("Group ID is required".to_string());
+    }
+
+    let trimmed_name = name.trim().to_string();
+
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+
+    let updater_id = state.identity.peer_id().to_base58();
+
+    let is_member = database::is_group_chat_member(&state.db_pool, &group_id, &updater_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !is_member {
+        return Err("You are not a member of this group.".to_string());
+    }
+
+    let normalized_name = normalize_group_name(Some(trimmed_name), &group_id);
+
+    database::update_group_chat_name(&state.db_pool, &group_id, normalized_name.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let record = database::get_group_chat_record(&state.db_pool, &group_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Group not found.".to_string())?;
+
+    let payload = map_record_to_payload(record);
+
+    let rename_payload = RenameGroupChatData {
+        group_id: group_id.clone(),
+        name: normalized_name.clone(),
+        updater_id: updater_id.clone(),
+    };
+
+    let signing_bytes = bincode::serialize(&rename_payload).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&signing_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let message = AepMessage::RenameGroupChat {
+        group_id,
+        name: normalized_name,
+        updater_id,
+        signature: Some(signature),
+    };
+
+    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(payload)
 }
