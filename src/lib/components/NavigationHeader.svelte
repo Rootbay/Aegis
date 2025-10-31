@@ -15,6 +15,15 @@
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { userStore } from "$lib/stores/userStore";
   import {
+    buildChannelLookup,
+    buildUserLookup,
+    DEFAULT_AUTHOR_TYPES,
+    DEFAULT_HAS_TOKENS,
+    parseSearchQuery,
+    type ParsedSearchToken,
+    type SearchFilterError,
+  } from "$lib/features/chat/utils/chatSearch";
+  import {
     chatStore,
     messagesByChatId,
     hasMoreByChatId,
@@ -235,6 +244,50 @@
     pushUser($userStore.me ?? undefined);
     return Array.from(seen.values());
   });
+
+  const userLookup = $derived(() =>
+    buildUserLookup(
+      availableUsers().map((user) => ({
+        id: user.id,
+        name: user.name ?? user.id,
+        tag: user.tag ?? null,
+      })),
+    ),
+  );
+
+  const channelLookup = $derived(() => {
+    if (!chat) {
+      return buildChannelLookup([]);
+    }
+    if (chat.type === "channel") {
+      return buildChannelLookup([{ id: chat.id, name: chat.name }]);
+    }
+    if (chat.type === "group") {
+      return buildChannelLookup([{ id: chat.id, name: chat.name }]);
+    }
+    return buildChannelLookup([
+      { id: chat.id, name: chat.friend?.name ?? chat.id },
+    ]);
+  });
+
+  const searchParseOptions = $derived(() => ({
+    lookups: {
+      users: userLookup(),
+      channels: channelLookup(),
+    },
+    allowedHas: DEFAULT_HAS_TOKENS,
+    allowedAuthorTypes: DEFAULT_AUTHOR_TYPES,
+  }));
+
+  const parsedSearchAnalysis = $derived(() =>
+    parseSearchQuery($chatSearchStore.query, searchParseOptions()),
+  );
+  const parsedSearchTokens = $derived<ParsedSearchToken[]>(
+    () => parsedSearchAnalysis.tokens,
+  );
+  const searchValidationErrors = $derived<SearchFilterError[]>(
+    () => parsedSearchAnalysis.errors,
+  );
 
   const filteredUserOptions = $derived(() => {
     const token = activeToken();
@@ -1195,13 +1248,16 @@
                 class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-background py-1 pl-8 pr-7 text-sm transition-[color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40"
               >
                 {#each tokens as token, index}
+                  {@const tokenMeta = parsedSearchTokens()[index] ?? null}
                   <Badge
                     variant="secondary"
                     class={cn(
                       "flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition",
-                      activeTokenIndex === index
-                        ? "ring-1 ring-ring"
-                        : "ring-0",
+                      tokenMeta && !tokenMeta.valid
+                        ? "ring-1 ring-destructive text-destructive"
+                        : activeTokenIndex === index
+                          ? "ring-1 ring-ring"
+                          : "ring-0",
                     )}
                     onclick={() => activateToken(index)}
                   >
@@ -1246,6 +1302,13 @@
                 >
                   <X class="h-3.5 w-3.5" />
                 </Button>
+              {/if}
+              {#if searchValidationErrors().length}
+                <div class="mt-1 space-y-0.5 text-xs text-destructive">
+                  {#each searchValidationErrors() as error (error.key + error.value)}
+                    <p>{error.message}</p>
+                  {/each}
+                </div>
               {/if}
             </div>
           </PopoverTrigger>

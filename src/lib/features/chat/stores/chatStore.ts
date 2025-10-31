@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AttachmentMeta,
   Message,
+  MessageAuthorType,
   ReplySnapshot,
 } from "$lib/features/chat/models/Message";
 import type {
@@ -33,6 +34,10 @@ type BackendMessage = {
   chatId?: string;
   sender_id?: string;
   senderId?: string;
+  sender_type?: string;
+  senderType?: string;
+  author_type?: string;
+  authorType?: string;
   content: string;
   timestamp: string | number | Date;
   read?: boolean;
@@ -1040,6 +1045,23 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return undefined;
   };
 
+  const AUTHOR_TYPE_VALUES: MessageAuthorType[] = [
+    "user",
+    "bot",
+    "webhook",
+  ];
+  const AUTHOR_TYPE_LOOKUP = new Set<MessageAuthorType>(AUTHOR_TYPE_VALUES);
+
+  const normalizeAuthorType = (
+    value: string | null | undefined,
+  ): MessageAuthorType | undefined => {
+    if (!value) {
+      return undefined;
+    }
+    const lower = value.toLowerCase() as MessageAuthorType;
+    return AUTHOR_TYPE_LOOKUP.has(lower) ? lower : undefined;
+  };
+
   const mapBackendMessage = async (
     message: BackendMessage,
     fallbackChatId: string,
@@ -1075,6 +1097,16 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           snippet: replySnapshotSnippet ?? undefined,
         }
       : undefined;
+    const rawAuthorType =
+      message.author_type ??
+      message.authorType ??
+      message.sender_type ??
+      message.senderType ??
+      null;
+    const authorType = normalizeAuthorType(
+      typeof rawAuthorType === "string" ? rawAuthorType : null,
+    );
+    const timestampMs = Date.parse(timestamp);
 
     const normalized: Message = {
       id: message.id,
@@ -1082,6 +1114,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       senderId: message.sender_id ?? message.senderId ?? "",
       content: decoded.content,
       timestamp,
+      timestampMs: Number.isNaN(timestampMs) ? undefined : timestampMs,
       read: message.read ?? true,
       pinned,
       pending: false,
@@ -1092,6 +1125,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       expiresAt: backendExpires ?? computeExpiryForTimestamp(timestamp),
       replyToMessageId: replyToMessageId ?? undefined,
       replySnapshot,
+      authorType,
     };
     return ensureMessageExpiry(normalized);
   };
