@@ -242,3 +242,8 @@ pub async fn set_wifi_direct_enabled(enabled: bool) -> Result<bool, String> {
 pub fn transport_snapshot() -> TransportSnapshot {
     transports::snapshot()
 }
+
+pub fn subscribe_transport_events(
+) -> tokio::sync::broadcast::Receiver<TransportSnapshot> {
+    transports::subscribe_changes()
+}

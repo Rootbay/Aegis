@@ -4,6 +4,7 @@ use std::sync::Arc;
 use libp2p::PeerId;
 use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
+use tokio::sync::broadcast;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum TransportMedium {
@@ -35,9 +36,26 @@ pub struct TransportManager {
     inner: RwLock<TransportInner>,
 }
 
+static TRANSPORT_NOTIFIER: OnceCell<broadcast::Sender<TransportSnapshot>> = OnceCell::new();
+
+fn notifier() -> &'static broadcast::Sender<TransportSnapshot> {
+    TRANSPORT_NOTIFIER.get_or_init(|| {
+        let (tx, _rx) = broadcast::channel(32);
+        tx
+    })
+}
+
+fn publish_snapshot(snapshot: TransportSnapshot) {
+    if let Some(sender) = TRANSPORT_NOTIFIER.get() {
+        let _ = sender.send(snapshot);
+    }
+}
+
 impl TransportManager {
     pub fn new() -> Self {
-        Self { inner: RwLock::new(TransportInner::default()) }
+        Self {
+            inner: RwLock::new(TransportInner::default()),
+        }
     }
 
     pub fn set_local_peer(&self, peer_id: PeerId) {
@@ -49,14 +67,20 @@ impl TransportManager {
         if guard.wifi_direct_enabled {
             guard.wifi_direct_peers.insert(peer_id);
         }
+        drop(guard);
+        publish_snapshot(self.snapshot());
     }
 
     pub fn set_enabled(&self, medium: TransportMedium, enabled: bool) -> bool {
         let mut guard = self.inner.write();
         let (flag, peers) = match medium {
             TransportMedium::Tcp => return false,
-            TransportMedium::Bluetooth => (&mut guard.bluetooth_enabled, &mut guard.bluetooth_peers),
-            TransportMedium::WifiDirect => (&mut guard.wifi_direct_enabled, &mut guard.wifi_direct_peers),
+            TransportMedium::Bluetooth => {
+                (&mut guard.bluetooth_enabled, &mut guard.bluetooth_peers)
+            }
+            TransportMedium::WifiDirect => {
+                (&mut guard.wifi_direct_enabled, &mut guard.wifi_direct_peers)
+            }
         };
 
         let changed = *flag != enabled;
@@ -79,6 +103,8 @@ impl TransportManager {
             TransportMedium::Bluetooth => guard.bluetooth_peers.clear(),
             TransportMedium::WifiDirect => guard.wifi_direct_peers.clear(),
         }
+        drop(guard);
+        publish_snapshot(self.snapshot());
     }
 
     pub fn set_peer_presence(&self, medium: TransportMedium, peer_id: PeerId, present: bool) {
@@ -94,6 +120,8 @@ impl TransportManager {
         } else {
             peers.remove(&peer_id);
         }
+        drop(guard);
+        publish_snapshot(self.snapshot());
     }
 
     pub fn snapshot(&self) -> TransportSnapshot {
@@ -105,6 +133,10 @@ impl TransportManager {
             bluetooth_peers: guard.bluetooth_peers.iter().cloned().collect(),
             wifi_direct_peers: guard.wifi_direct_peers.iter().cloned().collect(),
         }
+    }
+
+    pub fn local_peer_id(&self) -> Option<PeerId> {
+        self.inner.read().local_peer_id.clone()
     }
 }
 
@@ -120,8 +152,17 @@ pub fn snapshot() -> TransportSnapshot {
     global_manager().snapshot()
 }
 
+pub fn subscribe_changes() -> broadcast::Receiver<TransportSnapshot> {
+    notifier().subscribe()
+}
+
 pub fn set_medium_enabled(medium: TransportMedium, enabled: bool) -> bool {
-    global_manager().set_enabled(medium, enabled)
+    let manager = global_manager();
+    let changed = manager.set_enabled(medium, enabled);
+    if changed {
+        publish_snapshot(manager.snapshot());
+    }
+    changed
 }
 
 pub fn register_local_peer(peer_id: PeerId) {
@@ -134,4 +175,8 @@ pub fn set_peer_presence(medium: TransportMedium, peer_id: PeerId, present: bool
 
 pub fn clear_medium(medium: TransportMedium) {
     global_manager().clear_medium(medium);
+}
+
+pub fn local_peer_id() -> Option<PeerId> {
+    global_manager().local_peer_id()
 }
