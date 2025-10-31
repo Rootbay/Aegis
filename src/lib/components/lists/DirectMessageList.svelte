@@ -33,6 +33,10 @@
   } from "$lib/components/ui/avatar";
   import { Badge } from "$lib/components/ui/badge";
   import type { DirectMessageListEntry } from "$lib/features/chat/stores/directMessageRoster";
+  import {
+    computeSearchResults,
+    type SearchResults,
+  } from "./directMessageSearch";
 
   type SelectChatHandler = (
     chatId: string | null,
@@ -79,15 +83,9 @@
     sortedEntries.filter((entry) => entry.type === "dm" && entry.friend),
   );
 
-  let searchResults = $derived(() => {
-    if (!searchTerm) {
-      return dmEntries;
-    }
-    const lowered = searchTerm.toLowerCase();
-    return dmEntries.filter((entry) =>
-      entry.name.toLowerCase().includes(lowered),
-    );
-  });
+  let searchResults = $derived<SearchResults>(() =>
+    computeSearchResults(sortedEntries, searchTerm),
+  );
 
   function handleKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -355,45 +353,94 @@
       </DialogHeader>
 
       <div class="space-y-3">
-        <Input bind:value={searchTerm} placeholder="Search friends..." />
+        <Input
+          bind:value={searchTerm}
+          placeholder="Search conversations..."
+        />
 
         <ScrollArea class="max-h-60">
-          {#if searchResults.length > 0}
-            <div class="space-y-2">
-              {#each searchResults as item (item.id)}
-                {@const friend = item.friend}
-                {#if friend}
-                  <Button
-                    variant="ghost"
-                    class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
-                    onclick={() => {
-                      onSelect(item.id, "dm");
-                      showSearch = false;
-                      searchTerm = "";
-                    }}
-                  >
-                    <div class="relative">
-                      <Avatar class="h-10 w-10">
-                        <AvatarImage src={friend.avatar} alt={friend.name} />
-                        <AvatarFallback class="uppercase"
-                          >{friend.name?.[0]}</AvatarFallback
-                        >
-                      </Avatar>
-                      {#if friend.online}
-                        <span
-                          class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background"
-                        ></span>
-                      {/if}
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <p class="font-semibold truncate">{friend.name}</p>
-                      <p class="text-xs text-muted-foreground">
-                        Direct Message
-                      </p>
-                    </div>
-                  </Button>
-                {/if}
-              {/each}
+          {@const results: SearchResults =
+            searchResults ?? { dms: [], groups: [] }}
+          {@const totalResults =
+            (results.dms?.length ?? 0) + (results.groups?.length ?? 0)}
+          {#if totalResults > 0}
+            <div class="space-y-4">
+              {#if (results.dms?.length ?? 0) > 0}
+                <div class="space-y-2">
+                  <p class="px-2 text-xs font-semibold text-muted-foreground">
+                    Direct Messages
+                  </p>
+                  {#each results.dms ?? [] as item (item.id)}
+                    {@const friend = item.friend}
+                    {#if friend}
+                      <Button
+                        variant="ghost"
+                        class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
+                        onclick={() => {
+                          onSelect(item.id, "dm");
+                          showSearch = false;
+                          searchTerm = "";
+                        }}
+                      >
+                        <div class="relative">
+                          <Avatar class="h-10 w-10">
+                            <AvatarImage src={friend.avatar} alt={friend.name} />
+                            <AvatarFallback class="uppercase"
+                              >{friend.name?.[0]}</AvatarFallback
+                            >
+                          </Avatar>
+                          {#if friend.online}
+                            <span
+                              class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background"
+                            ></span>
+                          {/if}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                          <p class="font-semibold truncate">{friend.name}</p>
+                          <p class="text-xs text-muted-foreground">
+                            Direct Message
+                          </p>
+                        </div>
+                      </Button>
+                    {/if}
+                  {/each}
+                </div>
+              {/if}
+
+              {#if (results.groups?.length ?? 0) > 0}
+                <div class="space-y-2">
+                  <p class="px-2 text-xs font-semibold text-muted-foreground">
+                    Group Chats
+                  </p>
+                  {#each results.groups ?? [] as item (item.id)}
+                    {@const memberCount =
+                      item.memberCount ?? item.memberIds?.length ?? 0}
+                    <Button
+                      variant="ghost"
+                      class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
+                      onclick={() => {
+                        onSelect(item.id, "group");
+                        showSearch = false;
+                        searchTerm = "";
+                      }}
+                    >
+                      <div
+                        class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                      >
+                        <Users size={16} />
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="font-semibold truncate">{item.name}</p>
+                        <p class="text-xs text-muted-foreground">
+                          {memberCount > 0
+                            ? `${memberCount} member${memberCount === 1 ? "" : "s"}`
+                            : "Group Chat"}
+                        </p>
+                      </div>
+                    </Button>
+                  {/each}
+                </div>
+              {/if}
             </div>
           {:else if searchTerm.length > 0}
             <p class="text-center text-muted-foreground">
@@ -401,7 +448,7 @@
             </p>
           {:else}
             <p class="text-center text-muted-foreground">
-              Start typing to search for friends.
+              Start typing to search for conversations.
             </p>
           {/if}
         </ScrollArea>
