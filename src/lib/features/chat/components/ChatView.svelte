@@ -8,6 +8,7 @@
   import FileTransferApprovals from "$lib/features/chat/components/FileTransferApprovals.svelte";
   import FileTransferHistory from "$lib/features/chat/components/FileTransferHistory.svelte";
   import CallStatusBanner from "$lib/features/calls/components/CallStatusBanner.svelte";
+  import EmojiPicker from "$lib/components/emoji/EmojiPicker.svelte";
 
   import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
@@ -1236,7 +1237,6 @@
   }
 
   const REACTION_EMOJIS = ["❤️", "😂", "👍", "🔥"] as const;
-  const DEFAULT_REACTION = REACTION_EMOJIS[2];
   const reactionOptions = REACTION_EMOJIS.map((emoji) => ({
     emoji,
     action: `react_${emoji}` as const,
@@ -1249,6 +1249,10 @@
     reactionOptions.map(({ action, emoji }) => [action, emoji] as const),
   );
   type ReactionAction = (typeof reactionOptions)[number]["action"];
+
+  let reactionPickerChatId = $state<string | null>(null);
+  let reactionPickerMessageId = $state<string | null>(null);
+  let reactionPickerActivator: HTMLButtonElement | null = null;
 
   const baseMessageMenuItems = [
     { label: "Copy Message", action: "copy_message" },
@@ -1308,6 +1312,34 @@
         console.debug("Unhandled message action", action);
     }
     showMsgMenu = false;
+  }
+
+  function openReactionPicker(event: MouseEvent, msg: Message) {
+    const button = event.currentTarget as HTMLButtonElement | null;
+    if (!button) return;
+
+    if (reactionPickerMessageId === msg.id) {
+      closeReactionPicker();
+      return;
+    }
+
+    reactionPickerChatId = msg.chatId;
+    reactionPickerMessageId = msg.id;
+    reactionPickerActivator = button;
+  }
+
+  function closeReactionPicker() {
+    const activator = reactionPickerActivator;
+    reactionPickerChatId = null;
+    reactionPickerMessageId = null;
+    reactionPickerActivator = null;
+    activator?.focus();
+  }
+
+  function handleReactionSelect(emoji: string) {
+    if (!reactionPickerChatId || !reactionPickerMessageId) return;
+    chatStore.addReaction(reactionPickerChatId, reactionPickerMessageId, emoji);
+    closeReactionPicker();
   }
 
   async function startEditingMessage(msg: Message) {
@@ -1669,31 +1701,61 @@
                           }}>{emoji} {users.length}</button
                         >
                       {/each}
-                      <button
-                        type="button"
-                        class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
-                        onclick={() =>
-                          chatStore.addReaction(
-                            msg.chatId,
-                            msg.id,
-                            DEFAULT_REACTION,
-                          )}
-                        aria-label="Add reaction">+ React</button
-                      >
+                      <div class="relative inline-block">
+                        <button
+                          type="button"
+                          class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
+                          onclick={(event) => openReactionPicker(event, msg)}
+                          aria-label="Add reaction"
+                          aria-haspopup="dialog"
+                          aria-expanded={reactionPickerMessageId === msg.id}
+                        >
+                          + React
+                        </button>
+                        {#if reactionPickerMessageId === msg.id}
+                          <div
+                            class="absolute left-0 z-30 mt-2"
+                            role="presentation"
+                            onclick={(event) => event.stopPropagation()}
+                            onkeydown={(event) => event.stopPropagation()}
+                          >
+                            <EmojiPicker
+                              on:select={(event) =>
+                                handleReactionSelect(event.detail.emoji)}
+                              on:close={closeReactionPicker}
+                            />
+                          </div>
+                        {/if}
+                      </div>
                     </div>
                   {:else}
                     <div class="mt-1">
-                      <button
-                        type="button"
-                        class="px-2 py-0.5 text-xs rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
-                        onclick={() =>
-                          chatStore.addReaction(
-                            msg.chatId,
-                            msg.id,
-                            DEFAULT_REACTION,
-                          )}
-                        aria-label="Add reaction">+ React</button
-                      >
+                      <div class="relative inline-block">
+                        <button
+                          type="button"
+                          class="px-2 py-0.5 text-xs rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
+                          onclick={(event) => openReactionPicker(event, msg)}
+                          aria-label="Add reaction"
+                          aria-haspopup="dialog"
+                          aria-expanded={reactionPickerMessageId === msg.id}
+                        >
+                          + React
+                        </button>
+                        {#if reactionPickerMessageId === msg.id}
+                          <div
+                            class="absolute left-0 z-30 mt-2"
+                            role="presentation"
+                            onclick={(event) => event.stopPropagation()}
+                            onkeydown={(event) => event.stopPropagation()}
+                          >
+                            <EmojiPicker
+                              on:select={(event) =>
+                                handleReactionSelect(event.detail.emoji)}
+                              on:close={closeReactionPicker}
+                            />
+                          </div>
+                        {/if}
+                      </div>
                     </div>
                   {/if}
                   {#if msg.attachments && msg.attachments.length > 0}

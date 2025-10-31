@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { tick } from "svelte";
 
@@ -955,5 +955,75 @@ describe("ChatView friend removal", () => {
     expect(mutedModule.mutedFriendsStore.unmute).not.toHaveBeenCalled();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("ChatView reactions", () => {
+  beforeEach(() => {
+    resetChatViewState();
+    mockExtractFirstLink.mockReset();
+    mockExtractFirstLink.mockImplementation(() => null);
+    mockGetLinkPreviewMetadata.mockReset();
+    mockGetLinkPreviewMetadata.mockResolvedValue(null);
+  });
+
+  it("opens emoji picker and adds the selected reaction", async () => {
+    const chatModule = getChatStoreModule();
+    const addReactionSpy = vi.spyOn(chatModule.chatStore, "addReaction");
+
+    const chatId = "chat-emoji-picker";
+
+    const friend: Friend = {
+      id: "friend-emoji-picker",
+      name: "Emoji Picker Friend",
+      avatar: "https://example.com/emoji-friend.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-emoji-picker",
+      chatId,
+      senderId: friend.id,
+      content: "Emoji picker test message",
+      timestamp: new Date().toISOString(),
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    try {
+      render(ChatView, { props: { chat } });
+
+      await screen.findByText(message.content);
+
+      const container = getMessageContainer(message.content);
+      const reactButton = within(container).getByRole("button", {
+        name: "Add reaction",
+      });
+
+      await fireEvent.click(reactButton);
+
+      const emojiButton = await screen.findByRole("button", {
+        name: "React with 😀",
+      });
+
+      await fireEvent.click(emojiButton);
+
+      await waitFor(() => {
+        expect(addReactionSpy).toHaveBeenCalledWith(chatId, message.id, "😀");
+      });
+    } finally {
+      addReactionSpy.mockRestore();
+    }
   });
 });
