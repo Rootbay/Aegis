@@ -189,6 +189,7 @@ interface ChatStore {
   handleGroupChatCreated: (chat: BackendGroupChat) => GroupChatSummary;
   loadGroupChats: () => Promise<void>;
   leaveGroupChat: (groupId: string) => Promise<void>;
+  renameGroupChat: (groupId: string, newName: string) => Promise<GroupChatSummary>;
   handleGroupMemberLeft: (groupId: string, memberId: string) => void;
   groupChats: Readable<Map<string, GroupChatSummary>>;
 }
@@ -2834,6 +2835,54 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const renameGroupChat = async (
+    groupId: string,
+    newName: string,
+  ): Promise<GroupChatSummary> => {
+    const trimmed = newName.trim();
+    if (!groupId) {
+      throw new Error("Group ID is required.");
+    }
+    if (trimmed.length === 0) {
+      throw new Error("Group name is required.");
+    }
+
+    const existing = get(groupChatsStore).get(groupId);
+
+    try {
+      const payload = await invoke<
+        BackendGroupChat & {
+          ownerId?: string;
+          owner_id?: string;
+          createdAt?: string;
+          created_at?: string;
+          memberIds?: string[];
+          member_ids?: string[];
+        }
+      >("rename_group_dm", {
+        groupId,
+        group_id: groupId,
+        name: trimmed,
+      });
+
+      const backend: BackendGroupChat = {
+        id: payload.id,
+        name: payload.name ?? trimmed,
+        owner_id: payload.owner_id ?? payload.ownerId ?? existing?.ownerId ?? "",
+        created_at: payload.created_at ?? payload.createdAt ?? existing?.createdAt,
+        member_ids:
+          payload.member_ids ?? payload.memberIds ?? existing?.memberIds ?? [],
+      };
+
+      const summary = mapBackendGroupChat(backend);
+      upsertGroupChat(summary);
+      return summary;
+    } catch (error) {
+      console.error("Failed to rename group chat:", error);
+      throw error;
+    }
+  };
+
   const addReaction = async (
     targetChatId: string,
     messageId: string,
@@ -2935,6 +2984,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleGroupChatCreated,
     loadGroupChats,
     leaveGroupChat,
+    renameGroupChat,
     handleGroupMemberLeft,
     refreshChatFromStorage,
   };

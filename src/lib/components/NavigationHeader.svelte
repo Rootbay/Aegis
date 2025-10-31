@@ -41,6 +41,7 @@
     PanelRight,
     MoreVertical,
     LogOut,
+    Pencil,
   } from "@lucide/svelte";
   import {
     Popover,
@@ -48,11 +49,22 @@
     PopoverContent,
   } from "$lib/components/ui/popover";
   import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+  } from "$lib/components/ui/dialog";
+  import {
     DropdownMenu,
     DropdownMenuTrigger,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
   } from "$lib/components/ui/dropdown-menu";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
@@ -178,6 +190,11 @@
   let activeTokenIndex = $state<number | null>(null);
   let suppressStoreSync = false;
   let leaveGroupPending = $state(false);
+  let showRenameGroupModal = $state(false);
+  let renameGroupPending = $state(false);
+  let renameGroupName = $state("");
+  let renameGroupError = $state<string | null>(null);
+  let renameGroupInputRef = $state<HTMLInputElement | null>(null);
 
   const hideMemberNamesActive = $derived(() => {
     if (!chat?.id) return false;
@@ -597,6 +614,55 @@
       toasts.addToast(message, "error");
     } finally {
       leaveGroupPending = false;
+    }
+  }
+
+  async function openRenameGroupModal() {
+    if (!chat || chat.type !== "group") {
+      return;
+    }
+    renameGroupError = null;
+    renameGroupName = chat.name ?? "";
+    showRenameGroupModal = true;
+    await tick();
+    renameGroupInputRef?.focus?.();
+    renameGroupInputRef?.select?.();
+  }
+
+  function closeRenameGroupModal() {
+    if (renameGroupPending) {
+      return;
+    }
+    showRenameGroupModal = false;
+    renameGroupError = null;
+  }
+
+  async function handleRenameGroupSubmit(event?: SubmitEvent) {
+    event?.preventDefault?.();
+    if (!chat || chat.type !== "group" || renameGroupPending) {
+      return;
+    }
+
+    const trimmed = renameGroupName.trim();
+    if (!trimmed) {
+      renameGroupError = "Please enter a group name.";
+      return;
+    }
+
+    renameGroupPending = true;
+    try {
+      const summary = await chatStore.renameGroupChat(chat.id, trimmed);
+      toasts.addToast(`Group renamed to ${summary.name}.`, "success");
+      showRenameGroupModal = false;
+      renameGroupError = null;
+    } catch (error: any) {
+      console.error("Failed to rename group:", error);
+      const message =
+        error?.message ?? "Failed to rename group. Please try again.";
+      renameGroupError = message;
+      toasts.addToast(message, "error");
+    } finally {
+      renameGroupPending = false;
     }
   }
 
@@ -1027,12 +1093,24 @@
                 class="cursor-pointer"
                 size="icon"
                 aria-label="Group options"
-                disabled={leaveGroupPending}
+                disabled={leaveGroupPending || renameGroupPending}
               >
                 <MoreVertical class="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent class="w-44 text-sm">
+              <DropdownMenuItem
+                class="cursor-pointer"
+                disabled={renameGroupPending}
+                onselect={() => {
+                  if (!renameGroupPending) {
+                    void openRenameGroupModal();
+                  }
+                }}
+              >
+                <Pencil class="mr-2 h-3.5 w-3.5" /> Rename group
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 class="cursor-pointer text-destructive"
                 onselect={() => {
@@ -1043,8 +1121,63 @@
               >
                 <LogOut class="mr-2 h-3.5 w-3.5" /> Leave group
               </DropdownMenuItem>
-            </DropdownMenuContent>
+              </DropdownMenuContent>
           </DropdownMenu>
+          <Dialog
+            open={showRenameGroupModal}
+            onOpenChange={(value) => {
+              if (!value) {
+                closeRenameGroupModal();
+              }
+            }}
+          >
+            <DialogContent class="sm:max-w-sm">
+              <form
+                class="space-y-4"
+                on:submit|preventDefault={handleRenameGroupSubmit}
+              >
+                <DialogHeader class="space-y-1">
+                  <DialogTitle>Rename group</DialogTitle>
+                  <DialogDescription>
+                    Enter a new name for this group chat.
+                  </DialogDescription>
+                </DialogHeader>
+                <div class="space-y-2">
+                  <Label for="rename-group-input">Group name</Label>
+                  <Input
+                    id="rename-group-input"
+                    bind:this={renameGroupInputRef}
+                    bind:value={renameGroupName}
+                    placeholder="Enter group name"
+                    disabled={renameGroupPending}
+                    required
+                    aria-invalid={renameGroupError ? "true" : "false"}
+                  />
+                  {#if renameGroupError}
+                    <p class="text-sm text-destructive">{renameGroupError}</p>
+                  {/if}
+                </div>
+                <DialogFooter class="flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onclick={closeRenameGroupModal}
+                    disabled={renameGroupPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={
+                      renameGroupPending || renameGroupName.trim().length === 0
+                    }
+                  >
+                    Save
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         {/if}
       {/if}
 
