@@ -4,8 +4,19 @@ use std::sync::Arc;
 use tauri::State;
 use tokio::sync::Mutex;
 
+const STATE_NOT_INITIALIZED: &str =
+    "Application state not initialized. Please unlock your identity.";
+
 #[derive(Default)]
 pub struct AppStateContainer(pub Arc<Mutex<Option<AppState>>>);
+
+async fn take_state(state_container: &State<'_, AppStateContainer>) -> Result<AppState, String> {
+    let guard = state_container.0.lock().await;
+    guard
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| STATE_NOT_INITIALIZED.to_string())
+}
 
 pub async fn with_state<F, R>(
     state_container: State<'_, AppStateContainer>,
@@ -14,12 +25,8 @@ pub async fn with_state<F, R>(
 where
     F: FnOnce(AppState) -> Result<R, String>,
 {
-    let state_guard = state_container.0.lock().await;
-    if let Some(state) = state_guard.as_ref() {
-        f(state.clone())
-    } else {
-        Err("Application state not initialized. Please unlock your identity.".to_string())
-    }
+    let state = take_state(&state_container).await?;
+    f(state)
 }
 
 pub async fn with_state_async<F, Fut, R>(
@@ -30,10 +37,6 @@ where
     F: FnOnce(AppState) -> Fut,
     Fut: Future<Output = Result<R, String>>,
 {
-    let state_guard = state_container.0.lock().await;
-    if let Some(state) = state_guard.as_ref() {
-        f(state.clone()).await
-    } else {
-        Err("Application state not initialized. Please unlock your identity.".to_string())
-    }
+    let state = take_state(&state_container).await?;
+    f(state).await
 }
