@@ -1,299 +1,54 @@
-use libp2p::futures::StreamExt;
-use libp2p::swarm::SwarmEvent;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::{atomic::AtomicBool, Arc};
-use tauri::{Emitter, Manager, Runtime, State};
+use std::sync::Arc;
+
+use libp2p::futures::StreamExt;
+use libp2p::swarm::SwarmEvent;
+use tauri::{AppHandle, Runtime};
 use tokio::sync::{mpsc, Mutex};
 
 use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};
-use aegis_shared_types::{AppState, FileTransferMode, User};
-use aep::{database, handle_aep_message, initialize_aep};
-use bs58;
-use e2ee;
-use network::{
-    has_any_peers, initialize_network, send_data, ComposedEvent, LinkQuality, RoutedFrame,
-};
-use tokio::sync::mpsc::Sender as TokioSender;
+use aegis_shared_types::{AppState, FileTransferMode};
 
-use crate::commands::messages::{
-    EncryptedDmPayload, ReadReceiptEventPayload, TypingIndicatorEventPayload,
+use super::super::{
+    cleanup_incoming_state, load_outgoing_metadata, mode_to_str, persist_incoming_metadata,
+    persist_outgoing_metadata, sanitize_filename, write_incoming_chunk, DEFAULT_CHUNK_SIZE,
+    MAX_FILE_SIZE_BYTES, MAX_INFLIGHT_FILE_BYTES, MAX_OUTBOX_MESSAGES, MAX_UNAPPROVED_BUFFER_BYTES,
 };
+use super::network::NetworkResources;
 use crate::connectivity::{
     bridge_can_forward_to, emit_bridge_snapshot, note_bridge_forward_attempt,
-    note_bridge_forward_failure, note_bridge_forward_success, set_relay_store,
-    spawn_connectivity_task,
-};
-use crate::settings_store;
-
-use super::{
-    broadcast_group_key_update, cleanup_incoming_state, load_incoming_resilient_chunks,
-    load_outgoing_metadata, mode_to_str, persist_incoming_metadata, persist_outgoing_metadata,
-    rotate_and_broadcast_group_key, sanitize_filename, write_incoming_chunk,
-    IncomingResilientMetadata, OutgoingResilientMetadata, DEFAULT_CHUNK_SIZE, INCOMING_STATE_DIR,
-    MAX_FILE_SIZE_BYTES, MAX_INFLIGHT_FILE_BYTES, MAX_OUTBOX_MESSAGES, MAX_UNAPPROVED_BUFFER_BYTES,
-    OUTGOING_STATE_DIR,
+    note_bridge_forward_failure, note_bridge_forward_success,
 };
 
-pub async fn initialize_app_state<R: Runtime>(
-    app: tauri::AppHandle<R>,
-    password: &str,
-    state_container: State<'_, crate::commands::state::AppStateContainer>,
-) -> Result<(), String> {
-    let identity = crate::commands::identity::get_or_create_identity(&app, password)?;
-
-    initialize_aep();
-
-    let (swarm, topic, router) = initialize_network(identity.keypair().clone())
-        .await
-        .map_err(|e| format!("Failed to initialize network: {}", e))?;
-    let shared_swarm = Arc::new(Mutex::new(swarm));
-    let router = Arc::new(Mutex::new(router));
-
-    let (net_tx, mut net_rx) = mpsc::channel::<Vec<u8>>(100);
-    let (file_tx, mut file_rx) = mpsc::channel::<aegis_shared_types::FileTransferCommand>(16);
-    let (event_tx, mut event_rx) = mpsc::channel::<AepMessage>(100);
-    let outbox: Arc<Mutex<VecDeque<Vec<u8>>>> = Arc::new(Mutex::new(VecDeque::new()));
-
-    let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
-    let incoming_dir = app_data_dir.join(INCOMING_STATE_DIR);
-    if !incoming_dir.exists() {
-        std::fs::create_dir_all(&incoming_dir).map_err(|e| e.to_string())?;
-    }
-    let outgoing_dir = app_data_dir.join(OUTGOING_STATE_DIR);
-    if !outgoing_dir.exists() {
-        std::fs::create_dir_all(&outgoing_dir).map_err(|e| e.to_string())?;
-    }
-    let settings_path = app_data_dir.join("settings.json");
-    let persisted_settings = match settings_store::load_settings(&settings_path) {
-        Ok(settings) => settings,
-        Err(error) => {
-            eprintln!(
-                "Failed to load persisted settings ({}). Using defaults.",
-                error
-            );
-            settings_store::PersistedSettings::default()
-        }
-    };
-
-    let initial_acl = match persisted_settings.file_acl_policy.as_deref() {
-        Some("friends_only") => aegis_shared_types::FileAclPolicy::FriendsOnly,
-        Some("everyone") => aegis_shared_types::FileAclPolicy::Everyone,
-        _ => aegis_shared_types::FileAclPolicy::Everyone,
-    };
-    let db_path = app_data_dir.join("aegis.db");
-    let db_pool = database::initialize_db(db_path)
-        .await
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
-
-    let connectivity_snapshot = Arc::new(Mutex::new(None));
-
-    let new_state = AppState {
-        identity: identity.clone(),
-        network_tx: net_tx,
-        db_pool: db_pool.clone(),
-        incoming_files: Arc::new(Mutex::new(HashMap::new())),
-        file_cmd_tx: file_tx,
-        file_acl_policy: Arc::new(Mutex::new(initial_acl)),
-        app_data_dir: app_data_dir.clone(),
-        connectivity_snapshot: connectivity_snapshot.clone(),
-        voice_memos_enabled: Arc::new(AtomicBool::new(true)),
-        relays: Arc::new(Mutex::new(persisted_settings.relays.clone())),
-        trusted_devices: Arc::new(Mutex::new(persisted_settings.trusted_devices.clone())),
-        pending_device_bundles: Arc::new(Mutex::new(HashMap::new())),
-    };
-
-    *state_container.0.lock().await = Some(new_state.clone());
-
-    set_relay_store(new_state.relays.clone());
-
-    spawn_connectivity_task(
-        app.clone(),
-        shared_swarm.clone(),
-        router.clone(),
-        identity.peer_id(),
-        connectivity_snapshot,
-    );
-
-    let my_peer_id = identity.peer_id().to_base58();
-    let my_pubkey_b58 = bs58::encode(identity.public_key_protobuf_bytes()).into_string();
-    let anon_username = format!("anon-{}", &my_peer_id.chars().take(8).collect::<String>());
-    let mut ensure_user = User {
-        id: my_peer_id.clone(),
-        username: anon_username.clone(),
-        avatar: String::new(),
-        is_online: false,
-        public_key: Some(my_pubkey_b58.clone()),
-        bio: None,
-        tag: None,
-    };
-
-    if let Ok(existing) = aep::user_service::get_user(&db_pool, &my_peer_id).await {
-        match existing {
-            Some(mut u) => {
-                if u.public_key.as_deref() != Some(&my_pubkey_b58) {
-                    u.public_key = Some(my_pubkey_b58.clone());
-                    aep::user_service::insert_user(&db_pool, &u)
-                        .await
-                        .map_err(|e| e.to_string())?;
-                }
-                ensure_user = u;
-            }
-            None => {
-                aep::user_service::insert_user(&db_pool, &ensure_user)
-                    .await
-                    .map_err(|e| e.to_string())?;
-            }
-        }
-    }
-
-    let user_bytes = bincode::serialize(&ensure_user).map_err(|e| e.to_string())?;
-    let sig = identity
-        .keypair()
-        .sign(&user_bytes)
-        .map_err(|e| e.to_string())?;
-    let profile_msg = AepMessage::ProfileUpdate {
-        user: ensure_user.clone(),
-        signature: Some(sig),
-    };
-    let profile_msg_bytes = bincode::serialize(&profile_msg).map_err(|e| e.to_string())?;
-    if let Err(e) = new_state.network_tx.send(profile_msg_bytes).await {
-        eprintln!("Failed to broadcast initial profile: {}", e);
-    }
-
-    let prekey_bytes_to_broadcast = {
-        let e2ee_dir = app_data_dir.join("e2ee");
-        let mgr_arc = e2ee::init_with_dir(&e2ee_dir);
-        let mut mgr = mgr_arc.lock();
-        let bundle = mgr.generate_prekey_bundle(8);
-        bincode::serialize(&bundle).map_err(|e| e.to_string())?
-    };
-    let sig = identity
-        .keypair()
-        .sign(&prekey_bytes_to_broadcast)
-        .map_err(|e| e.to_string())?;
-    let msg = AepMessage::PrekeyBundle {
-        user_id: my_peer_id.clone(),
-        bundle: prekey_bytes_to_broadcast,
-        signature: Some(sig),
-    };
-    let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
-    if let Err(e) = new_state.network_tx.send(bytes).await {
-        eprintln!("Failed to broadcast prekey bundle: {}", e);
-    }
-
-    let app_handle = app.clone();
-    tokio::spawn(async move {
-        while let Some(message) = event_rx.recv().await {
-            if let Err(e) = app_handle.emit("new-message", message) {
-                eprintln!("Failed to emit new-message event: {}", e);
-            }
-        }
-    });
-
-    {
-        let db_pool_rotate = db_pool.clone();
-        let my_id_rotate = identity.peer_id().to_base58();
-        let identity_rotate = identity.clone();
-        let net_tx_rotate = new_state.network_tx.clone();
-        tokio::spawn(async move {
-            use std::collections::HashMap as Map;
-            let mut last_rotated: Map<String, i64> = Map::new();
-            let rotation_interval_secs: i64 = 12 * 60 * 60; // 12h
-            let retry_interval_secs: i64 = 60;
-
-            struct Pending {
-                server_id: String,
-                channel_id: Option<String>,
-                _epoch: u64,
-                next_ts: i64,
-                retries_left: u8,
-            }
-            let mut pending: Vec<Pending> = Vec::new();
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-            loop {
-                let _ = interval.tick().await;
-                let now = chrono::Utc::now().timestamp();
-
-                let mut remaining: Vec<Pending> = Vec::new();
-                for mut p in pending.drain(..) {
-                    if p.retries_left == 0 || p.next_ts > now {
-                        remaining.push(p);
-                        continue;
-                    }
-                    if let Err(e) = broadcast_group_key_update(
-                        &db_pool_rotate,
-                        identity_rotate.clone(),
-                        &net_tx_rotate,
-                        &p.server_id,
-                        &p.channel_id,
-                    )
-                    .await
-                    {
-                        eprintln!("Retry group key update failed: {}", e);
-                    }
-                    p.retries_left -= 1;
-                    p.next_ts = now + retry_interval_secs;
-                    remaining.push(p);
-                }
-                pending = remaining;
-
-                match aep::database::get_all_servers(&db_pool_rotate, &my_id_rotate).await {
-                    Ok(servers) => {
-                        for s in servers {
-                            if s.owner_id != my_id_rotate {
-                                continue;
-                            }
-                            for ch in s.channels {
-                                let gid = format!("{}:{}", s.id, ch.id);
-                                let last = last_rotated.get(&gid).cloned().unwrap_or(0);
-                                if now - last < rotation_interval_secs {
-                                    continue;
-                                }
-                                let epoch = now as u64;
-                                if let Err(e) = rotate_and_broadcast_group_key(
-                                    &db_pool_rotate,
-                                    identity_rotate.clone(),
-                                    &net_tx_rotate,
-                                    &s.id,
-                                    &Some(ch.id.clone()),
-                                    epoch,
-                                )
-                                .await
-                                {
-                                    eprintln!("Group key rotation failed: {}", e);
-                                } else {
-                                    last_rotated.insert(gid, now);
-                                    pending.push(Pending {
-                                        server_id: s.id.clone(),
-                                        channel_id: Some(ch.id),
-                                        _epoch: epoch,
-                                        next_ts: now + retry_interval_secs,
-                                        retries_left: 3,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => eprintln!("Failed to load servers for rotation: {}", e),
-                }
-            }
-        });
-    }
+pub(super) fn spawn_swarm_processing<R: Runtime>(
+    app: AppHandle<R>,
+    network: NetworkResources,
+    app_state: AppState,
+    db_pool: sqlx::Pool<sqlx::Sqlite>,
+    mut net_rx: mpsc::Receiver<Vec<u8>>,
+    mut file_rx: mpsc::Receiver<aegis_shared_types::FileTransferCommand>,
+    event_tx: mpsc::Sender<AepMessage>,
+    outbox: Arc<Mutex<VecDeque<Vec<u8>>>>,
+) {
+    let NetworkResources {
+        shared_swarm,
+        router,
+        topic,
+    } = network;
 
     let db_pool_clone = db_pool.clone();
-    let state_clone_for_aep = new_state.clone();
+    let state_clone_for_aep = app_state.clone();
     let app_for_emit = app.clone();
     let local_peer_id_str = state_clone_for_aep.identity.peer_id().to_base58();
     let topic_task = topic.clone();
     let shared_swarm_task = shared_swarm.clone();
     let outbox_task = outbox.clone();
     let router_task = router.clone();
+    let event_tx = event_tx;
+
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
         loop {
@@ -301,10 +56,10 @@ pub async fn initialize_app_state<R: Runtime>(
                 maybe = net_rx.recv() => {
                     if let Some(data) = maybe {
                         let mut swarm = shared_swarm_task.lock().await;
-                        if has_any_peers(&swarm) {
+                        if network::has_any_peers(&swarm) {
                             let mut router_guard = router_task.lock().await;
                             if let Err(e) =
-                                send_data(&mut swarm, &topic_task, &mut router_guard, data).await
+                                network::send_data(&mut swarm, &topic_task, &mut router_guard, data).await
                             {
                                 eprintln!("Failed to send data over network: {}", e);
                             }
@@ -335,23 +90,22 @@ pub async fn initialize_app_state<R: Runtime>(
                                             .map(|m| m.len())
                                             .unwrap_or(0);
 
-                                        {
-                                            let mut swarm = shared_swarm_task.lock().await;
-                                            let _ = swarm.behaviour_mut().req_res.send_request(
-                                                &peer,
-                                                network::FileTransferRequest::Init {
-                                                    filename: filename.clone(),
-                                                    size,
-                                                },
-                                            );
-                                        }
+                                        let mut swarm = shared_swarm_task.lock().await;
+                                        let _ = swarm.behaviour_mut().req_res.send_request(
+                                            &peer,
+                                            network::FileTransferRequest::Init {
+                                                filename: filename.clone(),
+                                                size,
+                                            },
+                                        );
+                                        drop(swarm);
 
                                         let mode_label = mode_to_str(mode);
                                         let mut buf = vec![0u8; DEFAULT_CHUNK_SIZE];
                                         let mut index: u64 = 0;
                                         let mut bytes_sent: u64 = 0;
                                         let mut resumed = false;
-                                        let mut metadata = OutgoingResilientMetadata {
+                                        let mut metadata = super::super::OutgoingResilientMetadata {
                                             next_index: 0,
                                             bytes_sent: 0,
                                             chunk_size: DEFAULT_CHUNK_SIZE,
@@ -363,7 +117,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                         if mode == FileTransferMode::Resilient {
                                             let base_dir = state_clone_for_aep
                                                 .app_data_dir
-                                                .join(OUTGOING_STATE_DIR)
+                                                .join(super::super::OUTGOING_STATE_DIR)
                                                 .join(&recipient_peer_id);
                                             if let Err(e) = std::fs::create_dir_all(&base_dir) {
                                                 eprintln!(
@@ -376,7 +130,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                             if candidate_meta.exists() {
                                                 match load_outgoing_metadata(&candidate_meta) {
                                                     Ok(existing) => {
-                                                        metadata = OutgoingResilientMetadata {
+                                                        metadata = super::super::OutgoingResilientMetadata {
                                                             next_index: existing.next_index,
                                                             bytes_sent: existing.bytes_sent,
                                                             chunk_size: if existing.chunk_size == 0 {
@@ -391,7 +145,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         bytes_sent = metadata.bytes_sent.min(size);
                                                         if index > 0 {
                                                             let seek_to = index.saturating_mul(DEFAULT_CHUNK_SIZE as u64);
-                                                            if let Err(e) = f.seek(SeekFrom::Start(seek_to)) {
+                                                            if let Err(e) = f.seek(std::io::SeekFrom::Start(seek_to)) {
                                                                 eprintln!("Failed to seek file for resume: {}", e);
                                                                 index = 0;
                                                                 bytes_sent = 0;
@@ -420,11 +174,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                             }
                                         }
 
-                                        let initial_status = if resumed {
-                                            "resuming"
-                                        } else {
-                                            "transferring"
-                                        };
+                                        let initial_status = if resumed { "resuming" } else { "transferring" };
                                         let initial_progress = if size == 0 {
                                             1.0
                                         } else if bytes_sent == 0 {
@@ -575,26 +325,24 @@ pub async fn initialize_app_state<R: Runtime>(
                     guard.select_next_some().await
                 } => {
                     match event {
-                        SwarmEvent::NewListenAddr { .. } => {
-                        }
-                        SwarmEvent::Behaviour(ComposedEvent::Gossipsub(g_event)) => {
+                        SwarmEvent::NewListenAddr { .. } => {}
+                        SwarmEvent::Behaviour(network::ComposedEvent::Gossipsub(g_event)) => {
                             if let libp2p::gossipsub::GossipsubEvent::Message { propagation_source, message, .. } = g_event {
                                 if message.topic == topic_task.hash() {
                                     {
                                         let mut router_guard = router_task.lock().await;
                                         router_guard.observe_peer(propagation_source.clone());
                                     }
-                                    let payload_opt = match bincode::deserialize::<RoutedFrame>(&message.data) {
-                                        Ok(RoutedFrame::Broadcast { origin, payload }) => {
+                                    let payload_opt = match bincode::deserialize::<network::RoutedFrame>(&message.data) {
+                                        Ok(network::RoutedFrame::Broadcast { origin, payload }) => {
                                             if let Ok(origin_peer) = libp2p::PeerId::from_str(&origin) {
                                                 let mut router_guard = router_task.lock().await;
                                                 router_guard.observe_peer(origin_peer);
                                             }
                                             Some(payload)
                                         }
-                                        Ok(RoutedFrame::Routed { envelope }) => {
-                                            let local_peer_id =
-                                                state_clone_for_aep.identity.peer_id().clone();
+                                        Ok(network::RoutedFrame::Routed { envelope }) => {
+                                            let local_peer_id = state_clone_for_aep.identity.peer_id().clone();
                                             let path_peers: Vec<libp2p::PeerId> = envelope
                                                 .path
                                                 .iter()
@@ -615,7 +363,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     if bridge_can_forward_to(&next_peer).await {
                                                         note_bridge_forward_attempt().await;
                                                         let mut failure: Option<String> = None;
-                                                        let frame = RoutedFrame::Routed {
+                                                        let frame = network::RoutedFrame::Routed {
                                                             envelope: envelope.clone(),
                                                         };
                                                         match bincode::serialize(&frame) {
@@ -746,7 +494,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 let timestamp = chrono::Utc::now();
                                                                 let mut db_attachments = Vec::new();
                                                                 let (content, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet) =
-                                                                    if let Ok(payload) = bincode::deserialize::<EncryptedDmPayload>(&plaintext) {
+                                                                    if let Ok(payload) = bincode::deserialize::<crate::commands::messages::EncryptedDmPayload>(&plaintext) {
                                                                         for descriptor in payload.attachments.into_iter() {
                                                                             if descriptor.data.is_empty() {
                                                                                 continue;
@@ -759,7 +507,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                                 data_len
                                                                             };
                                                                             let attachment_id = uuid::Uuid::new_v4().to_string();
-                                                                            db_attachments.push(database::Attachment {
+                                                                            db_attachments.push(aep::database::Attachment {
                                                                                 id: attachment_id,
                                                                                 message_id: message_id.clone(),
                                                                                 name: descriptor.name.clone(),
@@ -786,7 +534,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                         )
                                                                     };
 
-                                                                let new_message = database::Message {
+                                                                let new_message = aep::database::Message {
                                                                     id: message_id,
                                                                     chat_id,
                                                                     sender_id: sender.clone(),
@@ -803,7 +551,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                     edited_by: None,
                                                                     expires_at: None,
                                                                 };
-                                                                if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
+                                                                if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                             }
                                                         }
                                                     }
@@ -895,7 +643,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         continue;
                                                     }
 
-                                                    if let Err(err) = database::mark_message_as_read(&db_pool_clone, &message_id).await {
+                                                    if let Err(err) = aep::database::mark_message_as_read(&db_pool_clone, &message_id).await {
                                                         eprintln!(
                                                             "Failed to mark message {} as read: {}",
                                                             message_id, err
@@ -903,7 +651,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     }
 
                                                     let timestamp_str = timestamp.to_rfc3339();
-                                                    let payload = ReadReceiptEventPayload {
+                                                    let payload = crate::commands::messages::ReadReceiptEventPayload {
                                                         chat_id,
                                                         message_id,
                                                         reader_id,
@@ -971,7 +719,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         continue;
                                                     }
 
-                                                    if let Err(err) = database::upsert_typing_indicator(
+                                                    if let Err(err) = aep::database::upsert_typing_indicator(
                                                         &db_pool_clone,
                                                         &chat_id,
                                                         &user_id,
@@ -987,7 +735,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     }
 
                                                     let timestamp_str = timestamp.to_rfc3339();
-                                                    let payload = TypingIndicatorEventPayload {
+                                                    let payload = crate::commands::messages::TypingIndicatorEventPayload {
                                                         chat_id,
                                                         user_id,
                                                         is_typing,
@@ -1017,7 +765,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                         if let Some(plaintext) = plaintext_opt {
                                                             let chat_id = channel_id.clone().unwrap_or_else(|| server_id.clone());
                                                             let (content, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet) =
-                                                                if let Ok(payload) = bincode::deserialize::<EncryptedDmPayload>(&plaintext) {
+                                                                if let Ok(payload) = bincode::deserialize::<crate::commands::messages::EncryptedDmPayload>(&plaintext) {
                                                                     (
                                                                         payload.content,
                                                                         payload.reply_to_message_id,
@@ -1032,7 +780,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                         None,
                                                                     )
                                                                 };
-                                                            let new_message = database::Message {
+                                                            let new_message = aep::database::Message {
                                                                 id: uuid::Uuid::new_v4().to_string(),
                                                                 chat_id,
                                                                 sender_id: sender.clone(),
@@ -1049,7 +797,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                                 edited_by: None,
                                                                 expires_at: None,
                                                             };
-                                                            if let Err(e) = database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
+                                                            if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                         }
                                                     }
                                                 }
@@ -1069,7 +817,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                                     }
                                                 }
                                                 _ => {
-                                                    if let Err(e) = handle_aep_message(
+                                                    if let Err(e) = aep::handle_aep_message(
                                                         aep_message.clone(),
                                                         &db_pool_clone,
                                                         state_clone_for_aep.clone(),
@@ -1091,7 +839,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                 }
                             }
                         }
-                        SwarmEvent::Behaviour(ComposedEvent::Mdns(event)) => {
+                        SwarmEvent::Behaviour(network::ComposedEvent::Mdns(event)) => {
                             match event {
                                 libp2p::mdns::MdnsEvent::Discovered(list) => {
                                     let local_peer = state_clone_for_aep.identity.peer_id();
@@ -1103,7 +851,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                             router_guard.observe_direct_link(
                                                 local_peer.clone(),
                                                 peer_id,
-                                                LinkQuality::default(),
+                                                network::LinkQuality::default(),
                                             );
                                             addresses.push(addr);
                                         }
@@ -1122,7 +870,7 @@ pub async fn initialize_app_state<R: Runtime>(
                                 }
                             }
                         }
-                        SwarmEvent::Behaviour(ComposedEvent::ReqRes(event)) => {
+                        SwarmEvent::Behaviour(network::ComposedEvent::ReqRes(event)) => {
                             match event {
                                 libp2p::request_response::RequestResponseEvent::Message { peer, message } => {
                                     match message {
@@ -1231,12 +979,12 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             if let Some(meta_path) = file.metadata_path.clone() {
                                                                 let mut metadata = if meta_path.exists() {
                                                                     match std::fs::read(&meta_path) {
-                                                                        Ok(bytes) => serde_json::from_slice::<IncomingResilientMetadata>(&bytes)
-                                                                            .unwrap_or_else(|_| IncomingResilientMetadata::default()),
-                                                                        Err(_) => IncomingResilientMetadata::default(),
+                                                                        Ok(bytes) => serde_json::from_slice::<super::super::IncomingResilientMetadata>(&bytes)
+                                                                            .unwrap_or_else(|_| super::super::IncomingResilientMetadata::default()),
+                                                                        Err(_) => super::super::IncomingResilientMetadata::default(),
                                                                     }
                                                                 } else {
-                                                                    IncomingResilientMetadata::default()
+                                                                    super::super::IncomingResilientMetadata::default()
                                                                 };
                                                                 metadata.file_size = file.size;
                                                                 metadata.chunk_size = DEFAULT_CHUNK_SIZE;
@@ -1296,7 +1044,6 @@ pub async fn initialize_app_state<R: Runtime>(
                                                             if let Ok(dir) = app_for_emit.path().app_data_dir() {
                                                                 let output_path = dir.join(&safe_name);
                                                                 if let Ok(mut f) = std::fs::File::create(&output_path) {
-                                                                    use std::io::Write;
                                                                     let mut idx = 0u64;
                                                                     while let Some(chunk) = file.received_chunks.get(&idx) {
                                                                         let _ = f.write_all(chunk);
@@ -1367,7 +1114,7 @@ pub async fn initialize_app_state<R: Runtime>(
                 _ = interval.tick() => {
                     {
                         let guard = shared_swarm_task.lock().await;
-                        if !has_any_peers(&guard) { continue; }
+                        if !network::has_any_peers(&guard) { continue; }
                     }
                     let mut pending = outbox_task.lock().await;
                     if pending.is_empty() { continue; }
@@ -1376,7 +1123,7 @@ pub async fn initialize_app_state<R: Runtime>(
                     let mut remaining: Vec<Vec<u8>> = Vec::new();
                     for data in pending.drain(..) {
                         if let Err(e) =
-                            send_data(&mut swarm, &topic_task, &mut router_guard, data.clone()).await
+                            network::send_data(&mut swarm, &topic_task, &mut router_guard, data.clone()).await
                         {
                             eprintln!("Failed to flush queued data: {}", e);
                             remaining.push(data);
@@ -1387,6 +1134,4 @@ pub async fn initialize_app_state<R: Runtime>(
             }
         }
     });
-
-    Ok(())
 }
