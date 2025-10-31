@@ -20,6 +20,8 @@ use aegis_protocol::{
     CreateGroupChatData,
     LeaveGroupChatData,
     RenameGroupChatData,
+    AddGroupChatMembersData,
+    RemoveGroupChatMemberData,
     CreateServerData,
     JoinServerData,
     CreateChannelData,
@@ -907,6 +909,82 @@ pub async fn handle_aep_message(message: AepMessage, db_pool: &Pool<Sqlite>, sta
                     member_id
                 );
             }
+        }
+        AepMessage::AddGroupChatMembers {
+            group_id,
+            member_ids,
+            adder_id,
+            signature,
+        } => {
+            let payload = AddGroupChatMembersData {
+                group_id: group_id.clone(),
+                member_ids: member_ids.clone(),
+                adder_id: adder_id.clone(),
+            };
+            let payload_bytes =
+                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+            let public_key = fetch_public_key_for_user(db_pool, &adder_id).await?;
+
+            if let Some(sig) = signature {
+                if !public_key.verify(&payload_bytes, &sig) {
+                    eprintln!(
+                        "Invalid signature for add group chat members from user: {}",
+                        adder_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "Invalid signature for add group chat members message.".to_string(),
+                    ));
+                }
+            } else {
+                eprintln!(
+                    "Missing signature for add group chat members message from user: {}",
+                    adder_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Missing signature for add group chat members message.".to_string(),
+                ));
+            }
+
+            if !member_ids.is_empty() {
+                database::add_group_chat_members(db_pool, &group_id, &member_ids).await?;
+            }
+        }
+        AepMessage::RemoveGroupChatMember {
+            group_id,
+            member_id,
+            remover_id,
+            signature,
+        } => {
+            let payload = RemoveGroupChatMemberData {
+                group_id: group_id.clone(),
+                member_id: member_id.clone(),
+                remover_id: remover_id.clone(),
+            };
+            let payload_bytes =
+                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+            let public_key = fetch_public_key_for_user(db_pool, &remover_id).await?;
+
+            if let Some(sig) = signature {
+                if !public_key.verify(&payload_bytes, &sig) {
+                    eprintln!(
+                        "Invalid signature for remove group member message from user: {}",
+                        remover_id
+                    );
+                    return Err(AegisError::InvalidInput(
+                        "Invalid signature for remove group member message.".to_string(),
+                    ));
+                }
+            } else {
+                eprintln!(
+                    "Missing signature for remove group member message from user: {}",
+                    remover_id
+                );
+                return Err(AegisError::InvalidInput(
+                    "Missing signature for remove group member message.".to_string(),
+                ));
+            }
+
+            database::remove_group_chat_member(db_pool, &group_id, &member_id).await?;
         }
         AepMessage::RenameGroupChat {
             group_id,

@@ -206,6 +206,26 @@ export interface LeaveGroupChat {
   signature?: BytePayload;
 }
 
+export interface AddGroupChatMembers {
+  group_id?: string;
+  groupId?: string;
+  member_ids?: string[];
+  memberIds?: string[];
+  adder_id?: string;
+  adderId?: string;
+  signature?: BytePayload;
+}
+
+export interface RemoveGroupChatMember {
+  group_id?: string;
+  groupId?: string;
+  member_id?: string;
+  memberId?: string;
+  remover_id?: string;
+  removerId?: string;
+  signature?: BytePayload;
+}
+
 export interface CreateServer {
   server: Server;
   signature?: BytePayload;
@@ -296,4 +316,6 @@ export interface AepMessage {
   MessageReaction?: MessageReaction;
   CreateGroupChat?: CreateGroupChat;
   LeaveGroupChat?: LeaveGroupChat;
+  AddGroupChatMembers?: AddGroupChatMembers;
+  RemoveGroupChatMember?: RemoveGroupChatMember;
 }

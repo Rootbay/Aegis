@@ -286,4 +286,72 @@ describe("chatStore group chat management", () => {
     const entry = get(store.groupChats).get("group-1");
     expect(entry?.name).toBe("Updated title");
   });
+
+  it("adds new members via the add_group_dm_member command", async () => {
+    const store = createChatStore();
+    const { createdAt } = seedGroup(store);
+
+    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+      expect(command).toBe("add_group_dm_member");
+      expect(payload).toMatchObject({
+        groupId: "group-1",
+        group_id: "group-1",
+        memberIds: ["user-789"],
+        member_ids: ["user-789"],
+      });
+      return {
+        id: "group-1",
+        name: "Initial name",
+        owner_id: "user-123",
+        created_at: createdAt,
+        member_ids: ["user-123", "user-456", "user-789"],
+      } satisfies BackendGroupChat;
+    });
+
+    const summary = await store.addMembersToGroupChat("group-1", [
+      "user-789",
+      "user-789",
+    ]);
+
+    expect(summary.memberIds).toContain("user-789");
+    const entry = get(store.groupChats).get("group-1");
+    expect(entry?.memberIds).toEqual(["user-123", "user-456", "user-789"]);
+  });
+
+  it("removes a member via the remove_group_dm_member command", async () => {
+    const store = createChatStore();
+    const { createdAt } = seedGroup(store);
+
+    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+      expect(command).toBe("remove_group_dm_member");
+      expect(payload).toMatchObject({
+        groupId: "group-1",
+        group_id: "group-1",
+        memberId: "user-456",
+        member_id: "user-456",
+      });
+      return {
+        id: "group-1",
+        name: "Initial name",
+        owner_id: "user-123",
+        created_at: createdAt,
+        member_ids: ["user-123"],
+      } satisfies BackendGroupChat;
+    });
+
+    await store.removeGroupChatMember("group-1", "user-456");
+
+    const entry = get(store.groupChats).get("group-1");
+    expect(entry?.memberIds).toEqual(["user-123"]);
+  });
+
+  it("merges incoming group member additions", () => {
+    const store = createChatStore();
+    seedGroup(store);
+
+    store.handleGroupMembersAdded("group-1", ["user-456", "user-789"]);
+
+    const entry = get(store.groupChats).get("group-1");
+    expect(entry?.memberIds).toEqual(["user-123", "user-456", "user-789"]);
+  });
 });

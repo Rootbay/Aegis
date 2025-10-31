@@ -592,6 +592,26 @@ export function createAppController(): AppController {
             return;
           }
 
+          if (receivedMessage.AddGroupChatMembers) {
+            const payload = receivedMessage.AddGroupChatMembers;
+            const groupId = payload.group_id ?? payload.groupId;
+            const memberIds = payload.member_ids ?? payload.memberIds ?? [];
+            if (groupId && Array.isArray(memberIds) && memberIds.length) {
+              chatStore.handleGroupMembersAdded(groupId, memberIds);
+            }
+            return;
+          }
+
+          if (receivedMessage.RemoveGroupChatMember) {
+            const payload = receivedMessage.RemoveGroupChatMember;
+            const groupId = payload.group_id ?? payload.groupId;
+            const memberId = payload.member_id ?? payload.memberId;
+            if (groupId && memberId) {
+              chatStore.handleGroupMemberLeft(groupId, memberId);
+            }
+            return;
+          }
+
           if (receivedMessage.CreateGroupChat) {
             const groupPayload = receivedMessage.CreateGroupChat;
             const groupId =
