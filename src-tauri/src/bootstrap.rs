@@ -22,7 +22,10 @@ use tokio::sync::mpsc::Sender as TokioSender;
 use crate::commands::messages::{
     EncryptedDmPayload, ReadReceiptEventPayload, TypingIndicatorEventPayload,
 };
-use crate::connectivity::spawn_connectivity_task;
+use crate::connectivity::{
+    bridge_can_forward_to, emit_bridge_snapshot, note_bridge_forward_attempt,
+    note_bridge_forward_failure, note_bridge_forward_success, spawn_connectivity_task,
+};
 
 const MAX_OUTBOX_MESSAGES: usize = 256;
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
@@ -596,6 +599,8 @@ pub async fn initialize_app_state<R: Runtime>(
                                             Some(payload)
                                         }
                                         Ok(RoutedFrame::Routed { envelope }) => {
+                                            let local_peer_id =
+                                                state_clone_for_aep.identity.peer_id().clone();
                                             let path_peers: Vec<libp2p::PeerId> = envelope
                                                 .path
                                                 .iter()
@@ -608,6 +613,77 @@ pub async fn initialize_app_state<R: Runtime>(
                                                 }
                                             }
                                             if envelope.destination != local_peer_id_str {
+                                                let next_hop = path_peers
+                                                    .iter()
+                                                    .position(|peer| peer == &local_peer_id)
+                                                    .and_then(|idx| path_peers.get(idx + 1).cloned());
+                                                if let Some(next_peer) = next_hop {
+                                                    if bridge_can_forward_to(&next_peer).await {
+                                                        note_bridge_forward_attempt().await;
+                                                        let mut failure: Option<String> = None;
+                                                        let frame = RoutedFrame::Routed {
+                                                            envelope: envelope.clone(),
+                                                        };
+                                                        match bincode::serialize(&frame) {
+                                                            Ok(bytes) => {
+                                                                let publish_outcome = {
+                                                                    let mut swarm_guard =
+                                                                        shared_swarm_task.lock().await;
+                                                                    swarm_guard
+                                                                        .behaviour_mut()
+                                                                        .gossipsub
+                                                                        .publish(topic_task.clone(), bytes)
+                                                                };
+
+                                                                match publish_outcome {
+                                                                    Ok(_) => {
+                                                                        note_bridge_forward_success()
+                                                                            .await;
+                                                                        if let Err(err) =
+                                                                            emit_bridge_snapshot(&app_for_emit)
+                                                                                .await
+                                                                        {
+                                                                            eprintln!(
+                                                                                "Failed to emit bridge snapshot: {}",
+                                                                                err
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    Err(error) => {
+                                                                        failure = Some(format!(
+                                                                            "Forwarding to {} failed: {}",
+                                                                            next_peer.to_base58(),
+                                                                            error
+                                                                        ));
+                                                                    }
+                                                                }
+                                                            }
+                                                            Err(error) => {
+                                                                failure = Some(format!(
+                                                                    "Forwarding serialization failed: {}",
+                                                                    error
+                                                                ));
+                                                            }
+                                                        }
+
+                                                        if let Some(message) = failure {
+                                                            note_bridge_forward_failure(
+                                                                message.clone(),
+                                                            )
+                                                            .await;
+                                                            if let Err(err) =
+                                                                emit_bridge_snapshot(&app_for_emit)
+                                                                    .await
+                                                            {
+                                                                eprintln!(
+                                                                    "Failed to emit bridge snapshot: {}",
+                                                                    err
+                                                                );
+                                                            }
+                                                            eprintln!("{}", message);
+                                                        }
+                                                    }
+                                                }
                                                 continue;
                                             }
                                             {

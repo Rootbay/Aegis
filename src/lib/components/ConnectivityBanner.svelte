@@ -24,6 +24,7 @@
   }>();
 
   let enablingBridge = $state(false);
+  let lastGatewayError = $state<string | null>(null);
 
   const gatewayStatus = $derived(() => state.gatewayStatus);
 
@@ -119,6 +120,19 @@
         return null;
       default:
         return null;
+    }
+  });
+
+  $effect(() => {
+    const status = gatewayStatus();
+    const error = status.lastError;
+    if (status.bridgeModeEnabled && !status.forwarding && error) {
+      if (error !== lastGatewayError) {
+        toasts.addToast(`Bridge forwarding issue: ${error}`, "warning");
+        lastGatewayError = error;
+      }
+    } else if (!error) {
+      lastGatewayError = null;
     }
   });
 

@@ -7,7 +7,7 @@ use aegis_shared_types::{
     ConnectivityEventPayload, ConnectivityGatewayStatus, ConnectivityLink, ConnectivityPeer,
     ConnectivityTransportStatus,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use libp2p::{multiaddr::Protocol, swarm::Swarm, Multiaddr, PeerId};
 use once_cell::sync::{Lazy, OnceCell};
 use tauri::{AppHandle, Emitter, Runtime};
@@ -29,6 +29,9 @@ struct BridgeSnapshot {
     tracked_peers: Vec<PeerId>,
     last_dial_attempt: Option<DateTime<Utc>>,
     last_error: Option<String>,
+    last_forward_attempt: Option<DateTime<Utc>>,
+    last_forward_success: Option<DateTime<Utc>>,
+    last_forward_failure: Option<DateTime<Utc>>,
 }
 
 #[derive(Default)]
@@ -38,6 +41,9 @@ struct BridgeState {
     tracked_peers: HashSet<PeerId>,
     last_dial_attempt: Option<DateTime<Utc>>,
     last_error: Option<String>,
+    last_forward_attempt: Option<DateTime<Utc>>,
+    last_forward_success: Option<DateTime<Utc>>,
+    last_forward_failure: Option<DateTime<Utc>>,
 }
 
 impl BridgeState {
@@ -55,6 +61,9 @@ impl BridgeState {
             tracked_peers: self.tracked_peers.iter().cloned().collect(),
             last_dial_attempt: self.last_dial_attempt,
             last_error: self.last_error.clone(),
+            last_forward_attempt: self.last_forward_attempt,
+            last_forward_success: self.last_forward_success,
+            last_forward_failure: self.last_forward_failure,
         }
     }
 
@@ -155,9 +164,12 @@ pub fn spawn_connectivity_task<R: Runtime>(
         let local_peer_id_clone = local_peer_id.clone();
         tokio::spawn(async move {
             while transport_events.recv().await.is_ok() {
-                if let Some(snapshot) =
-                    collect_and_store_snapshot(&swarm_clone, &local_peer_id_clone, &snapshot_store_clone)
-                        .await
+                if let Some(snapshot) = collect_and_store_snapshot(
+                    &swarm_clone,
+                    &local_peer_id_clone,
+                    &snapshot_store_clone,
+                )
+                .await
                 {
                     if let Err(error) = app_clone.emit("connectivity-status", snapshot.clone()) {
                         eprintln!("Failed to emit connectivity snapshot: {}", error);
@@ -301,7 +313,7 @@ fn compute_snapshot(
     let bridge_mode_enabled = bridge_snapshot
         .map(|snapshot| snapshot.enabled)
         .unwrap_or(false);
-    let forwarding_active = bridge_mode_enabled && upstream_connected > 0;
+    let forwarding_active = forwarding_active(bridge_snapshot, upstream_connected);
 
     let mut peer_entries: HashMap<String, ConnectivityPeer> = HashMap::new();
     peer_entries.insert(
@@ -487,6 +499,27 @@ fn compute_snapshot(
     }
 }
 
+fn forwarding_active(bridge_snapshot: Option<&BridgeSnapshot>, upstream_connected: u32) -> bool {
+    if upstream_connected == 0 {
+        return false;
+    }
+
+    let snapshot = match bridge_snapshot {
+        Some(snapshot) if snapshot.enabled => snapshot,
+        _ => return false,
+    };
+
+    let last_success = match snapshot.last_forward_success {
+        Some(timestamp) => timestamp,
+        None => return false,
+    };
+
+    let now = Utc::now();
+    let freshness_window = ChronoDuration::seconds(45);
+
+    now - last_success <= freshness_window
+}
+
 pub async fn set_bridge_mode_enabled<R: Runtime>(
     app: &AppHandle<R>,
     enabled: bool,
@@ -507,6 +540,9 @@ pub async fn set_bridge_mode_enabled<R: Runtime>(
             state.ensure_targets();
             state.last_dial_attempt = Some(Utc::now());
             state.last_error = None;
+            state.last_forward_attempt = None;
+            state.last_forward_success = None;
+            state.last_forward_failure = None;
 
             if state.upstream_targets.is_empty() {
                 let message = "No upstream targets configured".to_string();
@@ -527,6 +563,9 @@ pub async fn set_bridge_mode_enabled<R: Runtime>(
             state.last_error = None;
             state.last_dial_attempt = None;
             state.tracked_peers.clear();
+            state.last_forward_attempt = None;
+            state.last_forward_success = None;
+            state.last_forward_failure = None;
         }
     }
 
@@ -557,6 +596,68 @@ pub async fn set_bridge_mode_enabled<R: Runtime>(
     Ok(snapshot
         .gateway_status
         .unwrap_or_else(ConnectivityGatewayStatus::default))
+}
+
+pub async fn bridge_can_forward_to(peer: &PeerId) -> bool {
+    let state = BRIDGE_STATE.lock().await;
+    state.enabled && state.tracked_peers.contains(peer)
+}
+
+pub async fn note_bridge_forward_attempt() {
+    let mut state = BRIDGE_STATE.lock().await;
+    state.last_forward_attempt = Some(Utc::now());
+}
+
+pub async fn note_bridge_forward_success() {
+    let mut state = BRIDGE_STATE.lock().await;
+    state.last_forward_success = Some(Utc::now());
+    state.last_error = None;
+}
+
+pub async fn note_bridge_forward_failure(error: String) {
+    let mut state = BRIDGE_STATE.lock().await;
+    state.last_forward_failure = Some(Utc::now());
+    state.last_error = Some(error);
+}
+
+pub async fn emit_bridge_snapshot<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let _ = refresh_connectivity_snapshot(app).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bridge_snapshot_with_success(age_secs: i64, upstream: u32) -> (BridgeSnapshot, u32) {
+        let now = Utc::now();
+        let snapshot = BridgeSnapshot {
+            enabled: true,
+            upstream_targets: Vec::new(),
+            tracked_peers: Vec::new(),
+            last_dial_attempt: None,
+            last_error: None,
+            last_forward_attempt: Some(now - ChronoDuration::seconds(age_secs)),
+            last_forward_success: Some(now - ChronoDuration::seconds(age_secs)),
+            last_forward_failure: None,
+        };
+        (snapshot, upstream)
+    }
+
+    #[test]
+    fn forwarding_active_requires_recent_success() {
+        let (recent, upstream) = bridge_snapshot_with_success(10, 2);
+        assert!(forwarding_active(Some(&recent), upstream));
+
+        let (stale, upstream) = bridge_snapshot_with_success(180, 2);
+        assert!(!forwarding_active(Some(&stale), upstream));
+    }
+
+    #[test]
+    fn forwarding_inactive_without_upstream() {
+        let (recent, _upstream) = bridge_snapshot_with_success(5, 0);
+        assert!(!forwarding_active(Some(&recent), 0));
+    }
 }
 
 pub async fn set_bluetooth_enabled<R: Runtime>(
