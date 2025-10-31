@@ -1,9 +1,9 @@
 import { writable, type Readable, get } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
-import type { User } from "$lib/features/auth/models/User";
-import { toasts } from "$lib/stores/ToastStore";
-import { userCache } from "$lib/utils/cache";
-import { presenceStore } from "$lib/features/presence/presenceStore";
+import type { User } from "../features/auth/models/User";
+import { toasts } from "./ToastStore";
+import { userCache } from "../utils/cache";
+import { presenceStore } from "../features/presence/presenceStore";
 
 const FALLBACK_AVATAR = (id: string) =>
   `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${id}`;

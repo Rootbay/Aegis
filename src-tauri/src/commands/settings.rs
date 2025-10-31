@@ -1,13 +1,8 @@
 use crate::commands::state::AppStateContainer;
-use serde::{Deserialize, Serialize};
+use crate::settings_store;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri::State;
-
-#[derive(Serialize, Deserialize)]
-struct PersistedSettings {
-    file_acl_policy: String,
-}
 
 #[tauri::command]
 pub async fn get_file_acl_policy(
@@ -35,20 +30,14 @@ pub async fn set_file_acl_policy(
         "friends_only" => aegis_shared_types::FileAclPolicy::FriendsOnly,
         _ => aegis_shared_types::FileAclPolicy::Everyone,
     };
-    // Persist to settings.json under app_data_dir
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
     let path = app_data_dir.join("settings.json");
-    let to_write = PersistedSettings {
-        file_acl_policy: match &*guard {
-            aegis_shared_types::FileAclPolicy::FriendsOnly => "friends_only".into(),
-            aegis_shared_types::FileAclPolicy::Everyone => "everyone".into(),
-        },
-    };
-    let json = serde_json::to_vec_pretty(&to_write).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())?;
+    let mut persisted = settings_store::load_settings(&path).unwrap_or_default();
+    persisted.file_acl_policy = Some(match &*guard {
+        aegis_shared_types::FileAclPolicy::FriendsOnly => "friends_only".to_string(),
+        aegis_shared_types::FileAclPolicy::Everyone => "everyone".to_string(),
+    });
+    settings_store::save_settings(&path, &persisted)?;
     Ok(())
 }
 

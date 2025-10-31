@@ -1,6 +1,10 @@
 import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
+import type {
+  RelayScope,
+  RelayStatus,
+} from "$lib/features/settings/models/relay";
 import type { Role } from "./Role";
 import type { ServerInvite } from "./ServerInvite";
 
@@ -57,6 +61,14 @@ export type ServerModerationSettings = {
   [key: string]: unknown;
 };
 
+export interface ServerRelayParticipation {
+  relayId: string;
+  label: string;
+  scope: RelayScope;
+  status: RelayStatus;
+  lastCheckedAt: string | null;
+}
+
 export interface Server {
   id: string;
   name: string;
@@ -78,4 +90,5 @@ export interface Server {
   stickers?: ServerSticker[];
   widgetSettings?: ServerWidgetSettings | null;
   auditLog?: ServerAuditLogEntry[];
+  relayParticipation?: ServerRelayParticipation[];
 }

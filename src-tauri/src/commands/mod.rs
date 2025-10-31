@@ -11,6 +11,7 @@ pub mod messages;
 pub mod moderation;
 pub mod presence;
 pub mod reviews;
+pub mod relays;
 pub mod servers;
 pub mod settings;
 pub mod state;

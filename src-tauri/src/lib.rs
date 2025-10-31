@@ -1,6 +1,7 @@
 pub mod bootstrap;
 pub mod commands;
 pub mod connectivity;
+pub mod settings_store;
 
 use crate::commands::state::AppStateContainer;
 
@@ -102,6 +103,10 @@ pub async fn run() {
             commands::settings::get_file_acl_policy,
             commands::settings::set_file_acl_policy,
             commands::settings::set_voice_memos_enabled,
+            commands::relays::list_relays,
+            commands::relays::register_relay,
+            commands::relays::remove_relay,
+            commands::relays::update_relay_health,
             commands::data_privacy::export_user_data,
             commands::data_privacy::request_account_deletion,
             commands::data_privacy::panic_wipe,

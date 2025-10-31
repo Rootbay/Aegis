@@ -1,6 +1,13 @@
-import { browser } from "$app/environment";
 import { derived, writable, type Readable } from "svelte/store";
-import { getInvoke, getListen } from "$services/tauri";
+import { getInvoke, getListen } from "../services/tauri";
+import type {
+  RelaySnapshot,
+  RelayStatus,
+  RelayScope,
+} from "../features/settings/models/relay";
+import { relayStore } from "../features/settings/stores/relayStore";
+
+const browser = typeof window !== "undefined" && typeof document !== "undefined";
 
 export type ConnectivityStatus =
   | "initializing"
@@ -48,6 +55,7 @@ export interface ConnectivityEventPayload {
   reason?: string | null;
   gatewayStatus?: PartialGatewayStatus | null;
   transports?: PartialTransportStatus | null;
+  relays?: Array<PartialRelaySnapshot> | null;
 }
 
 export interface ConnectivityState {
@@ -67,6 +75,8 @@ export interface ConnectivityState {
   bestRouteQuality: number | null;
   averageRouteQuality: number | null;
   averageSuccessRate: number | null;
+  relays: RelaySnapshot[];
+  activeRelayCount: number;
 }
 
 type PartialMeshPeer = {
@@ -95,6 +105,23 @@ type PartialMeshLink = {
   type?: ConnectionMedium | null;
   latencyMs?: number | null;
   latency_ms?: number | null;
+};
+
+type PartialRelaySnapshot = {
+  id?: string | null;
+  label?: string | null;
+  urls?: string[] | null;
+  scope?: RelayScope | null;
+  serverIds?: string[] | null;
+  hasCredential?: boolean | null;
+  status?: RelayStatus | null;
+  lastCheckedAt?: string | null;
+  last_checked_at?: string | null;
+  latencyMs?: number | null;
+  latency_ms?: number | null;
+  uptimePercent?: number | null;
+  uptime_percent?: number | null;
+  error?: string | null;
 };
 
 export interface GatewayStatus {
@@ -174,6 +201,8 @@ const initialState: ConnectivityState = {
   bestRouteQuality: null,
   averageRouteQuality: null,
   averageSuccessRate: null,
+  relays: [],
+  activeRelayCount: 0,
 };
 
 const fallbackSnapshots: ConnectivityEventPayload[] = [
@@ -194,6 +223,7 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
       wifiDirectPeers: [],
       localPeerId: null,
     },
+    relays: [],
   },
   {
     internetReachable: false,
@@ -256,6 +286,17 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
       wifiDirectPeers: [],
       localPeerId: "self",
     },
+    relays: [
+      {
+        id: "mesh-relay",
+        label: "Relay Beacon",
+        scope: "global",
+        serverIds: [],
+        hasCredential: false,
+        status: "degraded",
+        lastCheckedAt: new Date().toISOString(),
+      },
+    ],
   },
   {
     internetReachable: true,
@@ -355,6 +396,19 @@ const fallbackSnapshots: ConnectivityEventPayload[] = [
       wifiDirectPeers: ["mesh-relay"],
       localPeerId: "self",
     },
+    relays: [
+      {
+        id: "mesh-relay",
+        label: "Relay Beacon",
+        scope: "global",
+        serverIds: [],
+        hasCredential: false,
+        status: "healthy",
+        lastCheckedAt: new Date().toISOString(),
+        latencyMs: 42,
+        uptimePercent: 99.2,
+      },
+    ],
   },
 ];
 
@@ -363,6 +417,14 @@ const meshConnectionMediums: ConnectionMedium[] = [
   "bluetooth",
   "wifi-direct",
   "bridge",
+];
+
+const relayScopes: RelayScope[] = ["global", "server"];
+const relayStatuses: RelayStatus[] = [
+  "unknown",
+  "healthy",
+  "degraded",
+  "offline",
 ];
 
 function normalizePeer(peer: PartialMeshPeer, index: number): MeshPeer {
@@ -485,6 +547,51 @@ function normalizeTransportStatus(
   };
 }
 
+function normalizeRelay(
+  relay: PartialRelaySnapshot,
+  index: number,
+): RelaySnapshot {
+  const id = relay.id ?? `relay-${index}`;
+  const scopeCandidate = (relay.scope ?? "global") as RelayScope;
+  const scope = relayScopes.includes(scopeCandidate) ? scopeCandidate : "global";
+  const statusCandidate = (relay.status ?? "unknown") as RelayStatus;
+  const status = relayStatuses.includes(statusCandidate)
+    ? statusCandidate
+    : "unknown";
+  const latency =
+    typeof relay.latencyMs === "number"
+      ? relay.latencyMs
+      : typeof relay.latency_ms === "number"
+        ? relay.latency_ms
+        : null;
+  const uptime =
+    typeof relay.uptimePercent === "number"
+      ? relay.uptimePercent
+      : typeof relay.uptime_percent === "number"
+        ? relay.uptime_percent
+        : null;
+  const urls = Array.isArray(relay.urls)
+    ? relay.urls.filter((value): value is string => typeof value === "string")
+    : [];
+  const serverIds = Array.isArray(relay.serverIds)
+    ? relay.serverIds.filter((value): value is string => typeof value === "string")
+    : [];
+
+  return {
+    id,
+    label: relay.label ?? id,
+    urls,
+    scope,
+    serverIds,
+    hasCredential: Boolean(relay.hasCredential ?? false),
+    status,
+    lastCheckedAt: relay.lastCheckedAt ?? relay.last_checked_at ?? null,
+    latencyMs: latency,
+    uptimePercent: uptime,
+    error: relay.error ?? null,
+  };
+}
+
 function computeStatus(
   state: ConnectivityState,
   payload: ConnectivityEventPayload,
@@ -514,16 +621,28 @@ function describeStatus(state: ConnectivityState): string {
       if (state.meshPeers === 0) {
         return "Mesh link established, awaiting peers.";
       }
+      const relayHint =
+        state.activeRelayCount > 0
+          ? ` ${state.activeRelayCount} relay${
+              state.activeRelayCount === 1 ? "" : "s"
+            } standing by.`
+          : "";
       return `Connected to ${state.meshPeers} mesh peer${
         state.meshPeers === 1 ? "" : "s"
-      }. Internet unavailable.`;
+      }. Internet unavailable.${relayHint}`.trim();
     }
     case "online": {
       const meshPart =
         state.meshPeers > 0
           ? ` ${state.meshPeers} mesh peer${state.meshPeers === 1 ? "" : "s"}.`
           : "";
-      return `Online with global connectivity.${meshPart}`.trim();
+      const relayPart =
+        state.activeRelayCount > 0
+          ? ` ${state.activeRelayCount} relay${
+              state.activeRelayCount === 1 ? "" : "s"
+            } forwarding traffic.`
+          : "";
+      return `Online with global connectivity.${meshPart}${relayPart}`.trim();
     }
     default:
       return "";
@@ -554,6 +673,17 @@ export function createConnectivityStore(): ConnectivityStore {
 
       const gatewayStatus = normalizeGatewayStatus(payload.gatewayStatus);
       const transportStatus = normalizeTransportStatus(payload.transports);
+
+      let relays = current.relays;
+      if (Array.isArray(payload.relays)) {
+        relays = payload.relays.map(normalizeRelay);
+        if (relays.length > 0) {
+          relayStore.mapRelayParticipation(relays);
+        }
+      }
+      const activeRelayCount = relays.filter((relay) =>
+        relay.status === "healthy" || relay.status === "degraded",
+      ).length;
 
       const meshPeers =
         typeof payload.meshPeers === "number"
@@ -610,6 +740,8 @@ export function createConnectivityStore(): ConnectivityStore {
         bestRouteQuality,
         averageRouteQuality,
         averageSuccessRate,
+        relays,
+        activeRelayCount,
       } satisfies ConnectivityState;
     });
   };

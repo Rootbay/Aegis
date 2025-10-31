@@ -1,6 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get } from "svelte/store";
 
+vi.mock("$lib/features/settings/stores/relayStore", () => ({
+  relayStore: {
+    initialize: vi.fn(),
+    refresh: vi.fn(),
+    registerRelay: vi.fn(),
+    removeRelay: vi.fn(),
+    updateRelayHealth: vi.fn(),
+    mapRelayParticipation: vi.fn(),
+    subscribe: () => () => {},
+  },
+}));
+
 import { connectivityStore } from "../../src/lib/stores/connectivityStore";
 
 describe("bridge relay integration", () => {
@@ -70,5 +82,28 @@ describe("bridge relay integration", () => {
     expect(state.gatewayStatus.lastError).toContain("Forwarding to");
     expect(state.gatewayStatus.bridgeModeEnabled).toBe(true);
     expect(state.gatewayStatus.forwarding).toBe(false);
+  });
+
+  it("tracks relay telemetry and active relay count", () => {
+    connectivityStore.handleBackendEvent({
+      relays: [
+        {
+          id: "relay-alpha",
+          label: "Relay Alpha",
+          scope: "global",
+          status: "healthy",
+        },
+        {
+          id: "relay-beta",
+          label: "Relay Beta",
+          scope: "global",
+          status: "offline",
+        },
+      ],
+    });
+
+    const state = get(connectivityStore);
+    expect(state.relays).toHaveLength(2);
+    expect(state.activeRelayCount).toBe(1);
   });
 });
