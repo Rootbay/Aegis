@@ -9,8 +9,8 @@
     DropdownMenuSeparator,
   } from "$lib/components/ui/dropdown-menu";
 
-  type SizeHandler = (size: number) => void;
-  type ZoomHandler = (zoom: number) => void;
+  type SizeHandler = ({ size }: { size: number }) => void;
+  type ZoomHandler = ({ zoom }: { zoom: number }) => void;
 
   type MagnifierContextMenuProps = {
     x?: number;
@@ -36,12 +36,12 @@
   }
 
   function setMagnifierSize(size: number) {
-    onsetMagnifierSize?.(size);
+    onsetMagnifierSize?.({ size });
     close();
   }
 
   function setMagnifierZoom(zoom: number) {
-    onsetMagnifierZoom?.(zoom);
+    onsetMagnifierZoom?.({ zoom });
     close();
   }
 </script>

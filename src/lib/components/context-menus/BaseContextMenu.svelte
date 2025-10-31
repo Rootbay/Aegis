@@ -7,7 +7,10 @@
     data?: TData | null;
   };
 
-  type ContextMenuHandler<TData> = (payload: {
+  type ContextMenuHandler<TData> = ({
+    action,
+    itemData,
+  }: {
     action: string;
     itemData: TData | null;
   }) => void;

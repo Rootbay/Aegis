@@ -3,16 +3,15 @@
 <script lang="ts">
   import { Badge } from "$lib/components/ui/badge";
   import { Button } from "$lib/components/ui/button";
-  import { Alert } from "$lib/components/ui/alert/alert.svelte";
-  import AlertDescription from "$lib/components/ui/alert/alert-description.svelte";
+  import { Alert, AlertDescription } from "$lib/components/ui/alert/index.js";
   import { toasts } from "$lib/stores/ToastStore";
   import { setEnableBridgeMode } from "$lib/features/settings/stores/settings";
   import type { ConnectivityState } from "$lib/stores/connectivityStore";
-  import { AlertTriangle, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
+  import { TriangleAlert, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
   import { goto } from "$app/navigation";
 
   let {
-    state,
+    state: connectivityState,
     statusMessage,
     fallbackMessage,
     showBridgePrompt = false,
@@ -26,10 +25,10 @@
   let enablingBridge = $state(false);
   let lastGatewayError = $state<string | null>(null);
 
-  const gatewayStatus = $derived(() => state.gatewayStatus);
+  const gatewayStatus = $derived(() => connectivityState.gatewayStatus);
 
   const statusLabel = $derived(() => {
-    switch (state.status) {
+    switch (connectivityState.status) {
       case "online":
         return "Online";
       case "mesh-only":
@@ -42,7 +41,7 @@
   });
 
   const statusVariant = $derived(() => {
-    switch (state.status) {
+    switch (connectivityState.status) {
       case "online":
         return "default" as const;
       case "mesh-only":
@@ -54,8 +53,8 @@
     }
   });
 
-  const StatusIcon = $derived(() => {
-    switch (state.status) {
+  const StatusIconComponent = $derived(() => {
+    switch (connectivityState.status) {
       case "online":
         return Wifi;
       case "mesh-only":
@@ -69,18 +68,22 @@
 
   const meshSummary = $derived(() => {
     const parts = [
-      `Mesh peers: ${state.meshPeers}`,
-      `Total peers: ${state.totalPeers}`,
+      `Mesh peers: ${connectivityState.meshPeers}`,
+      `Total peers: ${connectivityState.totalPeers}`,
     ];
-    if (state.activeRelayCount > 0) {
-      parts.push(`Relays: ${state.activeRelayCount}`);
+    if (connectivityState.activeRelayCount > 0) {
+      parts.push(`Relays: ${connectivityState.activeRelayCount}`);
     }
-    if (state.bestRouteQuality !== null) {
-      parts.push(`Best route ${Math.round(state.bestRouteQuality * 100)}%`);
-    }
-    if (state.averageSuccessRate !== null) {
+    if (connectivityState.bestRouteQuality !== null) {
       parts.push(
-        `Avg reliability ${Math.round(state.averageSuccessRate * 100)}%`,
+        `Best route ${Math.round(connectivityState.bestRouteQuality * 100)}%`,
+      );
+    }
+    if (connectivityState.averageSuccessRate !== null) {
+      parts.push(
+        `Avg reliability ${Math.round(
+          connectivityState.averageSuccessRate * 100,
+        )}%`,
       );
     }
     return parts.join(" • ");
@@ -95,7 +98,7 @@
         ? ("warning" as const)
         : ("info" as const);
     }
-    if (state.bridgeSuggested) {
+    if (connectivityState.bridgeSuggested) {
       return "warning" as const;
     }
     return null;
@@ -185,7 +188,7 @@
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex flex-wrap items-center gap-3 text-sm">
       <Badge variant={statusVariant()} class="flex items-center gap-1">
-        <svelte:component this={StatusIcon()} class="size-3" />
+        <StatusIconComponent class="size-3" />
         {statusLabel()}
       </Badge>
       <span class="text-muted-foreground">{meshSummary()}</span>
@@ -227,7 +230,7 @@
   <Alert
     class="mx-4 mb-2 mt-2 border-amber-500/40 bg-amber-500/10 text-amber-600"
   >
-    <AlertTriangle class="size-4" />
+    <TriangleAlert class="size-4" />
     <AlertDescription class="text-sm">{fallbackMessage}</AlertDescription>
   </Alert>
 {/if}

@@ -38,10 +38,12 @@
     type SearchResults,
   } from "./directMessageSearch";
 
-  type SelectChatHandler = (
-    chatId: string | null,
-    type?: "dm" | "group",
-  ) => void;
+  type SelectChatParams = {
+    chatId: string | null;
+    type?: "dm" | "group";
+  };
+
+  type SelectChatHandler = (params: SelectChatParams) => void; // eslint-disable-line no-unused-vars
 
   let {
     entries = [],
@@ -103,7 +105,7 @@
   ) {
     const item = dmEntries.find((entry) => entry.id === entryId)?.friend;
     if (!item) return;
-    if (action === "open") onSelect(entryId, "dm");
+    if (action === "open") onSelect({ chatId: entryId, type: "dm" });
     if (action === "mute") {
       toggleMute(item);
     }
@@ -187,7 +189,7 @@
     <Button
       variant="ghost"
       class="text-xl font-bold px-0 justify-start w-full"
-      onclick={() => onSelect(null)}
+      onclick={() => onSelect({ chatId: null })}
     >
       Friends
     </Button>
@@ -240,7 +242,8 @@
                   variant="ghost"
                   class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
                   data-active={activeChatId === entry.id}
-                  onclick={() => onSelect(entry.id, "dm")}
+                  onclick={() =>
+                    onSelect({ chatId: entry.id, type: "dm" })}
                 >
                   <div class="relative">
                     <Avatar class="h-10 w-10">
@@ -309,7 +312,8 @@
               variant="ghost"
               class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
               data-active={activeChatId === entry.id}
-              onclick={() => onSelect(entry.id, "group")}
+              onclick={() =>
+                onSelect({ chatId: entry.id, type: "group" })}
             >
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
@@ -374,7 +378,7 @@
                         variant="ghost"
                         class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
                         onclick={() => {
-                          onSelect(item.id, "dm");
+                          onSelect({ chatId: item.id, type: "dm" });
                           showSearch = false;
                           searchTerm = "";
                         }}
@@ -419,7 +423,7 @@
                       variant="ghost"
                       class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
                       onclick={() => {
-                        onSelect(item.id, "group");
+                        onSelect({ chatId: item.id, type: "group" });
                         showSearch = false;
                         searchTerm = "";
                       }}

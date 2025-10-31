@@ -109,7 +109,8 @@
     if (value) {
       inviteActionState = { ...inviteActionState, [inviteId]: true };
     } else {
-      const { [inviteId]: _removed, ...rest } = inviteActionState;
+      const rest = { ...inviteActionState };
+      delete rest[inviteId];
       inviteActionState = rest;
     }
   }

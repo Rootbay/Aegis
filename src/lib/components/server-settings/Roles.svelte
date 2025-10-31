@@ -3,6 +3,7 @@
   import type { Role } from "$lib/features/servers/models/Role";
   import type { User } from "$lib/features/auth/models/User";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import { SvelteSet } from "svelte/reactivity";
 
   let activeServerId = $derived($serverStore.activeServerId ?? null);
   let server = $derived(
@@ -35,7 +36,7 @@
   }
 
   const dedupeMemberIds = (ids: string[]): string[] => {
-    const set = new Set<string>();
+    const set = new SvelteSet<string>();
     for (const id of ids) {
       if (typeof id === "string" && id.trim().length > 0) {
         set.add(id);

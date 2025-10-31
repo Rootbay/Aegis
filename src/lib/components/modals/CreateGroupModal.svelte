@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { SvelteSet } from "svelte/reactivity";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import {
     Dialog,
     DialogContent,
@@ -8,7 +8,6 @@
     DialogTitle,
     DialogDescription,
     DialogFooter,
-    DialogClose,
   } from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button/index.js";
   import { toasts } from "$lib/stores/ToastStore";
@@ -44,7 +43,7 @@
   let defaultSelectionsApplied = false;
 
   function getAvailableUsers() {
-    const map = new Map(allUsers.map((user) => [user.id, user] as const));
+    const map = new SvelteMap(allUsers.map((user) => [user.id, user] as const));
     for (const user of additionalUsers) {
       if (!map.has(user.id)) {
         map.set(user.id, user);

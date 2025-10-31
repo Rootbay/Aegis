@@ -17,8 +17,8 @@
   const { isOpen, query, filteredCommands, highlightedIndex } =
     commandPaletteStore;
 
-  let searchInput: HTMLInputElement | null = null;
-  let dialogElement: HTMLDivElement | null = null;
+  let searchInput = $state<HTMLInputElement | null>(null);
+  let dialogElement = $state<HTMLDivElement | null>(null);
 
   let groupedCommands = $derived(() => {
     const commands = $filteredCommands;

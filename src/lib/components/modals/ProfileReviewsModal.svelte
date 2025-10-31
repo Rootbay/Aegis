@@ -253,7 +253,7 @@
               <span class="flex items-center gap-1 text-foreground">
                 <span class="font-medium">{reviewSummary.average}</span>
                 <div class="flex items-center gap-0.5">
-                  {#each ratingChoices as value}
+                  {#each ratingChoices as value (value)}
                     <Star
                       class={`h-4 w-4 ${
                         reviewSummary.average && reviewSummary.average >= value
@@ -321,7 +321,7 @@
                       class="flex items-center gap-1"
                       aria-label={`Rated ${review.rating} out of five`}
                     >
-                      {#each ratingChoices as value}
+                      {#each ratingChoices as value (value)}
                         <Star
                           class={`h-4 w-4 ${
                             review.rating >= value
@@ -353,7 +353,7 @@
             <span class="text-sm font-medium">Your rating</span>
             <div class="flex items-center gap-2">
               <div class="flex items-center gap-1">
-                {#each ratingChoices as value}
+                {#each ratingChoices as value (value)}
                   <button
                     type="button"
                     class={`rounded-md border border-border/60 bg-background p-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${

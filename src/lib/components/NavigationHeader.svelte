@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { tick, getContext, onMount } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import { goto } from "$app/navigation";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -181,7 +182,7 @@
     onOpenDetailedProfile: OpenProfileHandler;
     isFriendsOrRootPage?: boolean;
     friendsActiveTab?: string;
-    onFriendsTabSelect?: (tab: string) => void;
+    onFriendsTabSelect?: (tab: string) => void; // eslint-disable-line no-unused-vars
     onFriendsAddClick?: () => void;
   }>();
 
@@ -230,7 +231,7 @@
 
   const availableUsers = $derived(() => {
     if (!chat) return [] as User[];
-    const seen = new Map<string, User>();
+    const seen = new SvelteMap<string, User>();
     const pushUser = (user: User | null | undefined) => {
       if (!user) return;
       if (seen.has(user.id)) return;
@@ -330,7 +331,7 @@
       return "";
     }
 
-    const lookup = new Map<string, string>();
+    const lookup = new SvelteMap<string, string>();
     if (chat.type === "dm" && chat.friend) {
       lookup.set(chat.friend.id, chat.friend.name ?? chat.friend.id);
     }
@@ -968,7 +969,7 @@
     class="h-[55px] border-b border-border px-4 pt-4 pb-2 flex items-center justify-start sticky top-0 z-10 bg-card"
   >
     <div class="flex flex-wrap items-center gap-2">
-      {#each friendsTabs as tab}
+      {#each friendsTabs as tab (tab)}
         <button
           type="button"
           class="px-3 py-1 rounded-md text-sm font-medium cursor-pointer h-8"
@@ -1241,7 +1242,7 @@
               <div
                 class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-background py-1 pl-8 pr-7 text-sm transition-[color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40"
               >
-                {#each tokens as token, index}
+                {#each tokens as token, index (token.key + ":" + token.value + ":" + index)}
                   {@const tokenMeta = parsedSearchTokens()[index] ?? null}
                   <Badge
                     variant="secondary"
@@ -1360,7 +1361,7 @@
                 <span>Message Types</span>
               </div>
               <div class="space-y-1 px-2 pb-2">
-                {#each messageTypeOptions as option}
+                {#each messageTypeOptions as option (option.value)}
                   <Button
                     type="button"
                     variant="ghost"
@@ -1387,7 +1388,7 @@
             </div>
 
             <div class="space-y-1 px-2 pb-2">
-              {#each searchOptionTemplates as option}
+              {#each searchOptionTemplates as option (option.key)}
                 <Button
                   type="button"
                   variant="ghost"

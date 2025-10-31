@@ -149,10 +149,10 @@ export type AppController = {
     handleFriendsTabSelect: (tab: string) => void;
     handleFriendsAddClick: () => void;
     handleSelectChannel: (serverId: string, channelId: string | null) => void;
-    handleSelectDirectMessage: (
-      chatId: string | null,
-      type?: "dm" | "group",
-    ) => void;
+    handleSelectDirectMessage: (params: {
+      chatId: string | null;
+      type?: "dm" | "group";
+    }) => void;
     openModal: PageState["openModal"];
     closeModal: PageState["closeModal"];
     openDetailedProfileModal: PageState["openDetailedProfileModal"];
@@ -347,10 +347,13 @@ export function createAppController(): AppController {
     }
   };
 
-  const handleSelectDirectMessage = (
-    chatId: string | null,
-    type: "dm" | "group" = "dm",
-  ) => {
+  const handleSelectDirectMessage = ({
+    chatId,
+    type = "dm",
+  }: {
+    chatId: string | null;
+    type?: "dm" | "group";
+  }) => {
     if (chatId) {
       chatStore.setActiveChat(chatId, type);
     }

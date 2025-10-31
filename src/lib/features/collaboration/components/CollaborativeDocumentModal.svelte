@@ -2,7 +2,8 @@
 
 <script lang="ts">
   import { Share2, Users, X } from "@lucide/svelte";
-  import { get, onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { get } from "svelte/store";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import {

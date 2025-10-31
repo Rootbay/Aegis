@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowDown, ArrowUp, Search as SearchIcon, X } from "@lucide/svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import {
@@ -77,7 +78,7 @@
   });
 
   const memberLookup = $derived(() => {
-    const map = new Map<string, User>();
+    const map = new SvelteMap<string, User>();
     chatParticipants.forEach((member) => {
       map.set(member.id, member);
     });

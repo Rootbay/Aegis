@@ -21,6 +21,7 @@
   } from "$lib/features/auth/stores/authStore";
   import type { SecurityQuestion } from "$lib/features/auth/stores/authStore";
   import RecoveryQrScanner from "./RecoveryQrScanner.svelte";
+  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import {
@@ -73,6 +74,7 @@
   let unlockPassword = $state("");
   let unlockPasswordError = $state<string | null>(null);
   let unlockTotp = $state("");
+  let unlockPending = $state(false);
   let securityQuestionAnswers = $state<Record<string, string>>({});
   let recoveryPhrase = $state("");
   let recoveryTotp = $state("");
@@ -140,6 +142,10 @@
   function sanitizeCode(value: string): string {
     return value.replace(/[^0-9]/g, "").slice(0, 6);
   }
+
+  onMount(() => {
+    authStore.bootstrap();
+  });
 
   $effect(() => {
     if (passwordInput) {
@@ -381,8 +387,10 @@
 
   async function handleUnlock(event: Event) {
     event.preventDefault();
+    if (unlockPending) return;
 
     unlockPasswordError = null;
+    unlockPending = true;
 
     try {
       await authStore.loginWithPassword(
@@ -392,6 +400,8 @@
     } catch (error) {
       unlockPasswordError =
         error instanceof Error ? error.message : "Unable to unlock.";
+    } finally {
+      unlockPending = false;
     }
   }
 
@@ -1157,7 +1167,7 @@
               <Button
                 class="w-full"
                 type="submit"
-                disabled={isLoading ||
+                disabled={unlockPending ||
                   unlockPassword.trim().length === 0 ||
                   (requireTotpOnUnlock && unlockTotp.length !== 6)}
               >

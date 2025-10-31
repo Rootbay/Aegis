@@ -41,7 +41,7 @@
   let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
   let draftMessage = $state("");
   let isSending = $state(false);
-  let messageInputElement: HTMLInputElement | null = null;
+  let messageInputElement = $state<HTMLInputElement | null>(null);
 
   function handleOpenDetailedProfile() {
     close?.();

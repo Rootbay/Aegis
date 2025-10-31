@@ -13,7 +13,7 @@
   import type { AttachmentMeta } from "$lib/features/chat/models/Message";
   import { toasts } from "$lib/stores/ToastStore";
 
-  type FileRemoveHandler = (file: File) => void;
+  type FileRemoveHandler = (file: File) => void; // eslint-disable-line no-unused-vars
 
   interface FilePreviewProps {
     variant?: "composer" | "message";
@@ -22,7 +22,7 @@
     chatId?: string;
     messageId?: string;
     onRemove?: FileRemoveHandler;
-    onOpen?: (url: string) => void;
+    onOpen?: (url: string) => void; // eslint-disable-line no-unused-vars
   }
 
   let {

@@ -6,7 +6,7 @@
   type Props = {
     bannedUsers?: User[];
     serverId?: string;
-    onUnban?: (user: User) => void | Promise<void>;
+    onUnban?: (user: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
   };
 
   const noopOnUnban = () => {};

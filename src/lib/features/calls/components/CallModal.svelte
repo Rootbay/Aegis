@@ -40,7 +40,7 @@
 
   let duration = $state(0);
   let interval: ReturnType<typeof setInterval> | null = null;
-  let localVideoEl: HTMLVideoElement | null = null;
+  let localVideoEl = $state<HTMLVideoElement | null>(null);
   function mediaStream(node: HTMLMediaElement, stream: MediaStream | null) {
     const apply = (value: MediaStream | null) => {
       if (node.srcObject !== value) {
@@ -242,7 +242,14 @@
                     autoplay
                     playsinline
                     class="h-full w-full object-cover"
-                  ></video>
+                  >
+                    <track
+                      kind="captions"
+                      srclang="en"
+                      label="Live captions unavailable"
+                      src="data:text/vtt,WEBVTT"
+                    />
+                  </video>
                   {#if participant.isScreenSharing}
                     <div
                       class="absolute top-2 left-2 rounded bg-black/60 px-2 py-1 text-xs font-medium text-white"
@@ -270,7 +277,14 @@
                       playsinline
                       muted
                       class="absolute bottom-2 right-2 h-16 w-24 rounded border border-white/40 object-cover shadow-lg"
-                    ></video>
+                    >
+                      <track
+                        kind="captions"
+                        srclang="en"
+                        label="Live captions unavailable"
+                        src="data:text/vtt,WEBVTT"
+                      />
+                    </video>
                   {/if}
                   {#if participant.screenShareStream}
                     <audio
@@ -298,7 +312,14 @@
                 playsinline
                 muted
                 class="absolute inset-0 h-full w-full object-cover"
-              ></video>
+              >
+                <track
+                  kind="captions"
+                  srclang="en"
+                  label="Live captions unavailable"
+                  src="data:text/vtt,WEBVTT"
+                />
+              </video>
               {#if isScreenSharing}
                 <div
                   class="absolute top-2 left-2 rounded bg-black/60 px-2 py-1 text-xs font-medium text-white"

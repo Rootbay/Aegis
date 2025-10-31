@@ -793,38 +793,6 @@ const logout = () => {
 
 const clearError = () => update((state) => ({ ...state, error: null }));
 
-const getDeviceInfo = async (): Promise<TrustedDevice> => {
-  if (!browser) {
-    return {
-      id: "unknown",
-      name: "Unknown Device",
-      lastUsed: new Date().toISOString(),
-    };
-  }
-
-  const userAgent = navigator.userAgent;
-  const deviceId = await hashString(
-    userAgent + navigator.language + screen.width + screen.height,
-  );
-
-  return {
-    id: deviceId,
-    name: getDeviceName(userAgent),
-    lastUsed: new Date().toISOString(),
-    userAgent,
-  };
-};
-
-const getDeviceName = (userAgent: string): string => {
-  if (userAgent.includes("Windows")) return "Windows PC";
-  if (userAgent.includes("Mac")) return "Mac";
-  if (userAgent.includes("Linux")) return "Linux PC";
-  if (userAgent.includes("Android")) return "Android Device";
-  if (userAgent.includes("iPhone")) return "iPhone";
-  if (userAgent.includes("iPad")) return "iPad";
-  return "Unknown Device";
-};
-
 const setSessionTimeout = (minutes: number) => {
   const validMinutes = Math.max(5, Math.min(minutes, 1440)); // 5 minutes to 24 hours
   updateAuthPersistence((current) => ({

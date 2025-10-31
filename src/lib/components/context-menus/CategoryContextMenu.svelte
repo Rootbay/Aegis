@@ -13,7 +13,10 @@
     categoryId: string;
   };
 
-  type CategoryContextMenuHandler = (detail: CategoryContextMenuDetail) => void;
+  type CategoryContextMenuHandler = ({
+    action,
+    categoryId,
+  }: CategoryContextMenuDetail) => void;
 
   type CategoryContextMenuProps = {
     x: number;

@@ -15,7 +15,10 @@
     channelId: string;
   };
 
-  type ChannelContextMenuHandler = (detail: ChannelContextMenuDetail) => void;
+  type ChannelContextMenuHandler = ({
+    action,
+    channelId,
+  }: ChannelContextMenuDetail) => void;
 
   type ChannelContextMenuProps = {
     x: number;

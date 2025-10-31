@@ -310,7 +310,7 @@
       return;
     }
 
-    const validIds = new Set(
+    const validIds = new SvelteSet(
       (server.categories ?? []).map((category: ChannelCategory) => category.id),
     );
 
@@ -319,7 +319,7 @@
     }
 
     let changed = false;
-    const next = new Set<string>();
+    const next = new SvelteSet<string>();
     for (const id of collapsedCategoryIds) {
       if (validIds.has(id)) {
         next.add(id);

@@ -1,7 +1,7 @@
 import "@testing-library/svelte/vitest";
 import { JSDOM } from "jsdom";
-import { render, waitFor } from "@testing-library/svelte";
-import { vi } from "vitest";
+import { render } from "@testing-library/svelte";
+import { describe, expect, test, vi } from "vitest";
 import { tick } from "svelte";
 import FriendsListTestHost from "./__tests__/FriendsListTestHost.svelte";
 import type { Friend } from "$lib/features/friends/models/Friend";
@@ -17,6 +17,8 @@ vi.mock("./FriendItem.svelte", () => ({
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>");
 const { window } = dom;
+
+type AnimationFrameCallback = (timestamp: number) => void;
 
 function copyProps(src: Window & typeof globalThis, target: typeof globalThis) {
   const descriptors = Object.getOwnPropertyDescriptors(src) as Record<
@@ -41,7 +43,7 @@ globalThis.SVGElement = window.SVGElement;
 globalThis.MutationObserver = window.MutationObserver;
 globalThis.requestAnimationFrame =
   window.requestAnimationFrame?.bind(window) ??
-  ((cb: FrameRequestCallback) => setTimeout(() => cb(Date.now()), 16));
+  ((cb: AnimationFrameCallback) => setTimeout(() => cb(Date.now()), 16));
 globalThis.cancelAnimationFrame =
   window.cancelAnimationFrame?.bind(window) ??
   ((id: number) => clearTimeout(id));
@@ -67,7 +69,7 @@ describe("FriendsList", () => {
   });
 
   test("shows empty state after loading completes", async () => {
-    const { queryByRole, getByText } = renderList({ loading: false });
+    const { getByText } = renderList({ loading: false });
 
     await tick();
 

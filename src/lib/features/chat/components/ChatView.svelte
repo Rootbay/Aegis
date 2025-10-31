@@ -2263,7 +2263,7 @@
                             ? "bg-zinc-700/80"
                             : ""
                         }`}
-                        onpointerdown|preventDefault={() =>
+                        onpointerdown={() =>
                           handleMentionSelection(index)}
                         onclick={() => handleMentionSelection(index)}
                       >

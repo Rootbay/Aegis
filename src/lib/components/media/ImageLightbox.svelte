@@ -97,11 +97,11 @@
     contextMenuY = event.clientY;
   }
 
-  function handleSetMagnifierSize(size: number) {
+  function handleSetMagnifierSize({ size }: { size: number }) {
     magnifierSize = size;
   }
 
-  function handleSetMagnifierZoom(zoom: number) {
+  function handleSetMagnifierZoom({ zoom }: { zoom: number }) {
     magnifierZoom = zoom;
   }
 

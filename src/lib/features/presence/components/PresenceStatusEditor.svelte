@@ -33,12 +33,7 @@
     variant = "ghost",
     size,
     buttonClass = "",
-  }: Props = $props({
-    label: undefined,
-    variant: "ghost" as const,
-    size: undefined,
-    buttonClass: "",
-  });
+  }: Props = $props();
 
   const resolvedSize = $derived(size ?? (label ? "default" : "icon"));
 
