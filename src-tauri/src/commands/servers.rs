@@ -292,6 +292,16 @@ fn parse_schedule(value: &str) -> Result<DateTime<Utc>, String> {
         .map_err(|error| format!("Invalid scheduled time: {error}"))
 }
 
+async fn get_initialized_state(
+    state_container: &State<'_, AppStateContainer>,
+) -> Result<AppState, String> {
+    let state_guard = state_container.0.lock().await;
+    state_guard
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| "State not initialized".to_string())
+}
+
 async fn ensure_server_owner(state: &AppState, server_id: &str) -> Result<(), String> {
     let server = database::get_server_by_id(&state.db_pool, server_id)
         .await
@@ -557,8 +567,7 @@ pub async fn create_server(
     mut server: database::Server,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let owner_id = state.identity.peer_id().to_base58();
     server.owner_id = owner_id.clone();
     server.invites = Vec::new();
@@ -618,8 +627,7 @@ pub async fn join_server(
     user_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
     if user_id != my_id {
         return Err("Caller identity mismatch".into());
@@ -638,13 +646,7 @@ pub async fn redeem_server_invite(
     code: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<RedeemServerInviteResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
     let redemption = database::redeem_server_invite_by_code(&state.db_pool, &code, &my_id)
         .await
@@ -679,8 +681,7 @@ pub async fn leave_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
 
     database::remove_server_member(&state.db_pool, &server_id, &my_id)
@@ -694,8 +695,7 @@ pub async fn remove_server_member(
     member_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -720,8 +720,7 @@ pub async fn create_channel(
     channel: database::Channel,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &channel.server_id)
@@ -766,13 +765,7 @@ pub async fn create_channel_category(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ChannelCategoryResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let category = create_channel_category_internal(state, request).await?;
     let response: ChannelCategoryResponse = category.clone().into();
     app.emit("server-category-created", response.clone())
@@ -786,13 +779,7 @@ pub async fn delete_channel_category(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ChannelCategoryResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let category = delete_channel_category_internal(state, request).await?;
     let response: ChannelCategoryResponse = category.clone().into();
     app.emit("server-category-deleted", response.clone())
@@ -805,8 +792,7 @@ pub async fn get_servers(
     current_user_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Server>, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = get_initialized_state(&state_container).await?;
     database::get_all_servers(&state.db_pool, &current_user_id)
         .await
         .map_err(|e| e.to_string())
@@ -817,8 +803,7 @@ pub async fn get_channels_for_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Channel>, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = get_initialized_state(&state_container).await?;
     database::get_channels_for_server(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
@@ -829,8 +814,7 @@ pub async fn get_channel_categories_for_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ChannelCategoryResponse>, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = get_initialized_state(&state_container).await?;
     let categories = database::get_channel_categories_for_server(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -845,8 +829,7 @@ pub async fn get_members_for_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<aegis_shared_types::User>, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = get_initialized_state(&state_container).await?;
     database::get_server_members(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
@@ -857,13 +840,7 @@ pub async fn list_server_bans(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::User>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     ensure_server_owner(&state, &server_id).await?;
 
     database::get_server_bans(&state.db_pool, &server_id)
@@ -878,13 +855,7 @@ pub async fn unban_server_member(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerBanUpdate, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     ensure_server_owner(&state, &server_id).await?;
 
     database::remove_server_ban(&state.db_pool, &server_id, &user_id)
@@ -907,8 +878,7 @@ pub async fn get_server_details(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = get_initialized_state(&state_container).await?;
     database::get_server_by_id(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
@@ -919,13 +889,7 @@ pub async fn list_server_events(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ServerEventResponse>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let events = database::get_server_events(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -938,13 +902,7 @@ pub async fn create_server_event(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerEventResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let event = create_server_event_internal(state.clone(), request).await?;
     let response: ServerEventResponse = event.into();
     app.emit("server-event-created", response.clone())
@@ -958,13 +916,7 @@ pub async fn update_server_event(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerEventResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let event = update_server_event_internal(state.clone(), request).await?;
     let response: ServerEventResponse = event.into();
     app.emit("server-event-updated", response.clone())
@@ -978,13 +930,7 @@ pub async fn cancel_server_event(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerEventResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let event = cancel_server_event_internal(state.clone(), request.event_id).await?;
     let response: ServerEventResponse = event.into();
     app.emit("server-event-cancelled", response.clone())
@@ -997,13 +943,7 @@ pub async fn list_server_webhooks(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ServerWebhookResponse>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     ensure_server_owner(&state, &server_id).await?;
 
     let webhooks = database::list_server_webhooks(&state.db_pool, &server_id)
@@ -1021,13 +961,7 @@ pub async fn create_server_webhook(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerWebhookResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let webhook = create_server_webhook_internal(state.clone(), request).await?;
     let response: ServerWebhookResponse = webhook.into();
     app.emit("server-webhook-created", response.clone())
@@ -1041,13 +975,7 @@ pub async fn update_server_webhook(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerWebhookResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let webhook = update_server_webhook_internal(state.clone(), request).await?;
     let response: ServerWebhookResponse = webhook.into();
     app.emit("server-webhook-updated", response.clone())
@@ -1061,13 +989,7 @@ pub async fn delete_server_webhook(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<DeleteServerWebhookResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
-
+    let state = get_initialized_state(&state_container).await?;
     let webhook = delete_server_webhook_internal(state.clone(), request).await?;
     let response = DeleteServerWebhookResponse {
         webhook_id: webhook.id,
@@ -1380,8 +1302,7 @@ pub async fn send_server_invite(
     user_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<SendServerInviteResult, String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
         .await
@@ -1436,8 +1357,7 @@ pub async fn generate_server_invite(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ServerInviteResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1471,8 +1391,7 @@ pub async fn list_server_invites(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ServerInviteResponse>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1504,8 +1423,7 @@ pub async fn revoke_server_invite(
     invite_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1538,8 +1456,7 @@ pub async fn get_channel_display_preferences(
     server_id: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ChannelDisplayPreferenceResponse>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let user_id = state.identity.peer_id().to_base58();
 
     let prefs = database::get_channel_display_preferences_for_user(
@@ -1562,8 +1479,7 @@ pub async fn set_channel_display_preferences(
     hide_member_names: bool,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ChannelDisplayPreferenceResponse, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let user_id = state.identity.peer_id().to_base58();
 
     let preference = database::upsert_channel_display_preference(
@@ -1583,8 +1499,7 @@ pub async fn delete_channel(
     channel_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
 
     let channel = database::get_channel_by_id(&state.db_pool, &channel_id)
@@ -1631,8 +1546,7 @@ pub async fn delete_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let my_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1676,8 +1590,7 @@ pub async fn update_server_metadata(
     metadata: ServerMetadataUpdate,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1703,8 +1616,7 @@ pub async fn update_server_roles(
     roles: Vec<database::Role>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Role>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1732,8 +1644,7 @@ pub async fn update_server_channels(
     channels: Vec<database::Channel>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Channel>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -1766,8 +1677,7 @@ pub async fn update_server_moderation_flags(
     moderation: ServerModerationUpdate,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?.clone();
+    let state = get_initialized_state(&state_container).await?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
