@@ -22,25 +22,6 @@ pub struct EncryptedDmPayload {
     pub reply_snapshot_snippet: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) struct MessageEnvelope {
-    pub version: u8,
-    pub algorithm: String,
-    pub nonce: String,
-    pub key: String,
-    pub ciphertext: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub(super) struct AttachmentEnvelope {
-    pub version: u8,
-    pub algorithm: String,
-    pub nonce: String,
-    pub key: String,
-    pub ciphertext: String,
-    pub original_size: u64,
-}
-
 #[derive(Debug, Serialize)]
 pub struct EncryptChatPayloadResponse {
     pub content: String,
