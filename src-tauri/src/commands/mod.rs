@@ -4,6 +4,7 @@ pub mod collaboration;
 pub mod connected_accounts;
 pub mod connectivity;
 pub mod data_privacy;
+pub mod devices;
 pub mod files;
 pub mod friends;
 pub mod identity;

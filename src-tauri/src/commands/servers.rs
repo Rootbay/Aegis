@@ -1081,7 +1081,14 @@ pub async fn delete_server_webhook(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aegis_shared_types::{AppState, FileAclPolicy, IncomingFile, Server};
+    use aegis_shared_types::{
+        AppState,
+        FileAclPolicy,
+        IncomingFile,
+        PendingDeviceProvisioning,
+        Server,
+        TrustedDeviceRecord,
+    };
     use crypto::identity::Identity;
     use std::collections::HashMap;
     use std::sync::atomic::AtomicBool;
@@ -1104,6 +1111,12 @@ mod tests {
             app_data_dir,
             connectivity_snapshot: Arc::new(Mutex::new(None)),
             voice_memos_enabled: Arc::new(AtomicBool::new(true)),
+            relays: Arc::new(Mutex::new(Vec::new())),
+            trusted_devices: Arc::new(Mutex::new(Vec::<TrustedDeviceRecord>::new())),
+            pending_device_bundles: Arc::new(Mutex::new(HashMap::<
+                String,
+                PendingDeviceProvisioning,
+            >::new())),
         }
     }
 

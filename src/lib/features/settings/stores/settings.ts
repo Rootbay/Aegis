@@ -1,15 +1,25 @@
 import { get } from "svelte/store";
 import { getInvoke } from "$services/tauri";
 import { persistentStore } from "$lib/stores/persistentStore";
+import { connectivityStore } from "$lib/stores/connectivityStore";
 import type { GatewayStatus } from "$lib/stores/connectivityStore";
+import type {
+  DeviceInventorySnapshot,
+  DeviceProvisioningState,
+  DeviceSyncResult,
+  TrustedDevice,
+} from "./deviceTypes";
 
-export interface TrustedDevice {
-  id: string;
-  name: string;
-  platform: string;
-  lastSeen: string;
-  active: boolean;
-}
+export type {
+  DeviceTrustStatus,
+  DevicePairingStage,
+  DeviceProvisioningBundle,
+  PendingDeviceLink,
+  DeviceInventorySnapshot,
+  DeviceProvisioningState,
+  DeviceSyncResult,
+  TrustedDevice,
+} from "./deviceTypes";
 
 export interface ConnectedAccount {
   id: string;
@@ -169,22 +179,7 @@ export const defaultSettings: AppSettings = {
   remindAboutUpdates: true,
   updateReminderIntervalDays: 7,
   connectedAccounts: [],
-  trustedDevices: [
-    {
-      id: "device-local",
-      name: "Aegis Desktop",
-      platform: "Linux",
-      lastSeen: new Date().toISOString(),
-      active: true,
-    },
-    {
-      id: "device-mobile",
-      name: "Aegis Mobile",
-      platform: "Android",
-      lastSeen: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-      active: true,
-    },
-  ],
+  trustedDevices: [],
   aerpRouteUpdateIntervalSeconds: 10,
   aerpMinRouteQuality: 0.4,
   aerpMaxHops: 6,
@@ -609,44 +604,122 @@ export const setUpdateReminderInterval = (days: number) => {
   updateAppSetting("updateReminderIntervalDays", normalized);
 };
 
-export function upsertTrustedDevice(device: TrustedDevice) {
-  settings.update((current) => {
-    const existingIndex = current.trustedDevices.findIndex(
-      (item) => item.id === device.id,
-    );
-    const trustedDevices = [...current.trustedDevices];
-    if (existingIndex >= 0) {
-      trustedDevices[existingIndex] = {
-        ...trustedDevices[existingIndex],
-        ...device,
-      };
-    } else {
-      trustedDevices.push(device);
-    }
+async function invokeBackend<T>(
+  command: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  const invoke = await getInvoke();
+  if (!invoke) {
+    throw new Error("Secure backend is unavailable.");
+  }
+  return invoke<T>(command, args);
+}
 
+function mergeTrustedDevice(device: TrustedDevice) {
+  settings.update((current) => {
+    const next = current.trustedDevices.filter((item) => item.id !== device.id);
+    next.push(device);
     return {
       ...current,
-      trustedDevices,
+      trustedDevices: next,
     };
   });
 }
 
-export function revokeTrustedDevice(deviceId: string) {
+export async function refreshTrustedDeviceInventory(): Promise<DeviceInventorySnapshot> {
+  const snapshot = await invokeBackend<DeviceInventorySnapshot>(
+    "list_trusted_devices",
+  );
   settings.update((current) => ({
     ...current,
-    trustedDevices: current.trustedDevices.map((device) =>
-      device.id === deviceId ? { ...device, active: false } : device,
-    ),
+    trustedDevices: snapshot.trustedDevices,
   }));
+  return snapshot;
 }
 
-export function removeTrustedDevice(deviceId: string) {
+export async function initiateTrustedDeviceProvisioning(
+  label?: string,
+): Promise<DeviceProvisioningState> {
+  return invokeBackend<DeviceProvisioningState>(
+    "initiate_device_provisioning",
+    { displayName: label },
+  );
+}
+
+export async function requestTrustedDeviceLink(
+  bundleId: string,
+  codePhrase: string,
+  deviceName: string,
+  platform?: string,
+): Promise<DeviceProvisioningState> {
+  const response = await invokeBackend<DeviceProvisioningState>(
+    "request_device_link",
+    {
+      bundleId,
+      codePhrase,
+      deviceName,
+      platform,
+    },
+  );
+  return response;
+}
+
+export async function approveTrustedDeviceRequest(
+  bundleId: string,
+): Promise<DeviceProvisioningState> {
+  const response = await invokeBackend<DeviceProvisioningState>(
+    "approve_device_request",
+    { bundleId },
+  );
+  await refreshTrustedDeviceInventory();
+  return response;
+}
+
+export async function declineTrustedDeviceRequest(
+  bundleId: string,
+): Promise<void> {
+  await invokeBackend<void>("decline_device_request", { bundleId });
+  await refreshTrustedDeviceInventory();
+}
+
+export async function completeTrustedDeviceSync(
+  bundleId: string,
+): Promise<DeviceSyncResult> {
+  const result = await connectivityStore.bootstrapFromTrustedDevice(bundleId);
+  mergeTrustedDevice(result.approvedDevice);
+  return result;
+}
+
+export async function revokeTrustedDevice(
+  deviceId: string,
+): Promise<TrustedDevice[]> {
+  const updated = await invokeBackend<TrustedDevice[]>(
+    "revoke_trusted_device",
+    { deviceId },
+  );
   settings.update((current) => ({
     ...current,
-    trustedDevices: current.trustedDevices.filter(
-      (device) => device.id !== deviceId,
-    ),
+    trustedDevices: updated,
   }));
+  return updated;
+}
+
+export async function removeTrustedDevice(
+  deviceId: string,
+): Promise<TrustedDevice[]> {
+  const updated = await invokeBackend<TrustedDevice[]>(
+    "forget_trusted_device",
+    { deviceId },
+  );
+  settings.update((current) => ({
+    ...current,
+    trustedDevices: updated,
+  }));
+  return updated;
+}
+
+export async function cancelDeviceProvisioning(bundleId: string): Promise<void> {
+  await invokeBackend<void>("cancel_device_provisioning", { bundleId });
 }
 
 function generateFallbackId(prefix: string) {

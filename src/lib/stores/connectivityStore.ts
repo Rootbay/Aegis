@@ -5,6 +5,7 @@ import type {
   RelayStatus,
   RelayScope,
 } from "../features/settings/models/relay";
+import type { DeviceSyncResult } from "../features/settings/stores/deviceTypes";
 import { relayStore } from "../features/settings/stores/relayStore";
 
 const browser = typeof window !== "undefined" && typeof document !== "undefined";
@@ -77,6 +78,14 @@ export interface ConnectivityState {
   averageSuccessRate: number | null;
   relays: RelaySnapshot[];
   activeRelayCount: number;
+  trustedDeviceSync: TrustedDeviceSyncStatus;
+}
+
+export interface TrustedDeviceSyncStatus {
+  inProgress: boolean;
+  lastSync: string | null;
+  lastBundleId: string | null;
+  lastError: string | null;
 }
 
 type PartialMeshPeer = {
@@ -182,6 +191,7 @@ type ConnectivityStore = Readable<ConnectivityState> & {
   markFallback: (reason: string) => void;
   statusMessage: Readable<string>;
   fallbackMessage: Readable<string | null>;
+  bootstrapFromTrustedDevice: (bundleId: string) => Promise<DeviceSyncResult>;
 };
 
 const initialState: ConnectivityState = {
@@ -203,6 +213,12 @@ const initialState: ConnectivityState = {
   averageSuccessRate: null,
   relays: [],
   activeRelayCount: 0,
+  trustedDeviceSync: {
+    inProgress: false,
+    lastSync: null,
+    lastBundleId: null,
+    lastError: null,
+  },
 };
 
 const fallbackSnapshots: ConnectivityEventPayload[] = [
@@ -779,6 +795,53 @@ export function createConnectivityStore(): ConnectivityStore {
     }, 20000);
   };
 
+  const bootstrapFromTrustedDevice = async (
+    bundleId: string,
+  ): Promise<DeviceSyncResult> => {
+    update((state) => ({
+      ...state,
+      trustedDeviceSync: {
+        inProgress: true,
+        lastSync: state.trustedDeviceSync.lastSync,
+        lastBundleId: bundleId,
+        lastError: null,
+      },
+    }));
+
+    try {
+      const invoke = await getInvoke();
+      if (!invoke) {
+        throw new Error("Secure backend is unavailable.");
+      }
+      const result = await invoke<DeviceSyncResult>("complete_device_sync", {
+        bundleId,
+      });
+      update((state) => ({
+        ...state,
+        trustedDeviceSync: {
+          inProgress: false,
+          lastSync: result.issuedAt,
+          lastBundleId: bundleId,
+          lastError: null,
+        },
+      }));
+      return result;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      update((state) => ({
+        ...state,
+        trustedDeviceSync: {
+          ...state.trustedDeviceSync,
+          inProgress: false,
+          lastBundleId: bundleId,
+          lastError: message,
+        },
+      }));
+      throw error;
+    }
+  };
+
   const initialize = async () => {
     if (!browser) {
       return;
@@ -868,6 +931,7 @@ export function createConnectivityStore(): ConnectivityStore {
     markFallback,
     statusMessage,
     fallbackMessage,
+    bootstrapFromTrustedDevice,
   };
 }
 

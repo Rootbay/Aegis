@@ -121,6 +121,8 @@ pub async fn initialize_app_state<R: Runtime>(
         connectivity_snapshot: connectivity_snapshot.clone(),
         voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         relays: Arc::new(Mutex::new(persisted_settings.relays.clone())),
+        trusted_devices: Arc::new(Mutex::new(persisted_settings.trusted_devices.clone())),
+        pending_device_bundles: Arc::new(Mutex::new(HashMap::new())),
     };
 
     *state_container.0.lock().await = Some(new_state.clone());
