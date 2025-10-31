@@ -28,6 +28,19 @@ pub async fn update_user_profile(
         return Err("Caller identity mismatch".into());
     }
 
+    let trimmed_avatar = user.avatar.trim().to_owned();
+    user.avatar = if trimmed_avatar.is_empty() {
+        match user_service::get_user(&state.db_pool, &user.id).await {
+            Ok(Some(existing)) => existing.avatar,
+            _ => format!(
+                "https://api.dicebear.com/8.x/bottts-neutral/svg?seed={}",
+                user.id
+            ),
+        }
+    } else {
+        trimmed_avatar
+    };
+
     user.public_key = Some(bs58::encode(state.identity.public_key_protobuf_bytes()).into_string());
     user_service::insert_user(&state.db_pool, &user)
         .await
