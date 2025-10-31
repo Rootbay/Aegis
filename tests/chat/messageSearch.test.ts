@@ -179,7 +179,9 @@ describe("parseSearchQuery", () => {
     );
     expect(parsed.filters.after).toBeDefined();
     expect(parsed.filters.before).toBeDefined();
-    expect((parsed.filters.after ?? 0) < (parsed.filters.before ?? 0)).toBe(true);
+    expect((parsed.filters.after ?? 0) < (parsed.filters.before ?? 0)).toBe(
+      true,
+    );
   });
 
   it("reports validation errors for invalid tokens", () => {

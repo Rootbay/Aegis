@@ -96,11 +96,15 @@
     </div>
   </a>
 {:else if status === "loading"}
-  <div class="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+  <div
+    class="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+  >
     Loading preview…
   </div>
 {:else if status === "error" && errorMessage}
-  <div class="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+  <div
+    class="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground"
+  >
     {errorMessage}
   </div>
 {/if}

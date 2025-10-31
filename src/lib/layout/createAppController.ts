@@ -96,7 +96,9 @@ type PageState = {
     isServerMemberContext: boolean,
   ) => void;
   readonly openDetailedProfileModal: (user: User) => void;
-  readonly openProfileReviewsModal: (options: ProfileReviewsModalOptions) => void;
+  readonly openProfileReviewsModal: (
+    options: ProfileReviewsModalOptions,
+  ) => void;
   readonly openCreateGroupModal: (options?: GroupModalOptions) => void;
   readonly openReportUserModal: (payload: ReportUserModalPayload) => void;
   readonly openCollaborativeDocument: (options?: {
@@ -470,12 +472,8 @@ export function createAppController(): AppController {
         (event) => {
           const receivedMessage: AepMessage = event.payload;
           if (receivedMessage.PresenceUpdate) {
-            const {
-              user_id,
-              is_online,
-              status_message,
-              location,
-            } = receivedMessage.PresenceUpdate;
+            const { user_id, is_online, status_message, location } =
+              receivedMessage.PresenceUpdate;
             const trimmedStatus = status_message?.trim?.() ?? "";
             const normalizedStatusMessage =
               trimmedStatus.length > 0 ? trimmedStatus : null;
@@ -562,7 +560,11 @@ export function createAppController(): AppController {
             const channelId = payload.channel_id ?? null;
             const targetId = serverId ?? channelId;
             if (targetId && channelId) {
-              void chatStore.refreshChatFromStorage(targetId, "server", channelId);
+              void chatStore.refreshChatFromStorage(
+                targetId,
+                "server",
+                channelId,
+              );
             }
             return;
           }

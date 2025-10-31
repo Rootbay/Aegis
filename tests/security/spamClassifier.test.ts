@@ -41,7 +41,10 @@ const weights = {
   profile: 0.3,
 };
 
-function logisticScore(features: Parameters<typeof runMock>[0], context: Parameters<typeof runMock>[1]) {
+function logisticScore(
+  features: Parameters<typeof runMock>[0],
+  context: Parameters<typeof runMock>[1],
+) {
   const keywordHitsNorm = Math.min(features.keywordHits.length, 4) / 4;
   const urlNorm = Math.min(features.urlCount, 3) / 3;
   const punctuationNorm = Math.min(features.punctuationBursts, 3) / 3;

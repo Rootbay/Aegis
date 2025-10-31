@@ -29,7 +29,8 @@
   let activeServerId = $derived($serverStore.activeServerId ?? null);
   let activeServer = $derived(
     activeServerId
-      ? $serverStore.servers.find((server) => server.id === activeServerId) ?? null
+      ? ($serverStore.servers.find((server) => server.id === activeServerId) ??
+          null)
       : null,
   );
   let members = $derived(activeServer?.members ?? []);
@@ -231,10 +232,7 @@
   async function handleCopyInvite(invite: ServerInvite) {
     const link = buildInviteLinkFromCode(invite.code);
     try {
-      if (
-        typeof navigator !== "undefined" &&
-        navigator.clipboard?.writeText
-      ) {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(link);
         toasts.addToast("Invite link copied.", "success");
         return;
@@ -468,8 +466,12 @@
         {/if}
       </div>
 
-      <div class="bg-zinc-800/80 border border-zinc-700 rounded-2xl shadow p-6 space-y-5">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div
+        class="bg-zinc-800/80 border border-zinc-700 rounded-2xl shadow p-6 space-y-5"
+      >
+        <div
+          class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
             <h3 class="text-lg font-semibold text-white">Members</h3>
             <p class="text-sm text-zinc-400">
@@ -491,7 +493,9 @@
             <Button
               onclick={handleGenerateInvite}
               disabled={isGeneratingInvite || !invitesAllowed}
-              title={!invitesAllowed ? "Invites are disabled for this server." : undefined}
+              title={!invitesAllowed
+                ? "Invites are disabled for this server."
+                : undefined}
             >
               {#if isGeneratingInvite}
                 Generating invite…
@@ -503,13 +507,15 @@
         </div>
 
         <MemberList
-          members={members}
+          {members}
           serverId={activeServer.id}
           onMemberRemoved={handleMemberRemoved}
         />
       </div>
 
-      <div class="bg-zinc-800/80 border border-zinc-700 rounded-2xl shadow p-6 space-y-5">
+      <div
+        class="bg-zinc-800/80 border border-zinc-700 rounded-2xl shadow p-6 space-y-5"
+      >
         <div class="space-y-1">
           <h3 class="text-lg font-semibold text-white">Bans</h3>
           <p class="text-sm text-zinc-400">

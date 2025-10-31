@@ -1,6 +1,10 @@
 <script lang="ts">
   import { Clock, Filter, ListChecks } from "@lucide/svelte";
-  import { Avatar, AvatarImage, AvatarFallback } from "$lib/components/ui/avatar/index.js";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
@@ -92,7 +96,9 @@
 </script>
 
 <div class="space-y-4">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div>
       <h4 class="text-base font-semibold text-white">Audit Log</h4>
       <p class="text-sm text-muted-foreground">
@@ -105,7 +111,9 @@
         bind:value={query}
         class="pr-9"
       />
-      <Filter class="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Filter
+        class="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+      />
     </div>
   </div>
 
@@ -120,13 +128,16 @@
                 {#if actor.avatar}
                   <AvatarImage src={actor.avatar} alt={actor.name} />
                 {:else}
-                  <AvatarFallback>{actor.name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  <AvatarFallback
+                    >{actor.name.slice(0, 2).toUpperCase()}</AvatarFallback
+                  >
                 {/if}
               </Avatar>
               <div class="flex-1 space-y-2">
                 <div class="flex flex-wrap items-center gap-2">
                   <p class="text-sm font-semibold text-white">{actor.name}</p>
-                  <Badge variant="secondary">{formatAction(entry.action)}</Badge>
+                  <Badge variant="secondary">{formatAction(entry.action)}</Badge
+                  >
                   {#if entry.target}
                     <Badge variant="outline">Target: {entry.target}</Badge>
                   {/if}
@@ -136,14 +147,17 @@
                   {formatTimestamp(entry.createdAt)}
                 </p>
                 {#if entry.metadata}
-                  <div class="rounded-md border border-zinc-800/80 bg-zinc-900/60 p-3 text-xs text-muted-foreground">
+                  <div
+                    class="rounded-md border border-zinc-800/80 bg-zinc-900/60 p-3 text-xs text-muted-foreground"
+                  >
                     <p class="mb-1 font-semibold text-white/80">Details</p>
                     <div class="grid gap-1 sm:grid-cols-2">
                       {#each Object.entries(entry.metadata) as [key, value] (`${entry.id}-${key}`)}
                         <div class="truncate">
                           <span class="font-medium text-white/80">{key}:</span>
                           <span class="ml-1 text-muted-foreground">
-                            {typeof value === "string" || typeof value === "number"
+                            {typeof value === "string" ||
+                            typeof value === "number"
                               ? value
                               : JSON.stringify(value)}
                           </span>
@@ -159,11 +173,14 @@
       </ul>
     </ScrollArea>
   {:else}
-    <div class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center text-muted-foreground">
+    <div
+      class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center text-muted-foreground"
+    >
       <ListChecks class="h-10 w-10" />
       <p class="text-sm font-medium text-white">No audit activity yet</p>
       <p class="text-sm">
-        Configuration changes and moderation events will appear here as they occur.
+        Configuration changes and moderation events will appear here as they
+        occur.
       </p>
     </div>
   {/if}

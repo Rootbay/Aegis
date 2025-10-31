@@ -50,7 +50,11 @@ function createRelayStore(): RelayStore {
       applyRelayState(backendRelays ?? []);
     } catch (error) {
       console.error("Failed to load relay configuration", error);
-      update((state) => ({ ...state, loading: false, error: "Failed to load relay configuration." }));
+      update((state) => ({
+        ...state,
+        loading: false,
+        error: "Failed to load relay configuration.",
+      }));
     }
   };
 
@@ -70,17 +74,24 @@ function createRelayStore(): RelayStore {
   const registerRelay = async (config: RelayConfig) => {
     const invoke = await getInvoke();
     if (!invoke) {
-      toasts.addToast("Relay management requires the desktop client.", "warning");
+      toasts.addToast(
+        "Relay management requires the desktop client.",
+        "warning",
+      );
       return null;
     }
 
     try {
-      const record = await invoke<RelayRecord>("register_relay", { payload: { config } });
+      const record = await invoke<RelayRecord>("register_relay", {
+        payload: { config },
+      });
       if (!record) {
         return null;
       }
       update((state) => {
-        const relays = state.relays.filter((relay) => relay.config.id !== record.config.id);
+        const relays = state.relays.filter(
+          (relay) => relay.config.id !== record.config.id,
+        );
         relays.push(record);
         relays.sort((a, b) => a.config.label.localeCompare(b.config.label));
         serverStore.applyRelayBindings(relays);
@@ -97,14 +108,19 @@ function createRelayStore(): RelayStore {
   const removeRelay = async (relayId: string) => {
     const invoke = await getInvoke();
     if (!invoke) {
-      toasts.addToast("Relay management requires the desktop client.", "warning");
+      toasts.addToast(
+        "Relay management requires the desktop client.",
+        "warning",
+      );
       return false;
     }
 
     try {
       await invoke("remove_relay", { relayId });
       update((state) => {
-        const relays = state.relays.filter((relay) => relay.config.id !== relayId);
+        const relays = state.relays.filter(
+          (relay) => relay.config.id !== relayId,
+        );
         serverStore.applyRelayBindings(relays);
         return { ...state, relays };
       });
@@ -159,7 +175,9 @@ function createRelayStore(): RelayStore {
         return state;
       }
       const nextRelays = state.relays.map((relay) => {
-        const telemetry = snapshot.find((entry) => entry.id === relay.config.id);
+        const telemetry = snapshot.find(
+          (entry) => entry.id === relay.config.id,
+        );
         if (!telemetry) {
           return relay;
         }
@@ -167,9 +185,9 @@ function createRelayStore(): RelayStore {
           ...relay,
           health: {
             status: telemetry.status ?? relay.health.status,
-            lastCheckedAt: telemetry.lastCheckedAt ?? relay.health.lastCheckedAt,
-            latencyMs:
-              telemetry.latencyMs ?? relay.health.latencyMs,
+            lastCheckedAt:
+              telemetry.lastCheckedAt ?? relay.health.lastCheckedAt,
+            latencyMs: telemetry.latencyMs ?? relay.health.latencyMs,
             uptimePercent:
               telemetry.uptimePercent ?? relay.health.uptimePercent,
             error: telemetry.error ?? relay.health.error,

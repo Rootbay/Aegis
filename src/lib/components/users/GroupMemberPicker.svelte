@@ -28,18 +28,14 @@
     if (!term) {
       return users;
     }
-    return users.filter((user) =>
-      user.name.toLowerCase().includes(term),
-    );
+    return users.filter((user) => user.name.toLowerCase().includes(term));
   });
 
   const pinnedFriends = $derived(
     filteredUsers.filter((user) => user.isFriend && user.isPinned),
   );
 
-  const otherUsers = $derived(
-    filteredUsers.filter((user) => !user.isPinned),
-  );
+  const otherUsers = $derived(filteredUsers.filter((user) => !user.isPinned));
 
   function handleToggle(userId: string) {
     onToggleUser?.(userId);

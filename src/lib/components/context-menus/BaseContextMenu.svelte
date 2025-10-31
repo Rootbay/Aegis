@@ -10,7 +10,7 @@
   type ContextMenuHandler<TData> = (payload: {
     action: string;
     itemData: TData | null;
-  }) => void; // eslint-disable-line no-unused-vars
+  }) => void;
 
   let {
     x = 0,

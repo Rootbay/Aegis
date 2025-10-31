@@ -218,7 +218,10 @@ export function updateSettings(partial: Partial<AppSettings>) {
 
 function sanitizeRoutingConfig(config: AerpRoutingConfig): AerpRoutingConfig {
   return {
-    updateIntervalSeconds: Math.max(1, Math.round(config.updateIntervalSeconds)),
+    updateIntervalSeconds: Math.max(
+      1,
+      Math.round(config.updateIntervalSeconds),
+    ),
     minRouteQuality: Math.min(Math.max(config.minRouteQuality, 0), 1),
     maxHops: Math.max(1, Math.round(config.maxHops)),
   };
@@ -254,7 +257,9 @@ function createBooleanSetter<Key extends AppSettingsKey>(key: Key) {
 
 export async function triggerPanicWipe(): Promise<boolean> {
   if (typeof window === "undefined") {
-    throw new Error("Panic wipe can only be triggered from the desktop client.");
+    throw new Error(
+      "Panic wipe can only be triggered from the desktop client.",
+    );
   }
 
   const initialConfirmation = window.confirm(
@@ -276,7 +281,9 @@ export async function triggerPanicWipe(): Promise<boolean> {
   const invoke = await getInvoke();
 
   if (!invoke) {
-    throw new Error("Secure backend is unavailable. Panic wipe could not be initiated.");
+    throw new Error(
+      "Secure backend is unavailable. Panic wipe could not be initiated.",
+    );
   }
 
   await invoke("panic_wipe");
@@ -521,7 +528,9 @@ export const setAudioOutputDeviceId = (deviceId: string) => {
   updateAppSetting("audioOutputDeviceId", deviceId.trim());
 };
 
-function canonicalizeTurnServer(config: TurnServerConfig): TurnServerConfig | null {
+function canonicalizeTurnServer(
+  config: TurnServerConfig,
+): TurnServerConfig | null {
   const urls = (config.urls ?? [])
     .map((url) => url.trim())
     .filter((url) => url.length > 0);
@@ -718,7 +727,9 @@ export async function removeTrustedDevice(
   return updated;
 }
 
-export async function cancelDeviceProvisioning(bundleId: string): Promise<void> {
+export async function cancelDeviceProvisioning(
+  bundleId: string,
+): Promise<void> {
   await invokeBackend<void>("cancel_device_provisioning", { bundleId });
 }
 

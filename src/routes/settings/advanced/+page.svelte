@@ -180,7 +180,9 @@
     {/each}
 
     {#if advancedState.enablePanicButton}
-      <div class="space-y-3 rounded-lg border border-red-900/60 bg-red-950/40 p-4">
+      <div
+        class="space-y-3 rounded-lg border border-red-900/60 bg-red-950/40 p-4"
+      >
         <div>
           <p class="text-sm font-semibold text-red-200">Emergency panic wipe</p>
           <p class="text-xs text-red-200/80">

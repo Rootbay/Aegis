@@ -15,13 +15,20 @@
   );
   const canManage = $derived(typeof onupdate_setting === "function");
 
-  function emitUpdate(payload: { id: string; property: string; value: unknown }) {
+  function emitUpdate(payload: {
+    id: string;
+    property: string;
+    value: unknown;
+  }) {
     if (typeof onupdate_setting === "function") {
       Reflect.apply(onupdate_setting as CallableFunction, undefined, [payload]);
     }
   }
 
-  function emitButton(payload: { id: string; context?: Record<string, unknown> }) {
+  function emitButton(payload: {
+    id: string;
+    context?: Record<string, unknown>;
+  }) {
     if (typeof onbutton_click === "function") {
       Reflect.apply(onbutton_click as CallableFunction, undefined, [payload]);
     }
@@ -50,7 +57,9 @@
 
   function handleRemove(stickerId: string) {
     if (!canManage) return;
-    const filtered = sortedStickers.filter((sticker) => sticker.id !== stickerId);
+    const filtered = sortedStickers.filter(
+      (sticker) => sticker.id !== stickerId,
+    );
     emitUpdate({
       id: "stickerManagement",
       property: "stickers",
@@ -64,7 +73,9 @@
 </script>
 
 <div class="space-y-4">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div>
       <h4 class="text-base font-semibold text-white">Custom Stickers</h4>
       <p class="text-sm text-muted-foreground">
@@ -79,9 +90,13 @@
   {#if sortedStickers.length > 0}
     <div class="grid gap-4 sm:grid-cols-2">
       {#each sortedStickers as sticker (sticker.id)}
-        <div class="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+        <div
+          class="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+        >
           <div class="flex items-start gap-3">
-            <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-zinc-800 bg-zinc-900">
+            <div
+              class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md border border-zinc-800 bg-zinc-900"
+            >
               {#if sticker.previewUrl || sticker.url}
                 <img
                   src={sticker.previewUrl ?? sticker.url}
@@ -96,10 +111,14 @@
             <div class="flex-1 space-y-1">
               <p class="text-sm font-semibold text-white">{sticker.name}</p>
               {#if sticker.description}
-                <p class="text-xs text-muted-foreground">{sticker.description}</p>
+                <p class="text-xs text-muted-foreground">
+                  {sticker.description}
+                </p>
               {/if}
               <p class="text-xs text-muted-foreground">
-                Added {formatDate(sticker.createdAt)} · {formatSize(sticker.sizeKb)}
+                Added {formatDate(sticker.createdAt)} · {formatSize(
+                  sticker.sizeKb,
+                )}
               </p>
             </div>
             {#if canManage}
@@ -115,8 +134,12 @@
             {/if}
           </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="secondary">{sticker.format?.toUpperCase() ?? "PNG"}</Badge>
+          <div
+            class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+          >
+            <Badge variant="secondary"
+              >{sticker.format?.toUpperCase() ?? "PNG"}</Badge
+            >
             {#if sticker.tags?.length}
               {#each sticker.tags as tag (tag)}
                 <span class="rounded bg-zinc-800/80 px-2 py-1">#{tag}</span>
@@ -130,7 +153,9 @@
       {/each}
     </div>
   {:else}
-    <div class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center text-muted-foreground">
+    <div
+      class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center text-muted-foreground"
+    >
       <StickerIcon class="h-10 w-10" />
       <p class="text-sm font-medium text-white">No stickers yet</p>
       <p class="text-sm">

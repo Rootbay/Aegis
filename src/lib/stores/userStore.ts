@@ -220,7 +220,9 @@ function createUserStore(): UserStore {
         ...updatedUser,
         avatar: ensureAvatar(updatedUser.id, updatedUser.avatar),
       };
-      await invoke("update_user_profile", { user: toBackendUser(normalizedUser) });
+      await invoke("update_user_profile", {
+        user: toBackendUser(normalizedUser),
+      });
       update((state) => ({ ...state, me: normalizedUser }));
       userCache.set(normalizedUser.id, normalizedUser);
       presenceStore.syncFromUser(normalizedUser);

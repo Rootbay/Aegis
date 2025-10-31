@@ -80,7 +80,9 @@ export function extractLinks(content: string | null | undefined): string[] {
   return links;
 }
 
-export function extractFirstLink(content: string | null | undefined): string | null {
+export function extractFirstLink(
+  content: string | null | undefined,
+): string | null {
   const [first] = extractLinks(content);
   return first ?? null;
 }

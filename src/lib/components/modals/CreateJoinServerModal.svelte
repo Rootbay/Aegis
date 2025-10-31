@@ -335,20 +335,20 @@
       </div>
 
       <DialogFooter class="mt-6 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            type="button"
-            class="gap-2"
-            onclick={() => (modalView = "main")}
-          >
+        <Button
+          variant="ghost"
+          type="button"
+          class="gap-2"
+          onclick={() => (modalView = "main")}
+        >
           <ArrowLeft size={14} />
           Back
         </Button>
-          <Button
-            type="button"
-            onclick={createNewServer}
-            disabled={!trimmedServerName}
-          >
+        <Button
+          type="button"
+          onclick={createNewServer}
+          disabled={!trimmedServerName}
+        >
           Create
         </Button>
       </DialogFooter>

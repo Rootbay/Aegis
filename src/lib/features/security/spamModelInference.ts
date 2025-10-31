@@ -97,12 +97,19 @@ class SpamModelInference {
   }
 
   async run(features: SpamFeatures, context: SpamContext): Promise<number> {
-    if (!(await this.ensureLoaded()) || this.session === null || this.ort === null) {
+    if (
+      !(await this.ensureLoaded()) ||
+      this.session === null ||
+      this.ort === null
+    ) {
       throw new Error("Spam model not available");
     }
 
     const vector = buildFeatureVector(features, context);
-    const input = new this.ort.Tensor("float32", vector, [1, MODEL_FEATURE_LENGTH]);
+    const input = new this.ort.Tensor("float32", vector, [
+      1,
+      MODEL_FEATURE_LENGTH,
+    ]);
     const outputs = await this.session.run({ features: input as Tensor });
     const tensor = outputs.prob as Tensor | undefined;
     const raw = tensor?.data?.[0];

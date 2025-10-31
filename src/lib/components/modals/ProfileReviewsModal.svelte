@@ -64,12 +64,16 @@
 
   const currentUserId = $derived($userStore.me?.id ?? null);
   const isSelfReview = $derived(
-    subjectType === "user" && currentUserId !== null && currentUserId === subjectId,
+    subjectType === "user" &&
+      currentUserId !== null &&
+      currentUserId === subjectId,
   );
   const canSubmitReview = $derived(Boolean(currentUserId) && !isSelfReview);
 
   const trimmedContentLength = $derived(formContent.trim().length);
-  const remainingCharacters = $derived(MAX_REVIEW_LENGTH - trimmedContentLength);
+  const remainingCharacters = $derived(
+    MAX_REVIEW_LENGTH - trimmedContentLength,
+  );
 
   const reviewSummary = $derived(() => {
     if (reviews.length === 0) {
@@ -90,7 +94,8 @@
 
   const modalDescription = $derived(() => {
     const name = subjectNameProp?.trim();
-    const targetLabel = name || (subjectType === "user" ? "this user" : "this server");
+    const targetLabel =
+      name || (subjectType === "user" ? "this user" : "this server");
     if (reviews.length === 0) {
       return `Be the first to review ${targetLabel}.`;
     }
@@ -240,7 +245,9 @@
             {subjectNameProp?.trim() ||
               (subjectType === "user" ? "Unnamed user" : "Unnamed server")}
           </p>
-          <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <div
+            class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+          >
             <span class="capitalize">{subjectType} reviews</span>
             {#if reviewSummary.count}
               <span class="flex items-center gap-1 text-foreground">
@@ -253,16 +260,17 @@
                           ? "text-yellow-400"
                           : "text-muted-foreground"
                       }`}
-                      fill={
-                        reviewSummary.average && reviewSummary.average >= value
-                          ? "currentColor"
-                          : "none"
-                      }
+                      fill={reviewSummary.average &&
+                      reviewSummary.average >= value
+                        ? "currentColor"
+                        : "none"}
                     />
                   {/each}
                 </div>
                 <span class="text-xs text-muted-foreground">
-                  ({reviewSummary.count} review{reviewSummary.count === 1 ? "" : "s"})
+                  ({reviewSummary.count} review{reviewSummary.count === 1
+                    ? ""
+                    : "s"})
                 </span>
               </span>
             {:else}
@@ -278,13 +286,17 @@
         </div>
       {:else}
         {#if errorMessage}
-          <div class="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div
+            class="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
             {errorMessage}
           </div>
         {/if}
         <ScrollArea class="max-h-72 pr-3">
           {#if reviews.length === 0}
-            <div class="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-muted-foreground">
+            <div
+              class="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-muted-foreground"
+            >
               <p>No reviews yet.</p>
               {#if canSubmitReview}
                 <p>Share your experience to help the community.</p>
@@ -293,7 +305,9 @@
           {:else}
             <div class="flex flex-col gap-4 py-1">
               {#each reviews as review (review.id)}
-                <article class="rounded-lg border border-border/60 bg-muted/30 p-4">
+                <article
+                  class="rounded-lg border border-border/60 bg-muted/30 p-4"
+                >
                   <div class="flex items-start justify-between gap-4">
                     <div>
                       <p class="text-sm font-medium text-foreground">
@@ -314,7 +328,9 @@
                               ? "text-yellow-400"
                               : "text-muted-foreground"
                           }`}
-                          fill={review.rating >= value ? "currentColor" : "none"}
+                          fill={review.rating >= value
+                            ? "currentColor"
+                            : "none"}
                         />
                       {/each}
                     </div>
@@ -341,7 +357,9 @@
                   <button
                     type="button"
                     class={`rounded-md border border-border/60 bg-background p-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-                      formRating === value ? "border-primary" : "hover:border-primary"
+                      formRating === value
+                        ? "border-primary"
+                        : "hover:border-primary"
                     }`}
                     onclick={() => setRating(value)}
                   >
@@ -357,7 +375,8 @@
                   </button>
                 {/each}
               </div>
-              <span class="text-sm text-muted-foreground">{formRating} / 5</span>
+              <span class="text-sm text-muted-foreground">{formRating} / 5</span
+              >
             </div>
           </div>
 
@@ -370,11 +389,15 @@
               value={formContent}
               oninput={handleContentInput}
             />
-            <div class="flex items-center justify-between text-xs text-muted-foreground">
+            <div
+              class="flex items-center justify-between text-xs text-muted-foreground"
+            >
               <span>{trimmedContentLength} / {MAX_REVIEW_LENGTH}</span>
               {#if remainingCharacters < 0}
                 <span class="text-destructive">
-                  {-remainingCharacters} character{remainingCharacters === -1 ? "" : "s"} over the limit
+                  {-remainingCharacters} character{remainingCharacters === -1
+                    ? ""
+                    : "s"} over the limit
                 </span>
               {/if}
             </div>
@@ -399,7 +422,9 @@
         </form>
       {:else}
         <div class="space-y-4">
-          <div class="rounded-md border border-muted-foreground/20 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+          <div
+            class="rounded-md border border-muted-foreground/20 bg-muted/30 px-3 py-3 text-sm text-muted-foreground"
+          >
             {#if !currentUserId}
               Sign in to share your thoughts.
             {:else if isSelfReview}

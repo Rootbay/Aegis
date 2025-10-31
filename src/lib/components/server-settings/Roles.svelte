@@ -7,7 +7,7 @@
   let activeServerId = $derived($serverStore.activeServerId ?? null);
   let server = $derived(
     activeServerId
-      ? $serverStore.servers.find((s) => s.id === activeServerId) ?? null
+      ? ($serverStore.servers.find((s) => s.id === activeServerId) ?? null)
       : null,
   );
 
@@ -125,7 +125,6 @@
 
   const sortedMembers = $derived(sortMembers(members));
   const sortedRoles = $derived(sortRoles(roles));
-
 </script>
 
 <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase">
@@ -161,7 +160,7 @@
 
     <div class="bg-card/60 rounded-lg p-4 shadow-sm border border-border/40">
       <RolesManagement
-        roles={roles}
+        {roles}
         onadd_role={handleAddRole}
         onupdate_role={handleUpdateRole}
         ondelete_role={handleDeleteRole}
@@ -207,7 +206,8 @@
                       class="h-4 w-4 rounded border-border bg-background"
                       checked={isMemberAssigned(member.id, role.id)}
                       disabled={saving}
-                      onchange={() => handleMemberRoleToggle(member.id, role.id)}
+                      onchange={() =>
+                        handleMemberRoleToggle(member.id, role.id)}
                     />
                     <span>{role.name}</span>
                   </label>

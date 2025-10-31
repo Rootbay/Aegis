@@ -66,7 +66,9 @@
   }
 </script>
 
-<div class="flex min-h-full flex-col items-center justify-center gap-4 p-8 text-center">
+<div
+  class="flex min-h-full flex-col items-center justify-center gap-4 p-8 text-center"
+>
   {#if processing}
     <div class="space-y-2">
       <p class="text-lg font-semibold text-foreground">Joining server…</p>

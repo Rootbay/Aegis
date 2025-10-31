@@ -7,11 +7,11 @@ URL count, uppercase ratio, punctuation bursts, repeated characters,
 short-message indicator, and context flags for friend requests and profile
 content) and outputs a calibrated probability that a message is spam.
 
-| Asset | Location | Notes |
-| --- | --- | --- |
-| Model weights | `static/models/spam-classifier.onnx` | Float32 logistic regression exported to ONNX. |
-| Inference layer | `src/lib/features/security/spamModelInference.ts` | Fetches the ONNX model and executes it with `onnxruntime-web`. |
-| Classifier orchestration | `src/lib/features/security/spamClassifier.ts` | Manages caching, thresholds, fallbacks, and reason strings. |
+| Asset                    | Location                                          | Notes                                                          |
+| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------- |
+| Model weights            | `static/models/spam-classifier.onnx`              | Float32 logistic regression exported to ONNX.                  |
+| Inference layer          | `src/lib/features/security/spamModelInference.ts` | Fetches the ONNX model and executes it with `onnxruntime-web`. |
+| Classifier orchestration | `src/lib/features/security/spamClassifier.ts`     | Manages caching, thresholds, fallbacks, and reason strings.    |
 
 ## Loading strategy & fallbacks
 
@@ -46,7 +46,7 @@ reason messaging so existing moderation workflows remain unchanged.
 
 ## Testing notes
 
-* Unit tests mock the ONNX runtime so they remain deterministic and do not
+- Unit tests mock the ONNX runtime so they remain deterministic and do not
   require WASM during CI.
-* `tests/chat/chatStore.test.ts` includes fixtures for representative ham and
+- `tests/chat/chatStore.test.ts` includes fixtures for representative ham and
   spam content to verify integration behaviour and metadata handling.

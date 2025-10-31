@@ -1,6 +1,10 @@
 <script lang="ts">
   import { UploadCloud, Trash2, SmilePlus } from "@lucide/svelte";
-  import { Avatar, AvatarImage, AvatarFallback } from "$lib/components/ui/avatar/index.js";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import type { ServerEmoji } from "$lib/features/servers/models/Server";
@@ -16,13 +20,20 @@
   );
   const canManage = $derived(typeof onupdate_setting === "function");
 
-  function emitUpdate(payload: { id: string; property: string; value: unknown }) {
+  function emitUpdate(payload: {
+    id: string;
+    property: string;
+    value: unknown;
+  }) {
     if (typeof onupdate_setting === "function") {
       Reflect.apply(onupdate_setting as CallableFunction, undefined, [payload]);
     }
   }
 
-  function emitButton(payload: { id: string; context?: Record<string, unknown> }) {
+  function emitButton(payload: {
+    id: string;
+    context?: Record<string, unknown>;
+  }) {
     if (typeof onbutton_click === "function") {
       Reflect.apply(onbutton_click as CallableFunction, undefined, [payload]);
     }
@@ -66,7 +77,9 @@
 </script>
 
 <div class="space-y-4">
-  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div>
       <h4 class="text-base font-semibold text-white">Custom Emojis</h4>
       <p class="text-sm text-muted-foreground">
@@ -81,7 +94,9 @@
   {#if sortedEmojis.length > 0}
     <div class="grid gap-4 sm:grid-cols-2">
       {#each sortedEmojis as emoji (emoji.id)}
-        <div class="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+        <div
+          class="flex flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+        >
           <div class="flex items-center gap-3">
             <Avatar class="h-12 w-12 border border-zinc-800">
               {#if emoji.url}
@@ -109,7 +124,9 @@
             {/if}
           </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <div
+            class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+          >
             {#if emoji.animated}
               <Badge variant="secondary">Animated</Badge>
             {/if}
@@ -129,11 +146,14 @@
       {/each}
     </div>
   {:else}
-    <div class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center text-muted-foreground">
+    <div
+      class="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/40 p-8 text-center text-muted-foreground"
+    >
       <SmilePlus class="h-10 w-10" />
       <p class="text-sm font-medium text-white">No emojis yet</p>
       <p class="text-sm">
-        When you upload custom emoji, they will appear here for quick management.
+        When you upload custom emoji, they will appear here for quick
+        management.
       </p>
     </div>
   {/if}

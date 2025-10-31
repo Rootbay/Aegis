@@ -21,7 +21,14 @@
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { getEnvTurnServers } from "$lib/features/calls/utils/iceServers";
-  import { AlertCircle, Video, Mic, Plus, Trash2, ServerCog } from "lucide-svelte";
+  import {
+    AlertCircle,
+    Video,
+    Mic,
+    Plus,
+    Trash2,
+    ServerCog,
+  } from "lucide-svelte";
 
   type DeviceOption = {
     deviceId: string;
@@ -819,7 +826,9 @@
       {/if}
 
       {#each turnServers as server, index (index)}
-        <div class="space-y-3 rounded-lg border border-zinc-800/70 bg-zinc-900/60 p-4">
+        <div
+          class="space-y-3 rounded-lg border border-zinc-800/70 bg-zinc-900/60 p-4"
+        >
           <div class="grid gap-3 sm:grid-cols-3">
             <div class="sm:col-span-2 space-y-1">
               <Label class="text-xs text-zinc-400">Relay URLs</Label>
@@ -849,7 +858,9 @@
               />
             </div>
           </div>
-          <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <div
+            class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+          >
             <div class="space-y-1">
               <Label class="text-xs text-zinc-400">Credential</Label>
               <Input

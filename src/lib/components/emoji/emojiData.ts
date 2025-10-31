@@ -75,7 +75,9 @@ export async function loadEmojiData(): Promise<EmojiLoadResult> {
 
     const sanitized = rawCategories
       .map((category) => sanitizeCategory(category))
-      .filter((category): category is EmojiCategory => category.emojis.length > 0);
+      .filter(
+        (category): category is EmojiCategory => category.emojis.length > 0,
+      );
 
     if (sanitized.length === 0) {
       throw new Error("Emoji metadata contained no usable categories");
@@ -83,7 +85,10 @@ export async function loadEmojiData(): Promise<EmojiLoadResult> {
 
     return { categories: sanitized, usedFallback: false };
   } catch (error) {
-    console.warn("Failed to load emoji metadata, falling back to defaults", error);
+    console.warn(
+      "Failed to load emoji metadata, falling back to defaults",
+      error,
+    );
     return { categories: fallbackEmojiCategories, usedFallback: true };
   }
 }
@@ -97,10 +102,16 @@ function sanitizeCategory(candidate: unknown): EmojiCategory {
     };
   }
 
-  const id = getStringProperty(candidate, "id") || getStringProperty(candidate, "label") || "category";
+  const id =
+    getStringProperty(candidate, "id") ||
+    getStringProperty(candidate, "label") ||
+    "category";
   const label = getStringProperty(candidate, "label") || id;
   const emojis = Array.isArray((candidate as any).emojis)
-    ? (candidate as any).emojis.filter((emoji: unknown) => typeof emoji === "string" && emoji.trim().length > 0)
+    ? (candidate as any).emojis.filter(
+        (emoji: unknown) =>
+          typeof emoji === "string" && emoji.trim().length > 0,
+      )
     : [];
 
   return {

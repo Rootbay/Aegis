@@ -8,7 +8,8 @@ import type {
 import type { DeviceSyncResult } from "../features/settings/stores/deviceTypes";
 import { relayStore } from "../features/settings/stores/relayStore";
 
-const browser = typeof window !== "undefined" && typeof document !== "undefined";
+const browser =
+  typeof window !== "undefined" && typeof document !== "undefined";
 
 export type ConnectivityStatus =
   | "initializing"
@@ -569,7 +570,9 @@ function normalizeRelay(
 ): RelaySnapshot {
   const id = relay.id ?? `relay-${index}`;
   const scopeCandidate = (relay.scope ?? "global") as RelayScope;
-  const scope = relayScopes.includes(scopeCandidate) ? scopeCandidate : "global";
+  const scope = relayScopes.includes(scopeCandidate)
+    ? scopeCandidate
+    : "global";
   const statusCandidate = (relay.status ?? "unknown") as RelayStatus;
   const status = relayStatuses.includes(statusCandidate)
     ? statusCandidate
@@ -590,7 +593,9 @@ function normalizeRelay(
     ? relay.urls.filter((value): value is string => typeof value === "string")
     : [];
   const serverIds = Array.isArray(relay.serverIds)
-    ? relay.serverIds.filter((value): value is string => typeof value === "string")
+    ? relay.serverIds.filter(
+        (value): value is string => typeof value === "string",
+      )
     : [];
 
   return {
@@ -697,8 +702,8 @@ export function createConnectivityStore(): ConnectivityStore {
           relayStore.mapRelayParticipation(relays);
         }
       }
-      const activeRelayCount = relays.filter((relay) =>
-        relay.status === "healthy" || relay.status === "degraded",
+      const activeRelayCount = relays.filter(
+        (relay) => relay.status === "healthy" || relay.status === "degraded",
       ).length;
 
       const meshPeers =
@@ -827,8 +832,7 @@ export function createConnectivityStore(): ConnectivityStore {
       }));
       return result;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
       update((state) => ({
         ...state,
         trustedDeviceSync: {

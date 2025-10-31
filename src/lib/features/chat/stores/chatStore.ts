@@ -194,7 +194,10 @@ interface ChatStore {
   handleGroupChatCreated: (chat: BackendGroupChat) => GroupChatSummary;
   loadGroupChats: () => Promise<void>;
   leaveGroupChat: (groupId: string) => Promise<void>;
-  renameGroupChat: (groupId: string, newName: string) => Promise<GroupChatSummary>;
+  renameGroupChat: (
+    groupId: string,
+    newName: string,
+  ) => Promise<GroupChatSummary>;
   addMembersToGroupChat: (
     groupId: string,
     memberIds: string[],
@@ -1045,11 +1048,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return undefined;
   };
 
-  const AUTHOR_TYPE_VALUES: MessageAuthorType[] = [
-    "user",
-    "bot",
-    "webhook",
-  ];
+  const AUTHOR_TYPE_VALUES: MessageAuthorType[] = ["user", "bot", "webhook"];
   const AUTHOR_TYPE_LOOKUP = new Set<MessageAuthorType>(AUTHOR_TYPE_VALUES);
 
   const normalizeAuthorType = (
@@ -2941,8 +2940,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       const backend: BackendGroupChat = {
         id: payload.id,
         name: payload.name ?? trimmed,
-        owner_id: payload.owner_id ?? payload.ownerId ?? existing?.ownerId ?? "",
-        created_at: payload.created_at ?? payload.createdAt ?? existing?.createdAt,
+        owner_id:
+          payload.owner_id ?? payload.ownerId ?? existing?.ownerId ?? "",
+        created_at:
+          payload.created_at ?? payload.createdAt ?? existing?.createdAt,
         member_ids:
           payload.member_ids ?? payload.memberIds ?? existing?.memberIds ?? [],
       };
@@ -2983,7 +2984,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         member_ids: filtered,
       });
       const summary = handleGroupChatCreated(payload);
-      handleGroupMembersAdded(summary.id, payload.member_ids ?? payload.memberIds ?? []);
+      handleGroupMembersAdded(
+        summary.id,
+        payload.member_ids ?? payload.memberIds ?? [],
+      );
       return summary;
     } catch (error) {
       console.error("Failed to add members to group chat:", error);

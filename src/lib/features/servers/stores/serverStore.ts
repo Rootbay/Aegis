@@ -16,10 +16,7 @@ import type { Role } from "../models/Role";
 import type { ServerInvite } from "../models/ServerInvite";
 import { userStore } from "../../../stores/userStore";
 import { serverCache } from "../../../utils/cache";
-import type {
-  RelayRecord,
-  RelayStatus,
-} from "../../settings/models/relay";
+import type { RelayRecord, RelayStatus } from "../../settings/models/relay";
 
 type BackendUser = {
   id: string;
@@ -373,7 +370,8 @@ export function createServerStore(): ServerStore {
       showMembersOnline: showMembersOnline ?? undefined,
       showInstantInvite: showInstantInvite ?? undefined,
       inviteUrl: normalizeString(widget.inviteUrl ?? widget.invite_url) ?? null,
-      previewUrl: normalizeString(widget.previewUrl ?? widget.preview_url) ?? null,
+      previewUrl:
+        normalizeString(widget.previewUrl ?? widget.preview_url) ?? null,
       lastSyncedAt:
         normalizeString(widget.lastSyncedAt ?? widget.last_synced_at) ?? null,
     } satisfies ServerWidgetSettings;
@@ -672,10 +670,9 @@ export function createServerStore(): ServerStore {
     const mergedSettings: ServerModerationSettings = isRecord(rawSettings)
       ? ({ ...rawSettings } as ServerModerationSettings)
       : {};
-    const transparentSetting =
-      coerceBoolean(
-        transparentEdits ?? transparent_edits ?? mergedSettings.transparentEdits,
-      );
+    const transparentSetting = coerceBoolean(
+      transparentEdits ?? transparent_edits ?? mergedSettings.transparentEdits,
+    );
     if (transparentSetting !== undefined) {
       mergedSettings.transparentEdits = transparentSetting;
     }
@@ -771,8 +768,8 @@ export function createServerStore(): ServerStore {
         ? (patch.stickers ?? [])
         : (original.stickers ?? []),
       widgetSettings: hasOwn(patch, "widgetSettings")
-        ? patch.widgetSettings ?? null
-        : original.widgetSettings ?? null,
+        ? (patch.widgetSettings ?? null)
+        : (original.widgetSettings ?? null),
       auditLog: hasOwn(patch, "auditLog")
         ? (patch.auditLog ?? [])
         : (original.auditLog ?? []),
@@ -1379,8 +1376,10 @@ export function createServerStore(): ServerStore {
 
     let settingsWereTouched = false;
     if (hasOwn(patch, "settings")) {
-      const { normalizedSettings, moderationPayload: settingsModerationPayload } =
-        extractSettingsChanges(patch.settings, previousServer.settings);
+      const {
+        normalizedSettings,
+        moderationPayload: settingsModerationPayload,
+      } = extractSettingsChanges(patch.settings, previousServer.settings);
       if (normalizedSettings !== undefined) {
         normalizedPatch = {
           ...normalizedPatch,
@@ -1466,8 +1465,9 @@ export function createServerStore(): ServerStore {
         } as Server;
       }
 
-      const patchedSettings = normalizedPatch
-        .settings as ServerModerationSettings | undefined;
+      const patchedSettings = normalizedPatch.settings as
+        | ServerModerationSettings
+        | undefined;
       if (settingsWereTouched) {
         finalServer = {
           ...finalServer,

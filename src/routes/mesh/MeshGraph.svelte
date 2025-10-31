@@ -326,7 +326,9 @@
         <div class="mt-2 space-y-1">
           <div class="flex items-center justify-between">
             <span class="text-muted-foreground">Hop count</span>
-            <span class="font-medium text-foreground">{hover.peer.hopCount ?? "–"}</span>
+            <span class="font-medium text-foreground"
+              >{hover.peer.hopCount ?? "–"}</span
+            >
           </div>
           <div class="flex items-center justify-between">
             <span class="text-muted-foreground">Route quality</span>
@@ -346,7 +348,11 @@
           </div>
           <div class="flex items-center justify-between">
             <span class="text-muted-foreground">Latency</span>
-            <span class="font-medium text-foreground">{hover.peer.latencyMs !== null ? `${hover.peer.latencyMs} ms` : "–"}</span>
+            <span class="font-medium text-foreground"
+              >{hover.peer.latencyMs !== null
+                ? `${hover.peer.latencyMs} ms`
+                : "–"}</span
+            >
           </div>
         </div>
       {:else if hover.type === "edge"}
@@ -365,7 +371,9 @@
           </div>
           <div class="flex items-center justify-between">
             <span class="text-muted-foreground">Medium</span>
-            <span class="font-medium capitalize text-foreground">{hover.link.medium}</span>
+            <span class="font-medium capitalize text-foreground"
+              >{hover.link.medium}</span
+            >
           </div>
           <div class="flex items-center justify-between">
             <span class="text-muted-foreground">Latency</span>

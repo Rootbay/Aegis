@@ -108,9 +108,8 @@ class MockRTCPeerConnection {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var MediaStream: typeof MockMediaStream;
-  // eslint-disable-next-line no-var
+
   var RTCPeerConnection: typeof MockRTCPeerConnection;
 }
 

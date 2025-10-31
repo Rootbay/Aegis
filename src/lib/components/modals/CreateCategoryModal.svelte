@@ -41,15 +41,11 @@
   let name = $state("");
   let submitting = $state(false);
 
-  const mapCategory = (
-    category: BackendChannelCategory,
-  ): ChannelCategory => ({
+  const mapCategory = (category: BackendChannelCategory): ChannelCategory => ({
     id: category.id,
     server_id: category.server_id,
     name: category.name,
-    position: Number.isFinite(category.position)
-      ? category.position
-      : 0,
+    position: Number.isFinite(category.position) ? category.position : 0,
     created_at: category.created_at,
   });
 
@@ -112,10 +108,7 @@
       </DialogDescription>
     </DialogHeader>
 
-    <form
-      class="space-y-4"
-      onsubmit|preventDefault={handleSubmit}
-    >
+    <form class="space-y-4" onsubmit={handleSubmit}>
       <div class="space-y-2">
         <Label for="category-name">Category name</Label>
         <Input

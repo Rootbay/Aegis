@@ -32,25 +32,21 @@ const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
     };
   });
 
-const {
-  callState,
-  initializeCallMock,
-  startCallMock,
-  setCallModalOpenMock,
-} = vi.hoisted(() => {
-  const { writable } = require("svelte/store");
-  return {
-    callState: writable({
-      activeCall: null,
-      deviceAvailability: { audioInput: true, videoInput: true },
-      permissions: { audio: "granted", video: "granted", checking: false },
-      showCallModal: false,
-    }),
-    initializeCallMock: vi.fn(),
-    startCallMock: vi.fn(),
-    setCallModalOpenMock: vi.fn(),
-  };
-});
+const { callState, initializeCallMock, startCallMock, setCallModalOpenMock } =
+  vi.hoisted(() => {
+    const { writable } = require("svelte/store");
+    return {
+      callState: writable({
+        activeCall: null,
+        deviceAvailability: { audioInput: true, videoInput: true },
+        permissions: { audio: "granted", video: "granted", checking: false },
+        showCallModal: false,
+      }),
+      initializeCallMock: vi.fn(),
+      startCallMock: vi.fn(),
+      setCallModalOpenMock: vi.fn(),
+    };
+  });
 
 const {
   memberSidebarState,
@@ -76,17 +72,19 @@ const {
       });
       return nextVisible;
     }),
-    setMemberSidebarVisibilityMock: vi.fn((chatId: string, visible: boolean) => {
-      state.update((map: Map<string, boolean>) => {
-        const next = new Map(map);
-        if (visible) {
-          next.delete(chatId);
-        } else {
-          next.set(chatId, false);
-        }
-        return next;
-      });
-    }),
+    setMemberSidebarVisibilityMock: vi.fn(
+      (chatId: string, visible: boolean) => {
+        state.update((map: Map<string, boolean>) => {
+          const next = new Map(map);
+          if (visible) {
+            next.delete(chatId);
+          } else {
+            next.set(chatId, false);
+          }
+          return next;
+        });
+      },
+    ),
   };
 });
 

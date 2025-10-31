@@ -1115,11 +1115,9 @@
             memberSidebarVisible ? "text-cyan-400" : "",
           )}
           size="icon"
-          aria-label={
-            memberSidebarVisible
-              ? "Hide Member Sidebar"
-              : "Show Member Sidebar"
-          }
+          aria-label={memberSidebarVisible
+            ? "Hide Member Sidebar"
+            : "Show Member Sidebar"}
           onclick={toggleMemberSidebarVisibility}
           aria-pressed={memberSidebarVisible ? "true" : "false"}
         >
@@ -1174,7 +1172,7 @@
               >
                 <LogOut class="mr-2 h-3.5 w-3.5" /> Leave group
               </DropdownMenuItem>
-              </DropdownMenuContent>
+            </DropdownMenuContent>
           </DropdownMenu>
           <Dialog
             open={showRenameGroupModal}
@@ -1185,10 +1183,7 @@
             }}
           >
             <DialogContent class="sm:max-w-sm">
-              <form
-                class="space-y-4"
-                on:submit|preventDefault={handleRenameGroupSubmit}
-              >
+              <form class="space-y-4" onsubmit={handleRenameGroupSubmit}>
                 <DialogHeader class="space-y-1">
                   <DialogTitle>Rename group</DialogTitle>
                   <DialogDescription>
@@ -1221,9 +1216,8 @@
                   </Button>
                   <Button
                     type="submit"
-                    disabled={
-                      renameGroupPending || renameGroupName.trim().length === 0
-                    }
+                    disabled={renameGroupPending ||
+                      renameGroupName.trim().length === 0}
                   >
                     Save
                   </Button>

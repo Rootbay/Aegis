@@ -15,11 +15,12 @@ export function computeSearchResults(
   searchTerm: string,
 ): SearchResults {
   const normalizedTerm = searchTerm.trim().toLowerCase();
-  const source = normalizedTerm.length > 0
-    ? entries.filter((entry) =>
-        entry.name.toLowerCase().includes(normalizedTerm),
-      )
-    : entries;
+  const source =
+    normalizedTerm.length > 0
+      ? entries.filter((entry) =>
+          entry.name.toLowerCase().includes(normalizedTerm),
+        )
+      : entries;
 
   return {
     dms: source.filter(isDirectMessage),

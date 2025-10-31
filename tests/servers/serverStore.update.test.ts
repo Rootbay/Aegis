@@ -1,11 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  mock,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { get } from "svelte/store";
 import type { Server } from "../../src/lib/features/servers/models/Server";
 

@@ -2,7 +2,8 @@ import { get, writable, type Readable } from "svelte/store";
 
 export type MemberSidebarVisibilityState = Map<string, boolean>;
 
-interface MemberSidebarVisibilityStore extends Readable<MemberSidebarVisibilityState> {
+interface MemberSidebarVisibilityStore
+  extends Readable<MemberSidebarVisibilityState> {
   setVisibility: (chatId: string, visible: boolean) => void;
   toggleVisibility: (chatId: string) => boolean;
   isVisible: (chatId: string) => boolean;
@@ -54,4 +55,5 @@ function createMemberSidebarVisibilityStore(): MemberSidebarVisibilityStore {
   };
 }
 
-export const memberSidebarVisibilityStore = createMemberSidebarVisibilityStore();
+export const memberSidebarVisibilityStore =
+  createMemberSidebarVisibilityStore();

@@ -1,10 +1,18 @@
 <script lang="ts">
   import { CheckCircle2, Copy, Link2, RefreshCcw } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
-  import { Select, SelectTrigger, SelectContent, SelectItem } from "$lib/components/ui/select/index.js";
+  import {
+    Select,
+    SelectTrigger,
+    SelectContent,
+    SelectItem,
+  } from "$lib/components/ui/select/index.js";
   import { Switch } from "$lib/components/ui/switch/index.js";
   import type { Channel } from "$lib/features/channels/models/Channel";
-  import type { Server, ServerWidgetSettings } from "$lib/features/servers/models/Server";
+  import type {
+    Server,
+    ServerWidgetSettings,
+  } from "$lib/features/servers/models/Server";
 
   export let server: Server | null = null;
   export let widgetSettings: ServerWidgetSettings | null | undefined = null;
@@ -12,9 +20,10 @@
   export let onupdate_setting: unknown = undefined;
 
   const currentWidget = $derived<ServerWidgetSettings>(() => {
-    const firstChannelId = Array.isArray(channels) && channels.length > 0
-      ? channels[0]?.id ?? null
-      : null;
+    const firstChannelId =
+      Array.isArray(channels) && channels.length > 0
+        ? (channels[0]?.id ?? null)
+        : null;
     return {
       enabled: widgetSettings?.enabled ?? false,
       channelId:
@@ -45,7 +54,11 @@
 
   const canUpdate = $derived(typeof onupdate_setting === "function");
 
-  function emitUpdate(payload: { id: string; property: string; value: unknown }) {
+  function emitUpdate(payload: {
+    id: string;
+    property: string;
+    value: unknown;
+  }) {
     if (typeof onupdate_setting === "function") {
       Reflect.apply(onupdate_setting as CallableFunction, undefined, [payload]);
     }
@@ -94,11 +107,14 @@
 
 <div class="space-y-6">
   <div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div
+      class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+    >
       <div>
         <h4 class="text-base font-semibold text-white">Server Widget</h4>
         <p class="text-sm text-muted-foreground">
-          Enable a shareable widget so visitors can preview activity and join instantly.
+          Enable a shareable widget so visitors can preview activity and join
+          instantly.
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -116,7 +132,9 @@
 
   <div class="grid gap-4 md:grid-cols-2">
     <div class="space-y-2">
-      <label class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <label
+        class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
         Widget Channel
       </label>
       {#if channelOptions.length > 0}
@@ -128,8 +146,9 @@
         >
           <SelectTrigger class="w-full">
             <span data-slot="select-value" class="flex-1 text-left">
-              {channelOptions.find((option) => option.value === currentWidget.channelId)?.label
-                || "Choose a channel"}
+              {channelOptions.find(
+                (option) => option.value === currentWidget.channelId,
+              )?.label || "Choose a channel"}
             </span>
           </SelectTrigger>
           <SelectContent>
@@ -139,14 +158,18 @@
           </SelectContent>
         </Select>
       {:else}
-        <div class="rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-3 text-sm text-muted-foreground">
+        <div
+          class="rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-3 text-sm text-muted-foreground"
+        >
           No text channels available.
         </div>
       {/if}
     </div>
 
     <div class="space-y-2">
-      <label class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <label
+        class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      >
         Appearance
       </label>
       <Select
@@ -169,7 +192,9 @@
   </div>
 
   <div class="grid gap-4 md:grid-cols-2">
-    <div class="flex items-start justify-between rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+    <div
+      class="flex items-start justify-between rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+    >
       <div>
         <p class="text-sm font-medium text-white">Show online member count</p>
         <p class="text-xs text-muted-foreground">
@@ -179,11 +204,14 @@
       <Switch
         checked={currentWidget.showMembersOnline ?? true}
         disabled={!canUpdate}
-        onCheckedChange={(checked) => updateWidget({ showMembersOnline: checked })}
+        onCheckedChange={(checked) =>
+          updateWidget({ showMembersOnline: checked })}
       />
     </div>
 
-    <div class="flex items-start justify-between rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+    <div
+      class="flex items-start justify-between rounded-lg border border-zinc-800 bg-zinc-900/40 p-4"
+    >
       <div>
         <p class="text-sm font-medium text-white">Show instant invite button</p>
         <p class="text-xs text-muted-foreground">
@@ -193,13 +221,16 @@
       <Switch
         checked={currentWidget.showInstantInvite ?? true}
         disabled={!canUpdate}
-        onCheckedChange={(checked) => updateWidget({ showInstantInvite: checked })}
+        onCheckedChange={(checked) =>
+          updateWidget({ showInstantInvite: checked })}
       />
     </div>
   </div>
 
   <div class="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+    >
       <div class="space-y-1">
         <p class="text-sm font-medium text-white">Invite link</p>
         <p class="text-xs text-muted-foreground">
@@ -218,24 +249,25 @@
         >
           <Copy class="mr-2 h-4 w-4" /> Copy link
         </Button>
-        <Button
-          variant="ghost"
-          disabled={!canUpdate}
-          onclick={refreshPreview}
-        >
+        <Button variant="ghost" disabled={!canUpdate} onclick={refreshPreview}>
           <RefreshCcw class="mr-2 h-4 w-4" /> Refresh Preview
         </Button>
       </div>
     </div>
     <p class="mt-3 text-xs text-muted-foreground">
-      <CheckCircle2 class="mr-1 inline h-3.5 w-3.5 align-middle text-emerald-400" />
+      <CheckCircle2
+        class="mr-1 inline h-3.5 w-3.5 align-middle text-emerald-400"
+      />
       Last synced {formatDate(currentWidget.lastSyncedAt)}
     </p>
   </div>
 
   {#if !currentWidget.enabled}
-    <div class="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/60 p-4 text-sm text-muted-foreground">
-      Enable the widget to embed an interactive preview on your website or community hub.
+    <div
+      class="rounded-lg border border-dashed border-zinc-700 bg-zinc-900/60 p-4 text-sm text-muted-foreground"
+    >
+      Enable the widget to embed an interactive preview on your website or
+      community hub.
     </div>
   {/if}
 </div>

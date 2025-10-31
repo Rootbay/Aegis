@@ -1415,7 +1415,10 @@
   );
 
   const searchUsers = $derived(() => {
-    const entries = new Map<string, { id: string; name?: string | null; tag?: string | null }>();
+    const entries = new Map<
+      string,
+      { id: string; name?: string | null; tag?: string | null }
+    >();
     if (!chat) {
       return [] as { id: string; name?: string | null; tag?: string | null }[];
     }

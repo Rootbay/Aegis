@@ -105,8 +105,7 @@
   const createGroupContext = getContext<CreateGroupContext | undefined>(
     CREATE_GROUP_CONTEXT_KEY,
   );
-  const openProfileReviewsModal =
-    createGroupContext?.openProfileReviewsModal;
+  const openProfileReviewsModal = createGroupContext?.openProfileReviewsModal;
 
   let showCreateChannelModal = $state(false);
   let showCreateCategoryModal = $state(false);
@@ -574,10 +573,7 @@
           ? server.categories.some((category) => category.id === categoryId)
           : false;
         if (!exists) {
-          toasts.addToast(
-            "Select a custom category to delete.",
-            "info",
-          );
+          toasts.addToast("Select a custom category to delete.", "info");
           break;
         }
         void deleteCategory(categoryId);
@@ -905,7 +901,6 @@
       serverId: server.id,
     });
   }
-
 </script>
 
 <ServerBackgroundContextMenu onaction={handleServerBackgroundAction}>
@@ -998,7 +993,8 @@
               {@const collapsed = isCategoryCollapsed(category.id)}
               <Collapsible
                 open={!collapsed}
-                onOpenChange={(value) => setCategoryCollapsed(category.id, !value)}
+                onOpenChange={(value) =>
+                  setCategoryCollapsed(category.id, !value)}
               >
                 <div class="flex justify-between items-center py-1 mt-4">
                   <CollapsibleTrigger
@@ -1015,9 +1011,9 @@
                     </h3>
                     <ChevronDown
                       size={10}
-                      class={`ml-1 transition-transform duration-200 ${collapsed
-                        ? 'rotate-[-90deg]'
-                        : ''}`}
+                      class={`ml-1 transition-transform duration-200 ${
+                        collapsed ? "rotate-[-90deg]" : ""
+                      }`}
                     />
                   </CollapsibleTrigger>
                   <Button
@@ -1031,8 +1027,14 @@
                 </div>
 
                 <CollapsibleContent>
-                  {@const textChannels = getVisibleChannels(category.id, "text")}
-                  {@const voiceChannels = getVisibleChannels(category.id, "voice")}
+                  {@const textChannels = getVisibleChannels(
+                    category.id,
+                    "text",
+                  )}
+                  {@const voiceChannels = getVisibleChannels(
+                    category.id,
+                    "voice",
+                  )}
                   {#if textChannels.length === 0 && voiceChannels.length === 0}
                     <p class="text-xs text-muted-foreground px-2 py-1">
                       No channels in this category yet.
@@ -1056,11 +1058,14 @@
                           onSelectChannel(server.id, channel.id);
                         }
                       }}
-                      oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                      oncontextmenu={(e) =>
+                        handleChannelContextMenu(e, channel)}
                     >
                       <div class="flex items-center truncate">
                         <Hash size={10} class="mr-1" />
-                        <span class="truncate select-none ml-2">{channel.name}</span>
+                        <span class="truncate select-none ml-2"
+                          >{channel.name}</span
+                        >
                       </div>
                       <div class="ml-auto flex items-center gap-2">
                         {#if unreadCount > 0}
@@ -1122,11 +1127,14 @@
                           handleVoiceChannelClick(channel);
                         }
                       }}
-                      oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                      oncontextmenu={(e) =>
+                        handleChannelContextMenu(e, channel)}
                     >
                       <div class="flex items-center truncate">
                         <Mic size={12} class="mr-1" />
-                        <span class="truncate select-none ml-2">{channel.name}</span>
+                        <span class="truncate select-none ml-2"
+                          >{channel.name}</span
+                        >
                       </div>
                       <div
                         class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
@@ -1198,12 +1206,7 @@
 
             <CollapsibleContent>
               {#if server && server.channels && server.channels.length > 0}
-                {#each server.channels.filter(
-                    (c: Channel) =>
-                      c.channel_type === "text" &&
-                      (c.category_id ?? null) === null &&
-                      (!hideMutedChannels || !mutedChannelIds.has(c.id)),
-                  ) as channel (channel.id)}
+                {#each server.channels.filter((c: Channel) => c.channel_type === "text" && (c.category_id ?? null) === null && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
                   {@const metadata = channelMetadataLookup.get(channel.id)}
                   {@const unreadCount = metadata?.unreadCount ?? 0}
                   <div
@@ -1274,7 +1277,10 @@
             open={!voiceChannelsCollapsed}
             onOpenChange={(value) => {
               voiceChannelsCollapsed = !value;
-              persistCollapsedState(VOICE_COLLAPSED_KEY, voiceChannelsCollapsed);
+              persistCollapsedState(
+                VOICE_COLLAPSED_KEY,
+                voiceChannelsCollapsed,
+              );
             }}
           >
             <div class="flex justify-between items-center py-1 mt-6">
@@ -1312,12 +1318,7 @@
 
             <CollapsibleContent>
               {#if server && server.channels && server.channels.length > 0}
-                {#each server.channels.filter(
-                    (c: Channel) =>
-                      c.channel_type === "voice" &&
-                      (c.category_id ?? null) === null &&
-                      (!hideMutedChannels || !mutedChannelIds.has(c.id)),
-                  ) as channel (channel.id)}
+                {#each server.channels.filter((c: Channel) => c.channel_type === "voice" && (c.category_id ?? null) === null && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
                   {@const activeCall = $callStore.activeCall}
                   {@const isActiveVoiceChannel =
                     activeCall &&

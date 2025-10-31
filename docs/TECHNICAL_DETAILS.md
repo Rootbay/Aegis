@@ -42,11 +42,11 @@ AERP maintains a weighted graph of recently observed peers and updates link scor
 
 The router exposes a snapshot API used by the connectivity UI to display hop counts, path quality, and per-link latency. Configuration is persisted as part of the application settings and surfaced in the Network Settings panel:
 
-| Setting | Description | Default |
-| --- | --- | --- |
+| Setting                          | Description                                                                  | Default      |
+| -------------------------------- | ---------------------------------------------------------------------------- | ------------ |
 | `aerpRouteUpdateIntervalSeconds` | How often the router recomputes candidate paths and emits refreshed metrics. | `10` seconds |
-| `aerpMinRouteQuality` | Minimum confidence (0–1) required before a path is considered viable. | `0.4` |
-| `aerpMaxHops` | Maximum hop count for multi-hop forwarding. | `6` |
+| `aerpMinRouteQuality`            | Minimum confidence (0–1) required before a path is considered viable.        | `0.4`        |
+| `aerpMaxHops`                    | Maximum hop count for multi-hop forwarding.                                  | `6`          |
 
 Users can tune these values to prefer ultra-stable links (raise the quality floor) or faster convergence (shorten the interval). Every change is pushed to the Rust backend through the `set_routing_config` command, which immediately refreshes the connectivity snapshot so the UI reflects the new routing posture.
 

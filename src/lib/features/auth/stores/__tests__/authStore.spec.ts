@@ -45,15 +45,12 @@ vi.mock("$lib/stores/ToastStore", () => ({
 }));
 
 const ingestDeviceHandshakeMock = vi.fn<(raw: string) => unknown>();
-const approveDeviceHandshakeMock =
-  vi.fn<
-    (
-      options: unknown,
-    ) => Promise<{
-      updatedPersistence: Record<string, unknown>;
-      totpRequirement: boolean;
-    }>
-  >();
+const approveDeviceHandshakeMock = vi.fn<
+  (options: unknown) => Promise<{
+    updatedPersistence: Record<string, unknown>;
+    totpRequirement: boolean;
+  }>
+>();
 const createDeviceHandshakeMock =
   vi.fn<(options: unknown) => Promise<string>>();
 const getDeviceInfoMock =

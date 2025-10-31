@@ -26,7 +26,13 @@
   import type { PendingDeviceLink } from "$lib/features/settings/stores/deviceTypes";
   import { connectivityStore } from "$lib/stores/connectivityStore";
   import { toasts } from "$lib/stores/ToastStore";
-  import { Loader2, RefreshCw, Copy, ShieldCheck, ShieldOff } from "lucide-svelte";
+  import {
+    Loader2,
+    RefreshCw,
+    Copy,
+    ShieldCheck,
+    ShieldOff,
+  } from "lucide-svelte";
 
   let trustedDevices = $state<TrustedDevice[]>(get(settings).trustedDevices);
   let provisioning = $state<DeviceProvisioningState[]>([]);
@@ -96,7 +102,9 @@
       provisioningQr = nextQr;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to load device inventory.";
+        error instanceof Error
+          ? error.message
+          : "Failed to load device inventory.";
       toasts.addToast(message, "error");
     } finally {
       isInventoryLoading = false;
@@ -148,10 +156,13 @@
         try {
           provisioningQr = {
             ...provisioningQr,
-            [state.bundle.bundleId]: await QRCode.toDataURL(state.bundle.qrPayload, {
-              scale: 4,
-              margin: 1,
-            }),
+            [state.bundle.bundleId]: await QRCode.toDataURL(
+              state.bundle.qrPayload,
+              {
+                scale: 4,
+                margin: 1,
+              },
+            ),
           };
         } catch (error) {
           console.warn("Failed generating QR for new bundle", error);
@@ -162,7 +173,9 @@
       toasts.addToast("Provisioning bundle created.", "success");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to create provisioning bundle.";
+        error instanceof Error
+          ? error.message
+          : "Failed to create provisioning bundle.";
       toasts.addToast(message, "error");
     } finally {
       isGeneratingBundle = false;
@@ -176,7 +189,9 @@
       toasts.addToast("Provisioning bundle cancelled.", "info");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to cancel provisioning bundle.";
+        error instanceof Error
+          ? error.message
+          : "Failed to cancel provisioning bundle.";
       toasts.addToast(message, "error");
     }
   }
@@ -189,7 +204,9 @@
       toasts.addToast("Device approved.", "success");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to approve device request.";
+        error instanceof Error
+          ? error.message
+          : "Unable to approve device request.";
       toasts.addToast(message, "error");
     } finally {
       approvalBusy = { ...approvalBusy, [bundleId]: false };
@@ -204,7 +221,9 @@
       toasts.addToast("Device request declined.", "info");
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to decline device request.";
+        error instanceof Error
+          ? error.message
+          : "Unable to decline device request.";
       toasts.addToast(message, "error");
     } finally {
       approvalBusy = { ...approvalBusy, [bundleId]: false };
@@ -217,7 +236,10 @@
     const code = requestCodePhrase.trim();
     const name = requestDeviceName.trim();
     if (!bundle || !code || !name) {
-      toasts.addToast("Bundle ID, code phrase, and device name are required.", "error");
+      toasts.addToast(
+        "Bundle ID, code phrase, and device name are required.",
+        "error",
+      );
       return;
     }
     try {
@@ -233,7 +255,8 @@
       toasts.addToast("Approval request sent.", "success");
       await loadInventory();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to request approval.";
+      const message =
+        error instanceof Error ? error.message : "Failed to request approval.";
       toasts.addToast(message, "error");
     } finally {
       isSubmittingRequest = false;
@@ -243,17 +266,25 @@
   async function handleCompleteSync() {
     const bundle = (requestBundleId || lastRequestedBundleId || "").trim();
     if (!bundle) {
-      toasts.addToast("Enter the bundle ID you used during provisioning.", "error");
+      toasts.addToast(
+        "Enter the bundle ID you used during provisioning.",
+        "error",
+      );
       return;
     }
     try {
       syncError = null;
       lastSyncResult = await completeTrustedDeviceSync(bundle);
       await loadInventory();
-      toasts.addToast("Encrypted profile retrieved from trusted device.", "success");
+      toasts.addToast(
+        "Encrypted profile retrieved from trusted device.",
+        "success",
+      );
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to complete trusted sync.";
+        error instanceof Error
+          ? error.message
+          : "Failed to complete trusted sync.";
       syncError = message;
       toasts.addToast(message, "error");
     }
@@ -264,7 +295,8 @@
       await revokeTrustedDevice(device.id);
       toasts.addToast(`${device.name} access revoked.`, "info");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to revoke device.";
+      const message =
+        error instanceof Error ? error.message : "Failed to revoke device.";
       toasts.addToast(message, "error");
     }
   }
@@ -274,7 +306,8 @@
       await removeTrustedDevice(device.id);
       toasts.addToast(`${device.name} removed from trusted devices.`, "info");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to forget device.";
+      const message =
+        error instanceof Error ? error.message : "Failed to forget device.";
       toasts.addToast(message, "error");
     }
   }
@@ -284,7 +317,8 @@
       await navigator.clipboard.writeText(phrase);
       toasts.addToast("Code phrase copied to clipboard.", "success");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Clipboard unavailable.";
+      const message =
+        error instanceof Error ? error.message : "Clipboard unavailable.";
       toasts.addToast(message, "error");
     }
   }
@@ -299,17 +333,20 @@
   <div class="space-y-2">
     <h1 class="text-2xl font-semibold text-zinc-50">Trusted devices</h1>
     <p class="text-sm text-muted-foreground">
-      Issue short-lived bundles to link secondary hardware and review which devices can
-      decrypt your profile without additional challenges.
+      Issue short-lived bundles to link secondary hardware and review which
+      devices can decrypt your profile without additional challenges.
     </p>
   </div>
 
-  <section class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+  <section
+    class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
     <div class="flex items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold text-zinc-100">Provision a device</h2>
         <p class="text-sm text-muted-foreground">
-          Generate a bundle with a QR code or code phrase to authorize a companion device.
+          Generate a bundle with a QR code or code phrase to authorize a
+          companion device.
         </p>
       </div>
       <Button
@@ -327,7 +364,10 @@
       </Button>
     </div>
 
-    <form class="grid gap-3 md:grid-cols-[2fr,auto]" onsubmit={handleGenerateBundle}>
+    <form
+      class="grid gap-3 md:grid-cols-[2fr,auto]"
+      onsubmit={handleGenerateBundle}
+    >
       <div class="space-y-1">
         <Label class="text-sm font-medium text-zinc-200" for="provision-label">
           Optional label
@@ -352,20 +392,32 @@
     {#if provisioning.length > 0}
       <div class="grid gap-4 md:grid-cols-2">
         {#each provisioning as state (state.bundle.bundleId)}
-          <div class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+          <div
+            class="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-4"
+          >
             <div class="flex items-center justify-between">
               <div>
-                <h3 class="text-base font-semibold text-zinc-100">Bundle {state.bundle.bundleId}</h3>
+                <h3 class="text-base font-semibold text-zinc-100">
+                  Bundle {state.bundle.bundleId}
+                </h3>
                 <p class="text-xs text-muted-foreground">
-                  {stageLabel(state.stage)} · Expires in {formatExpiry(state.bundle.expiresAt)}
+                  {stageLabel(state.stage)} · Expires in {formatExpiry(
+                    state.bundle.expiresAt,
+                  )}
                 </p>
               </div>
-              <Badge variant="secondary">{renderRequestingDevice(state.requestingDevice)}</Badge>
+              <Badge variant="secondary"
+                >{renderRequestingDevice(state.requestingDevice)}</Badge
+              >
             </div>
 
-            <div class="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/60 p-3 text-sm">
+            <div
+              class="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/60 p-3 text-sm"
+            >
               <p class="font-medium text-zinc-100">Code phrase</p>
-              <p class="break-all text-sm text-zinc-300">{state.bundle.codePhrase}</p>
+              <p class="break-all text-sm text-zinc-300">
+                {state.bundle.codePhrase}
+              </p>
               <Button
                 variant="ghost"
                 size="sm"
@@ -432,16 +484,20 @@
       </div>
     {:else}
       <p class="text-sm text-muted-foreground">
-        No active provisioning bundles. Generate one above to begin linking another device.
+        No active provisioning bundles. Generate one above to begin linking
+        another device.
       </p>
     {/if}
   </section>
 
-  <section class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+  <section
+    class="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
     <div class="space-y-1">
       <h2 class="text-lg font-semibold text-zinc-100">Link this device</h2>
       <p class="text-sm text-muted-foreground">
-        Paste the bundle ID and code phrase generated on your primary device to request approval.
+        Paste the bundle ID and code phrase generated on your primary device to
+        request approval.
       </p>
     </div>
     <form class="grid gap-3 md:grid-cols-2" onsubmit={handleRequestApproval}>
@@ -509,17 +565,22 @@
     {/if}
 
     {#if lastSyncResult}
-      <div class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+      <div
+        class="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200"
+      >
         <p class="font-medium">Trusted device sync completed.</p>
         <p>
-          Retrieved encrypted profile for {lastSyncResult.approvedDevice.name}. Messages synced:
+          Retrieved encrypted profile for {lastSyncResult.approvedDevice.name}.
+          Messages synced:
           {lastSyncResult.messageCount}
         </p>
       </div>
     {/if}
 
     {#if syncError}
-      <div class="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+      <div
+        class="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200"
+      >
         <p class="font-medium">Sync failed</p>
         <p>{syncError}</p>
       </div>
@@ -527,7 +588,9 @@
 
     {#if connectivity.trustedDeviceSync.lastSync}
       <p class="text-xs text-muted-foreground">
-        Last sync completed {new Date(connectivity.trustedDeviceSync.lastSync).toLocaleString()}.
+        Last sync completed {new Date(
+          connectivity.trustedDeviceSync.lastSync,
+        ).toLocaleString()}.
       </p>
     {/if}
   </section>
@@ -536,27 +599,37 @@
     <div>
       <h2 class="text-lg font-semibold text-zinc-100">Authorized hardware</h2>
       <p class="text-sm text-muted-foreground">
-        Devices that can decrypt your profile without an additional recovery flow.
+        Devices that can decrypt your profile without an additional recovery
+        flow.
       </p>
     </div>
 
     {#if trustedDevices.length === 0}
       <p class="text-sm text-muted-foreground">
-        No trusted devices yet. Provision one above to allow seamless access from companion hardware.
+        No trusted devices yet. Provision one above to allow seamless access
+        from companion hardware.
       </p>
     {:else}
       <div class="space-y-3">
         {#each trustedDevices as device (device.id)}
-          <div class="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 md:flex-row md:items-center md:justify-between">
+          <div
+            class="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 md:flex-row md:items-center md:justify-between"
+          >
             <div>
               <div class="flex items-center gap-3">
-                <h3 class="text-base font-semibold text-zinc-100">{device.name}</h3>
-                <Badge variant={device.status === "active" ? "secondary" : "outline"}>
+                <h3 class="text-base font-semibold text-zinc-100">
+                  {device.name}
+                </h3>
+                <Badge
+                  variant={device.status === "active" ? "secondary" : "outline"}
+                >
                   {device.status.replace("_", " ")}
                 </Badge>
               </div>
               <p class="text-xs text-muted-foreground">
-                {device.platform} · Linked {new Date(device.addedAt).toLocaleString()} · Last seen
+                {device.platform} · Linked {new Date(
+                  device.addedAt,
+                ).toLocaleString()} · Last seen
                 {" "}
                 {new Date(device.lastSeen).toLocaleString()}
               </p>

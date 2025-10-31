@@ -93,52 +93,60 @@ vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () => ({
 }));
 
 vi.mock("$lib/features/chat/services/chatEncryptionService", () => ({
-  encryptOutgoingMessagePayload: vi.fn(async ({
-    content,
-    attachments,
-  }: {
-    content: string;
-    attachments: unknown[];
-  }) => ({
-    content,
-    attachments,
-    wasEncrypted: false,
-  })),
-  decodeIncomingMessagePayload: vi.fn(async ({
-    content,
-    attachments,
-  }: {
-    content: string;
-    attachments?: unknown[] | null;
-  }) => ({
-    content,
-    attachments: attachments ?? undefined,
-    wasEncrypted: false,
-  })),
+  encryptOutgoingMessagePayload: vi.fn(
+    async ({
+      content,
+      attachments,
+    }: {
+      content: string;
+      attachments: unknown[];
+    }) => ({
+      content,
+      attachments,
+      wasEncrypted: false,
+    }),
+  ),
+  decodeIncomingMessagePayload: vi.fn(
+    async ({
+      content,
+      attachments,
+    }: {
+      content: string;
+      attachments?: unknown[] | null;
+    }) => ({
+      content,
+      attachments: attachments ?? undefined,
+      wasEncrypted: false,
+    }),
+  ),
 }));
 vi.mock("../../src/lib/features/chat/services/chatEncryptionService", () => ({
-  encryptOutgoingMessagePayload: vi.fn(async ({
-    content,
-    attachments,
-  }: {
-    content: string;
-    attachments: unknown[];
-  }) => ({
-    content,
-    attachments,
-    wasEncrypted: false,
-  })),
-  decodeIncomingMessagePayload: vi.fn(async ({
-    content,
-    attachments,
-  }: {
-    content: string;
-    attachments?: unknown[] | null;
-  }) => ({
-    content,
-    attachments: attachments ?? undefined,
-    wasEncrypted: false,
-  })),
+  encryptOutgoingMessagePayload: vi.fn(
+    async ({
+      content,
+      attachments,
+    }: {
+      content: string;
+      attachments: unknown[];
+    }) => ({
+      content,
+      attachments,
+      wasEncrypted: false,
+    }),
+  ),
+  decodeIncomingMessagePayload: vi.fn(
+    async ({
+      content,
+      attachments,
+    }: {
+      content: string;
+      attachments?: unknown[] | null;
+    }) => ({
+      content,
+      attachments: attachments ?? undefined,
+      wasEncrypted: false,
+    }),
+  ),
 }));
 
 vi.mock("$lib/utils/nativeNotification", () => ({

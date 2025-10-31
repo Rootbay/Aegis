@@ -135,7 +135,8 @@ function extractFeatures(text: string): SpamFeatures {
   const words = text.match(WORD_REGEX) ?? [];
   const tokens = words.filter((word) => word.length > 0);
 
-  const uppercaseRatio = letters.length === 0 ? 0 : uppercaseMatches.length / letters.length;
+  const uppercaseRatio =
+    letters.length === 0 ? 0 : uppercaseMatches.length / letters.length;
 
   return {
     keywordScore,
@@ -148,7 +149,11 @@ function extractFeatures(text: string): SpamFeatures {
   };
 }
 
-function buildReasons(features: SpamFeatures, flagged: boolean, usedModel: boolean): string[] {
+function buildReasons(
+  features: SpamFeatures,
+  flagged: boolean,
+  usedModel: boolean,
+): string[] {
   const reasons: string[] = [];
   if (features.keywordHits.length > 0) {
     const sample = features.keywordHits.slice(0, 3).join(", ");
@@ -194,7 +199,10 @@ function adjustModelScore(
     adjusted = Math.min(1, adjusted + 0.05);
   }
   if (features.urlCount > 0) {
-    adjusted = Math.min(1, adjusted + Math.min(0.06, features.urlCount * 0.025));
+    adjusted = Math.min(
+      1,
+      adjusted + Math.min(0.06, features.urlCount * 0.025),
+    );
   }
   if (features.uppercaseRatio > 0.75) {
     adjusted = Math.min(1, adjusted + 0.02);

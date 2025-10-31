@@ -353,10 +353,7 @@
       </DialogHeader>
 
       <div class="space-y-3">
-        <Input
-          bind:value={searchTerm}
-          placeholder="Search conversations..."
-        />
+        <Input bind:value={searchTerm} placeholder="Search conversations..." />
 
         <ScrollArea class="max-h-60">
           {@const results: SearchResults =
@@ -384,7 +381,10 @@
                       >
                         <div class="relative">
                           <Avatar class="h-10 w-10">
-                            <AvatarImage src={friend.avatar} alt={friend.name} />
+                            <AvatarImage
+                              src={friend.avatar}
+                              alt={friend.name}
+                            />
                             <AvatarFallback class="uppercase"
                               >{friend.name?.[0]}</AvatarFallback
                             >

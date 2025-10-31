@@ -1,7 +1,11 @@
 <svelte:options runes={true} />
 
 <script lang="ts" generics="T = unknown">
-  let { items = [], renderItem, keyProp } = $props<{
+  let {
+    items = [],
+    renderItem,
+    keyProp,
+  } = $props<{
     items?: T[];
     renderItem?: (item: T, index: number) => any;
     keyProp?: string;
@@ -10,7 +14,7 @@
 
 <div data-testid="virtual-list-stub">
   {#if renderItem}
-    {#each items as item, index (keyProp ? (item as any)?.[keyProp] ?? index : index)}
+    {#each items as item, index (keyProp ? ((item as any)?.[keyProp] ?? index) : index)}
       {@render renderItem(item, index)}
     {/each}
   {/if}

@@ -45,7 +45,7 @@
 
   type OpenUserCardModalHandler = (
     ...args: [User, number, number, boolean]
-  ) => void; // eslint-disable-line no-unused-vars
+  ) => void;
   type OpenDetailedProfileHandler = (...args: [User]) => void; // eslint-disable-line no-unused-vars
 
   interface MemberGroup {
@@ -85,8 +85,8 @@
 
   const resolvedServerId = $derived(
     context === "server"
-      ? providedServerId ?? $serverStore.activeServerId ?? null
-      : providedServerId ?? null,
+      ? (providedServerId ?? $serverStore.activeServerId ?? null)
+      : (providedServerId ?? null),
   );
 
   const resolvedRoles: Role[] = $derived(
@@ -105,11 +105,11 @@
   );
 
   const resolvedGroupId = $derived(
-    context === "group" ? providedGroupId ?? null : null,
+    context === "group" ? (providedGroupId ?? null) : null,
   );
 
   const resolvedGroupOwnerId = $derived(
-    context === "group" ? providedGroupOwnerId ?? null : null,
+    context === "group" ? (providedGroupOwnerId ?? null) : null,
   );
 
   const currentUserId = $derived(() => $userStore.me?.id ?? null);
@@ -410,7 +410,11 @@
   }
 
   async function handleRemoveMember(member: MemberWithRoles) {
-    if (!canRemoveMember(member) || !resolvedGroupId || typeof member.id !== "string") {
+    if (
+      !canRemoveMember(member) ||
+      !resolvedGroupId ||
+      typeof member.id !== "string"
+    ) {
       return;
     }
 
@@ -427,7 +431,10 @@
 
     try {
       await chatStore.removeGroupChatMember(resolvedGroupId, member.id);
-      toasts.addToast(`${member.name ?? "Member"} removed from the group.`, "success");
+      toasts.addToast(
+        `${member.name ?? "Member"} removed from the group.`,
+        "success",
+      );
     } catch (error) {
       console.error("Failed to remove group member", error);
       toasts.addToast("Failed to remove member from the group.", "error");
@@ -478,128 +485,127 @@
               class="flex flex-col items-center gap-3 px-6 py-8 text-center text-sm text-muted-foreground"
             >
               <Users class="size-5" aria-hidden="true" />
-            <p>No members in this chat.</p>
-          </div>
-        {:else}
-          <div class="space-y-5 px-2 py-4">
-            {#each groupedMembers as group (group.id)}
-              <SidebarGroup class="space-y-2">
-                <SidebarGroupLabel>
-                  <div class="flex min-w-0 items-center gap-2">
-                    {#if group.color}
-                      <span
-                        class="h-2 w-2 shrink-0 rounded-full border border-border"
-                        style={`background-color: ${group.color}`}
-                        aria-hidden="true"
-                      ></span>
-                    {/if}
-                    <span class="truncate text-foreground">{group.label}</span>
-                  </div>
-                  <span class="text-xs font-semibold text-muted-foreground"
-                    >{group.members.length}</span
-                  >
-                </SidebarGroupLabel>
-                <SidebarGroupContent class="space-y-1">
-                  <SidebarMenu class="space-y-1">
-                    {#each group.members as member (member.id)}
-                      <SidebarMenuItem>
-                        <div class="flex items-center gap-1">
-                          <Popover.Root class="flex-1">
-                            <Popover.Trigger class="flex-1">
-                              <SidebarMenuButton
-                                class="flex w-full items-center gap-3"
-                                ondblclick={(event) =>
-                                  openUserCardModal?.(
-                                    member,
-                                    event.clientX,
-                                    event.clientY,
-                                    true,
-                                  )}
-                              >
-                                <div class="relative">
-                                  <Avatar class="size-8">
-                                    <AvatarImage
-                                      src={member.avatar}
-                                      alt={member.name}
-                                    />
-                                    <AvatarFallback>
-                                      {(member.name || "?")
-                                        .slice(0, 2)
-                                        .toUpperCase()}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  {#if member.online}
-                                    <span
-                                      class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"
-                                    ></span>
-                                  {/if}
-                                </div>
-                                <div class="min-w-0">
-                                  <p
-                                    class="truncate text-sm font-medium text-foreground"
-                                  >
-                                    {member.name}
-                                  </p>
-                                  {#if member.statusMessage}
+              <p>No members in this chat.</p>
+            </div>
+          {:else}
+            <div class="space-y-5 px-2 py-4">
+              {#each groupedMembers as group (group.id)}
+                <SidebarGroup class="space-y-2">
+                  <SidebarGroupLabel>
+                    <div class="flex min-w-0 items-center gap-2">
+                      {#if group.color}
+                        <span
+                          class="h-2 w-2 shrink-0 rounded-full border border-border"
+                          style={`background-color: ${group.color}`}
+                          aria-hidden="true"
+                        ></span>
+                      {/if}
+                      <span class="truncate text-foreground">{group.label}</span
+                      >
+                    </div>
+                    <span class="text-xs font-semibold text-muted-foreground"
+                      >{group.members.length}</span
+                    >
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent class="space-y-1">
+                    <SidebarMenu class="space-y-1">
+                      {#each group.members as member (member.id)}
+                        <SidebarMenuItem>
+                          <div class="flex items-center gap-1">
+                            <Popover.Root class="flex-1">
+                              <Popover.Trigger class="flex-1">
+                                <SidebarMenuButton
+                                  class="flex w-full items-center gap-3"
+                                  ondblclick={(event) =>
+                                    openUserCardModal?.(
+                                      member,
+                                      event.clientX,
+                                      event.clientY,
+                                      true,
+                                    )}
+                                >
+                                  <div class="relative">
+                                    <Avatar class="size-8">
+                                      <AvatarImage
+                                        src={member.avatar}
+                                        alt={member.name}
+                                      />
+                                      <AvatarFallback>
+                                        {(member.name || "?")
+                                          .slice(0, 2)
+                                          .toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    {#if member.online}
+                                      <span
+                                        class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"
+                                      ></span>
+                                    {/if}
+                                  </div>
+                                  <div class="min-w-0">
                                     <p
-                                      class="text-xs text-muted-foreground truncate"
-                                      title={member.statusMessage}
+                                      class="truncate text-sm font-medium text-foreground"
                                     >
-                                      {member.statusMessage}
+                                      {member.name}
                                     </p>
-                                  {/if}
-                                  {#if member.location}
-                                    <p
-                                      class="text-xs text-muted-foreground flex items-center gap-1"
-                                      title={member.location}
-                                    >
-                                      <MapPin class="h-3 w-3" />
-                                      <span class="truncate"
-                                        >{member.location}</span
+                                    {#if member.statusMessage}
+                                      <p
+                                        class="text-xs text-muted-foreground truncate"
+                                        title={member.statusMessage}
                                       >
-                                    </p>
-                                  {/if}
-                                </div>
-                              </SidebarMenuButton>
-                            </Popover.Trigger>
-                            <Popover.Content
-                              let:close
-                              class="w-auto border-none p-0"
-                            >
-                              <UserCardModal
-                                profileUser={member}
-                                {openDetailedProfileModal}
-                                isServerMemberContext={isServerContext}
-                                close={close}
-                                serverId={
-                                  isServerContext
-                                    ? resolvedServerId ?? undefined
-                                    : undefined
-                                }
-                              />
-                            </Popover.Content>
-                          </Popover.Root>
-                          {#if typeof member.id === "string" && canRemoveMember(member)}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                              aria-label={`Remove ${member.name ?? "member"} from group`}
-                              onclick={() => handleRemoveMember(member)}
-                              disabled={isRemovingMember(member.id)}
-                            >
-                              <UserMinus class="h-4 w-4" />
-                            </Button>
-                          {/if}
-                        </div>
-                      </SidebarMenuItem>
-                    {/each}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            {/each}
-          </div>
-        {/if}
+                                        {member.statusMessage}
+                                      </p>
+                                    {/if}
+                                    {#if member.location}
+                                      <p
+                                        class="text-xs text-muted-foreground flex items-center gap-1"
+                                        title={member.location}
+                                      >
+                                        <MapPin class="h-3 w-3" />
+                                        <span class="truncate"
+                                          >{member.location}</span
+                                        >
+                                      </p>
+                                    {/if}
+                                  </div>
+                                </SidebarMenuButton>
+                              </Popover.Trigger>
+                              <Popover.Content
+                                let:close
+                                class="w-auto border-none p-0"
+                              >
+                                <UserCardModal
+                                  profileUser={member}
+                                  {openDetailedProfileModal}
+                                  isServerMemberContext={isServerContext}
+                                  {close}
+                                  serverId={isServerContext
+                                    ? (resolvedServerId ?? undefined)
+                                    : undefined}
+                                />
+                              </Popover.Content>
+                            </Popover.Root>
+                            {#if typeof member.id === "string" && canRemoveMember(member)}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                aria-label={`Remove ${member.name ?? "member"} from group`}
+                                onclick={() => handleRemoveMember(member)}
+                                disabled={isRemovingMember(member.id)}
+                              >
+                                <UserMinus class="h-4 w-4" />
+                              </Button>
+                            {/if}
+                          </div>
+                        </SidebarMenuItem>
+                      {/each}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              {/each}
+            </div>
+          {/if}
         </ScrollArea>
       </div>
     </SidebarContent>
@@ -627,11 +633,9 @@
         users={inviteCandidates}
         selectedUserIds={inviteeSelection}
         onToggleUser={toggleInviteeSelection}
-        emptyStateMessage={
-          hasInviteCandidates
-            ? "No users found."
-            : "No friends available to invite."
-        }
+        emptyStateMessage={hasInviteCandidates
+          ? "No users found."
+          : "No friends available to invite."}
       />
 
       <DialogFooter>

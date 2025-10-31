@@ -88,10 +88,14 @@
         nextIndex = (currentIndex + 1) % emojiButtons.length;
         break;
       case "ArrowLeft":
-        nextIndex = (currentIndex - 1 + emojiButtons.length) % emojiButtons.length;
+        nextIndex =
+          (currentIndex - 1 + emojiButtons.length) % emojiButtons.length;
         break;
       case "ArrowDown":
-        nextIndex = Math.min(currentIndex + GRID_COLUMNS, emojiButtons.length - 1);
+        nextIndex = Math.min(
+          currentIndex + GRID_COLUMNS,
+          emojiButtons.length - 1,
+        );
         break;
       case "ArrowUp":
         nextIndex = Math.max(currentIndex - GRID_COLUMNS, 0);
@@ -103,7 +107,10 @@
       }
       case "End": {
         const rowStart = Math.floor(currentIndex / GRID_COLUMNS) * GRID_COLUMNS;
-        nextIndex = Math.min(rowStart + GRID_COLUMNS - 1, emojiButtons.length - 1);
+        nextIndex = Math.min(
+          rowStart + GRID_COLUMNS - 1,
+          emojiButtons.length - 1,
+        );
         break;
       }
       default:
@@ -154,7 +161,9 @@
     <div class="max-h-64 space-y-3 overflow-y-auto pr-1">
       {#each categories as category (category.id)}
         <section>
-          <p class="text-xs font-semibold uppercase tracking-wide text-white/60">
+          <p
+            class="text-xs font-semibold uppercase tracking-wide text-white/60"
+          >
             {category.label}
           </p>
           <div class="mt-2 grid grid-cols-8 gap-1">

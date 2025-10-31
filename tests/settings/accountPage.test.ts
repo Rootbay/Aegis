@@ -3,60 +3,62 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../../src/lib/features/auth/models/User";
 import AccountSettingsPage from "../../src/routes/settings/account/+page.svelte";
 
-const { mockUser, userState, updateProfile, authPersistenceState } = vi.hoisted(() => {
-  const baseUser: User = {
-    id: "user-1",
-    name: "Alice Example",
-    avatar: "https://example.com/avatar.png",
-    online: true,
-    publicKey: "public-key",
-    bio: "Testing avatar uploads",
-    tag: "#1234",
-    statusMessage: null,
-    location: null,
-  };
-  type State = { me: User | null; loading: boolean };
-  const subscribers = new Set<(value: State) => void>();
-  let state: State = { me: baseUser, loading: false };
-  const subscribe = (run: (value: State) => void) => {
-    run(state);
-    subscribers.add(run);
-    return () => subscribers.delete(run);
-  };
-  const set = (value: State) => {
-    state = value;
-    subscribers.forEach((run) => run(state));
-  };
-  const update = vi.fn(async (_user: User) => {});
-  type PersistenceState = {
-    requireTotpOnUnlock: boolean;
-    createdAt: string | null;
-    lastLoginAt: string | null;
-  };
-  const persistenceSubscribers = new Set<(value: PersistenceState) => void>();
-  let persistenceState: PersistenceState = {
-    requireTotpOnUnlock: false,
-    createdAt: null,
-    lastLoginAt: null,
-  };
-  const persistenceStore = {
-    subscribe(run: (value: PersistenceState) => void) {
-      run(persistenceState);
-      persistenceSubscribers.add(run);
-      return () => persistenceSubscribers.delete(run);
-    },
-    set(value: PersistenceState) {
-      persistenceState = value;
-      persistenceSubscribers.forEach((run) => run(persistenceState));
-    },
-  };
-  return {
-    mockUser: baseUser,
-    userState: { subscribe, set },
-    updateProfile: update,
-    authPersistenceState: persistenceStore,
-  };
-});
+const { mockUser, userState, updateProfile, authPersistenceState } = vi.hoisted(
+  () => {
+    const baseUser: User = {
+      id: "user-1",
+      name: "Alice Example",
+      avatar: "https://example.com/avatar.png",
+      online: true,
+      publicKey: "public-key",
+      bio: "Testing avatar uploads",
+      tag: "#1234",
+      statusMessage: null,
+      location: null,
+    };
+    type State = { me: User | null; loading: boolean };
+    const subscribers = new Set<(value: State) => void>();
+    let state: State = { me: baseUser, loading: false };
+    const subscribe = (run: (value: State) => void) => {
+      run(state);
+      subscribers.add(run);
+      return () => subscribers.delete(run);
+    };
+    const set = (value: State) => {
+      state = value;
+      subscribers.forEach((run) => run(state));
+    };
+    const update = vi.fn(async (_user: User) => {});
+    type PersistenceState = {
+      requireTotpOnUnlock: boolean;
+      createdAt: string | null;
+      lastLoginAt: string | null;
+    };
+    const persistenceSubscribers = new Set<(value: PersistenceState) => void>();
+    let persistenceState: PersistenceState = {
+      requireTotpOnUnlock: false,
+      createdAt: null,
+      lastLoginAt: null,
+    };
+    const persistenceStore = {
+      subscribe(run: (value: PersistenceState) => void) {
+        run(persistenceState);
+        persistenceSubscribers.add(run);
+        return () => persistenceSubscribers.delete(run);
+      },
+      set(value: PersistenceState) {
+        persistenceState = value;
+        persistenceSubscribers.forEach((run) => run(persistenceState));
+      },
+    };
+    return {
+      mockUser: baseUser,
+      userState: { subscribe, set },
+      updateProfile: update,
+      authPersistenceState: persistenceStore,
+    };
+  },
+);
 
 vi.mock("qrcode", () => ({
   default: {
@@ -93,8 +95,12 @@ vi.mock("$lib/features/auth/stores/authStore", () => ({
 
 class FileReaderMock {
   public result: string | ArrayBuffer | null = null;
-  public onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null = null;
-  public onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => void) | null = null;
+  public onload:
+    | ((this: FileReader, ev: ProgressEvent<FileReader>) => void)
+    | null = null;
+  public onerror:
+    | ((this: FileReader, ev: ProgressEvent<FileReader>) => void)
+    | null = null;
 
   readAsDataURL(_file: Blob) {
     this.result = "data:image/png;base64,uploaded-avatar";
@@ -120,7 +126,9 @@ describe("Account settings avatar management", () => {
   it("previews uploaded avatars and submits the data URL", async () => {
     const { container } = render(AccountSettingsPage);
 
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const fileInput = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
     await waitFor(() => {
       expect(
         container.querySelector<HTMLImageElement>(
@@ -134,7 +142,9 @@ describe("Account settings avatar management", () => {
     )!;
 
     expect(fileInput).toBeTruthy();
-    expect(avatarImage.getAttribute("src")).toBe("https://example.com/avatar.png");
+    expect(avatarImage.getAttribute("src")).toBe(
+      "https://example.com/avatar.png",
+    );
 
     const file = new File(["avatar"], "avatar.png", { type: "image/png" });
     await fireEvent.change(fileInput, { target: { files: [file] } });
@@ -163,13 +173,19 @@ describe("Account settings avatar management", () => {
   it("shows validation feedback when an unsupported file is uploaded", async () => {
     const { container } = render(AccountSettingsPage);
 
-    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
-    const invalidFile = new File(["invalid"], "avatar.txt", { type: "text/plain" });
+    const fileInput = container.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const invalidFile = new File(["invalid"], "avatar.txt", {
+      type: "text/plain",
+    });
 
     await fireEvent.change(fileInput, { target: { files: [invalidFile] } });
 
     expect(
-      screen.getByText("Unsupported image type. Use PNG, JPG, GIF, SVG, or WebP."),
+      screen.getByText(
+        "Unsupported image type. Use PNG, JPG, GIF, SVG, or WebP.",
+      ),
     ).toBeTruthy();
 
     const saveButton = screen.getByRole("button", { name: "Save changes" });

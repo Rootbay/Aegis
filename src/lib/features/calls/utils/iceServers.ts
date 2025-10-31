@@ -15,7 +15,10 @@ function getTurnServersEnvRaw(): string | undefined {
       return envValue;
     }
   } catch (error) {
-    console.warn("Failed to read VITE_TURN_SERVERS from import.meta.env", error);
+    console.warn(
+      "Failed to read VITE_TURN_SERVERS from import.meta.env",
+      error,
+    );
   }
 
   if (typeof process !== "undefined" && process.env?.VITE_TURN_SERVERS) {
@@ -44,7 +47,9 @@ function splitUrls(value: string | string[]): string[] {
 function createIceServerFromConfig(
   config: TurnServerConfig,
 ): RTCIceServer | null {
-  const urls = config.urls.map((url) => url.trim()).filter((url) => url.length > 0);
+  const urls = config.urls
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0);
   if (urls.length === 0) {
     return null;
   }
@@ -142,9 +147,7 @@ function parseFallbackTurnValue(raw: string): TurnServerConfig[] {
 }
 
 function canonicalIceServerKey(server: RTCIceServer): string {
-  const urls = Array.isArray(server.urls)
-    ? server.urls.join(",")
-    : server.urls;
+  const urls = Array.isArray(server.urls) ? server.urls.join(",") : server.urls;
   const username = server.username ?? "";
   const credential = server.credential ?? "";
   return `${urls}|${username}|${credential}`;
@@ -186,7 +189,10 @@ export function getIceServersFromConfig(
     .map((config) => createIceServerFromConfig(config))
     .filter((value): value is RTCIceServer => value !== null);
 
-  const combined = [DEFAULT_STUN_SERVER, ...getEnvTurnServers(), ...fromSettings];
+  const combined = [
+    DEFAULT_STUN_SERVER,
+    ...getEnvTurnServers(),
+    ...fromSettings,
+  ];
   return dedupeIceServers(combined);
 }
-

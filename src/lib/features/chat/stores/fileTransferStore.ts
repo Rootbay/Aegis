@@ -231,10 +231,15 @@ function createFileTransferStore(): FileTransferStore {
     mode: FileTransferMode,
   ) {
     try {
-      await performApproval(payload.sender_id, payload.filename, resilientEnabled, {
-        safeFilename: payload.safe_filename,
-        size: payload.size,
-      });
+      await performApproval(
+        payload.sender_id,
+        payload.filename,
+        resilientEnabled,
+        {
+          safeFilename: payload.safe_filename,
+          size: payload.size,
+        },
+      );
     } catch (error) {
       console.error("Failed to auto-approve file transfer", error);
       toasts.showErrorToast(
@@ -266,21 +271,21 @@ function createFileTransferStore(): FileTransferStore {
         id: buildId("incoming", senderId, filename),
         senderId,
         filename,
-      safeFilename: existing?.safeFilename ?? filename,
-      size: existing?.size,
-      path: existing?.path,
-      status: "denied",
-      direction: "incoming",
-      mode: existing?.mode ?? "basic",
-      phase: "complete",
-      progress: existing?.progress ?? 0,
-      resumed: existing?.resumed ?? false,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      dismissed: false,
-      autoApprovalFailed: existing?.autoApprovalFailed ?? false,
-    }));
-  } catch (error) {
+        safeFilename: existing?.safeFilename ?? filename,
+        size: existing?.size,
+        path: existing?.path,
+        status: "denied",
+        direction: "incoming",
+        mode: existing?.mode ?? "basic",
+        phase: "complete",
+        progress: existing?.progress ?? 0,
+        resumed: existing?.resumed ?? false,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+        dismissed: false,
+        autoApprovalFailed: existing?.autoApprovalFailed ?? false,
+      }));
+    } catch (error) {
       console.error("Failed to reject file transfer", error);
       toasts.showErrorToast("Failed to reject file transfer.");
       throw error;

@@ -114,7 +114,10 @@
     const urls = parseList(relayUrls);
 
     if (!label || urls.length === 0) {
-      toasts.addToast("Relay label and at least one URL are required.", "warning");
+      toasts.addToast(
+        "Relay label and at least one URL are required.",
+        "warning",
+      );
       return;
     }
 
@@ -214,7 +217,10 @@
       void setRoutingUpdateIntervalSeconds(routingUpdateInterval);
     }
 
-    if (Math.abs(current.aerpMinRouteQuality - routingQualityThreshold) > Number.EPSILON) {
+    if (
+      Math.abs(current.aerpMinRouteQuality - routingQualityThreshold) >
+      Number.EPSILON
+    ) {
       void setRoutingQualityThreshold(routingQualityThreshold);
     }
 
@@ -431,7 +437,9 @@
     />
   </section>
 
-  <section class="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+  <section
+    class="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
     <div class="flex items-center justify-between gap-4">
       <div>
         <Label class="text-sm font-medium text-zinc-200">
@@ -441,7 +449,8 @@
           Control how frequently AERP refreshes path scores.
         </p>
       </div>
-      <span class="text-xs text-muted-foreground">{routingUpdateInterval}s</span>
+      <span class="text-xs text-muted-foreground">{routingUpdateInterval}s</span
+      >
     </div>
     <Slider
       min={2}
@@ -452,7 +461,9 @@
     />
   </section>
 
-  <section class="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+  <section
+    class="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+  >
     <div class="flex items-center justify-between gap-4">
       <div>
         <Label class="text-sm font-medium text-zinc-200">
@@ -497,7 +508,9 @@
     />
   </section>
 
-  <section class="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+  <section
+    class="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6"
+  >
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h2 class="text-lg font-semibold text-zinc-100">Relay endpoints</h2>
@@ -548,7 +561,9 @@
                 {relayStatusLabel(relay.health.status)}
               </Badge>
             </div>
-            <dl class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+            <dl
+              class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3"
+            >
               <div>
                 <dt class="font-medium text-foreground">Scope</dt>
                 <dd>{relayScopeLabel(relay.config.scope)}</dd>
@@ -605,7 +620,9 @@
                   handleRefreshRelay(relay.config.id, relay.health.status)}
                 disabled={refreshingRelay[relay.config.id]}
               >
-                {refreshingRelay[relay.config.id] ? "Updating…" : "Refresh health"}
+                {refreshingRelay[relay.config.id]
+                  ? "Updating…"
+                  : "Refresh health"}
               </Button>
               <Button
                 type="button"
@@ -634,7 +651,10 @@
         onsubmit|preventDefault={handleAddRelay}
       >
         <div class="sm:col-span-1">
-          <Label for="relay-label" class="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            for="relay-label"
+            class="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             Label
           </Label>
           <Input
@@ -645,7 +665,10 @@
           />
         </div>
         <div class="sm:col-span-1">
-          <Label for="relay-scope" class="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            for="relay-scope"
+            class="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             Scope
           </Label>
           <select
@@ -658,7 +681,10 @@
           </select>
         </div>
         <div class="sm:col-span-2">
-          <Label for="relay-urls" class="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            for="relay-urls"
+            class="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             Relay URLs
           </Label>
           <Input
@@ -669,7 +695,10 @@
           />
         </div>
         <div>
-          <Label for="relay-username" class="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            for="relay-username"
+            class="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             Username (optional)
           </Label>
           <Input
@@ -679,7 +708,10 @@
           />
         </div>
         <div>
-          <Label for="relay-credential" class="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            for="relay-credential"
+            class="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             Credential (optional)
           </Label>
           <Input
@@ -690,7 +722,10 @@
           />
         </div>
         <div class="sm:col-span-2">
-          <Label for="relay-servers" class="text-xs uppercase tracking-wide text-muted-foreground">
+          <Label
+            for="relay-servers"
+            class="text-xs uppercase tracking-wide text-muted-foreground"
+          >
             Server IDs (optional)
           </Label>
           <Input

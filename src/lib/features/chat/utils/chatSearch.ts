@@ -428,9 +428,9 @@ export function parseSearchQuery(
           hasValues.add(normalized);
           recordToken(tokens, errors, key, rawValue, normalized, true);
         } else {
-          const message = `Unknown message type "${strippedValue}". Try one of: ${
-            [...allowedHas].join(", ")
-          }.`;
+          const message = `Unknown message type "${strippedValue}". Try one of: ${[
+            ...allowedHas,
+          ].join(", ")}.`;
           recordToken(tokens, errors, key, rawValue, undefined, false, message);
           textParts.push(part);
         }
@@ -446,7 +446,14 @@ export function parseSearchQuery(
         }
         const bound = startOfDay(parsed);
         before = before === undefined ? bound : Math.min(before, bound);
-        recordToken(tokens, errors, key, rawValue, new Date(bound).toISOString(), true);
+        recordToken(
+          tokens,
+          errors,
+          key,
+          rawValue,
+          new Date(bound).toISOString(),
+          true,
+        );
         break;
       }
       case "after": {
@@ -459,7 +466,14 @@ export function parseSearchQuery(
         }
         const bound = startOfDay(parsed);
         after = after === undefined ? bound : Math.max(after, bound);
-        recordToken(tokens, errors, key, rawValue, new Date(bound).toISOString(), true);
+        recordToken(
+          tokens,
+          errors,
+          key,
+          rawValue,
+          new Date(bound).toISOString(),
+          true,
+        );
         break;
       }
       case "during": {
@@ -503,7 +517,9 @@ export function parseSearchQuery(
         break;
       }
       case "authortype": {
-        const normalized = strippedValue.trim().toLowerCase() as MessageAuthorType;
+        const normalized = strippedValue
+          .trim()
+          .toLowerCase() as MessageAuthorType;
         if (!normalized) {
           const message = "Author type must be user, bot, or webhook.";
           recordToken(tokens, errors, key, rawValue, undefined, false, message);
@@ -514,9 +530,9 @@ export function parseSearchQuery(
           authorValues.add(normalized);
           recordToken(tokens, errors, key, rawValue, normalized, true);
         } else {
-          const message = `Author type must be one of: ${
-            [...allowedAuthorTypes].join(", ")
-          }.`;
+          const message = `Author type must be one of: ${[
+            ...allowedAuthorTypes,
+          ].join(", ")}.`;
           recordToken(tokens, errors, key, rawValue, undefined, false, message);
           textParts.push(part);
         }
@@ -759,7 +775,10 @@ export function matchNormalizedMessages(
       continue;
     }
 
-    if (pinnedFilter !== undefined && Boolean(message.pinned) !== pinnedFilter) {
+    if (
+      pinnedFilter !== undefined &&
+      Boolean(message.pinned) !== pinnedFilter
+    ) {
       continue;
     }
 
@@ -768,7 +787,8 @@ export function matchNormalizedMessages(
     }
 
     const cacheEntry = cache?.get(message.id);
-    const mentionIds = cacheEntry?.mentionIds ?? extractMentionIds(message.content ?? "");
+    const mentionIds =
+      cacheEntry?.mentionIds ?? extractMentionIds(message.content ?? "");
 
     if (requiredMentions) {
       const mentionSet = new Set(mentionIds);
@@ -870,4 +890,3 @@ function extractLinks(content: string | null | undefined): string[] {
 
   return links;
 }
-

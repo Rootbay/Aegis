@@ -309,9 +309,7 @@
               </Button>
             </div>
             <div class="space-y-2">
-              <label
-                for="avatar-url"
-                class="text-xs uppercase text-zinc-500"
+              <label for="avatar-url" class="text-xs uppercase text-zinc-500"
                 >Image URL</label
               >
               <Input

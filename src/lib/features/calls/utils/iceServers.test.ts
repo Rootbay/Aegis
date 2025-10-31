@@ -45,7 +45,8 @@ describe("ICE server configuration helpers", () => {
   });
 
   it("supports simple comma or space separated TURN URLs", () => {
-    process.env.VITE_TURN_SERVERS = "turn:one.example:3478 turn:two.example:3478";
+    process.env.VITE_TURN_SERVERS =
+      "turn:one.example:3478 turn:two.example:3478";
 
     const envServers = getEnvTurnServers();
     expect(envServers).toHaveLength(1);
@@ -85,4 +86,3 @@ describe("ICE server configuration helpers", () => {
     });
   });
 });
-

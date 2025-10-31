@@ -26,9 +26,7 @@ export function saveChatDraft(chatId: string, draft: ChatDraft | null) {
     messageInput: draft.messageInput,
     attachments: [...draft.attachments],
     replyTargetMessageId: draft.replyTargetMessageId,
-    replyPreview: draft.replyPreview
-      ? { ...draft.replyPreview }
-      : null,
+    replyPreview: draft.replyPreview ? { ...draft.replyPreview } : null,
     textareaHeight: draft.textareaHeight,
   });
 }

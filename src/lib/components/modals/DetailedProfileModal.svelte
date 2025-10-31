@@ -225,8 +225,7 @@
   );
   const openCreateGroupModal = createGroupContext?.openCreateGroupModal;
   const openReportUserModal = createGroupContext?.openReportUserModal;
-  const openProfileReviewsModal =
-    createGroupContext?.openProfileReviewsModal;
+  const openProfileReviewsModal = createGroupContext?.openProfileReviewsModal;
   const getCurrentChat = () => createGroupContext?.currentChat ?? null;
 
   const unsubscribeNotes = userNotesStore.subscribe((value) => {
@@ -742,11 +741,7 @@
               <Star class="h-4 w-4" />
               <CircleCheck class="h-4 w-4 text-green-500" />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onclick={viewProfileReviews}
-            >
+            <Button variant="outline" size="sm" onclick={viewProfileReviews}>
               <Star class="mr-2 h-4 w-4" /> View reviews
             </Button>
           </div>
@@ -812,7 +807,8 @@
                 Note
               </h3>
               {#if noteFeedback}
-                <span class="text-xs text-muted-foreground">{noteFeedback}</span>
+                <span class="text-xs text-muted-foreground">{noteFeedback}</span
+                >
               {/if}
             </div>
             <Textarea
