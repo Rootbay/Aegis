@@ -40,6 +40,12 @@
   import { highlightText } from "$lib/features/chat/utils/highlightText";
   import LinkPreview from "$lib/features/chat/components/LinkPreview.svelte";
   import { extractFirstLink } from "$lib/features/chat/utils/linkPreviews";
+  import {
+    clearChatDraft,
+    loadChatDraft,
+    saveChatDraft,
+    type ChatDraft,
+  } from "$lib/features/chat/utils/chatDraftStore";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -63,6 +69,26 @@
     author?: string;
     snippet?: string;
   };
+
+  function persistChatDraft(chatId: string) {
+    const shouldPersist =
+      messageInput.trim().length > 0 ||
+      attachedFiles.length > 0 ||
+      replyTargetMessageId !== null;
+
+    if (!shouldPersist) {
+      clearChatDraft(chatId);
+      return;
+    }
+
+    saveChatDraft(chatId, {
+      messageInput,
+      attachments: [...attachedFiles],
+      replyTargetMessageId,
+      replyPreview: replyPreview ? { ...replyPreview } : null,
+      textareaHeight: textareaRef?.style.height ?? "",
+    });
+  }
 
   let { chat } = $props<{ chat: Chat | null }>();
 
@@ -319,6 +345,9 @@
   });
 
   onDestroy(() => {
+    if (chat?.id) {
+      persistChatDraft(chat.id);
+    }
     if (isRecording || mediaRecorder || recordingStream) {
       stopRecording({ save: false, silent: true });
     }
@@ -341,16 +370,50 @@
   let prevCount = $state(0);
   let prevChatId = $state<string | null>(null);
   $effect(() => {
-    const id = chat?.id ?? null;
-    if (id !== prevChatId) {
-      unseenCount = 0;
-      isAtBottom = true;
-      prevCount = 0;
-      prevChatId = id;
-      chatSearchStore.reset();
+    const nextChatId = chat?.id ?? null;
+    if (nextChatId === prevChatId) {
+      return;
+    }
+
+    if (prevChatId) {
+      persistChatDraft(prevChatId);
+    }
+
+    unseenCount = 0;
+    isAtBottom = true;
+    prevCount = 0;
+    chatSearchStore.reset();
+    prevChatId = nextChatId;
+
+    let restoredDraft: ChatDraft | undefined;
+
+    if (nextChatId) {
+      restoredDraft = loadChatDraft(nextChatId);
+      if (restoredDraft) {
+        messageInput = restoredDraft.messageInput;
+        attachedFiles = [...restoredDraft.attachments];
+        replyTargetMessageId = restoredDraft.replyTargetMessageId;
+        replyPreview = restoredDraft.replyPreview
+          ? { ...restoredDraft.replyPreview }
+          : null;
+      } else {
+        messageInput = "";
+        attachedFiles = [];
+        replyTargetMessageId = null;
+        replyPreview = null;
+      }
+    } else {
+      messageInput = "";
+      attachedFiles = [];
       replyTargetMessageId = null;
       replyPreview = null;
     }
+
+    void tick().then(() => {
+      if (!textareaRef) return;
+      textareaRef.style.height = restoredDraft?.textareaHeight ?? "";
+      adjustTextareaHeight();
+    });
   });
 
   $effect(() => {
@@ -1008,6 +1071,9 @@
         );
       } else {
         await chatStore.sendMessage(messageInput, replyOptions);
+      }
+      if (chat?.id) {
+        clearChatDraft(chat.id);
       }
       messageInput = "";
       attachedFiles = [];
