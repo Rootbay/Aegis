@@ -190,7 +190,13 @@ interface ChatStore {
   loadGroupChats: () => Promise<void>;
   leaveGroupChat: (groupId: string) => Promise<void>;
   renameGroupChat: (groupId: string, newName: string) => Promise<GroupChatSummary>;
+  addMembersToGroupChat: (
+    groupId: string,
+    memberIds: string[],
+  ) => Promise<GroupChatSummary>;
+  removeGroupChatMember: (groupId: string, memberId: string) => Promise<void>;
   handleGroupMemberLeft: (groupId: string, memberId: string) => void;
+  handleGroupMembersAdded: (groupId: string, memberIds: string[]) => void;
   groupChats: Readable<Map<string, GroupChatSummary>>;
 }
 
@@ -2790,6 +2796,39 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     });
   };
 
+  const handleGroupMembersAdded = (groupId: string, memberIds: string[]) => {
+    if (!groupId || !memberIds?.length) {
+      return;
+    }
+
+    groupChatsStore.update((map) => {
+      const summary = map.get(groupId);
+      if (!summary) {
+        return map;
+      }
+      const existing = new Set(summary.memberIds);
+      let changed = false;
+      for (const memberId of memberIds) {
+        if (typeof memberId !== "string" || memberId.length === 0) {
+          continue;
+        }
+        if (!existing.has(memberId)) {
+          existing.add(memberId);
+          changed = true;
+        }
+      }
+      if (!changed) {
+        return map;
+      }
+      const next = new Map(map);
+      next.set(groupId, {
+        ...summary,
+        memberIds: Array.from(existing),
+      });
+      return next;
+    });
+  };
+
   const handleGroupMemberLeft = (groupId: string, memberId: string) => {
     if (!groupId || !memberId) {
       return;
@@ -2879,6 +2918,71 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return summary;
     } catch (error) {
       console.error("Failed to rename group chat:", error);
+      throw error;
+    }
+  };
+
+  const addMembersToGroupChat = async (
+    groupId: string,
+    memberIds: string[],
+  ): Promise<GroupChatSummary> => {
+    const trimmedGroupId = groupId.trim();
+    if (!trimmedGroupId) {
+      throw new Error("Group ID is required.");
+    }
+    const filtered = Array.from(
+      new Set(
+        memberIds.filter(
+          (id) => typeof id === "string" && id.trim().length > 0,
+        ),
+      ),
+    );
+    if (filtered.length === 0) {
+      throw new Error("Please select at least one member to add.");
+    }
+
+    try {
+      const payload = await invoke<BackendGroupChat>("add_group_dm_member", {
+        groupId: trimmedGroupId,
+        group_id: trimmedGroupId,
+        memberIds: filtered,
+        member_ids: filtered,
+      });
+      const summary = handleGroupChatCreated(payload);
+      handleGroupMembersAdded(summary.id, payload.member_ids ?? payload.memberIds ?? []);
+      return summary;
+    } catch (error) {
+      console.error("Failed to add members to group chat:", error);
+      throw error;
+    }
+  };
+
+  const removeGroupChatMember = async (
+    groupId: string,
+    memberId: string,
+  ): Promise<void> => {
+    const trimmedGroupId = groupId.trim();
+    const trimmedMemberId = memberId.trim();
+    if (!trimmedGroupId || !trimmedMemberId) {
+      throw new Error("Group ID and member ID are required.");
+    }
+
+    try {
+      const payload = await invoke<BackendGroupChat | null>(
+        "remove_group_dm_member",
+        {
+          groupId: trimmedGroupId,
+          group_id: trimmedGroupId,
+          memberId: trimmedMemberId,
+          member_id: trimmedMemberId,
+        },
+      );
+      if (payload) {
+        handleGroupChatCreated(payload);
+      }
+      handleGroupMemberLeft(trimmedGroupId, trimmedMemberId);
+    } catch (error) {
+      console.error("Failed to remove member from group chat:", error);
       throw error;
     }
   };
@@ -2985,7 +3089,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     loadGroupChats,
     leaveGroupChat,
     renameGroupChat,
+    addMembersToGroupChat,
+    removeGroupChatMember,
     handleGroupMemberLeft,
+    handleGroupMembersAdded,
     refreshChatFromStorage,
   };
 }

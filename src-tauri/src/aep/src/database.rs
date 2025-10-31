@@ -1609,6 +1609,38 @@ pub async fn remove_group_chat_member(
     Ok(true)
 }
 
+pub async fn add_group_chat_members(
+    pool: &Pool<Sqlite>,
+    group_chat_id: &str,
+    member_ids: &[String],
+) -> Result<Vec<String>, sqlx::Error> {
+    if member_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut tx = pool.begin().await?;
+    let timestamp = Utc::now().to_rfc3339();
+    let mut added = Vec::new();
+
+    for member_id in member_ids {
+        let result = sqlx::query!(
+            "INSERT OR IGNORE INTO group_chat_members (group_chat_id, user_id, added_at) VALUES (?, ?, ?)",
+            group_chat_id,
+            member_id,
+            timestamp
+        )
+        .execute(&mut *tx)
+        .await?;
+
+        if result.rows_affected() > 0 {
+            added.push(member_id.clone());
+        }
+    }
+
+    tx.commit().await?;
+    Ok(added)
+}
+
 pub async fn delete_message(pool: &Pool<Sqlite>, message_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM messages WHERE id = ?", message_id)
         .execute(pool)

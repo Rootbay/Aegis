@@ -1,5 +1,12 @@
 use crate::commands::state::AppStateContainer;
-use aegis_protocol::{AepMessage, CreateGroupChatData, LeaveGroupChatData, RenameGroupChatData};
+use aegis_protocol::{
+    AddGroupChatMembersData,
+    AepMessage,
+    CreateGroupChatData,
+    LeaveGroupChatData,
+    RemoveGroupChatMemberData,
+    RenameGroupChatData,
+};
 use aep::database::{self, GroupChat, GroupChatMember, GroupChatRecord};
 use chrono::Utc;
 use serde::Serialize;
@@ -199,6 +206,125 @@ pub async fn leave_group_dm(
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn add_group_dm_member(
+    group_id: String,
+    member_ids: Vec<String>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<GroupChatPayload, String> {
+    if member_ids.is_empty() {
+        return Err("Please select at least one member to add.".to_string());
+    }
+
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+
+    let adder_id = state.identity.peer_id().to_base58();
+
+    let added_members = database::add_group_chat_members(
+        &state.db_pool,
+        &group_id,
+        &member_ids,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if added_members.is_empty() {
+        return Err("No new members were added.".to_string());
+    }
+
+    let record = database::get_group_chat_record(&state.db_pool, &group_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Group not found.".to_string())?;
+
+    let payload = map_record_to_payload(record.clone());
+
+    let signing_payload = AddGroupChatMembersData {
+        group_id: group_id.clone(),
+        member_ids: added_members.clone(),
+        adder_id: adder_id.clone(),
+    };
+    let signing_bytes = bincode::serialize(&signing_payload).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&signing_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let message = AepMessage::AddGroupChatMembers {
+        group_id,
+        member_ids: added_members,
+        adder_id,
+        signature: Some(signature),
+    };
+    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(payload)
+}
+
+#[tauri::command]
+pub async fn remove_group_dm_member(
+    group_id: String,
+    member_id: String,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<Option<GroupChatPayload>, String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+
+    let remover_id = state.identity.peer_id().to_base58();
+
+    let removed = database::remove_group_chat_member(&state.db_pool, &group_id, &member_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !removed {
+        return Err("Member was not part of the group.".to_string());
+    }
+
+    let signing_payload = RemoveGroupChatMemberData {
+        group_id: group_id.clone(),
+        member_id: member_id.clone(),
+        remover_id: remover_id.clone(),
+    };
+    let signing_bytes = bincode::serialize(&signing_payload).map_err(|e| e.to_string())?;
+    let signature = state
+        .identity
+        .keypair()
+        .sign(&signing_bytes)
+        .map_err(|e| e.to_string())?;
+
+    let message = AepMessage::RemoveGroupChatMember {
+        group_id: group_id.clone(),
+        member_id,
+        remover_id,
+        signature: Some(signature),
+    };
+    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(serialized)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let record = database::get_group_chat_record(&state.db_pool, &group_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(record.map(map_record_to_payload))
 }
 
 #[tauri::command]

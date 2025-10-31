@@ -33,6 +33,8 @@ pub async fn run() {
             commands::chats::create_group_dm,
             commands::chats::leave_group_dm,
             commands::chats::rename_group_dm,
+            commands::chats::add_group_dm_member,
+            commands::chats::remove_group_dm_member,
             commands::chats::get_group_chats,
             commands::presence::send_presence_update,
             commands::presence::mark_self_presence_local,

@@ -84,6 +84,18 @@ pub enum AepMessage {
         updater_id: String,
         signature: Option<Vec<u8>>,
     },
+    AddGroupChatMembers {
+        group_id: String,
+        member_ids: Vec<String>,
+        adder_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    RemoveGroupChatMember {
+        group_id: String,
+        member_id: String,
+        remover_id: String,
+        signature: Option<Vec<u8>>,
+    },
     CreateServer { server: Server, signature: Option<Vec<u8>> },
     JoinServer { server_id: String, user_id: String, signature: Option<Vec<u8>> },
     CreateChannel { channel: Channel, signature: Option<Vec<u8>> },
@@ -185,6 +197,20 @@ pub struct CreateServerData {
 pub struct JoinServerData {
     pub server_id: String,
     pub user_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AddGroupChatMembersData {
+    pub group_id: String,
+    pub member_ids: Vec<String>,
+    pub adder_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RemoveGroupChatMemberData {
+    pub group_id: String,
+    pub member_id: String,
+    pub remover_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

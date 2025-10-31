@@ -167,6 +167,8 @@
                 members={$currentChat.members as MemberWithRoles[]}
                 {openDetailedProfileModal}
                 context="group"
+                groupId={$currentChat.id}
+                groupOwnerId={$currentChat.ownerId}
               />
             {/if}
           </div>
