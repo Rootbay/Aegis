@@ -118,7 +118,9 @@
         </div>
         <div class="rounded-lg border border-border/60 bg-muted/40 p-4 text-sm">
           <p class="text-muted-foreground">Active relays</p>
-          <p class="mt-1 text-2xl font-semibold">{$stateStore.activeRelayCount}</p>
+          <p class="mt-1 text-2xl font-semibold">
+            {$stateStore.activeRelayCount}
+          </p>
         </div>
       </CardContent>
     </Card>
@@ -132,8 +134,9 @@
       </CardHeader>
       <CardContent class="space-y-3">
         <p class="text-sm text-muted-foreground">
-          Node size reflects hop proximity while color intensity represents route quality or
-          success rate. Link thickness indicates reported signal quality.
+          Node size reflects hop proximity while color intensity represents
+          route quality or success rate. Link thickness indicates reported
+          signal quality.
         </p>
         <MeshGraph peers={peerList()} links={linkList()} />
       </CardContent>
@@ -148,36 +151,62 @@
       </CardHeader>
       <CardContent>
         {#if peerList().length === 0}
-          <div class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground">
+          <div
+            class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground"
+          >
             <AlertTriangle class="size-4" />
             No mesh peers detected. Devices will appear here when discovered.
           </div>
         {:else}
           <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {#each peerList() as peer (peer.id)}
-              <div class="rounded-lg border border-border/60 bg-background/80 p-4">
+              <div
+                class="rounded-lg border border-border/60 bg-background/80 p-4"
+              >
                 <div class="flex items-center justify-between gap-3">
                   <div>
-                    <p class="text-sm font-medium text-foreground">{peer.label}</p>
+                    <p class="text-sm font-medium text-foreground">
+                      {peer.label}
+                    </p>
                     <p class="text-xs text-muted-foreground">{peer.id}</p>
                   </div>
-                  <Badge variant={peer.connection === "internet" ? "default" : peer.connection === "bridge" ? "secondary" : "outline"}>
-                    {peer.connection === "self" ? "This device" : peer.connection === "internet" ? "Gateway" : peer.connection === "bridge" ? "Bridge" : "Mesh"}
+                  <Badge
+                    variant={peer.connection === "internet"
+                      ? "default"
+                      : peer.connection === "bridge"
+                        ? "secondary"
+                        : "outline"}
+                  >
+                    {peer.connection === "self"
+                      ? "This device"
+                      : peer.connection === "internet"
+                        ? "Gateway"
+                        : peer.connection === "bridge"
+                          ? "Bridge"
+                          : "Mesh"}
                   </Badge>
                 </div>
                 <Separator class="my-3" />
-                <dl class="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <dl
+                  class="grid grid-cols-2 gap-2 text-xs text-muted-foreground"
+                >
                   <div>
                     <dt class="font-medium text-foreground">Hop count</dt>
                     <dd>{peer.hopCount ?? "–"}</dd>
                   </div>
                   <div>
                     <dt class="font-medium text-foreground">Latency</dt>
-                    <dd>{peer.latencyMs !== null ? `${peer.latencyMs} ms` : "–"}</dd>
+                    <dd>
+                      {peer.latencyMs !== null ? `${peer.latencyMs} ms` : "–"}
+                    </dd>
                   </div>
                   <div>
                     <dt class="font-medium text-foreground">Last seen</dt>
-                    <dd>{peer.lastSeen ? new Date(peer.lastSeen).toLocaleTimeString() : "–"}</dd>
+                    <dd>
+                      {peer.lastSeen
+                        ? new Date(peer.lastSeen).toLocaleTimeString()
+                        : "–"}
+                    </dd>
                   </div>
                   <div>
                     <dt class="font-medium text-foreground">Via</dt>
@@ -216,17 +245,23 @@
       </CardHeader>
       <CardContent>
         {#if relayList().length === 0}
-          <div class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground">
+          <div
+            class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground"
+          >
             <AlertTriangle class="size-4" />
             No relay telemetry reported yet.
           </div>
         {:else}
           <div class="space-y-3">
             {#each relayList() as relay (relay.id)}
-              <div class="rounded-lg border border-border/60 bg-background/80 p-4">
+              <div
+                class="rounded-lg border border-border/60 bg-background/80 p-4"
+              >
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p class="text-sm font-medium text-foreground">{relay.label}</p>
+                    <p class="text-sm font-medium text-foreground">
+                      {relay.label}
+                    </p>
                     <p class="text-xs text-muted-foreground break-words">
                       {relay.urls.join(", ")}
                     </p>
@@ -235,10 +270,14 @@
                     {relayStatusLabel(relay.status)}
                   </Badge>
                 </div>
-                <dl class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3">
+                <dl
+                  class="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-3"
+                >
                   <div>
                     <dt class="font-medium text-foreground">Scope</dt>
-                    <dd>{relay.scope === "global" ? "Global" : "Server-specific"}</dd>
+                    <dd>
+                      {relay.scope === "global" ? "Global" : "Server-specific"}
+                    </dd>
                   </div>
                   <div>
                     <dt class="font-medium text-foreground">Last check</dt>
@@ -290,18 +329,24 @@
     <Card>
       <CardHeader>
         <CardTitle>Links</CardTitle>
-        <CardDescription>Graph edges and their observed signal quality.</CardDescription>
+        <CardDescription
+          >Graph edges and their observed signal quality.</CardDescription
+        >
       </CardHeader>
       <CardContent>
         {#if linkList().length === 0}
-          <div class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground">
+          <div
+            class="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 px-4 py-8 text-sm text-muted-foreground"
+          >
             <AlertTriangle class="size-4" />
             No active links reported.
           </div>
         {:else}
           <div class="overflow-hidden rounded-lg border border-border/60">
             <table class="min-w-full divide-y divide-border/60 text-sm">
-              <thead class="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+              <thead
+                class="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground"
+              >
                 <tr>
                   <th class="px-4 py-2 text-left font-medium">Source</th>
                   <th class="px-4 py-2 text-left font-medium">Target</th>
@@ -313,11 +358,23 @@
               <tbody class="divide-y divide-border/60 bg-background/80">
                 {#each linkList() as link, index (link.source + link.target + index)}
                   <tr>
-                    <td class="px-4 py-2 font-medium text-foreground">{link.source}</td>
+                    <td class="px-4 py-2 font-medium text-foreground"
+                      >{link.source}</td
+                    >
                     <td class="px-4 py-2 text-foreground">{link.target}</td>
-                    <td class="px-4 py-2 capitalize text-muted-foreground">{link.medium}</td>
-                    <td class="px-4 py-2 text-muted-foreground">{link.quality !== null ? `${Math.round(link.quality * 100)}%` : "–"}</td>
-                    <td class="px-4 py-2 text-muted-foreground">{link.latencyMs !== null ? `${Math.round(link.latencyMs)} ms` : "–"}</td>
+                    <td class="px-4 py-2 capitalize text-muted-foreground"
+                      >{link.medium}</td
+                    >
+                    <td class="px-4 py-2 text-muted-foreground"
+                      >{link.quality !== null
+                        ? `${Math.round(link.quality * 100)}%`
+                        : "–"}</td
+                    >
+                    <td class="px-4 py-2 text-muted-foreground"
+                      >{link.latencyMs !== null
+                        ? `${Math.round(link.latencyMs)} ms`
+                        : "–"}</td
+                    >
                   </tr>
                 {/each}
               </tbody>

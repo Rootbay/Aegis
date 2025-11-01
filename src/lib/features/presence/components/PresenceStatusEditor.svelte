@@ -28,12 +28,7 @@
     buttonClass?: string;
   };
 
-  let {
-    label,
-    variant = "ghost",
-    size,
-    buttonClass = "",
-  }: Props = $props();
+  let { label, variant = "ghost", size, buttonClass = "" }: Props = $props();
 
   const resolvedSize = $derived(size ?? (label ? "default" : "icon"));
 

@@ -2263,8 +2263,7 @@
                             ? "bg-zinc-700/80"
                             : ""
                         }`}
-                        onpointerdown={() =>
-                          handleMentionSelection(index)}
+                        onpointerdown={() => handleMentionSelection(index)}
                         onclick={() => handleMentionSelection(index)}
                       >
                         {#if suggestion.avatar}

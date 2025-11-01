@@ -279,8 +279,7 @@
           <g
             tabindex="-1"
             class="cursor-pointer focus:outline-none"
-            onpointerenter={(event) =>
-              showNodePointerTooltip(event, node.peer)}
+            onpointerenter={(event) => showNodePointerTooltip(event, node.peer)}
             onpointerleave={clearTooltip}
             onfocus={(event) =>
               showNodeFocusTooltip(

@@ -277,9 +277,7 @@
     }
 
     if (!recoveryPassword || !recoveryPasswordConfirm) {
-      toasts.showErrorToast(
-        "Enter and confirm your new password to continue.",
-      );
+      toasts.showErrorToast("Enter and confirm your new password to continue.");
       return;
     }
 
@@ -351,9 +349,7 @@
       onboardingStep = "security_questions";
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to accept password.";
+        error instanceof Error ? error.message : "Unable to accept password.";
       toasts.showErrorToast(message);
     }
   }
@@ -484,9 +480,7 @@
       showScanner = false;
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to process QR code.";
+        error instanceof Error ? error.message : "Failed to process QR code.";
       toasts.showErrorToast(message);
     }
   }
@@ -538,9 +532,7 @@
       showRecoveryForm = false;
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to finalize recovery.";
+        error instanceof Error ? error.message : "Unable to finalize recovery.";
       toasts.showErrorToast(message);
     }
   }
@@ -599,7 +591,8 @@
   );
 
   const identityLabel = $derived(
-    storedUsername ?? (username.trim().length ? username.trim() : "New identity"),
+    storedUsername ??
+      (username.trim().length ? username.trim() : "New identity"),
   );
 
   const canSubmitPassword = $derived(
@@ -624,7 +617,9 @@
     }
   });
 
-  const showRecoveryTab = $derived(hasStoredSecurityQuestions || pendingRecovery);
+  const showRecoveryTab = $derived(
+    hasStoredSecurityQuestions || pendingRecovery,
+  );
 
   const onboardingStages = [
     { id: "username", label: "Callsign" },
@@ -662,6 +657,7 @@
     }
   });
 </script>
+
 <div
   class="min-h-screen w-full bg-linear-to-br from-zinc-950 via-zinc-900 to-black text-zinc-100 flex items-center justify-center px-6 py-12"
 >
@@ -708,7 +704,9 @@
       </DialogHeader>
 
       <div class="space-y-4">
-        <div class="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-100">
+        <div
+          class="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-100"
+        >
           <TriangleAlert size={18} class="mt-0.5 text-yellow-300" />
           <div class="space-y-1">
             <p class="font-medium text-yellow-200">Save these words now</p>
@@ -743,9 +741,13 @@
   </Dialog>
 
   <section class="w-full max-w-5xl space-y-8">
-    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <header
+      class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+    >
       <div class="flex items-center gap-3">
-        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800 shadow-lg shadow-black/40">
+        <div
+          class="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800 shadow-lg shadow-black/40"
+        >
           <Lock class="h-5 w-5 text-primary" />
         </div>
 
@@ -756,11 +758,15 @@
             {#if status === "needs_setup"}
               Create a new secure identity.
             {:else}
-              Continue as <span class="text-zinc-200 font-medium">{identityLabel}</span>.
+              Continue as <span class="text-zinc-200 font-medium"
+                >{identityLabel}</span
+              >.
             {/if}
 
             {#if requireTotpOnUnlock}
-              <span class="ml-2 inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300 ring-1 ring-zinc-800">
+              <span
+                class="ml-2 inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300 ring-1 ring-zinc-800"
+              >
                 <Shield size={12} /> 2FA
               </span>
             {/if}
@@ -782,11 +788,19 @@
     </header>
 
     {#if inOnboardingFlow}
-      <section class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section
+        class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6"
+      >
+        <div
+          class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
-            <p class="text-xs uppercase tracking-widest text-zinc-500">Initial setup</p>
-            <h2 class="text-2xl font-semibold text-zinc-100">Secure your identity</h2>
+            <p class="text-xs uppercase tracking-widest text-zinc-500">
+              Initial setup
+            </p>
+            <h2 class="text-2xl font-semibold text-zinc-100">
+              Secure your identity
+            </h2>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -804,7 +818,9 @@
 
         <div class="space-y-2">
           <div class="flex items-center justify-between text-xs text-zinc-500">
-            <span>Step {onboardingStepIndex + 1} of {onboardingStages.length}</span>
+            <span
+              >Step {onboardingStepIndex + 1} of {onboardingStages.length}</span
+            >
             <span class="uppercase tracking-wide text-zinc-400">
               {onboardingStages[onboardingStepIndex]?.label}
             </span>
@@ -848,13 +864,19 @@
             </h3>
 
             <p class="text-sm text-zinc-400">
-              Copy these 12 words in order. They are the only way to rebuild your identity if you forget your password.
+              Copy these 12 words in order. They are the only way to rebuild
+              your identity if you forget your password.
             </p>
 
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
+            <div
+              class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono"
+            >
               {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
-                <div class="rounded-lg border border-zinc-800/70 bg-zinc-950/70 px-3 py-2 text-zinc-100">
-                  <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
+                <div
+                  class="rounded-lg border border-zinc-800/70 bg-zinc-950/70 px-3 py-2 text-zinc-100"
+                >
+                  <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span
+                  >{word}
                 </div>
               {/each}
             </div>
@@ -910,20 +932,25 @@
 
             <p class="text-sm text-zinc-400">
               {#if unicodeRequired}
-                Use at least 12 characters including uppercase, lowercase, numbers, special characters, and a Unicode character.
+                Use at least 12 characters including uppercase, lowercase,
+                numbers, special characters, and a Unicode character.
               {:else}
-                Use at least 12 characters with mixed case, numbers, and symbols.
+                Use at least 12 characters with mixed case, numbers, and
+                symbols.
               {/if}
             </p>
 
             {#if passwordInput}
               <div class="space-y-2">
-                <div class="flex items-center justify-between text-xs uppercase tracking-wide">
+                <div
+                  class="flex items-center justify-between text-xs uppercase tracking-wide"
+                >
                   <span class="text-zinc-500">Strength</span>
                   <span
                     class="font-semibold"
                     class:text-red-400={passwordStrength.score < 40}
-                    class:text-yellow-400={passwordStrength.score >= 40 && passwordStrength.score < 80}
+                    class:text-yellow-400={passwordStrength.score >= 40 &&
+                      passwordStrength.score < 80}
                     class:text-emerald-400={passwordStrength.score >= 80}
                   >
                     {passwordStrength.score < 40
@@ -934,7 +961,11 @@
                   </span>
                 </div>
 
-                <Progress value={passwordStrength.score} max={100} class="h-2 bg-zinc-800" />
+                <Progress
+                  value={passwordStrength.score}
+                  max={100}
+                  class="h-2 bg-zinc-800"
+                />
 
                 {#if passwordStrength.feedback.length > 0}
                   <ul class="text-xs text-zinc-500 space-y-1">
@@ -965,7 +996,9 @@
                   class="absolute right-2 top-1/2 -translate-y-1/2"
                   onclick={togglePasswordVisibility}
                 >
-                  {#if showPassword}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
+                  {#if showPassword}<EyeOff size={16} />{:else}<Eye
+                      size={16}
+                    />{/if}
                 </Button>
               </div>
             </div>
@@ -1001,14 +1034,18 @@
             </h3>
 
             <p class="text-sm text-zinc-400">
-              Choose 3–5 questions only you can answer. These protect you during recovery.
+              Choose 3–5 questions only you can answer. These protect you during
+              recovery.
             </p>
 
             <div class="space-y-4">
               {#each securityQuestions as question, index}
-                <div class="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4">
+                <div
+                  class="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4"
+                >
                   <div class="flex items-center justify-between">
-                    <Label for={`question-${index}`}>Question {index + 1}</Label>
+                    <Label for={`question-${index}`}>Question {index + 1}</Label
+                    >
 
                     {#if securityQuestions.length > 3}
                       <Button
@@ -1074,17 +1111,24 @@
               Each code works once. Store them offline before continuing.
             </p>
 
-            <div class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4">
+            <div
+              class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4"
+            >
               <div class="grid grid-cols-2 gap-2 text-sm font-mono">
                 {#each backupCodes as code}
-                  <span class="rounded-md bg-zinc-900/70 px-3 py-2 text-center text-zinc-100">
+                  <span
+                    class="rounded-md bg-zinc-900/70 px-3 py-2 text-center text-zinc-100"
+                  >
                     {code}
                   </span>
                 {/each}
               </div>
             </div>
 
-            <Button class="w-full sm:w-auto" onclick={() => (onboardingStep = "totp")}>
+            <Button
+              class="w-full sm:w-auto"
+              onclick={() => (onboardingStep = "totp")}
+            >
               I have saved my backup codes
             </Button>
           </div>
@@ -1108,9 +1152,15 @@
                   Scan with your authenticator app or enter the key manually.
                 </p>
 
-                <div class="rounded-lg border border-zinc-800/70 bg-zinc-950/50 p-3">
+                <div
+                  class="rounded-lg border border-zinc-800/70 bg-zinc-950/50 p-3"
+                >
                   <p class="text-xs uppercase text-zinc-500">Manual key</p>
-                  <Input value={$authStore.onboarding.totpSecret} readonly class="font-mono text-base" />
+                  <Input
+                    value={$authStore.onboarding.totpSecret}
+                    readonly
+                    class="font-mono text-base"
+                  />
                 </div>
               </div>
             </div>
@@ -1145,7 +1195,9 @@
         {/if}
       </section>
     {:else}
-      <section class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6">
+      <section
+        class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6"
+      >
         {#if activeView === "unlock"}
           <div class="space-y-6">
             <form class="space-y-4" onsubmit={handleUnlock}>
@@ -1201,7 +1253,9 @@
             </form>
 
             {#if status === "account_locked"}
-              <div class="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+              <div
+                class="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200"
+              >
                 <div class="flex items-center gap-2 font-medium">
                   <Shield size={14} /> Account locked
                 </div>
@@ -1214,7 +1268,9 @@
               </div>
             {/if}
 
-            <div class="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
+            <div
+              class="flex flex-wrap items-center gap-2 text-sm text-zinc-400"
+            >
               <Button
                 type="button"
                 size="sm"
@@ -1250,12 +1306,17 @@
         {:else if activeView === "recovery"}
           <div class="space-y-6">
             {#if !showRecoveryForm}
-              <div class="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-5">
+              <div
+                class="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-5"
+              >
                 <div class="flex items-center justify-between gap-3">
                   <div>
-                    <h3 class="text-lg font-semibold text-zinc-100">Security question recovery</h3>
+                    <h3 class="text-lg font-semibold text-zinc-100">
+                      Security question recovery
+                    </h3>
                     <p class="text-sm text-zinc-400">
-                      Answer at least two security questions to set a new password.
+                      Answer at least two security questions to set a new
+                      password.
                     </p>
                   </div>
 
@@ -1274,21 +1335,27 @@
             {:else}
               <form class="space-y-4" onsubmit={handleSecurityQuestionRecovery}>
                 {#if recoveryQuestionPrompts.length === 0}
-                  <div class="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
-                    Add security questions from Settings before using this recovery method.
+                  <div
+                    class="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200"
+                  >
+                    Add security questions from Settings before using this
+                    recovery method.
                   </div>
                 {:else}
                   <div class="space-y-4">
                     {#each recoveryQuestionPrompts as prompt, index (prompt)}
                       <div class="space-y-2">
-                        <Label for={`recovery-question-${index}`}>{prompt}</Label>
+                        <Label for={`recovery-question-${index}`}
+                          >{prompt}</Label
+                        >
 
                         <Input
                           id={`recovery-question-${index}`}
                           type="text"
                           value={securityQuestionAnswers[prompt] ?? ""}
                           oninput={(event) => {
-                            const target = event.currentTarget as HTMLInputElement;
+                            const target =
+                              event.currentTarget as HTMLInputElement;
                             securityQuestionAnswers = {
                               ...securityQuestionAnswers,
                               [prompt]: target.value,
@@ -1342,12 +1409,16 @@
                   />
 
                   {#if recoveryPasswordValidation && recoveryPassword}
-                    <p class="text-xs text-red-400">{recoveryPasswordValidation}</p>
+                    <p class="text-xs text-red-400">
+                      {recoveryPasswordValidation}
+                    </p>
                   {/if}
                 </div>
 
                 <div class="space-y-2">
-                  <Label for="recovery-password-confirm">Confirm new password</Label>
+                  <Label for="recovery-password-confirm"
+                    >Confirm new password</Label
+                  >
 
                   <Input
                     id="recovery-password-confirm"
@@ -1370,7 +1441,9 @@
                   <Button
                     class="w-full"
                     type="submit"
-                    disabled={!recoveryFormReady || isLoading || status === "recovery_ack_required"}
+                    disabled={!recoveryFormReady ||
+                      isLoading ||
+                      status === "recovery_ack_required"}
                   >
                     Reset password
                   </Button>
@@ -1390,10 +1463,13 @@
         {:else}
           <div class="space-y-6">
             {#if $authStore.pendingDeviceLogin}
-              <div class="rounded-lg border border-blue-500/40 bg-blue-500/10 p-4 text-sm text-zinc-200">
+              <div
+                class="rounded-lg border border-blue-500/40 bg-blue-500/10 p-4 text-sm text-zinc-200"
+              >
                 <p class="font-medium text-zinc-100">Login request</p>
                 <p class="mt-1 text-zinc-300/80">
-                  Login request from {$authStore.pendingDeviceLogin.username ?? "trusted device"}.
+                  Login request from {$authStore.pendingDeviceLogin.username ??
+                    "trusted device"}.
                 </p>
               </div>
 
@@ -1425,9 +1501,12 @@
                 </Button>
               </form>
             {:else}
-              <div class="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-5 text-sm text-zinc-400">
+              <div
+                class="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-5 text-sm text-zinc-400"
+              >
                 <p>
-                  Generate a QR from another trusted device to hand off your session instantly.
+                  Generate a QR from another trusted device to hand off your
+                  session instantly.
                 </p>
 
                 <Button
@@ -1448,4 +1527,3 @@
     {/if}
   </section>
 </div>
-

@@ -17,11 +17,7 @@
     Code,
   } from "@lucide/svelte";
 
-  type ServerBackgroundActionHandler = ({
-    action,
-  }: {
-    action: string;
-  }) => void;
+  type ServerBackgroundActionHandler = ({ action }: { action: string }) => void;
 
   type ServerBackgroundContextMenuProps = {
     onaction?: ServerBackgroundActionHandler;

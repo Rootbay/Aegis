@@ -242,8 +242,7 @@
                   variant="ghost"
                   class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
                   data-active={activeChatId === entry.id}
-                  onclick={() =>
-                    onSelect({ chatId: entry.id, type: "dm" })}
+                  onclick={() => onSelect({ chatId: entry.id, type: "dm" })}
                 >
                   <div class="relative">
                     <Avatar class="h-10 w-10">
@@ -312,8 +311,7 @@
               variant="ghost"
               class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
               data-active={activeChatId === entry.id}
-              onclick={() =>
-                onSelect({ chatId: entry.id, type: "group" })}
+              onclick={() => onSelect({ chatId: entry.id, type: "group" })}
             >
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
