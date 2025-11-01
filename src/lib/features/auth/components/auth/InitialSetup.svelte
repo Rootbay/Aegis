@@ -12,6 +12,9 @@
     KeySquare,
     QrCode,
     Lock,
+    ArrowLeftRight,
+    LogOut,
+    UserPlus,
   } from "@lucide/svelte";
   import {
     authStore,
@@ -35,13 +38,6 @@
     SelectContent,
     SelectItem,
   } from "$lib/components/ui/select/index.js";
-  import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent,
-  } from "$lib/components/ui/card/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
   import {
     Dialog,
@@ -52,7 +48,6 @@
     DialogFooter,
   } from "$lib/components/ui/dialog/index.js";
   import { Progress } from "$lib/components/ui/progress/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
 
   type OnboardingStep =
     | "username"
@@ -509,6 +504,45 @@
     }
   }
 
+  function resetUnlockState() {
+    unlockPassword = "";
+    unlockTotp = "";
+    unlockPasswordError = null;
+    unlockPending = false;
+  }
+
+  function handleLogout() {
+    resetUnlockState();
+    authStore.logout();
+    activeView = "unlock";
+  }
+
+  function handleSwitchAccount() {
+    resetUnlockState();
+    authStore.cancelOnboarding();
+    authStore.logout();
+    activeView = "unlock";
+  }
+
+  function startFreshRegistration() {
+    resetUnlockState();
+    resetRecoveryFormFields();
+    localError = null;
+    showScanner = false;
+    authStore.clearError();
+    authStore.cancelOnboarding();
+    onboardingStep = "username";
+    confirmationInputs = {};
+    totpCode = "";
+    passwordInput = "";
+    passwordConfirm = "";
+    passwordError = null;
+    securityQuestions = [];
+    backupCodes = [];
+    showRecoveryForm = false;
+    activeView = "unlock";
+  }
+
   const isLoading = $derived($authStore.loading);
   const status = $derived($authStore.status);
   const pendingRecovery = $derived($authStore.pendingRecoveryRotation);
@@ -518,6 +552,15 @@
 
   const hasStoredSecurityQuestions = $derived(
     storedSecurityQuestions.length > 0,
+  );
+
+  const storedUsername = $derived($authPersistenceStore.username ?? null);
+  const hasStoredCredentials = $derived(
+    Boolean($authPersistenceStore.passwordHash && storedUsername),
+  );
+
+  const identityLabel = $derived(
+    storedUsername ?? (username.trim().length ? username.trim() : "New identity"),
   );
 
   $effect(() => {
@@ -543,6 +586,29 @@
     }
   });
 
+  const showRecoveryTab = $derived(hasStoredSecurityQuestions || pendingRecovery);
+
+  const onboardingStages = [
+    { id: "username", label: "Callsign" },
+    { id: "phrase", label: "Recovery phrase" },
+    { id: "confirm", label: "Phrase check" },
+    { id: "password", label: "Unlock password" },
+    { id: "security_questions", label: "Security questions" },
+    { id: "backup_codes", label: "Backup codes" },
+    { id: "totp", label: "Authenticator" },
+  ] satisfies { id: OnboardingStep; label: string }[];
+
+  const onboardingStepIndex = $derived(
+    Math.max(
+      0,
+      onboardingStages.findIndex((stage) => stage.id === onboardingStep),
+    ),
+  );
+
+  const onboardingProgress = $derived(
+    ((onboardingStepIndex + 1) / onboardingStages.length) * 100,
+  );
+
   $effect(() => {
     if (inOnboardingFlow) {
       activeView = "unlock";
@@ -558,18 +624,17 @@
     }
   });
 </script>
-
 <div
-  class="min-h-screen w-full bg-zinc-950 text-zinc-100 flex items-center justify-center px-6 py-10 relative"
+  class="min-h-screen w-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-black text-zinc-100 flex items-center justify-center px-6 py-12"
 >
   <Dialog open={showScanner} onOpenChange={(value) => (showScanner = value)}>
-    <DialogContent class="max-w-lg">
+    <DialogContent class="max-w-lg border border-zinc-800 bg-zinc-950/95">
       <DialogHeader>
-        <DialogTitle class="flex items-center gap-2">
-          <Scan size={18} /> Scan Trusted Device
+        <DialogTitle class="flex items-center gap-2 text-zinc-100">
+          <Scan size={18} /> Scan trusted device
         </DialogTitle>
 
-        <DialogDescription>
+        <DialogDescription class="text-zinc-400">
           Point your camera at the login QR displayed on one of your trusted
           devices.
         </DialogDescription>
@@ -580,7 +645,7 @@
         on:error={handleScannerError}
       />
 
-      <DialogFooter>
+      <DialogFooter class="sm:justify-end">
         <Button variant="ghost" size="sm" onclick={() => (showScanner = false)}>
           Close
         </Button>
@@ -592,13 +657,13 @@
     open={status === "recovery_ack_required" && !!pendingRecovery}
     onOpenChange={() => undefined}
   >
-    <DialogContent class="max-w-2xl">
+    <DialogContent class="max-w-2xl border border-zinc-800 bg-zinc-950/95">
       <DialogHeader>
-        <DialogTitle class="flex items-center gap-2">
+        <DialogTitle class="flex items-center gap-2 text-zinc-100">
           <Save size={18} /> Confirm your new recovery phrase
         </DialogTitle>
 
-        <DialogDescription>
+        <DialogDescription class="text-zinc-400">
           We generated a new recovery phrase for you. Store it securely before
           finishing your password reset.
         </DialogDescription>
@@ -606,9 +671,8 @@
 
       <div class="space-y-4">
         <Alert class="border-yellow-500/30 bg-yellow-500/10 text-yellow-100">
-          <AlertTitle class="flex items-center gap-2 text-yellow-100">
+          <AlertTitle class="flex items-center gap-2 text-yellow-200">
             <TriangleAlert size={16} class="text-yellow-300" />
-
             Save these words now
           </AlertTitle>
 
@@ -621,7 +685,7 @@
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
           {#each pendingRecovery?.newRecoveryPhrase ?? [] as word, index (index)}
             <div
-              class="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200"
+              class="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-zinc-200"
             >
               <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
             </div>
@@ -649,266 +713,296 @@
     </DialogContent>
   </Dialog>
 
-  {#if status === "needs_setup" || status === "setup_in_progress"}
-    <div class="mx-auto w-full max-w-4xl space-y-10">
-      <Card>
-        <CardHeader>
-          <div class="flex items-center gap-3">
-            <ShieldCheck class="text-primary" size={24} />
+  <section class="w-full max-w-5xl space-y-8">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-center gap-3">
+        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-900/60 ring-1 ring-zinc-800 shadow-lg shadow-black/40">
+          <Lock class="h-5 w-5 text-primary" />
+        </div>
 
-            <div>
-              <CardTitle>Aegis Authentication</CardTitle>
+        <div class="space-y-1">
+          <h1 class="text-xl font-semibold tracking-tight">Aegis unlock</h1>
 
-              <CardDescription>
-                Offline-first security with recovery phrase, strong password,
-                and optional unlock 2FA.
-              </CardDescription>
-            </div>
+          <p class="text-sm text-zinc-400">
+            {#if status === "needs_setup"}
+              Create a new secure identity.
+            {:else}
+              Continue as <span class="text-zinc-200 font-medium">{identityLabel}</span>.
+            {/if}
+
+            {#if requireTotpOnUnlock}
+              <span class="ml-2 inline-flex items-center gap-1 rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-medium text-zinc-300 ring-1 ring-zinc-800">
+                <Shield size={12} /> 2FA
+              </span>
+            {/if}
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        {#if hasStoredCredentials}
+          <Button variant="outline" size="sm" onclick={handleSwitchAccount}>
+            <ArrowLeftRight size={14} /> Switch account
+          </Button>
+        {/if}
+
+        <Button variant="ghost" size="sm" onclick={handleLogout}>
+          <LogOut size={16} /> Log out
+        </Button>
+      </div>
+    </header>
+
+    {#if inOnboardingFlow}
+      <section class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-xs uppercase tracking-widest text-zinc-500">Initial setup</p>
+            <h2 class="text-2xl font-semibold text-zinc-100">Secure your identity</h2>
           </div>
-        </CardHeader>
 
-        <CardContent class="space-y-6">
-          {#if localError}
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-
-              <AlertDescription>{localError}</AlertDescription>
-            </Alert>
-          {/if}
-
-          {#if onboardingStep === "username"}
-            <form class="space-y-4" onsubmit={handleStartOnboarding}>
-              <div class="space-y-2">
-                <Label for="callsign">Choose your callsign</Label>
-
-                <Input
-                  id="callsign"
-                  type="text"
-                  placeholder="e.g. SentinelFox"
-                  class="h-11"
-                  bind:value={username}
-                  minlength={3}
-                  required
-                  disabled={isLoading}
-                />
-
-                <p class="text-xs text-muted-foreground">
-                  This username identifies you across Aegis. You can change it
-                  later once inside.
-                </p>
-              </div>
-
-              <Button
-                class="w-full"
-                type="submit"
-                disabled={isLoading || username.trim().length < 3}
-              >
-                <ShieldCheck size={16} /> Begin secure setup
+          <div class="flex flex-wrap items-center gap-2">
+            {#if hasStoredCredentials}
+              <Button variant="outline" size="sm" onclick={handleSwitchAccount}>
+                <ArrowLeftRight size={14} /> Use another account
               </Button>
-            </form>
-          {:else if onboardingStep === "phrase" && $authStore.onboarding}
-            <div class="space-y-4">
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                <Save size={18} /> Save your recovery phrase
-              </h2>
+            {/if}
 
-              <p class="text-sm text-muted-foreground">
-                Write these 12 words down in order. They are the only way to
-                rebuild your account if you forget your password.
+            <Button variant="ghost" size="sm" onclick={handleLogout}>
+              Cancel setup
+            </Button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs text-zinc-500">
+            <span>Step {onboardingStepIndex + 1} of {onboardingStages.length}</span>
+            <span class="uppercase tracking-wide text-zinc-400">
+              {onboardingStages[onboardingStepIndex]?.label}
+            </span>
+          </div>
+
+          <Progress value={onboardingProgress} class="h-1 bg-zinc-800" />
+        </div>
+
+        {#if localError}
+          <Alert variant="destructive">
+            <AlertTitle>Setup error</AlertTitle>
+            <AlertDescription>{localError}</AlertDescription>
+          </Alert>
+        {/if}
+
+        {#if onboardingStep === "username"}
+          <form class="space-y-5" onsubmit={handleStartOnboarding}>
+            <div class="space-y-2">
+              <Label for="callsign">Choose a callsign</Label>
+
+              <Input
+                id="callsign"
+                type="text"
+                placeholder="e.g. SentinelFox"
+                class="h-11"
+                bind:value={username}
+                minlength={3}
+                required
+                disabled={isLoading}
+              />
+
+              <p class="text-xs text-zinc-500">
+                Your callsign appears to contacts and trusted devices.
               </p>
-
-              <div class="grid grid-cols-3 gap-2 text-sm font-mono">
-                {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
-                  <div
-                    class="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-200"
-                  >
-                    <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span
-                    >{word}
-                  </div>
-                {/each}
-              </div>
-
-              <Button class="w-full" onclick={goToConfirmation}>
-                I have stored my recovery phrase
-              </Button>
             </div>
-          {:else if onboardingStep === "confirm" && $authStore.onboarding}
-            <form class="space-y-4" onsubmit={goToPasswordStep}>
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                <Save size={18} /> Verify two random words
-              </h2>
 
-              <p class="text-sm text-muted-foreground">
-                Enter the requested words to prove you saved the phrase
-                correctly.
-              </p>
+            <Button
+              class="w-full sm:w-auto"
+              type="submit"
+              disabled={isLoading || username.trim().length < 3}
+            >
+              <ShieldCheck size={16} /> Start guided setup
+            </Button>
+          </form>
+        {:else if onboardingStep === "phrase" && $authStore.onboarding}
+          <div class="space-y-4">
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+              <Save size={18} /> Write down your recovery phrase
+            </h3>
 
-              <div class="space-y-3">
-                {#each $authStore.onboarding.confirmationIndices as index (index)}
-                  <div class="space-y-2">
-                    <Label for={`word-${index}`}>Word #{index + 1}</Label>
+            <p class="text-sm text-zinc-400">
+              Copy these 12 words in order. They are the only way to rebuild your identity if you forget your password.
+            </p>
 
-                    <Input
-                      id={`word-${index}`}
-                      type="text"
-                      class="h-10"
-                      value={confirmationInputs[index] ?? ""}
-                      oninput={(e) => {
-                        const t = e.currentTarget as HTMLInputElement;
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
+              {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
+                <div class="rounded-lg border border-zinc-800/70 bg-zinc-950/70 px-3 py-2 text-zinc-100">
+                  <span class="text-xs text-zinc-500 mr-2">{index + 1}.</span>{word}
+                </div>
+              {/each}
+            </div>
 
-                        confirmationInputs = {
-                          ...confirmationInputs,
-                          [index]: t.value,
-                        };
-                      }}
-                      required
-                      disabled={isLoading}
-                    />
-                  </div>
-                {/each}
-              </div>
+            <Button class="w-full sm:w-auto" onclick={goToConfirmation}>
+              I have stored my recovery phrase
+            </Button>
+          </div>
+        {:else if onboardingStep === "confirm" && $authStore.onboarding}
+          <form class="space-y-5" onsubmit={goToPasswordStep}>
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+              <Save size={18} /> Confirm two random words
+            </h3>
 
-              <Button
-                class="w-full"
-                type="submit"
-                disabled={!confirmReady || isLoading}
-              >
-                Continue to password setup
-              </Button>
-            </form>
-          {:else if onboardingStep === "password"}
-            <form class="space-y-4" onsubmit={handleSavePassword}>
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                <KeySquare size={18} /> Create your unlock password
-              </h2>
-
-              {#if unicodeRequired}
-                <p class="text-sm text-muted-foreground">
-                  Minimum 12 characters with uppercase, lowercase, numbers, and
-                  special characters.
-                </p>
-              {:else}
-                <p class="text-sm text-muted-foreground">
-                  Minimum 12 characters. Unicode characters are optional while
-                  you upgrade an existing identity.
-                </p>
-              {/if}
-
-              {#if passwordInput}
+            <div class="grid gap-4 sm:grid-cols-2">
+              {#each $authStore.onboarding.confirmationIndices as index (index)}
                 <div class="space-y-2">
-                  <div class="flex items-center justify-between text-sm">
-                    <span class="text-muted-foreground">Password strength:</span
-                    >
+                  <Label for={`word-${index}`}>Word #{index + 1}</Label>
 
-                    <span
-                      class="font-medium"
-                      class:text-red-400={passwordStrength.score < 40}
-                      class:text-yellow-400={passwordStrength.score >= 40 &&
-                        passwordStrength.score < 80}
-                      class:text-green-400={passwordStrength.score >= 80}
-                    >
-                      {passwordStrength.score < 40
-                        ? "Weak"
-                        : passwordStrength.score < 80
-                          ? "Medium"
-                          : "Strong"}
-                    </span>
-                  </div>
-
-                  <Progress value={passwordStrength.score} max={100} />
-
-                  {#if passwordStrength.feedback.length > 0}
-                    <ul class="text-xs text-zinc-500 list-disc list-inside">
-                      {#each passwordStrength.feedback as feedback}
-                        <li>{feedback}</li>
-                      {/each}
-                    </ul>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="space-y-2">
-                <Label for="password">Password</Label>
-
-                <div class="relative">
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    bind:value={passwordInput}
-                    autocomplete="new-password"
-                    minlength={MIN_PASSWORD_LENGTH}
+                    id={`word-${index}`}
+                    type="text"
+                    class="h-10"
+                    value={confirmationInputs[index] ?? ""}
+                    oninput={(e) => {
+                      const t = e.currentTarget as HTMLInputElement;
+
+                      confirmationInputs = {
+                        ...confirmationInputs,
+                        [index]: t.value,
+                      };
+                    }}
+                    required
+                    disabled={isLoading}
                   />
-
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    class="absolute right-2 top-1/2 -translate-y-1/2"
-                    onclick={togglePasswordVisibility}
-                  >
-                    {#if showPassword}<EyeOff size={16} />{:else}<Eye
-                        size={16}
-                      />{/if}
-                  </Button>
                 </div>
-              </div>
+              {/each}
+            </div>
 
-              <div class="space-y-2">
-                <Label for="password-confirm">Confirm password</Label>
+            <Button
+              class="w-full sm:w-auto"
+              type="submit"
+              disabled={!confirmReady || isLoading}
+            >
+              Continue to password setup
+            </Button>
+          </form>
+        {:else if onboardingStep === "password"}
+          <form class="space-y-5" onsubmit={handleSavePassword}>
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+              <KeySquare size={18} /> Create your unlock password
+            </h3>
 
-                <Input
-                  id="password-confirm"
-                  type="password"
-                  class="px-3 py-2"
-                  value={passwordConfirm}
-                  oninput={(e) => {
-                    const t = e.currentTarget as HTMLInputElement;
-                    passwordConfirm = t.value;
-                  }}
-                  minlength={MIN_PASSWORD_LENGTH}
-                  required
-                  autocomplete="new-password"
-                />
-              </div>
-
-              {#if passwordError}
-                <Alert variant="destructive">
-                  <AlertTitle>Password error</AlertTitle>
-
-                  <AlertDescription>{passwordError}</AlertDescription>
-                </Alert>
+            <p class="text-sm text-zinc-400">
+              {#if unicodeRequired}
+                Use at least 12 characters including uppercase, lowercase, numbers, special characters, and a Unicode character.
+              {:else}
+                Use at least 12 characters with mixed case, numbers, and symbols.
               {/if}
+            </p>
 
-              <Button
-                class="w-full"
-                type="submit"
-                disabled={isLoading || passwordStrength.score < 60}
-              >
-                Continue to security setup
-              </Button>
-            </form>
-          {:else if onboardingStep === "security_questions"}
-            <form class="space-y-4" onsubmit={handleSecurityQuestions}>
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                <Shield size={18} /> Configure security questions
-              </h2>
+            {#if passwordInput}
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs uppercase tracking-wide">
+                  <span class="text-zinc-500">Strength</span>
+                  <span
+                    class="font-semibold"
+                    class:text-red-400={passwordStrength.score < 40}
+                    class:text-yellow-400={passwordStrength.score >= 40 && passwordStrength.score < 80}
+                    class:text-emerald-400={passwordStrength.score >= 80}
+                  >
+                    {passwordStrength.score < 40
+                      ? "Weak"
+                      : passwordStrength.score < 80
+                        ? "Medium"
+                        : "Strong"}
+                  </span>
+                </div>
 
-              <p class="text-sm text-muted-foreground">
-                Set up 3-5 security questions that only you know the answers to.
-                These can help verify your identity during recovery.
-              </p>
+                <Progress value={passwordStrength.score} max={100} class="h-2 bg-zinc-800" />
 
+                {#if passwordStrength.feedback.length > 0}
+                  <ul class="text-xs text-zinc-500 space-y-1">
+                    {#each passwordStrength.feedback as feedback}
+                      <li>{feedback}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              </div>
+            {/if}
+
+            <div class="space-y-2">
+              <Label for="password">Password</Label>
+
+              <div class="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  bind:value={passwordInput}
+                  autocomplete="new-password"
+                  minlength={MIN_PASSWORD_LENGTH}
+                />
+
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  class="absolute right-2 top-1/2 -translate-y-1/2"
+                  onclick={togglePasswordVisibility}
+                >
+                  {#if showPassword}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
+                </Button>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="password-confirm">Confirm password</Label>
+
+              <Input
+                id="password-confirm"
+                type="password"
+                value={passwordConfirm}
+                oninput={(e) => {
+                  const t = e.currentTarget as HTMLInputElement;
+                  passwordConfirm = t.value;
+                }}
+                minlength={MIN_PASSWORD_LENGTH}
+                autocomplete="new-password"
+                required
+              />
+            </div>
+
+            {#if passwordError}
+              <Alert variant="destructive">
+                <AlertTitle>Password error</AlertTitle>
+                <AlertDescription>{passwordError}</AlertDescription>
+              </Alert>
+            {/if}
+
+            <Button
+              class="w-full sm:w-auto"
+              type="submit"
+              disabled={isLoading || passwordStrength.score < 60}
+            >
+              Continue to security setup
+            </Button>
+          </form>
+        {:else if onboardingStep === "security_questions"}
+          <form class="space-y-5" onsubmit={handleSecurityQuestions}>
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+              <Shield size={18} /> Configure security questions
+            </h3>
+
+            <p class="text-sm text-zinc-400">
+              Choose 3–5 questions only you can answer. These protect you during recovery.
+            </p>
+
+            <div class="space-y-4">
               {#each securityQuestions as question, index}
-                <div class="space-y-3 p-4 border border-zinc-700 rounded-lg">
+                <div class="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4">
                   <div class="flex items-center justify-between">
-                    <Label for={`question-${index}`}>Question {index + 1}</Label
-                    >
+                    <Label for={`question-${index}`}>Question {index + 1}</Label>
 
                     {#if securityQuestions.length > 3}
                       <Button
                         type="button"
                         variant="ghost"
-                        class="text-red-400 hover:text-destructive text-sm"
+                        size="sm"
+                        class="text-red-400 hover:text-destructive"
                         onclick={() => removeSecurityQuestion(index)}
                       >
                         Remove
@@ -917,10 +1011,7 @@
                   </div>
 
                   <Select type="single" bind:value={question.question}>
-                    <SelectTrigger
-                      class="w-[200px]"
-                      placeholder="Choose a question…"
-                    />
+                    <SelectTrigger placeholder="Choose a question…" />
 
                     <SelectContent>
                       {#each predefinedQuestions as q}
@@ -930,6 +1021,7 @@
                   </Select>
 
                   <Input
+                    id={`question-${index}`}
                     type="text"
                     placeholder="Your answer"
                     bind:value={question.answer}
@@ -938,193 +1030,159 @@
                   />
                 </div>
               {/each}
+            </div>
 
-              {#if securityQuestions.length < 5}
-                <Button
-                  type="button"
-                  variant="outline"
-                  class="w-full"
-                  onclick={addSecurityQuestion}
-                >
-                  Add another question
-                </Button>
+            {#if securityQuestions.length < 5}
+              <Button
+                type="button"
+                variant="outline"
+                class="w-full sm:w-auto"
+                onclick={addSecurityQuestion}
+              >
+                Add another question
+              </Button>
+            {/if}
+
+            <Button
+              class="w-full sm:w-auto"
+              type="submit"
+              disabled={!securityQuestionsReady || isLoading}
+            >
+              Continue to backup codes
+            </Button>
+          </form>
+        {:else if onboardingStep === "backup_codes" && backupCodes.length > 0}
+          <div class="space-y-5">
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+              <ShieldCheck size={18} /> Save your backup codes
+            </h3>
+
+            <p class="text-sm text-zinc-400">
+              Each code works once. Store them offline before continuing.
+            </p>
+
+            <div class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4">
+              <div class="grid grid-cols-2 gap-2 text-sm font-mono">
+                {#each backupCodes as code}
+                  <span class="rounded-md bg-zinc-900/70 px-3 py-2 text-center text-zinc-100">
+                    {code}
+                  </span>
+                {/each}
+              </div>
+            </div>
+
+            <Button class="w-full sm:w-auto" onclick={() => (onboardingStep = "totp")}>
+              I have saved my backup codes
+            </Button>
+          </div>
+        {:else if onboardingStep === "totp" && $authStore.onboarding}
+          <form class="space-y-5" onsubmit={finishOnboarding}>
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+              <KeyRound size={18} /> Pair your authenticator
+            </h3>
+
+            <div class="grid gap-4 lg:grid-cols-[auto,1fr]">
+              {#if totpQr}
+                <img
+                  src={totpQr}
+                  alt="Authenticator QR"
+                  class="h-40 w-40 rounded-xl border border-zinc-800 bg-white p-2"
+                />
               {/if}
 
-              <Button
-                class="w-full"
-                type="submit"
-                disabled={!securityQuestionsReady || isLoading}
-              >
-                Continue to backup codes
-              </Button>
-            </form>
-          {:else if onboardingStep === "backup_codes" && backupCodes.length > 0}
-            <div class="space-y-4">
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                <ShieldCheck size={18} /> Save your backup codes
-              </h2>
+              <div class="space-y-3 text-sm">
+                <p class="text-zinc-400">
+                  Scan with your authenticator app or enter the key manually.
+                </p>
 
-              <p class="text-sm text-muted-foreground">
-                Store these backup codes in a safe place. Each code can be used
-                once to access your account if you lose your password and
-                recovery phrase.
-              </p>
-
-              <Card class="bg-zinc-900 border-zinc-700">
-                <CardContent class="p-4">
-                  <div class="grid grid-cols-2 gap-2">
-                    {#each backupCodes as code}
-                      <Badge variant="secondary" class="justify-center"
-                        >{code}</Badge
-                      >
-                    {/each}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Alert class="border-yellow-500/30">
-                <TriangleAlert class="h-4 w-4 text-yellow-400" />
-
-                <AlertDescription class="text-yellow-400">
-                  Each code can only be used once. Store them securely offline.
-                </AlertDescription>
-              </Alert>
-
-              <Button class="w-full" onclick={() => (onboardingStep = "totp")}>
-                I have saved my backup codes
-              </Button>
-            </div>
-          {:else if onboardingStep === "totp" && $authStore.onboarding}
-            <form class="space-y-4" onsubmit={finishOnboarding}>
-              <h2 class="text-lg font-semibold flex items-center gap-2">
-                <KeyRound size={18} /> Pair your authenticator
-              </h2>
-
-              <p class="text-sm text-muted-foreground">
-                Scan this QR with your authenticator app. Codes are only
-                required for unlock if you enable that option in settings.
-              </p>
-
-              <div class="flex flex-col lg:flex-row gap-4 items-start">
-                {#if totpQr}
-                  <img
-                    src={totpQr}
-                    alt="Authenticator QR"
-                    class="w-40 h-40 rounded-lg border border-zinc-800 bg-white p-2"
-                  />
-                {/if}
-
-                <div class="space-y-2 text-sm">
-                  <p class="text-xs uppercase text-zinc-500">
-                    Manual setup key
-                  </p>
-
-                  <Input
-                    value={$authStore.onboarding.totpSecret}
-                    readonly
-                    class="font-mono"
-                  />
+                <div class="rounded-lg border border-zinc-800/70 bg-zinc-950/50 p-3">
+                  <p class="text-xs uppercase text-zinc-500">Manual key</p>
+                  <Input value={$authStore.onboarding.totpSecret} readonly class="font-mono text-base" />
                 </div>
               </div>
+            </div>
 
+            <div class="space-y-2">
+              <Label for="totp-setup">Authenticator code</Label>
+
+              <Input
+                id="totp-setup"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                value={totpCode}
+                oninput={(e) => {
+                  const t = e.currentTarget as HTMLInputElement;
+                  totpCode = sanitizeCode(t.value);
+                }}
+                maxlength={6}
+                required
+                disabled={isLoading}
+              />
+            </div>
+
+            <Button
+              class="w-full sm:w-auto"
+              type="submit"
+              disabled={totpCode.length !== 6 || isLoading}
+            >
+              Complete onboarding
+            </Button>
+          </form>
+        {/if}
+      </section>
+    {:else}
+    {:else}
+      <section class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6">
+        <div class="flex flex-wrap items-center gap-2" role="tablist">
+          <Button
+            type="button"
+            variant={activeView === "unlock" ? "secondary" : "ghost"}
+            size="sm"
+            class="flex items-center gap-2"
+            onclick={() => switchView("unlock")}
+          >
+            <Lock size={14} /> Unlock
+          </Button>
+
+          <Button
+            type="button"
+            variant={activeView === "recovery" ? "secondary" : "ghost"}
+            size="sm"
+            class="flex items-center gap-2"
+            onclick={() => {
+              resetRecoveryFormFields();
+              switchView("recovery");
+              showRecoveryForm = false;
+            }}
+            disabled={!showRecoveryTab}
+          >
+            <Shield size={14} /> Recover
+          </Button>
+
+          <Button
+            type="button"
+            variant={activeView === "handoff" ? "secondary" : "ghost"}
+            size="sm"
+            class="flex items-center gap-2"
+            onclick={() => switchView("handoff")}
+          >
+            <QrCode size={14} /> Trusted device
+          </Button>
+        </div>
+
+        {#if localError}
+          <Alert variant="destructive">
+            <AlertTitle>Authentication error</AlertTitle>
+            <AlertDescription>{localError}</AlertDescription>
+          </Alert>
+        {/if}
+
+        {#if activeView === "unlock"}
+          <div class="space-y-6">
+            <form class="space-y-4" onsubmit={handleUnlock}>
               <div class="space-y-2">
-                <Label for="totp-setup">Authenticator code</Label>
-
-                <Input
-                  id="totp-setup"
-                  type="text"
-                  inputmode="numeric"
-                  pattern="[0-9]*"
-                  class="w-full"
-                  value={totpCode}
-                  oninput={(e) => {
-                    const t = e.currentTarget as HTMLInputElement;
-
-                    totpCode = sanitizeCode(t.value);
-                  }}
-                  maxlength={6}
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-
-              <Button
-                class="w-full"
-                type="submit"
-                disabled={totpCode.length !== 6 || isLoading}
-              >
-                Complete onboarding
-              </Button>
-            </form>
-          {/if}
-        </CardContent>
-      </Card>
-    </div>
-  {:else}
-    <div class="mx-auto w-full max-w-3xl space-y-8">
-      <div class="flex flex-wrap justify-center gap-3">
-        <Button
-          type="button"
-          variant={activeView === "unlock" ? "default" : "ghost"}
-          class="flex items-center gap-2"
-          onclick={() => switchView("unlock")}
-        >
-          <Lock size={16} /> Unlock
-        </Button>
-
-        <Button
-          type="button"
-          variant={activeView === "recovery" ? "default" : "ghost"}
-          class="flex items-center gap-2"
-          onclick={() => {
-            resetRecoveryFormFields();
-            switchView("recovery");
-            showRecoveryForm = false;
-          }}
-          disabled={!hasStoredSecurityQuestions && !pendingRecovery}
-        >
-          <Shield size={16} /> Security recovery
-        </Button>
-
-        <Button
-          type="button"
-          variant={activeView === "handoff" ? "default" : "ghost"}
-          class="flex items-center gap-2"
-          onclick={() => switchView("handoff")}
-        >
-          <QrCode size={16} /> Trusted device
-        </Button>
-      </div>
-
-      {#if localError}
-        <Alert variant="destructive">
-          <AlertTitle>Error</AlertTitle>
-
-          <AlertDescription>{localError}</AlertDescription>
-        </Alert>
-      {/if}
-
-      {#if activeView === "unlock"}
-        <Card>
-          <CardHeader class="space-y-1">
-            <CardTitle class="flex items-center gap-2">
-              <Lock size={18} /> Unlock your identity
-            </CardTitle>
-
-            <CardDescription>
-              Enter your password to decrypt your local identity.
-
-              {#if requireTotpOnUnlock}
-                A 6-digit authenticator code is required because you enabled it
-                in settings.
-              {/if}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <form class="space-y-3" onsubmit={handleUnlock}>
-              <div class="space-y-2">
-                <Label for="unlock-password">Password</Label>
+                <Label for="unlock-password">Unlock password</Label>
 
                 <Input
                   id="unlock-password"
@@ -1151,7 +1209,6 @@
                     value={unlockTotp}
                     oninput={(event) => {
                       const target = event.currentTarget as HTMLInputElement;
-
                       unlockTotp = sanitizeCode(target.value);
                     }}
                     maxlength={6}
@@ -1161,94 +1218,112 @@
               {/if}
 
               {#if unlockPasswordError}
-                <p class="text-sm text-destructive">{unlockPasswordError}</p>
+                <p class="text-sm text-red-400">{unlockPasswordError}</p>
               {/if}
 
               <Button
-                class="w-full"
+                class="w-full sm:w-auto"
                 type="submit"
                 disabled={unlockPending ||
                   unlockPassword.trim().length === 0 ||
                   (requireTotpOnUnlock && unlockTotp.length !== 6)}
               >
-                Unlock account
+                Unlock session
               </Button>
             </form>
-          </CardContent>
-        </Card>
 
-        {#if status === "account_locked"}
-          <Alert variant="destructive">
-            <div class="flex items-center gap-2">
-              <Shield size={16} />
+            {#if status === "account_locked"}
+              <div class="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+                <div class="flex items-center gap-2 font-medium">
+                  <Shield size={14} /> Account locked
+                </div>
+                <p class="mt-1 text-red-200/80">
+                  Too many failed attempts. Try again later.
+                  {#if $authStore.accountLockedUntil}
+                    Unlocks at {$authStore.accountLockedUntil.toLocaleTimeString()}.
+                  {/if}
+                </p>
+              </div>
+            {/if}
 
-              <AlertTitle>Account Locked</AlertTitle>
+            <div class="flex flex-wrap items-center gap-2 text-sm text-zinc-400">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                class="flex items-center gap-2"
+                onclick={startFreshRegistration}
+              >
+                <UserPlus size={14} /> Register new identity
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                class="flex items-center gap-2"
+                onclick={() => switchView("recovery")}
+                disabled={!showRecoveryTab}
+              >
+                <Shield size={14} /> Use recovery options
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                class="flex items-center gap-2"
+                onclick={() => switchView("handoff")}
+              >
+                <QrCode size={14} /> Scan trusted device
+              </Button>
             </div>
-
-            <AlertDescription>
-              Your account has been locked due to too many failed login
-              attempts.
-
-              {#if $authStore.accountLockedUntil}
-                It will automatically unlock at {$authStore.accountLockedUntil.toLocaleTimeString()}.
-              {/if}
-            </AlertDescription>
-          </Alert>
-        {/if}
-      {:else if activeView === "recovery"}
-        <Card>
-          <CardHeader class="space-y-1">
-            <CardTitle class="flex items-center gap-2">
-              <Shield size={16} /> Recover with security questions
-            </CardTitle>
-
-            <CardDescription>
-              Answer your configured security questions to reset your password.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
+          </div>
+        {:else if activeView === "recovery"}
+          <div class="space-y-6">
             {#if !showRecoveryForm}
-              <div class="space-y-3 text-sm text-muted-foreground">
-                <p>Need to rotate your password without a recovery phrase?</p>
+              <div class="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-5">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 class="text-lg font-semibold text-zinc-100">Security question recovery</h3>
+                    <p class="text-sm text-zinc-400">
+                      Answer at least two security questions to set a new password.
+                    </p>
+                  </div>
 
-                <Button
-                  class="w-full"
-                  variant="outline"
-                  type="button"
-                  onclick={openRecoveryForm}
-                  disabled={status === "recovery_ack_required"}
-                >
-                  <Shield size={16} class="mr-2" /> Start security question recovery
-                </Button>
+                  <Button
+                    class="shrink-0"
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onclick={openRecoveryForm}
+                    disabled={status === "recovery_ack_required"}
+                  >
+                    Begin recovery
+                  </Button>
+                </div>
               </div>
             {:else}
               <form class="space-y-4" onsubmit={handleSecurityQuestionRecovery}>
                 {#if recoveryQuestionPrompts.length === 0}
                   <Alert variant="destructive">
                     <AlertTitle>No security questions configured</AlertTitle>
-
                     <AlertDescription>
-                      Add security questions from Settings before using this
-                      recovery method.
+                      Add security questions from Settings before using this recovery method.
                     </AlertDescription>
                   </Alert>
                 {:else}
                   <div class="space-y-4">
                     {#each recoveryQuestionPrompts as prompt, index (prompt)}
-                      <div class="space-y-1.5">
-                        <Label for={`recovery-question-${index}`}
-                          >{prompt}</Label
-                        >
+                      <div class="space-y-2">
+                        <Label for={`recovery-question-${index}`}>{prompt}</Label>
 
                         <Input
                           id={`recovery-question-${index}`}
                           type="text"
                           value={securityQuestionAnswers[prompt] ?? ""}
                           oninput={(event) => {
-                            const target =
-                              event.currentTarget as HTMLInputElement;
-
+                            const target = event.currentTarget as HTMLInputElement;
                             securityQuestionAnswers = {
                               ...securityQuestionAnswers,
                               [prompt]: target.value,
@@ -1259,7 +1334,7 @@
                       </div>
                     {/each}
 
-                    <p class="text-xs text-muted-foreground">
+                    <p class="text-xs text-zinc-500">
                       Provide answers for at least two questions to continue.
                     </p>
                   </div>
@@ -1277,7 +1352,6 @@
                       value={recoveryTotp}
                       oninput={(event) => {
                         const target = event.currentTarget as HTMLInputElement;
-
                         recoveryTotp = sanitizeCode(target.value);
                       }}
                       maxlength={6}
@@ -1303,16 +1377,12 @@
                   />
 
                   {#if recoveryPasswordValidation && recoveryPassword}
-                    <p class="text-xs text-destructive">
-                      {recoveryPasswordValidation}
-                    </p>
+                    <p class="text-xs text-red-400">{recoveryPasswordValidation}</p>
                   {/if}
                 </div>
 
                 <div class="space-y-2">
-                  <Label for="recovery-password-confirm"
-                    >Confirm new password</Label
-                  >
+                  <Label for="recovery-password-confirm">Confirm new password</Label>
 
                   <Input
                     id="recovery-password-confirm"
@@ -1328,9 +1398,7 @@
                   />
 
                   {#if recoveryPassword && recoveryPasswordConfirm && recoveryPassword !== recoveryPasswordConfirm}
-                    <p class="text-xs text-destructive">
-                      Passwords must match.
-                    </p>
+                    <p class="text-xs text-red-400">Passwords must match.</p>
                   {/if}
                 </div>
 
@@ -1345,12 +1413,11 @@
                   <Button
                     class="w-full"
                     type="submit"
-                    disabled={!recoveryFormReady ||
-                      isLoading ||
-                      status === "recovery_ack_required"}
+                    disabled={!recoveryFormReady || isLoading || status === "recovery_ack_required"}
                   >
-                    Reset password with security questions
+                    Reset password
                   </Button>
+
                   <Button
                     class="w-full sm:w-auto"
                     variant="ghost"
@@ -1362,28 +1429,14 @@
                 </div>
               </form>
             {/if}
-          </CardContent>
-        </Card>
-      {:else}
-        <Card>
-          <CardHeader>
-            <CardTitle class="flex items-center gap-2">
-              <QrCode size={18} /> Trusted device handoff
-            </CardTitle>
-            <CardDescription>
-              Open Aegis on another device, generate a login QR from Settings →
-              Devices, and scan it here. Approval still requires a fresh
-              authenticator code.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent class="space-y-6">
+          </div>
+        {:else}
+          <div class="space-y-6">
             {#if $authStore.pendingDeviceLogin}
               <Alert>
                 <AlertTitle>Login request</AlertTitle>
                 <AlertDescription>
-                  Login request from {$authStore.pendingDeviceLogin.username ??
-                    "trusted device"}.
+                  Login request from {$authStore.pendingDeviceLogin.username ?? "trusted device"}.
                 </AlertDescription>
               </Alert>
 
@@ -1407,7 +1460,7 @@
                 </div>
 
                 <Button
-                  class="w-full"
+                  class="w-full sm:w-auto"
                   type="submit"
                   disabled={deviceTotp.length !== 6 || isLoading}
                 >
@@ -1415,29 +1468,27 @@
                 </Button>
               </form>
             {:else}
-              <Card class="bg-muted">
-                <CardContent class="space-y-3 text-sm text-muted-foreground">
-                  <p>
-                    Ready to link another device? Generate a QR from your
-                    authenticated device to hand off credentials securely.
-                  </p>
+              <div class="rounded-2xl border border-zinc-800/70 bg-zinc-950/40 p-5 text-sm text-zinc-400">
+                <p>
+                  Generate a QR from another trusted device to hand off your session instantly.
+                </p>
 
-                  <Button
-                    class="w-full"
-                    variant="outline"
-                    onclick={() => {
-                      authStore.clearError();
-                      showScanner = true;
-                    }}
-                  >
-                    Launch camera scanner
-                  </Button>
-                </CardContent>
-              </Card>
+                <Button
+                  class="mt-4 w-full sm:w-auto"
+                  variant="outline"
+                  onclick={() => {
+                    authStore.clearError();
+                    showScanner = true;
+                  }}
+                >
+                  Launch camera scanner
+                </Button>
+              </div>
             {/if}
-          </CardContent>
-        </Card>
-      {/if}
-    </div>
-  {/if}
+          </div>
+        {/if}
+      </section>
+    {/if}
+  </section>
 </div>
+
