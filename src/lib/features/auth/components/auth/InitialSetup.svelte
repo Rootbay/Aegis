@@ -22,16 +22,12 @@
     MIN_PASSWORD_LENGTH,
     validatePassword,
   } from "$lib/features/auth/stores/authStore";
+  import { toasts } from "$lib/stores/ToastStore";
   import type { SecurityQuestion } from "$lib/features/auth/stores/authStore";
   import RecoveryQrScanner from "./RecoveryQrScanner.svelte";
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
-  import {
-    Alert,
-    AlertTitle,
-    AlertDescription,
-  } from "$lib/components/ui/alert/index.js";
   import {
     Select,
     SelectTrigger,
@@ -65,7 +61,6 @@
   let totpCode = $state("");
   let passwordInput = $state("");
   let passwordConfirm = $state("");
-  let passwordError = $state<string | null>(null);
   let unlockPassword = $state("");
   let unlockPasswordError = $state<string | null>(null);
   let unlockTotp = $state("");
@@ -75,12 +70,9 @@
   let recoveryTotp = $state("");
   let recoveryPassword = $state("");
   let recoveryPasswordConfirm = $state("");
-  let recoveryError = $state<string | null>(null);
-  let pendingRecoveryError = $state<string | null>(null);
   let deviceTotp = $state("");
   let showScanner = $state(false);
   let totpQr = $state<string | null>(null);
-  let localError = $state<string | null>(null);
 
   let passwordStrength = $state<{ score: number; feedback: string[] }>({
     score: 0,
@@ -166,16 +158,48 @@
       totpCode = "";
       passwordInput = "";
       passwordConfirm = "";
-      passwordError = null;
       onboardingStep = "username";
     }
   });
 
+  let lastAuthError: string | null = null;
   $effect(() => {
-    if ($authStore.error) {
-      localError = $authStore.error;
+    const error = $authStore.error;
+    if (error && error !== lastAuthError) {
+      toasts.showErrorToast(error);
+    }
+    lastAuthError = error;
+  });
+
+  let lastDeviceLoginIssuedAt: number | null = null;
+  $effect(() => {
+    const pendingDevice = $authStore.pendingDeviceLogin;
+    if (pendingDevice) {
+      if (pendingDevice.issuedAt !== lastDeviceLoginIssuedAt) {
+        const label = pendingDevice.username ?? "trusted device";
+        toasts.addToast(`Login request from ${label}.`, "info");
+        lastDeviceLoginIssuedAt = pendingDevice.issuedAt;
+      }
     } else {
-      localError = null;
+      lastDeviceLoginIssuedAt = null;
+    }
+  });
+
+  let lastRecoveryRotationId: string | null = null;
+  $effect(() => {
+    const pending = $authStore.pendingRecoveryRotation;
+    const currentStatus = $authStore.status;
+    if (currentStatus === "recovery_ack_required" && pending) {
+      if (pending.initiatedAt !== lastRecoveryRotationId) {
+        toasts.addToast(
+          "Your previous recovery phrase is no longer valid. Store the new phrase before continuing.",
+          "warning",
+          6000,
+        );
+        lastRecoveryRotationId = pending.initiatedAt;
+      }
+    } else {
+      lastRecoveryRotationId = null;
     }
   });
 
@@ -216,20 +240,21 @@
       authStore.beginOnboarding(username);
       onboardingStep = "phrase";
     } catch (error) {
-      localError =
+      const message =
         error instanceof Error ? error.message : "Unable to start setup.";
+      toasts.showErrorToast(message);
     }
   }
 
   async function handleSecurityQuestionRecovery(event: Event) {
     event.preventDefault();
-    recoveryError = null;
     authStore.clearError();
     const questions = storedSecurityQuestions;
 
     if (questions.length === 0) {
-      recoveryError =
-        "Security questions are not configured for this identity.";
+      toasts.showErrorToast(
+        "Security questions are not configured for this identity.",
+      );
       return;
     }
 
@@ -247,17 +272,19 @@
     );
 
     if (Object.keys(normalizedAnswers).length < 2) {
-      recoveryError = "Answer at least two security questions.";
+      toasts.showErrorToast("Answer at least two security questions.");
       return;
     }
 
     if (!recoveryPassword || !recoveryPasswordConfirm) {
-      recoveryError = "Enter and confirm your new password to continue.";
+      toasts.showErrorToast(
+        "Enter and confirm your new password to continue.",
+      );
       return;
     }
 
     if (recoveryPassword !== recoveryPasswordConfirm) {
-      recoveryError = "Passwords must match.";
+      toasts.showErrorToast("Passwords must match.");
       return;
     }
 
@@ -268,12 +295,12 @@
     );
 
     if (validation) {
-      recoveryError = validation;
+      toasts.showErrorToast(validation);
       return;
     }
 
     if (requireTotpOnUnlock && recoveryTotp.length !== 6) {
-      recoveryError = "Authenticator code must be 6 digits.";
+      toasts.showErrorToast("Authenticator code must be 6 digits.");
       return;
     }
 
@@ -286,10 +313,11 @@
 
       closeRecoveryForm();
     } catch (error) {
-      recoveryError =
+      const message =
         error instanceof Error
           ? error.message
           : "Security question recovery failed.";
+      toasts.showErrorToast(message);
     }
   }
 
@@ -305,17 +333,16 @@
   async function handleSavePassword(event: Event) {
     event.preventDefault();
     authStore.clearError();
-    passwordError = null;
 
     if (passwordInput !== passwordConfirm) {
-      passwordError = "Passwords do not match.";
+      toasts.showErrorToast("Passwords do not match.");
       return;
     }
 
     const validation = validatePassword(passwordInput, unicodeRequired);
 
     if (validation) {
-      passwordError = validation;
+      toasts.showErrorToast(validation);
       return;
     }
 
@@ -323,8 +350,11 @@
       authStore.saveOnboardingPassword(passwordInput);
       onboardingStep = "security_questions";
     } catch (error) {
-      passwordError =
-        error instanceof Error ? error.message : "Unable to accept password.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to accept password.";
+      toasts.showErrorToast(message);
     }
   }
 
@@ -342,10 +372,11 @@
 
       onboardingStep = "backup_codes";
     } catch (error) {
-      localError =
+      const message =
         error instanceof Error
           ? error.message
           : "Failed to configure security questions.";
+      toasts.showErrorToast(message);
     }
   }
 
@@ -402,10 +433,9 @@
 
   async function handleRecoveryLogin(event: Event) {
     event.preventDefault();
-    recoveryError = null;
 
     if (recoveryPassword !== recoveryPasswordConfirm) {
-      recoveryError = "Passwords do not match.";
+      toasts.showErrorToast("Passwords do not match.");
       return;
     }
 
@@ -416,7 +446,7 @@
     );
 
     if (validation) {
-      recoveryError = validation;
+      toasts.showErrorToast(validation);
       return;
     }
 
@@ -432,8 +462,9 @@
       recoveryPassword = "";
       recoveryPasswordConfirm = "";
     } catch (error) {
-      recoveryError =
+      const message =
         error instanceof Error ? error.message : "Recovery failed.";
+      toasts.showErrorToast(message);
     }
   }
 
@@ -452,13 +483,16 @@
       authStore.ingestDeviceHandshake(value);
       showScanner = false;
     } catch (error) {
-      localError =
-        error instanceof Error ? error.message : "Failed to process QR code.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to process QR code.";
+      toasts.showErrorToast(message);
     }
   }
 
   function handleScannerError() {
-    localError = "Camera error: unable to start QR scanner.";
+    toasts.showErrorToast("Camera error: unable to start QR scanner.");
   }
 
   function resetRecoveryFormFields() {
@@ -467,7 +501,6 @@
     recoveryTotp = "";
     recoveryPassword = "";
     recoveryPasswordConfirm = "";
-    recoveryError = null;
   }
 
   function switchView(view: SupportView) {
@@ -482,6 +515,12 @@
     resetRecoveryFormFields();
     switchView("recovery");
     showRecoveryForm = true;
+    if (recoveryQuestionPrompts.length === 0) {
+      toasts.addToast(
+        "Add security questions from Settings before using this recovery method.",
+        "warning",
+      );
+    }
   }
 
   function closeRecoveryForm() {
@@ -490,7 +529,6 @@
   }
 
   async function finalizeSecurityQuestionRecovery() {
-    pendingRecoveryError = null;
     try {
       await authStore.completeSecurityQuestionRecovery();
       securityQuestionAnswers = {};
@@ -499,8 +537,11 @@
       recoveryTotp = "";
       showRecoveryForm = false;
     } catch (error) {
-      pendingRecoveryError =
-        error instanceof Error ? error.message : "Unable to finalize recovery.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to finalize recovery.";
+      toasts.showErrorToast(message);
     }
   }
 
@@ -527,7 +568,6 @@
   function startFreshRegistration() {
     resetUnlockState();
     resetRecoveryFormFields();
-    localError = null;
     showScanner = false;
     authStore.clearError();
     authStore.cancelOnboarding();
@@ -536,7 +576,6 @@
     totpCode = "";
     passwordInput = "";
     passwordConfirm = "";
-    passwordError = null;
     securityQuestions = [];
     backupCodes = [];
     showRecoveryForm = false;
@@ -563,6 +602,11 @@
     storedUsername ?? (username.trim().length ? username.trim() : "New identity"),
   );
 
+  const canSubmitPassword = $derived(
+    passwordInput === passwordConfirm &&
+      !validatePassword(passwordInput, unicodeRequired),
+  );
+
   $effect(() => {
     if (!showRecoveryForm) return;
     const prompts = new Set<string>(recoveryQuestionPrompts);
@@ -577,12 +621,6 @@
         string,
         string
       >;
-    }
-  });
-
-  $effect(() => {
-    if (status !== "recovery_ack_required") {
-      pendingRecoveryError = null;
     }
   });
 
@@ -625,7 +663,7 @@
   });
 </script>
 <div
-  class="min-h-screen w-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-black text-zinc-100 flex items-center justify-center px-6 py-12"
+  class="min-h-screen w-full bg-linear-to-br from-zinc-950 via-zinc-900 to-black text-zinc-100 flex items-center justify-center px-6 py-12"
 >
   <Dialog open={showScanner} onOpenChange={(value) => (showScanner = value)}>
     <DialogContent class="max-w-lg border border-zinc-800 bg-zinc-950/95">
@@ -670,17 +708,16 @@
       </DialogHeader>
 
       <div class="space-y-4">
-        <Alert class="border-yellow-500/30 bg-yellow-500/10 text-yellow-100">
-          <AlertTitle class="flex items-center gap-2 text-yellow-200">
-            <TriangleAlert size={16} class="text-yellow-300" />
-            Save these words now
-          </AlertTitle>
-
-          <AlertDescription class="text-yellow-100/80">
-            Your previous recovery phrase is no longer valid. Write this one
-            down before you continue.
-          </AlertDescription>
-        </Alert>
+        <div class="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-100">
+          <TriangleAlert size={18} class="mt-0.5 text-yellow-300" />
+          <div class="space-y-1">
+            <p class="font-medium text-yellow-200">Save these words now</p>
+            <p class="text-sm text-yellow-100/80">
+              Your previous recovery phrase is no longer valid. Write this one
+              down before you continue.
+            </p>
+          </div>
+        </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
           {#each pendingRecovery?.newRecoveryPhrase ?? [] as word, index (index)}
@@ -691,14 +728,6 @@
             </div>
           {/each}
         </div>
-
-        {#if pendingRecoveryError}
-          <Alert variant="destructive">
-            <AlertTitle>Unable to finalize recovery</AlertTitle>
-
-            <AlertDescription>{pendingRecoveryError}</AlertDescription>
-          </Alert>
-        {/if}
       </div>
 
       <DialogFooter>
@@ -783,14 +812,6 @@
 
           <Progress value={onboardingProgress} class="h-1 bg-zinc-800" />
         </div>
-
-        {#if localError}
-          <Alert variant="destructive">
-            <AlertTitle>Setup error</AlertTitle>
-            <AlertDescription>{localError}</AlertDescription>
-          </Alert>
-        {/if}
-
         {#if onboardingStep === "username"}
           <form class="space-y-5" onsubmit={handleStartOnboarding}>
             <div class="space-y-2">
@@ -965,18 +986,10 @@
                 required
               />
             </div>
-
-            {#if passwordError}
-              <Alert variant="destructive">
-                <AlertTitle>Password error</AlertTitle>
-                <AlertDescription>{passwordError}</AlertDescription>
-              </Alert>
-            {/if}
-
             <Button
               class="w-full sm:w-auto"
               type="submit"
-              disabled={isLoading || passwordStrength.score < 60}
+              disabled={isLoading || !canSubmitPassword}
             >
               Continue to security setup
             </Button>
@@ -1132,52 +1145,7 @@
         {/if}
       </section>
     {:else}
-    {:else}
       <section class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6">
-        <div class="flex flex-wrap items-center gap-2" role="tablist">
-          <Button
-            type="button"
-            variant={activeView === "unlock" ? "secondary" : "ghost"}
-            size="sm"
-            class="flex items-center gap-2"
-            onclick={() => switchView("unlock")}
-          >
-            <Lock size={14} /> Unlock
-          </Button>
-
-          <Button
-            type="button"
-            variant={activeView === "recovery" ? "secondary" : "ghost"}
-            size="sm"
-            class="flex items-center gap-2"
-            onclick={() => {
-              resetRecoveryFormFields();
-              switchView("recovery");
-              showRecoveryForm = false;
-            }}
-            disabled={!showRecoveryTab}
-          >
-            <Shield size={14} /> Recover
-          </Button>
-
-          <Button
-            type="button"
-            variant={activeView === "handoff" ? "secondary" : "ghost"}
-            size="sm"
-            class="flex items-center gap-2"
-            onclick={() => switchView("handoff")}
-          >
-            <QrCode size={14} /> Trusted device
-          </Button>
-        </div>
-
-        {#if localError}
-          <Alert variant="destructive">
-            <AlertTitle>Authentication error</AlertTitle>
-            <AlertDescription>{localError}</AlertDescription>
-          </Alert>
-        {/if}
-
         {#if activeView === "unlock"}
           <div class="space-y-6">
             <form class="space-y-4" onsubmit={handleUnlock}>
@@ -1306,12 +1274,9 @@
             {:else}
               <form class="space-y-4" onsubmit={handleSecurityQuestionRecovery}>
                 {#if recoveryQuestionPrompts.length === 0}
-                  <Alert variant="destructive">
-                    <AlertTitle>No security questions configured</AlertTitle>
-                    <AlertDescription>
-                      Add security questions from Settings before using this recovery method.
-                    </AlertDescription>
-                  </Alert>
+                  <div class="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+                    Add security questions from Settings before using this recovery method.
+                  </div>
                 {:else}
                   <div class="space-y-4">
                     {#each recoveryQuestionPrompts as prompt, index (prompt)}
@@ -1401,14 +1366,6 @@
                     <p class="text-xs text-red-400">Passwords must match.</p>
                   {/if}
                 </div>
-
-                {#if recoveryError}
-                  <Alert variant="destructive">
-                    <AlertTitle>Recovery failed</AlertTitle>
-                    <AlertDescription>{recoveryError}</AlertDescription>
-                  </Alert>
-                {/if}
-
                 <div class="flex flex-col gap-3 sm:flex-row">
                   <Button
                     class="w-full"
@@ -1433,12 +1390,12 @@
         {:else}
           <div class="space-y-6">
             {#if $authStore.pendingDeviceLogin}
-              <Alert>
-                <AlertTitle>Login request</AlertTitle>
-                <AlertDescription>
+              <div class="rounded-lg border border-blue-500/40 bg-blue-500/10 p-4 text-sm text-zinc-200">
+                <p class="font-medium text-zinc-100">Login request</p>
+                <p class="mt-1 text-zinc-300/80">
                   Login request from {$authStore.pendingDeviceLogin.username ?? "trusted device"}.
-                </AlertDescription>
-              </Alert>
+                </p>
+              </div>
 
               <form class="space-y-3" onsubmit={handleDeviceLogin}>
                 <div class="space-y-2">

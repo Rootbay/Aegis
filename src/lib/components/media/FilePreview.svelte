@@ -169,7 +169,7 @@
         <FileIcon size={12} class="text-muted-foreground" />
       </div>
     {/if}
-    <div class="flex-grow overflow-hidden">
+    <div class="grow overflow-hidden">
       <p class="text-sm text-white truncate">{file.name}</p>
       <p class="text-xs text-muted-foreground">
         {formatBytes(file.size)}
@@ -235,11 +235,11 @@
     <div class="bg-muted/60 border border-muted/40 rounded-md p-3">
       <div class="flex items-center gap-3">
         <div
-          class="w-10 h-10 flex items-center justify-center bg-base-500 rounded-md flex-shrink-0"
+          class="w-10 h-10 flex items-center justify-center bg-base-500 rounded-md shrink-0"
         >
           <FileIcon size={12} class="text-muted-foreground" />
         </div>
-        <div class="flex-grow overflow-hidden">
+        <div class="grow overflow-hidden">
           <p class="text-sm text-white truncate">{attachment.name}</p>
           {#if attachment.size}
             <p class="text-xs text-muted-foreground">

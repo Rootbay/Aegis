@@ -1732,9 +1732,9 @@
 <FileTransferApprovals />
 <FileTransferHistory />
 
-<div class="flex-grow min-h-0 flex flex-col bg-card/50">
+<div class="grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
-    <div class="flex min-h-0 flex-grow flex-col">
+    <div class="flex min-h-0 grow flex-col">
       {#if callForChat}
         <div class="px-4 pt-4">
           <CallStatusBanner
@@ -1745,7 +1745,7 @@
           />
         </div>
       {/if}
-      <div class="flex-grow min-h-0 relative">
+      <div class="grow min-h-0 relative">
         <VirtualList
           items={currentChatMessages}
           mode="bottomToTop"
@@ -1799,7 +1799,7 @@
                       )}
                     oncontextmenu={(e) =>
                       displayableUser && handleContextMenu(e, displayableUser)}
-                    class="w-10 h-10 rounded-full flex-shrink-0 cursor-pointer"
+                    class="w-10 h-10 rounded-full shrink-0 cursor-pointer"
                   >
                     <img
                       src={senderAvatar}

@@ -63,7 +63,7 @@
       placeholder="Enter a User ID"
       minlength="3"
       maxlength="20"
-      class="flex-grow"
+      class="grow"
     />
     <Button
       type="submit"

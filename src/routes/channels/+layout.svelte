@@ -90,7 +90,7 @@
     {#if !$page.url.pathname.includes("/settings")}
       <ServerSidebar {server} onSelectChannel={handleSelectChannel} />
     {/if}
-    <main class="flex-grow flex flex-col bg-muted">
+    <main class="grow flex flex-col bg-muted">
       {@render children()}
     </main>
     {#if !$page.url.pathname.includes("/settings")}

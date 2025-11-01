@@ -11,6 +11,7 @@ import {
   verifyTotp,
   encryptWithSecret,
   decryptWithSecret,
+  generateBackupCodes,
   type DeviceHandshakePayload,
 } from "$lib/utils/security";
 import { userStore } from "$lib/stores/userStore";
@@ -350,6 +351,7 @@ const completeOnboarding = async ({
     const passwordHash = await hashString(password);
     const passwordEnvelope = await encryptWithSecret(totpSecret, password);
     const recoveryEnvelope = await encryptWithSecret(phraseKey, password);
+    const backupCodes = generateBackupCodes(10);
 
     await userStore.initialize(password, { username });
 
@@ -360,6 +362,8 @@ const completeOnboarding = async ({
       recoveryEnvelope,
       recoveryHash,
       totpSecret,
+      backupCodes,
+      backupCodesUsed: [],
       requireTotpOnUnlock: false,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),

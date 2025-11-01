@@ -31,7 +31,7 @@
 
 <div class="bg-muted p-2 rounded-md flex items-center space-x-3">
   <div
-    class="w-10 h-10 flex items-center justify-center bg-base-400 rounded-md flex-shrink-0"
+    class="w-10 h-10 flex items-center justify-center bg-base-400 rounded-md shrink-0"
   >
     {#if status === "completed"}
       <CircleCheck size={12} class="text-success" />
@@ -41,7 +41,7 @@
       <File size={12} class="text-muted-foreground" />
     {/if}
   </div>
-  <div class="flex-grow overflow-hidden">
+  <div class="grow overflow-hidden">
     <p class="text-sm text-foreground truncate">{fileName}</p>
     <div class="flex items-center gap-2">
       <div class="w-full bg-base-400 rounded-full h-1.5">

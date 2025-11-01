@@ -49,11 +49,11 @@
 </script>
 
 {#if currentChat}
-  <div class="flex-grow min-w-0">
+  <div class="grow min-w-0">
     <ChatView chat={currentChat} />
   </div>
 {:else}
-  <div class="flex-grow min-w-0 flex items-center justify-center bg-card">
+  <div class="grow min-w-0 flex items-center justify-center bg-card">
     <div class="flex flex-col items-center justify-center text-zinc-500">
       <p class="text-lg mt-4">Loading channel...</p>
     </div>

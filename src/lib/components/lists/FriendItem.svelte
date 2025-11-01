@@ -329,7 +329,7 @@
       ></span>
     {/if}
   </div>
-  <div class="flex flex-col flex-grow overflow-hidden">
+  <div class="flex flex-col grow overflow-hidden">
     <div class="flex items-center gap-2">
       <p class="font-semibold truncate">{displayName}</p>
       {#if friendTag}

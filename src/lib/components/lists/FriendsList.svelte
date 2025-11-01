@@ -82,7 +82,7 @@
 </script>
 
 <div class="flex flex-col h-full w-full text-zinc-100 {extraClass}">
-  <div class="flex-grow overflow-y-auto px-4 pb-4">
+  <div class="grow overflow-y-auto px-4 pb-4">
     {#if loading}
       <div class="flex justify-center mt-8" role="status" aria-live="polite">
         <span class="sr-only">Loading friends…</span>

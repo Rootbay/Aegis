@@ -141,6 +141,29 @@ export function generateRecoveryPhrase(wordCount = 12): string[] {
   );
 }
 
+const BACKUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export function generateBackupCodes(count = 10): string[] {
+  if (count <= 0) {
+    throw new Error("count must be positive.");
+  }
+
+  const codes = new Set<string>();
+
+  while (codes.size < count) {
+    const bytes = new Uint8Array(8);
+    webCrypto.getRandomValues(bytes);
+    let raw = "";
+    for (const byte of bytes) {
+      raw += BACKUP_CODE_ALPHABET[byte % BACKUP_CODE_ALPHABET.length];
+    }
+    const formatted = `${raw.slice(0, 4)}-${raw.slice(4)}`;
+    codes.add(formatted);
+  }
+
+  return Array.from(codes);
+}
+
 export function normalizeRecoveryPhrase(input: string | string[]): string {
   const words = Array.isArray(input) ? input : input.split(/\s+/);
   return words

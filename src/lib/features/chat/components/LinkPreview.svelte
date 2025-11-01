@@ -73,7 +73,7 @@
       {#if metadata.imageUrl}
         <img
           alt={metadata.title ?? metadata.siteName ?? metadata.url ?? url}
-          class="h-16 w-16 flex-shrink-0 rounded-md object-cover"
+          class="h-16 w-16 shrink-0 rounded-md object-cover"
           loading="lazy"
           src={metadata.imageUrl}
         />

@@ -49,7 +49,6 @@
     locationDraft = $presenceStore.locationInput;
     locationConsentDraft = $presenceStore.locationConsent;
     presenceError = null;
-    presenceStore.clearError();
   }
 
   async function handlePresenceSave() {
@@ -75,19 +74,16 @@
       presenceSaving = false;
     }
   }
-
-  $effect(() => {
-    if (presenceEditorOpen) {
-      resetDrafts();
-    }
-  });
 </script>
 
 <Popover
   open={presenceEditorOpen}
   onOpenChange={(open) => {
     presenceEditorOpen = open;
-    if (!open) {
+    if (open) {
+      resetDrafts();
+      presenceStore.clearError();
+    } else {
       presenceStore.clearError();
       presenceError = null;
     }

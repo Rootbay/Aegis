@@ -14,4 +14,6 @@
   data-slot="popover-trigger"
   class={cn("", className)}
   {...restProps}
-/>
+>
+  <slot />
+</PopoverPrimitive.Trigger>

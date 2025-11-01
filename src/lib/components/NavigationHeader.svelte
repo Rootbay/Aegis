@@ -45,11 +45,11 @@
     Users,
     Bell,
     Search,
-    HelpCircle,
+    BadgeQuestionMark,
     Trash2,
     MapPin,
     PanelRight,
-    MoreVertical,
+    EllipsisVertical,
     LogOut,
     Pencil,
   } from "@lucide/svelte";
@@ -77,7 +77,6 @@
   import { Label } from "$lib/components/ui/label";
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
-  import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
   import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
   import { toasts } from "$lib/stores/ToastStore";
 
@@ -284,10 +283,10 @@
     parseSearchQuery($chatSearchStore.query, searchParseOptions()),
   );
   const parsedSearchTokens = $derived<ParsedSearchToken[]>(
-    () => parsedSearchAnalysis.tokens,
+    () => parsedSearchAnalysis().tokens,
   );
   const searchValidationErrors = $derived<SearchFilterError[]>(
-    () => parsedSearchAnalysis.errors,
+    () => parsedSearchAnalysis().errors ?? [],
   );
 
   const filteredUserOptions = $derived(() => {
@@ -984,7 +983,6 @@
         <UserRoundPlus size={10} class="mr-2" />
         Add Friend
       </Button>
-      <PresenceStatusEditor label="Status" variant="secondary" size="sm" />
     </div>
   </header>
 {:else if chat}
@@ -1089,7 +1087,6 @@
           <Video class="w-4 h-4" />
         </Button>
       {/if}
-      <PresenceStatusEditor />
       {#if chat.type !== "dm"}
         <Button
           variant="ghost"
@@ -1147,7 +1144,7 @@
                 aria-label="Group options"
                 disabled={leaveGroupPending || renameGroupPending}
               >
-                <MoreVertical class="w-4 h-4" />
+                <EllipsisVertical class="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent class="w-44 text-sm">
@@ -1384,7 +1381,7 @@
               class="flex items-center justify-between px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
             >
               <span>Search Options</span>
-              <HelpCircle class="h-3.5 w-3.5" />
+              <BadgeQuestionMark class="h-3.5 w-3.5" />
             </div>
 
             <div class="space-y-1 px-2 pb-2">

@@ -47,7 +47,7 @@
     >
       <aside class="w-64 bg-card p-4 rounded-l-lg flex flex-col">
         <h2 class="text-lg font-bold mb-6">{server.name} Settings</h2>
-        <div class="flex-grow overflow-y-auto custom-scrollbar pr-2">
+        <div class="grow overflow-y-auto custom-scrollbar pr-2">
           <nav class="space-y-2">
             <button
               class="w-full text-left px-3 py-2 rounded {activeTab ===

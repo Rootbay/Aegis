@@ -33,7 +33,7 @@
       <X size={15} />
     </button>
   </header>
-  <div class="flex-grow p-4 overflow-y-auto">
+  <div class="grow p-4 overflow-y-auto">
     <div class="flex flex-col items-center mb-6">
       <div class="relative mb-4">
         <img

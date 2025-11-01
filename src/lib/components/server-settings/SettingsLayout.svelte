@@ -377,7 +377,7 @@
 
 <div class="flex h-full text-white">
   <aside class="w-[36vw] bg-zinc-900 p-4 shadow-lg flex flex-col h-full">
-    <ScrollArea class="flex-grow py-[60px] px-2">
+    <ScrollArea class="grow py-[60px] px-2">
       <div class="w-[238px] ml-auto">
         <div class="relative mb-4">
           <Input placeholder="Search" bind:value={searchQuery} class="pr-9" />

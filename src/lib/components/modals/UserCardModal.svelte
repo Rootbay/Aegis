@@ -18,6 +18,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Pencil, MapPin } from "@lucide/svelte";
+  import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
 
   type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -111,7 +112,7 @@
 </script>
 
 <Card class="w-[340px] border-none shadow-lg">
-  <CardHeader class="relative p-0 flex-shrink-0 h-[100px]">
+  <CardHeader class="relative p-0 shrink-0 h-[100px]">
     <Button
       style={`background-image: url(${profileUser.bannerUrl || ""})`}
       aria-label="View banner image"
@@ -147,7 +148,7 @@
     </div>
   </CardHeader>
 
-  <CardContent class="pt-2 pb-4 px-4 flex-grow overflow-y-auto">
+  <CardContent class="pt-2 pb-4 px-4 grow overflow-y-auto">
     <CardTitle class="text-xl font-bold">
       <Button
         class="p-0 border-none bg-transparent text-inherit font-inherit cursor-pointer hover:underline"
@@ -190,12 +191,15 @@
     {/if}
   </CardContent>
 
-  <CardFooter class="pt-0 px-4 pb-4 flex-shrink-0">
+  <CardFooter class="pt-0 px-4 pb-4 shrink-0">
     {#if isMyProfile}
-      <Button class="w-full" onclick={editProfile}>
-        <Pencil class="mr-2" size={18} />
-        Edit Profile
-      </Button>
+      <div class="flex w-full flex-col gap-2">
+        <Button class="w-full" onclick={editProfile}>
+          <Pencil class="mr-2" size={18} />
+          Edit Profile
+        </Button>
+        <PresenceStatusEditor label="Status" variant="secondary" size="sm" />
+      </div>
     {:else}
       <div class="flex w-full items-center gap-2">
         <Input
@@ -213,7 +217,7 @@
           disabled={isSending}
         />
         <Button
-          class="flex-shrink-0"
+          class="shrink-0"
           onclick={() => void sendDirectMessage()}
           disabled={isSending}
         >

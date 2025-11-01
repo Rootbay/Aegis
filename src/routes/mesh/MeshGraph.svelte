@@ -21,7 +21,7 @@
       }
     | null;
 
-  const hovered = $state<HoverState>(null);
+  let hovered = $state<HoverState>(null);
 
   let containerEl: HTMLDivElement | null = null;
 
@@ -51,8 +51,8 @@
   }
 
   const layout = $derived(() => {
-    const peerData = peers() ?? [];
-    const linkData = links() ?? [];
+    const peerData = peers ?? [];
+    const linkData = links ?? [];
 
     if (peerData.length === 0) {
       return {
@@ -150,15 +150,15 @@
   }
 
   function showNodePointerTooltip(event: PointerEvent, peer: MeshPeer) {
-    hovered.set({
+    hovered = {
       type: "node",
       peer,
       position: getRelativePosition(event),
-    });
+    };
   }
 
   function showEdgePointerTooltip(event: PointerEvent, edge: PositionedEdge) {
-    hovered.set({
+    hovered = {
       type: "edge",
       link: {
         ...edge.link,
@@ -166,35 +166,35 @@
         targetLabel: edge.targetLabel,
       },
       position: getRelativePosition(event),
-    });
+    };
   }
 
   function showNodeFocusTooltip(element: SVGGElement, peer: MeshPeer) {
     if (!containerEl) {
-      hovered.set({
+      hovered = {
         type: "node",
         peer,
         position: { x: 12, y: 12 },
-      });
+      };
       return;
     }
 
     const containerRect = containerEl.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
 
-    hovered.set({
+    hovered = {
       type: "node",
       peer,
       position: {
         x: elementRect.left - containerRect.left + elementRect.width / 2,
         y: elementRect.top - containerRect.top + elementRect.height / 2,
       },
-    });
+    };
   }
 
   function showEdgeFocusTooltip(element: SVGGElement, edge: PositionedEdge) {
     if (!containerEl) {
-      hovered.set({
+      hovered = {
         type: "edge",
         link: {
           ...edge.link,
@@ -202,14 +202,14 @@
           targetLabel: edge.targetLabel,
         },
         position: { x: 12, y: 12 },
-      });
+      };
       return;
     }
 
     const containerRect = containerEl.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
 
-    hovered.set({
+    hovered = {
       type: "edge",
       link: {
         ...edge.link,
@@ -220,16 +220,16 @@
         x: elementRect.left - containerRect.left + elementRect.width / 2,
         y: elementRect.top - containerRect.top + elementRect.height / 2,
       },
-    });
+    };
   }
 
   function clearTooltip() {
-    hovered.set(null);
+    hovered = null;
   }
 </script>
 
 <div
-  class="relative h-[28rem] w-full overflow-hidden rounded-lg border border-border/60 bg-muted/20"
+  class="relative h-112 w-full overflow-hidden rounded-lg border border-border/60 bg-muted/20"
   bind:this={containerEl}
   role="application"
   aria-label="Mesh connectivity graph"
@@ -255,12 +255,12 @@
       <g class="stroke-border/50">
         {#each layout().edges as edge (edge.link.source + edge.link.target)}
           <g
-            tabindex="0"
-            on:pointerenter={(event) => showEdgePointerTooltip(event, edge)}
-            on:pointerleave={clearTooltip}
-            on:focus={(event) =>
+            tabindex="-1"
+            onpointerenter={(event) => showEdgePointerTooltip(event, edge)}
+            onpointerleave={clearTooltip}
+            onfocus={(event) =>
               showEdgeFocusTooltip(event.currentTarget as SVGGElement, edge)}
-            on:blur={clearTooltip}
+            onblur={clearTooltip}
           >
             <path
               d={edge.path}
@@ -277,17 +277,17 @@
       <g>
         {#each layout().nodes as node (node.peer.id)}
           <g
-            tabindex="0"
+            tabindex="-1"
             class="cursor-pointer focus:outline-none"
-            on:pointerenter={(event) =>
+            onpointerenter={(event) =>
               showNodePointerTooltip(event, node.peer)}
-            on:pointerleave={clearTooltip}
-            on:focus={(event) =>
+            onpointerleave={clearTooltip}
+            onfocus={(event) =>
               showNodeFocusTooltip(
                 event.currentTarget as SVGGElement,
                 node.peer,
               )}
-            on:blur={clearTooltip}
+            onblur={clearTooltip}
           >
             <circle
               cx={node.x}
@@ -314,8 +314,8 @@
     </svg>
   {/if}
 
-  {#if hovered()}
-    {@const hover = hovered()!}
+  {#if hovered}
+    {@const hover = hovered!}
     <div
       class="pointer-events-none absolute z-10 max-w-xs rounded-md border border-border/60 bg-background/95 p-3 text-xs shadow-md"
       style={`left: ${Math.min(Math.max(hover.position.x + 12, 12), (containerEl?.clientWidth ?? 0) - 12)}px; top: ${Math.min(Math.max(hover.position.y + 12, 12), (containerEl?.clientHeight ?? 0) - 12)}px;`}
