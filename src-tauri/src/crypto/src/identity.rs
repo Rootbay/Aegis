@@ -1,6 +1,7 @@
-use libp2p::identity::{ed25519, Keypair};
 use argon2::password_hash::SaltString;
 use chacha20poly1305::XNonce;
+use libp2p::identity::{ed25519, Keypair};
+use std::convert::TryInto;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IdentityError {
@@ -43,7 +44,7 @@ impl Identity {
     fn pack_encrypted_data(ciphertext: &[u8], salt: &SaltString, nonce: &XNonce) -> Vec<u8> {
         let mut data = Vec::new();
         data.extend_from_slice(salt.as_ref().as_bytes());
-        data.extend_from_slice(nonce.as_slice());
+        data.extend_from_slice(nonce.as_ref());
         data.extend_from_slice(ciphertext);
         data
     }
@@ -56,8 +57,12 @@ impl Identity {
         if data.len() < PREFIX_LEN {
             return Err(IdentityError::Decoding("Invalid encrypted data length".to_string()));
         }
-        let salt = SaltString::from_b64(&String::from_utf8_lossy(&data[..SALT_LEN])).map_err(|e| IdentityError::Decoding(e.to_string()))?;
-        let nonce = XNonce::clone_from_slice(&data[SALT_LEN..PREFIX_LEN]);
+        let salt = SaltString::from_b64(&String::from_utf8_lossy(&data[..SALT_LEN]))
+            .map_err(|e| IdentityError::Decoding(e.to_string()))?;
+        let nonce_bytes: [u8; NONCE_LEN] = data[SALT_LEN..PREFIX_LEN]
+            .try_into()
+            .map_err(|_| IdentityError::Decoding("Invalid nonce length".to_string()))?;
+        let nonce: XNonce = nonce_bytes.into();
         let ciphertext = &data[PREFIX_LEN..];
         Ok((ciphertext.to_vec(), salt, nonce))
     }

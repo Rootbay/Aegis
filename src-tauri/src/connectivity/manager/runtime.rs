@@ -42,6 +42,7 @@ impl ConnectivityRuntime {
         self.local_peer_id.clone()
     }
 
+    #[allow(dead_code)]
     pub fn snapshot_store(&self) -> Arc<Mutex<Option<ConnectivityEventPayload>>> {
         Arc::clone(&self.snapshot_store)
     }

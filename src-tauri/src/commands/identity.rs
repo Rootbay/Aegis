@@ -4,6 +4,7 @@ use chacha20poly1305::XNonce;
 use crypto::identity::Identity;
 use libp2p::identity::{ed25519, Keypair};
 use serde::Serialize;
+use std::convert::TryInto;
 use std::fs;
 use std::io::{Read, Write};
 use tauri::{Manager, Runtime, State};
@@ -98,7 +99,7 @@ pub async fn rekey_identity<R: Runtime>(
         .map_err(|e| e.to_string())?;
     fs::File::create(&nonce_path)
         .map_err(|e| e.to_string())?
-        .write_all(nonce.as_slice())
+        .write_all(nonce.as_ref())
         .map_err(|e| e.to_string())?;
 
     Ok(())
@@ -142,7 +143,7 @@ pub async fn reset_identity<R: Runtime>(
         .map_err(|e| e.to_string())?;
     fs::File::create(&nonce_path)
         .map_err(|e| e.to_string())?
-        .write_all(nonce.as_slice())
+        .write_all(nonce.as_ref())
         .map_err(|e| e.to_string())?;
 
     Ok(())
@@ -190,7 +191,11 @@ pub(crate) fn get_or_create_identity<R: Runtime>(
             .map_err(|e| e.to_string())?
             .read_to_end(&mut nonce_bytes)
             .map_err(|e| e.to_string())?;
-        let nonce = XNonce::clone_from_slice(&nonce_bytes);
+        let nonce_array: [u8; 24] = nonce_bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| "Invalid nonce length".to_string())?;
+        let nonce: XNonce = nonce_array.into();
 
         let decrypted_secret =
             crypto::decrypt(&encrypted_secret, password.as_bytes(), &salt, &nonce)
@@ -219,7 +224,7 @@ pub(crate) fn get_or_create_identity<R: Runtime>(
             .map_err(|e| e.to_string())?;
         fs::File::create(&nonce_path)
             .map_err(|e| e.to_string())?
-            .write_all(nonce.as_slice())
+            .write_all(nonce.as_ref())
             .map_err(|e| e.to_string())?;
 
         Ok(identity)

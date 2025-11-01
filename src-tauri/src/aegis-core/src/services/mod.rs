@@ -1,5 +1,6 @@
-use aes_gcm::{Aes256Gcm, Key, Nonce};
+use aegis_shared_types::AppState;
 use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, Key, Nonce};
 use aes_gcm::KeyInit;
 use libp2p::PeerId;
 use rand::rngs::OsRng;
@@ -8,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use aegis_shared_types::AppState;
 use typenum::U12;
 
 
@@ -29,17 +29,17 @@ pub fn generate_symmetric_key() -> ([u8; 32], [u8; 12]) {
 }
 
 pub fn encrypt_file_chunk(data: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Result<Vec<u8>, String> {
-    let key = Key::<Aes256Gcm>::from_slice(key);
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::<U12>::from_slice(nonce);
-    cipher.encrypt(nonce, data).map_err(|e| e.to_string())
+    let key = Key::<Aes256Gcm>::from(*key);
+    let cipher = Aes256Gcm::new(&key);
+    let nonce = Nonce::<U12>::from(*nonce);
+    cipher.encrypt(&nonce, data).map_err(|e| e.to_string())
 }
 
 pub fn decrypt_file_chunk(data: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Result<Vec<u8>, String> {
-    let key = Key::<Aes256Gcm>::from_slice(key);
-    let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::<U12>::from_slice(nonce);
-    cipher.decrypt(nonce, data).map_err(|e| e.to_string())
+    let key = Key::<Aes256Gcm>::from(*key);
+    let cipher = Aes256Gcm::new(&key);
+    let nonce = Nonce::<U12>::from(*nonce);
+    cipher.decrypt(&nonce, data).map_err(|e| e.to_string())
 }
 
 pub async fn send_file(

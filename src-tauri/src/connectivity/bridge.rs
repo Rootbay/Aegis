@@ -12,12 +12,15 @@ static BRIDGE_STATE: Lazy<Arc<Mutex<BridgeState>>> =
 #[derive(Clone, Default)]
 pub struct BridgeSnapshot {
     pub enabled: bool,
+    #[allow(dead_code)]
     pub upstream_targets: Vec<Multiaddr>,
     pub tracked_peers: Vec<PeerId>,
     pub last_dial_attempt: Option<DateTime<Utc>>,
     pub last_error: Option<String>,
+    #[allow(dead_code)]
     pub last_forward_attempt: Option<DateTime<Utc>>,
     pub last_forward_success: Option<DateTime<Utc>>,
+    #[allow(dead_code)]
     pub last_forward_failure: Option<DateTime<Utc>>,
 }
 

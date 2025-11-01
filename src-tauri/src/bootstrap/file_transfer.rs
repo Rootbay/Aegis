@@ -44,6 +44,7 @@ pub(super) fn persist_outgoing_metadata(
     std::fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
+#[allow(dead_code)]
 pub(super) fn load_incoming_resilient_chunks(
     meta_path: &Path,
     data_path: &Path,

@@ -6,7 +6,9 @@ use crate::settings_store;
 
 pub(super) struct AppDirectories {
     data_dir: PathBuf,
+    #[allow(dead_code)]
     incoming_dir: PathBuf,
+    #[allow(dead_code)]
     outgoing_dir: PathBuf,
     settings_path: PathBuf,
 }
@@ -42,10 +44,12 @@ impl AppDirectories {
         &self.data_dir
     }
 
+    #[allow(dead_code)]
     pub fn incoming_dir(&self) -> &Path {
         &self.incoming_dir
     }
 
+    #[allow(dead_code)]
     pub fn outgoing_dir(&self) -> &Path {
         &self.outgoing_dir
     }

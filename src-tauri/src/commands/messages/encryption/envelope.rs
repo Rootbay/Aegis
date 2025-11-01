@@ -5,6 +5,7 @@ use chacha20poly1305::{ChaCha20Poly1305, Nonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
 
 pub(crate) const ENVELOPE_VERSION: u8 = 1;
 pub(crate) const ENVELOPE_ALGORITHM: &str = "chacha20poly1305";
@@ -68,14 +69,16 @@ pub(crate) fn encrypt_bytes(data: &[u8]) -> Result<EnvelopeCipher, String> {
         .try_fill_bytes(&mut nonce)
         .map_err(|e| format!("Failed to generate nonce: {e}"))?;
 
+    let nonce_vec = nonce.to_vec();
+    let nonce_array: Nonce = nonce.into();
     let ciphertext = cipher
-        .encrypt(Nonce::from_slice(&nonce), data)
+        .encrypt(&nonce_array, data)
         .map_err(|e| format!("Encryption error: {e}"))?;
 
     Ok(EnvelopeCipher {
         ciphertext,
         key: key.to_vec(),
-        nonce: nonce.to_vec(),
+        nonce: nonce_vec,
     })
 }
 
@@ -85,8 +88,15 @@ pub(crate) fn decrypt_bytes(cipher: &EnvelopeCipher) -> Result<Vec<u8>, String> 
     let cipher_impl = ChaCha20Poly1305::new_from_slice(&cipher.key)
         .map_err(|e| format!("Failed to initialise cipher: {e}"))?;
 
+    let nonce_bytes: [u8; NONCE_LEN] = cipher
+        .nonce
+        .as_slice()
+        .try_into()
+        .map_err(|_| "Invalid nonce length".to_string())?;
+    let nonce_array: Nonce = nonce_bytes.into();
+
     cipher_impl
-        .decrypt(Nonce::from_slice(&cipher.nonce), cipher.ciphertext.as_ref())
+        .decrypt(&nonce_array, cipher.ciphertext.as_ref())
         .map_err(|_| "Failed to decrypt payload".to_string())
 }
 
