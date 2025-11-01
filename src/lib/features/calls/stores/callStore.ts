@@ -209,7 +209,7 @@ function createCallStore() {
   let invokeFn: InvokeFn | null = null;
   let activeCallId: string | null = null;
   let deviceChangeUnsubscribe: (() => void) | null = null;
-  let dismissalTimer: ReturnType<typeof setTimeout> | null = null;
+  let dismissalTimer: number | null = null;
   let participantStates = new Map<string, InternalParticipant>();
   let pendingIncomingOffer: {
     senderId: string;
@@ -260,7 +260,7 @@ function createCallStore() {
   }
 
   function clearDismissalTimer() {
-    if (dismissalTimer) {
+    if (dismissalTimer !== null) {
       clearTimeout(dismissalTimer);
       dismissalTimer = null;
     }
@@ -621,11 +621,12 @@ function createCallStore() {
       return current;
     });
 
-    if (screenShareStream) {
+    const activeScreenShare = screenShareStream;
+    if (activeScreenShare) {
       const senders: RTCRtpSender[] = [];
-      screenShareStream.getTracks().forEach((track) => {
+      activeScreenShare.getTracks().forEach((track) => {
         try {
-          const sender = pc.addTrack(track, screenShareStream);
+          const sender = pc.addTrack(track, activeScreenShare);
           if (sender) {
             senders.push(sender);
           }
@@ -823,15 +824,15 @@ function createCallStore() {
     }));
 
     try {
-      const [audio, video] = await Promise.all([
+      const [audio, video]: PermissionState[] = await Promise.all([
         navigator.permissions
           .query({ name: "microphone" as PermissionName })
-          .then((status) => status.state)
-          .catch(() => "prompt"),
+          .then((status) => status.state as PermissionState)
+          .catch((): PermissionState => "prompt"),
         navigator.permissions
           .query({ name: "camera" as PermissionName })
-          .then((status) => status.state)
-          .catch(() => "prompt"),
+          .then((status) => status.state as PermissionState)
+          .catch((): PermissionState => "prompt"),
       ]);
       update((state) => ({
         ...state,
@@ -1791,20 +1792,26 @@ function createCallStore() {
         audio: call.type === "video",
       });
 
-      if (!stream.getTracks().length) {
-        stopStream(stream);
+      const shareStream = stream;
+      if (!shareStream) {
+        toasts.showErrorToast("No screen capture stream was provided.");
+        return false;
+      }
+
+      if (!shareStream.getTracks().length) {
+        stopStream(shareStream);
         toasts.showErrorToast("No screen capture tracks were provided.");
         return false;
       }
 
-      screenShareStream = stream;
+      screenShareStream = shareStream;
       screenShareSenders = new Map();
 
       const handleShareEnded = () => {
         stopScreenShare({ reason: "revoked" });
       };
 
-      stream.getTracks().forEach((track) => {
+      shareStream.getTracks().forEach((track) => {
         if (typeof track.addEventListener === "function") {
           track.addEventListener("ended", handleShareEnded);
           track.addEventListener("inactive", handleShareEnded);
@@ -1819,9 +1826,12 @@ function createCallStore() {
           return;
         }
         const senders: RTCRtpSender[] = [];
-        stream?.getTracks().forEach((track) => {
+        shareStream.getTracks().forEach((track) => {
           try {
-            const sender = participant.peerConnection?.addTrack(track, stream);
+            const sender = participant.peerConnection?.addTrack(
+              track,
+              shareStream,
+            );
             if (sender) {
               senders.push(sender);
             }

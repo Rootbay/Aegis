@@ -5,6 +5,7 @@
   let {
     ref = $bindable(null),
     class: className,
+    children,
     ...restProps
   }: PopoverPrimitive.TriggerProps = $props();
 </script>
@@ -15,5 +16,5 @@
   class={cn("", className)}
   {...restProps}
 >
-  <slot />
+  {@render children?.()}
 </PopoverPrimitive.Trigger>

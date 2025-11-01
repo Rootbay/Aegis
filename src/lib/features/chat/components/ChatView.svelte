@@ -200,7 +200,7 @@
         : [];
     }
     if (chat.type === "group" || chat.type === "channel") {
-      return (chat.members ?? []).map((member) => ({
+      return (chat.members ?? []).map((member: User) => ({
         id: member.id,
         name: member.name,
         avatar: member.avatar,
@@ -211,7 +211,7 @@
   });
 
   $effect(() => {
-    mentionableMembers;
+    mentionableMembers();
     mentionSuggestions.close();
   });
 
@@ -264,14 +264,15 @@
   });
 
   const showTransparentEditHistory = $derived(
-    () => moderationPreferences.transparentEdits,
+    () => moderationPreferences().transparentEdits,
   );
   const showDeletedTombstones = $derived(
-    () => moderationPreferences.deletedMessageDisplay === "tombstone",
+    () => moderationPreferences().deletedMessageDisplay === "tombstone",
   );
 
   const updateMentionSuggestions = (cursorPosition?: number) => {
-    if (!mentionableMembers.length) {
+    const members = mentionableMembers();
+    if (!members.length) {
       mentionSuggestions.close();
       return;
     }
@@ -279,7 +280,7 @@
       mentionSuggestions.updateInput(
         messageInput,
         cursorPosition ?? messageInput.length,
-        mentionableMembers,
+        members,
       );
       return;
     }
@@ -287,7 +288,7 @@
       typeof cursorPosition === "number"
         ? cursorPosition
         : (textareaRef.selectionStart ?? messageInput.length);
-    mentionSuggestions.updateInput(messageInput, cursor, mentionableMembers);
+    mentionSuggestions.updateInput(messageInput, cursor, members);
   };
 
   const handleComposerFocus = () => {
@@ -579,7 +580,9 @@
 
   $effect(() => {
     if ((chat?.type === "channel" || chat?.type === "group") && chat.members) {
-      memberById = new Map(chat.members.map((member) => [member.id, member]));
+      memberById = new Map(
+        chat.members.map((member: User) => [member.id, member]),
+      );
     } else {
       memberById = new Map();
     }
@@ -700,7 +703,7 @@
       return;
     }
     if (detail.action === "view_profile") {
-      openDetailedProfileModal(item);
+      openDetailedProfileModal?.(item);
     } else if (detail.action === "remove_friend") {
       removeFriend(item as Friend);
     } else if (detail.action === "block_user") {
@@ -1430,7 +1433,7 @@
       });
     }
     if ((chat.type === "group" || chat.type === "channel") && chat.members) {
-      chat.members.forEach((member) => {
+      chat.members.forEach((member: User) => {
         entries.set(member.id, {
           id: member.id,
           name: member.name ?? member.id,
@@ -1489,12 +1492,13 @@
   });
 
   function hangUpCurrentCall() {
-    if (!callForChat) {
+    const call = callForChat();
+    if (!call) {
       callStore.dismissCall();
       return;
     }
     const reason =
-      callForChat.type === "video" ? "Video call ended" : "Voice call ended";
+      call.type === "video" ? "Video call ended" : "Voice call ended";
     callStore.endCall(reason);
   }
 
@@ -1524,7 +1528,7 @@
   });
 
   $effect(() => {
-    chatSearchStore.setMatches(chatSearchMatches);
+    chatSearchStore.setMatches(chatSearchMatches());
   });
 
   $effect(() => {
@@ -1735,10 +1739,10 @@
 <div class="grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
     <div class="flex min-h-0 grow flex-col">
-      {#if callForChat}
+      {#if callForChat()}
         <div class="px-4 pt-4">
           <CallStatusBanner
-            call={callForChat}
+            call={callForChat()}
             onLeave={hangUpCurrentCall}
             onDismiss={dismissCallStatus}
             onOpenModal={reopenCallModal}
@@ -1791,7 +1795,7 @@
                   <button
                     onclick={(e) =>
                       displayableUser &&
-                      openUserCardModal(
+                      openUserCardModal?.(
                         displayableUser as User,
                         e.clientX,
                         e.clientY,
@@ -1817,7 +1821,7 @@
                       className="font-bold text-white hover:underline cursor-pointer"
                       onNameClick={(e) =>
                         displayableUser &&
-                        openUserCardModal(
+                        openUserCardModal?.(
                           displayableUser as User,
                           e.clientX,
                           e.clientY,
@@ -1877,7 +1881,7 @@
                         </button>
                       </div>
                     </div>
-                  {:else if showDeletedTombstones && msg.deleted}
+                  {:else if showDeletedTombstones() && msg.deleted}
                     <div
                       class="max-w-md rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 px-3 py-2 text-sm text-muted-foreground"
                     >
@@ -2007,7 +2011,7 @@
                           {/if}
                         {/if}
                       {/if}
-                      {#if showTransparentEditHistory && msg.editHistory?.length}
+                      {#if showTransparentEditHistory() && msg.editHistory?.length}
                         {@const historyEntries = [...msg.editHistory].reverse()}
                         <div
                           class="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs text-white/80"
@@ -2236,11 +2240,11 @@
               bind:value={messageInput}
               bind:this={textareaRef}
               oninput={(event) => {
-                adjustTextareaHeight(event);
+                adjustTextareaHeight();
                 handleComposerInput(event);
               }}
               onfocus={(event) => {
-                adjustTextareaHeight(event);
+                adjustTextareaHeight();
                 handleComposerFocus();
               }}
               onblur={handleComposerBlur}

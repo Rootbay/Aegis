@@ -1,5 +1,6 @@
 import { fireEvent, render } from "@testing-library/svelte";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { createRawSnippet } from "svelte";
 
 const gotoMock = vi.hoisted(() => vi.fn());
 const logoutMock = vi.hoisted(() => vi.fn());
@@ -43,9 +44,13 @@ describe("Settings layout", () => {
   });
 
   it("logs out and redirects when the Log Out button is clicked", async () => {
+    const emptyChildren = createRawSnippet(() => ({
+      render: () => "",
+    }));
+
     const { getByText } = render(SettingsLayout, {
       props: {
-        children: () => null,
+        children: emptyChildren,
       },
     });
 

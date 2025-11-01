@@ -1,5 +1,9 @@
 import { render, fireEvent, waitFor } from "@testing-library/svelte";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import type {
+  ActiveCall,
+  CallState,
+} from "$lib/features/calls/stores/callStore";
 
 import ChannelContextMenuMock from "../mocks/ChannelContextMenu.svelte";
 import ServerBackgroundContextMenuMock from "../mocks/ServerBackgroundContextMenu.svelte";
@@ -44,18 +48,18 @@ const {
   createInitialCallState,
   getCallStoreState,
 } = vi.hoisted(() => {
-  const subscribers: ((value: any) => void)[] = [];
+  const subscribers: Array<(value: CallState) => void> = [];
 
   const startCallMock = vi.fn();
   const setCallModalOpenMock = vi.fn();
   const initializeMock = vi.fn();
 
-  const createInitialCallState = () => ({
+  const createInitialCallState = (): CallState => ({
     activeCall: null,
     deviceAvailability: { audioInput: true, videoInput: true },
     permissions: {
-      audio: "granted" as PermissionState | "unknown",
-      video: "granted" as PermissionState | "unknown",
+      audio: "granted",
+      video: "granted",
       checking: false,
     },
     localMedia: {
@@ -63,17 +67,19 @@ const {
       videoEnabled: true,
       audioAvailable: true,
       videoAvailable: true,
+      screenSharing: false,
+      screenShareAvailable: true,
     },
     showCallModal: false,
   });
 
-  let state = createInitialCallState();
+  let state: CallState = createInitialCallState();
 
   const notify = () => {
     subscribers.forEach((run) => run(state));
   };
 
-  const subscribe = (run: (value: any) => void) => {
+  const subscribe = (run: (value: CallState) => void) => {
     run(state);
     subscribers.push(run);
     return () => {
@@ -99,7 +105,7 @@ const {
       setCallModalOpenMock.mockReset();
       initializeMock.mockReset();
     },
-    setCallStoreState: (nextState: any) => {
+    setCallStoreState: (nextState: CallState) => {
       state = nextState;
       notify();
     },
@@ -539,8 +545,8 @@ describe("ServerSidebar context menus", () => {
         localStream: null,
         callId: "call-123",
         direction: "outgoing",
-        participants: new Map(),
-      },
+        participants: new Map() as ActiveCall["participants"],
+      } satisfies ActiveCall,
     });
 
     expect(getCallStoreState().activeCall?.chatId).toBe("channel-2");

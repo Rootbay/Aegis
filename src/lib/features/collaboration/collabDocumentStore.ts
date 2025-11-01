@@ -47,6 +47,10 @@ interface InternalSession {
   connectedStore: ReturnType<typeof writable<boolean>>;
   cleanup: () => void;
   view: CollaborationSessionView;
+  applyRemoteUpdate: (payload: CollaborationUpdatePayload) => void;
+  setParticipants: (ids: Iterable<string>) => void;
+  updateContent: (value: string) => void;
+  annotateParticipant: (participant: CollaborationParticipant) => void;
 }
 
 interface StartSessionOptions {
@@ -292,20 +296,13 @@ function createInternalSession(
     connectedStore,
     cleanup,
     view,
-  };
-
-  return {
-    ...internalSession,
     applyRemoteUpdate,
     setParticipants,
     updateContent,
     annotateParticipant,
-  } as InternalSession & {
-    applyRemoteUpdate: (payload: CollaborationUpdatePayload) => void;
-    setParticipants: (ids: Iterable<string>) => void;
-    updateContent: (value: string) => void;
-    annotateParticipant: (participant: CollaborationParticipant) => void;
   };
+
+  return internalSession;
 }
 
 type SessionRecord = ReturnType<typeof createInternalSession>;

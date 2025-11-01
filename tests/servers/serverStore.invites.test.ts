@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import { get } from "svelte/store";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -37,7 +45,7 @@ import { serverStore } from "../../src/lib/features/servers/stores/serverStore";
 import type { Server } from "../../src/lib/features/servers/models/Server";
 import type { ServerInvite } from "../../src/lib/features/servers/models/ServerInvite";
 
-const invokeMock = invoke as unknown as vi.Mock;
+const invokeMock = invoke as unknown as Mock;
 
 const toBackendInvite = (invite: ServerInvite) => ({
   id: invite.id,

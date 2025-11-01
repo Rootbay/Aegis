@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import type { Server } from "../../src/lib/features/servers/models/Server";
+import type { Channel } from "../../src/lib/features/channels/models/Channel";
 
 type StorageLike = {
   getItem: (key: string) => string | null;
@@ -29,46 +30,22 @@ const createLocalStorageMock = () => {
   } satisfies StorageLike;
 };
 
-type MockFn<Args extends unknown[], Return> = ((...args: Args) => Return) & {
-  calls: Args[];
-  mockImplementation: (impl: (...args: Args) => Return) => MockFn<Args, Return>;
-  mockReset: () => void;
-};
+type InvokeFn = (
+  command: string,
+  payload?: Record<string, unknown>,
+) => Promise<unknown>;
 
-const createMockFn = <Args extends unknown[], Return>(
-  fallback: () => Return,
-): MockFn<Args, Return> => {
-  const mockFn = ((...args: Args) => {
-    mockFn.calls.push(args);
-    if (mockFn.impl) {
-      return mockFn.impl(...args);
-    }
-    return fallback();
-  }) as MockFn<Args, Return> & { impl?: (...args: Args) => Return };
+const invokeMockRef = vi.hoisted(() =>
+  vi.fn<InvokeFn>(() =>
+    Promise.reject(new Error("invoke mock not implemented")),
+  ),
+);
 
-  mockFn.calls = [];
-  mockFn.mockImplementation = (impl: (...args: Args) => Return) => {
-    mockFn.impl = impl;
-    return mockFn;
-  };
-  mockFn.mockReset = () => {
-    mockFn.calls = [];
-    mockFn.impl = undefined;
-  };
-  return mockFn;
-};
-
-const invokeMockRef = createMockFn<
-  [string, Record<string, unknown> | undefined],
-  Promise<unknown>
->(() => Promise.reject(new Error("invoke mock not implemented")));
-
-mock.module("@tauri-apps/api/core", () => ({
-  invoke: (...args: [string, Record<string, unknown> | undefined]) =>
-    invokeMockRef(...args),
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: invokeMockRef,
 }));
 
-mock.module("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore", () => ({
   userStore: {
     subscribe: (run: (value: unknown) => void) => {
       run({ me: { id: "user-1" } });
@@ -77,10 +54,8 @@ mock.module("$lib/stores/userStore", () => ({
   },
 }));
 
-const { serverStore } = await import(
-  "../../src/lib/features/servers/stores/serverStore"
-);
-const { serverCache } = await import("../../src/lib/utils/cache");
+import { serverStore } from "../../src/lib/features/servers/stores/serverStore";
+import { serverCache } from "../../src/lib/utils/cache";
 
 const baseServer: Server = {
   id: "server-1",
@@ -99,8 +74,7 @@ const baseServer: Server = {
 
 describe("serverStore.updateServer", () => {
   beforeEach(() => {
-    (globalThis as unknown as { localStorage: StorageLike }).localStorage =
-      createLocalStorageMock();
+    vi.stubGlobal("localStorage", createLocalStorageMock());
     serverStore.handleServersUpdate([baseServer]);
     serverCache.clear();
     invokeMockRef.mockReset();
@@ -108,7 +82,7 @@ describe("serverStore.updateServer", () => {
 
   afterEach(() => {
     invokeMockRef.mockReset();
-    delete (globalThis as { localStorage?: StorageLike }).localStorage;
+    vi.unstubAllGlobals();
   });
 
   it("persists metadata before updating local state", async () => {
@@ -141,8 +115,8 @@ describe("serverStore.updateServer", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(invokeMockRef.calls.length).toBeGreaterThanOrEqual(1);
-    expect(invokeMockRef.calls[0][0]).toBe("update_server_metadata");
+    expect(invokeMockRef.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(invokeMockRef.mock.calls[0]?.[0]).toBe("update_server_metadata");
 
     const state = get(serverStore);
     expect(state.servers[0].name).toBe("Updated Server");
@@ -151,7 +125,7 @@ describe("serverStore.updateServer", () => {
   });
 
   it("uses backend channel updates to keep cache in sync", async () => {
-    const returnedChannels = [
+    const returnedChannels: Channel[] = [
       {
         id: "channel-1",
         server_id: "server-1",
@@ -182,7 +156,7 @@ describe("serverStore.updateServer", () => {
     });
 
     expect(result.success).toBe(true);
-    const channelCalls = invokeMockRef.calls.filter(
+    const channelCalls = invokeMockRef.mock.calls.filter(
       ([cmd]) => cmd === "update_server_channels",
     );
     expect(channelCalls.length).toBe(1);
@@ -242,7 +216,7 @@ describe("serverStore.updateServer", () => {
     });
 
     expect(result.success).toBe(true);
-    const moderationCalls = invokeMockRef.calls.filter(
+    const moderationCalls = invokeMockRef.mock.calls.filter(
       ([cmd]) => cmd === "update_server_moderation_flags",
     );
     expect(moderationCalls.length).toBe(1);

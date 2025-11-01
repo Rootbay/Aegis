@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get, writable } from "svelte/store";
 
 const listenHandlers = new Map<string, (event: { payload: unknown }) => void>();
-const invokeMock = vi.fn(async () => undefined);
+const invokeMock = vi.fn(
+  async (_command: string, _payload: Record<string, unknown>) => undefined,
+);
 const listenMock = vi.fn(
   async (event: string, handler: (event: { payload: unknown }) => void) => {
     listenHandlers.set(event, handler);
@@ -107,12 +109,6 @@ class MockRTCPeerConnection {
   }
 }
 
-declare global {
-  var MediaStream: typeof MockMediaStream;
-
-  var RTCPeerConnection: typeof MockRTCPeerConnection;
-}
-
 vi.mock("$lib/services/tauri", () => ({
   getInvoke: async () => invokeMock,
   getListen: async () => listenMock,
@@ -152,6 +148,21 @@ vi.mock("$lib/features/settings/stores/settings", () => ({
   },
 }));
 
+const selectSignalCalls = () =>
+  invokeMock.mock.calls.filter(
+    (
+      call,
+    ): call is [
+      string,
+      Record<string, unknown> & { callId?: string; recipientId?: string },
+    ] =>
+      Array.isArray(call) &&
+      call.length >= 2 &&
+      call[0] === "send_call_signal" &&
+      typeof call[1] === "object" &&
+      call[1] !== null,
+  );
+
 describe("callStore signaling", () => {
   const audioTrack = {
     stop: vi.fn(),
@@ -180,7 +191,8 @@ describe("callStore signaling", () => {
 
     MockRTCPeerConnection.instances = [];
     MockMediaStream.nextId = 1;
-    globalThis.MediaStream = MockMediaStream;
+    globalThis.MediaStream =
+      MockMediaStream as unknown as typeof MediaStream;
     globalThis.RTCPeerConnection =
       MockRTCPeerConnection as unknown as typeof RTCPeerConnection;
 
@@ -190,15 +202,17 @@ describe("callStore signaling", () => {
     });
 
     Object.defineProperty(window, "MediaStream", {
-      value: MockMediaStream,
+      value: MockMediaStream as unknown as typeof MediaStream,
       configurable: true,
     });
 
+    const mockUuid = "00000000-0000-0000-0000-000000000000";
     if (typeof crypto?.randomUUID === "function") {
-      vi.spyOn(crypto, "randomUUID").mockReturnValue("test-call-id");
+      vi.spyOn(crypto, "randomUUID").mockReturnValue(mockUuid);
     } else {
-      // @ts-expect-error assigning mock crypto for tests
-      globalThis.crypto = { randomUUID: vi.fn(() => "test-call-id") };
+      globalThis.crypto = {
+        randomUUID: vi.fn(() => mockUuid),
+      } as unknown as Crypto;
     }
 
     Object.defineProperty(navigator, "mediaDevices", {
@@ -254,11 +268,11 @@ describe("callStore signaling", () => {
 
     expect(started).toBe(true);
 
-    const signalCalls = invokeMock.mock.calls.filter(
-      ([command]) => command === "send_call_signal",
-    );
+    const signalCalls = selectSignalCalls();
     expect(signalCalls).toHaveLength(2);
-    expect(signalCalls.map(([, payload]) => payload.recipientId)).toEqual(
+    expect(
+      signalCalls.map(([, payload]) => payload.recipientId ?? ""),
+    ).toEqual(
       expect.arrayContaining(["peer-a", "peer-b"]),
     );
     expect(MockRTCPeerConnection.instances).toHaveLength(2);
@@ -277,9 +291,7 @@ describe("callStore signaling", () => {
       members: [{ id: "peer-2", name: "Peer Two" }],
     });
 
-    const signalCalls = invokeMock.mock.calls.filter(
-      ([command]) => command === "send_call_signal",
-    );
+    const signalCalls = selectSignalCalls();
     const callId = signalCalls[0]?.[1]?.callId as string;
     expect(callId).toBeDefined();
 
@@ -360,9 +372,7 @@ describe("callStore signaling", () => {
       ],
     });
 
-    const signalCalls = invokeMock.mock.calls.filter(
-      ([command]) => command === "send_call_signal",
-    );
+    const signalCalls = selectSignalCalls();
     const callId = signalCalls[0]?.[1]?.callId as string;
     const handler = listenHandlers.get("call-signal");
     expect(handler).toBeTypeOf("function");
@@ -412,9 +422,7 @@ describe("callStore signaling", () => {
       members: [{ id: "peer-error", name: "Peer Error" }],
     });
 
-    const signalCalls = invokeMock.mock.calls.filter(
-      ([command]) => command === "send_call_signal",
-    );
+    const signalCalls = selectSignalCalls();
     const callId = signalCalls[0]?.[1]?.callId as string;
     const handler = listenHandlers.get("call-signal");
     expect(handler).toBeTypeOf("function");

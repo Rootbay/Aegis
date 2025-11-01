@@ -1188,7 +1188,7 @@ export function createServerStore(): ServerStore {
         },
       );
       const bans = Array.isArray(backendBans)
-        ? backendBans.map(fromBackendUser)
+        ? backendBans.map((backendUser) => fromBackendUser(backendUser))
         : [];
       banCache.set(serverId, bans);
       update((state) => ({

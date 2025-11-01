@@ -156,9 +156,9 @@
   <div
     class="relative group bg-zinc-700 p-2 rounded-md flex items-center space-x-2"
   >
-    {#if isImage && displayUrl}
+    {#if isImage() && displayUrl()}
       <img
-        src={displayUrl}
+        src={displayUrl()}
         alt={file.name}
         class="w-12 h-12 object-cover rounded-md"
       />
@@ -184,7 +184,7 @@
     </button>
   </div>
 {:else if isMessage && attachment}
-  {#if isImage && displayUrl}
+  {#if isImage() && displayUrl()}
     <button
       class="max-w-xs rounded-lg overflow-hidden cursor-pointer block border border-zinc-700/60"
       onclick={handleOpen}
@@ -195,12 +195,12 @@
       aria-label={`Open attachment ${attachment.name}`}
     >
       <img
-        src={displayUrl}
+        src={displayUrl()}
         alt={attachment.name}
         class="max-h-64 w-full object-contain bg-black/40"
       />
     </button>
-  {:else if isImage}
+  {:else if isImage()}
     <div class="bg-muted/60 border border-muted/40 rounded-md p-3">
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">

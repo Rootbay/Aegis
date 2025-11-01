@@ -1,5 +1,13 @@
 import { render, waitFor, cleanup } from "@testing-library/svelte";
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 import { writable } from "svelte/store";
 import * as appNavigation from "$app/navigation";
 
@@ -14,7 +22,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   },
 }));
 
-let gotoSpy: ReturnType<typeof vi.spyOn>;
+let gotoSpy: MockInstance<typeof appNavigation.goto> | undefined;
 const pageStore = writable({
   params: { code: "" },
   url: new URL("https://app.local/inv"),

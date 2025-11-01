@@ -14,6 +14,18 @@ import VirtualListStub from "../mocks/VirtualListStub.svelte";
 import ContextMenuActionDispatcher from "../mocks/ContextMenuActionDispatcher.svelte";
 
 import { invoke } from "@tauri-apps/api/core";
+import {
+  messagesByChatId as messagesByChatIdReadable,
+  hasMoreByChatId as hasMoreByChatIdReadable,
+  loadingStateByChat as loadingStateByChatReadable,
+} from "$lib/features/chat/stores/chatStore";
+import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
+import { resetChatDrafts } from "$lib/features/chat/utils/chatDraftStore";
+import ChatView from "$lib/features/chat/components/ChatView.svelte";
+import type { Chat } from "$lib/features/chat/models/Chat";
+import type { Friend } from "$lib/features/friends/models/Friend";
+import type { Message } from "$lib/features/chat/models/Message";
+import type { User } from "$lib/features/auth/models/User";
 
 vi.mock("$app/environment", () => ({
   browser: false,
@@ -26,8 +38,11 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   }
 
-  // @ts-expect-error polyfill for test environment
-  globalThis.ResizeObserver = ResizeObserverMock;
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    value: ResizeObserverMock,
+    configurable: true,
+    writable: true,
+  });
 }
 
 function createWritable<T>(initialValue: T) {
@@ -50,6 +65,123 @@ function createWritable<T>(initialValue: T) {
     },
   };
 }
+
+type WritableStore<T> = {
+  subscribe: (run: (value: T) => void) => () => void;
+  set: (value: T) => void;
+  update: (updater: (value: T) => T) => void;
+};
+
+type MockedFn<Args extends unknown[], Return> = ReturnType<
+  typeof vi.fn<Args, Return>
+>;
+
+type ToastModuleMock = {
+  toasts: {
+    addToast: ReturnType<typeof vi.fn>;
+    showErrorToast: ReturnType<typeof vi.fn>;
+  };
+  __resetToasts: () => void;
+};
+
+type ContextMenuModuleMock = {
+  buildGroupModalOptions: () => Record<string, unknown>;
+  buildReportUserPayload: () => Record<string, unknown>;
+};
+
+type CollabModuleMock = {
+  generateCollaborationDocumentId: (prefix?: string) => string;
+};
+
+type ChatStoreModule = {
+  chatStore: {
+    markActiveChatViewed: () => void;
+    sendTypingIndicator: () => Promise<void>;
+    loadMoreMessages: (chatId: string) => Promise<void>;
+    sendMessageWithAttachments: () => Promise<void>;
+    sendMessage: () => Promise<void>;
+    overrideSpamDecision: () => void;
+    deleteMessage: () => void;
+    editMessage: () => Promise<void>;
+    addReaction: () => void;
+    removeReaction: () => void;
+    pinMessage: () => Promise<void>;
+    unpinMessage: () => Promise<void>;
+  };
+  messagesByChatId: WritableStore<Map<string, Message[]>>;
+  hasMoreByChatId: WritableStore<Map<string, boolean>>;
+  loadingStateByChat: WritableStore<Map<string, boolean>>;
+};
+
+type ChatSearchState = {
+  query: string;
+  matches: number[];
+  activeMatchIndex: number;
+};
+
+type ChatSearchModule = {
+  chatSearchStore: {
+    subscribe: WritableStore<ChatSearchState>["subscribe"];
+    setQuery: (query: string) => void;
+    setMatches: (matches: number[]) => void;
+    setActiveMatchIndex: (index: number) => void;
+    registerHandlers: () => () => void;
+    reset: () => void;
+  };
+};
+
+type UserStoreModule = {
+  userStore: {
+    subscribe: WritableStore<{ me: User; loading: boolean }>["subscribe"];
+  };
+  __setUser: (user: User) => void;
+};
+
+type MutedFriendsModule = {
+  mutedFriendsStore: {
+    isMuted: (id: string) => boolean;
+    mute: (id: string) => void;
+    unmute: (id: string) => void;
+  };
+  __resetMutedFriends: () => void;
+};
+
+type FriendStoreModule = {
+  friendStore: {
+    removeFriend: (friendshipId: string, friendId: string) => Promise<void>;
+    initialize: () => Promise<void>;
+  };
+  __resetFriendStore?: () => void;
+};
+
+type CallStoreModule = {
+  callStore: {
+    subscribe: WritableStore<{ activeCall: unknown }>["subscribe"];
+    initialize: (...args: unknown[]) => unknown;
+    startCall: (...args: unknown[]) => unknown;
+    setCallModalOpen: (...args: unknown[]) => unknown;
+  };
+};
+
+type ServerStoreModule = {
+  serverStore: {
+    subscribe: WritableStore<{ servers: unknown[] }>["subscribe"];
+  };
+};
+
+const messagesByChatId = messagesByChatIdReadable as unknown as WritableStore<
+  Map<string, Message[]>
+>;
+const hasMoreByChatId =
+  hasMoreByChatIdReadable as unknown as WritableStore<
+    Map<string, boolean>
+  >;
+const loadingStateByChat =
+  loadingStateByChatReadable as unknown as WritableStore<
+    Map<string, boolean>
+  >;
+const { __setUser } = getUserStoreModule();
+const { __resetMutedFriends } = getMutedFriendsModule();
 
 function createFileList(...files: File[]): FileList {
   const fileList: Partial<FileList> = {
@@ -353,17 +485,23 @@ vi.mock("$lib/features/chat/components/MessageAuthorName.svelte", () => ({
   default: MessageAuthorNameStub,
 }));
 
-function getChatStoreModule() {
-  if (!globalThis.__chatStoreModule) {
-    const messagesByChatId = createWritable(new Map());
-    const hasMoreByChatId = createWritable(new Map());
-    const loadingStateByChat = createWritable(new Map());
+function getChatStoreModule(): ChatStoreModule {
+  const globals = globalThis as typeof globalThis & {
+    __chatStoreModule?: ChatStoreModule;
+  };
+  if (!globals.__chatStoreModule) {
+    const messagesByChatId =
+      createWritable<Map<string, Message[]>>(new Map());
+    const hasMoreByChatId =
+      createWritable<Map<string, boolean>>(new Map());
+    const loadingStateByChat =
+      createWritable<Map<string, boolean>>(new Map());
 
-    globalThis.__chatStoreModule = {
+    globals.__chatStoreModule = {
       chatStore: {
         markActiveChatViewed: () => {},
         sendTypingIndicator: () => Promise.resolve(),
-        loadMoreMessages: () => Promise.resolve(),
+        loadMoreMessages: async () => {},
         sendMessageWithAttachments: () => Promise.resolve(),
         sendMessage: () => Promise.resolve(),
         overrideSpamDecision: () => {},
@@ -379,7 +517,7 @@ function getChatStoreModule() {
       loadingStateByChat,
     };
   }
-  return globalThis.__chatStoreModule;
+  return globals.__chatStoreModule;
 }
 
 vi.mock("$lib/features/chat/stores/chatStore", () => getChatStoreModule());
@@ -387,15 +525,18 @@ vi.mock("../../src/lib/features/chat/stores/chatStore", () =>
   getChatStoreModule(),
 );
 
-function getChatSearchModule() {
-  if (!globalThis.__chatSearchModule) {
-    const state = createWritable({
+function getChatSearchModule(): ChatSearchModule {
+  const globals = globalThis as typeof globalThis & {
+    __chatSearchModule?: ChatSearchModule;
+  };
+  if (!globals.__chatSearchModule) {
+    const state = createWritable<ChatSearchState>({
       query: "",
       matches: [] as number[],
       activeMatchIndex: 0,
     });
 
-    globalThis.__chatSearchModule = {
+    globals.__chatSearchModule = {
       chatSearchStore: {
         subscribe: state.subscribe,
         setQuery: (query: string) => {
@@ -414,7 +555,7 @@ function getChatSearchModule() {
       },
     };
   }
-  return globalThis.__chatSearchModule;
+  return globals.__chatSearchModule;
 }
 
 vi.mock("$lib/features/chat/stores/chatSearchStore", () =>
@@ -424,44 +565,43 @@ vi.mock("../../src/lib/features/chat/stores/chatSearchStore", () =>
   getChatSearchModule(),
 );
 
-function getUserStoreModule() {
-  if (!globalThis.__userStoreModule) {
-    const state = createWritable({
-      me: {
-        id: "user-current",
-        name: "Current User",
-        avatar: "https://example.com/me.png",
-        online: true,
-      },
-      loading: false,
-    });
-
-    globalThis.__userStoreModule = {
-      userStore: {
-        subscribe: state.subscribe,
-      },
-      __setUser: (user: {
-        id: string;
-        name: string;
-        avatar: string;
-        online: boolean;
-      }) => {
-        state.set({ me: user, loading: false });
-      },
+  function getUserStoreModule(): UserStoreModule {
+    const globals = globalThis as typeof globalThis & {
+      __userStoreModule?: UserStoreModule;
     };
+    if (!globals.__userStoreModule) {
+      const state = createWritable<{ me: User; loading: boolean }>({
+        me: {
+          id: "user-current",
+          name: "Current User",
+          avatar: "https://example.com/me.png",
+          online: true,
+        },
+        loading: false,
+      });
+
+      globals.__userStoreModule = {
+        userStore: {
+          subscribe: state.subscribe,
+        },
+        __setUser: (user: User) => {
+          state.set({ me: user, loading: false });
+        },
+      };
+    }
+    return globals.__userStoreModule;
   }
-  return globalThis.__userStoreModule;
-}
 
 vi.mock("$lib/stores/userStore", () => getUserStoreModule());
 vi.mock("../../src/lib/stores/userStore", () => getUserStoreModule());
 
-function getMutedFriendsModule() {
-  if (!globalThis.__mutedFriendsModule) {
-    const muted = new Set<string>();
-
-    globalThis.__mutedFriendsModule = {
-      mutedFriendsStore: {
+  function getMutedFriendsModule(): MutedFriendsModule {
+    const globals = globalThis as typeof globalThis & {
+      __mutedFriendsModule?: MutedFriendsModule;
+    };
+    if (!globals.__mutedFriendsModule) {
+      const muted = new Set<string>();
+      const mutedFriendsStore = {
         isMuted: vi.fn((id: string) => muted.has(id)),
         mute: vi.fn((id: string) => {
           muted.add(id);
@@ -469,17 +609,20 @@ function getMutedFriendsModule() {
         unmute: vi.fn((id: string) => {
           muted.delete(id);
         }),
-      },
-      __resetMutedFriends: () => {
-        muted.clear();
-        globalThis.__mutedFriendsModule.mutedFriendsStore.isMuted.mockClear();
-        globalThis.__mutedFriendsModule.mutedFriendsStore.mute.mockClear();
-        globalThis.__mutedFriendsModule.mutedFriendsStore.unmute.mockClear();
-      },
-    };
+      };
+
+      globals.__mutedFriendsModule = {
+        mutedFriendsStore,
+        __resetMutedFriends: () => {
+          muted.clear();
+          mutedFriendsStore.isMuted.mockClear();
+          mutedFriendsStore.mute.mockClear();
+          mutedFriendsStore.unmute.mockClear();
+        },
+      };
+    }
+    return globals.__mutedFriendsModule;
   }
-  return globalThis.__mutedFriendsModule;
-}
 
 vi.mock("$lib/features/friends/stores/mutedFriendsStore", () =>
   getMutedFriendsModule(),
@@ -488,24 +631,29 @@ vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () =>
   getMutedFriendsModule(),
 );
 
-function getFriendStoreModule() {
-  if (!globalThis.__friendStoreModule) {
-    const removeFriend = vi.fn();
-    const initialize = vi.fn(async () => {});
-
-    globalThis.__friendStoreModule = {
-      friendStore: {
-        removeFriend,
-        initialize,
-      },
-      __resetFriendStore: () => {
-        removeFriend.mockClear();
-        initialize.mockClear();
-      },
+  function getFriendStoreModule(): FriendStoreModule {
+    const globals = globalThis as typeof globalThis & {
+      __friendStoreModule?: FriendStoreModule;
     };
+    if (!globals.__friendStoreModule) {
+      const removeFriend = vi.fn(
+        async (_friendshipId: string, _friendId: string) => {},
+      );
+      const initialize = vi.fn(async () => Promise.resolve());
+
+      globals.__friendStoreModule = {
+        friendStore: {
+          removeFriend,
+          initialize,
+        },
+        __resetFriendStore: () => {
+          removeFriend.mockClear();
+          initialize.mockClear();
+        },
+      };
+    }
+    return globals.__friendStoreModule;
   }
-  return globalThis.__friendStoreModule;
-}
 
 vi.mock("$lib/features/friends/stores/friendStore", () =>
   getFriendStoreModule(),
@@ -514,39 +662,47 @@ vi.mock("../../src/lib/features/friends/stores/friendStore", () =>
   getFriendStoreModule(),
 );
 
-function getCallStoreModule() {
-  if (!globalThis.__callStoreModule) {
-    const state = createWritable({ activeCall: null as unknown });
-
-    globalThis.__callStoreModule = {
-      callStore: {
-        subscribe: state.subscribe,
-        dismissCall: () => {},
-        endCall: () => {},
-        setCallModalOpen: () => {},
-      },
+  function getCallStoreModule(): CallStoreModule {
+    const globals = globalThis as typeof globalThis & {
+      __callStoreModule?: CallStoreModule;
     };
+    if (!globals.__callStoreModule) {
+      const state = createWritable<{ activeCall: unknown }>({
+        activeCall: null,
+      });
+
+      globals.__callStoreModule = {
+        callStore: {
+          subscribe: state.subscribe,
+          initialize: vi.fn(),
+          startCall: vi.fn(),
+          setCallModalOpen: vi.fn(),
+        },
+      };
+    }
+    return globals.__callStoreModule;
   }
-  return globalThis.__callStoreModule;
-}
 
 vi.mock("$lib/features/calls/stores/callStore", () => getCallStoreModule());
 vi.mock("../../src/lib/features/calls/stores/callStore", () =>
   getCallStoreModule(),
 );
 
-function getServerStoreModule() {
-  if (!globalThis.__serverStoreModule) {
-    const state = createWritable({ servers: [] as unknown[] });
-
-    globalThis.__serverStoreModule = {
-      serverStore: {
-        subscribe: state.subscribe,
-      },
+  function getServerStoreModule(): ServerStoreModule {
+    const globals = globalThis as typeof globalThis & {
+      __serverStoreModule?: ServerStoreModule;
     };
+    if (!globals.__serverStoreModule) {
+      const state = createWritable<{ servers: unknown[] }>({ servers: [] });
+
+      globals.__serverStoreModule = {
+        serverStore: {
+          subscribe: state.subscribe,
+        },
+      };
+    }
+    return globals.__serverStoreModule;
   }
-  return globalThis.__serverStoreModule;
-}
 
 vi.mock("$lib/features/servers/stores/serverStore", () =>
   getServerStoreModule(),
@@ -555,51 +711,60 @@ vi.mock("../../src/lib/features/servers/stores/serverStore", () =>
   getServerStoreModule(),
 );
 
-function getToastModule() {
-  if (!globalThis.__toastModule) {
-    const addToast = vi.fn();
-    const showErrorToast = vi.fn();
-
-    globalThis.__toastModule = {
-      toasts: {
-        addToast,
-        showErrorToast,
-      },
-      __resetToasts: () => {
-        addToast.mockClear();
-        showErrorToast.mockClear();
-      },
+  function getToastModule(): ToastModuleMock {
+    const globals = globalThis as typeof globalThis & {
+      __toastModule?: ToastModuleMock;
     };
+    if (!globals.__toastModule) {
+      const addToast = vi.fn();
+      const showErrorToast = vi.fn();
+
+      globals.__toastModule = {
+        toasts: {
+          addToast,
+          showErrorToast,
+        },
+        __resetToasts: () => {
+          addToast.mockClear();
+          showErrorToast.mockClear();
+        },
+      };
+    }
+    return globals.__toastModule;
   }
-  return globalThis.__toastModule;
-}
 
 vi.mock("$lib/stores/ToastStore", () => getToastModule());
 vi.mock("../../src/lib/stores/ToastStore", () => getToastModule());
 
-function getContextMenuModule() {
-  if (!globalThis.__contextMenuModule) {
-    globalThis.__contextMenuModule = {
-      buildGroupModalOptions: () => ({}),
-      buildReportUserPayload: () => ({}),
+  function getContextMenuModule(): ContextMenuModuleMock {
+    const globals = globalThis as typeof globalThis & {
+      __contextMenuModule?: ContextMenuModuleMock;
     };
+    if (!globals.__contextMenuModule) {
+      globals.__contextMenuModule = {
+        buildGroupModalOptions: () => ({}),
+        buildReportUserPayload: () => ({}),
+      };
+    }
+    return globals.__contextMenuModule;
   }
-  return globalThis.__contextMenuModule;
-}
 
 vi.mock("$lib/features/chat/utils/contextMenu", () => getContextMenuModule());
 vi.mock("../../src/lib/features/chat/utils/contextMenu", () =>
   getContextMenuModule(),
 );
 
-function getCollabModule() {
-  if (!globalThis.__collabModule) {
-    globalThis.__collabModule = {
-      generateCollaborationDocumentId: (prefix = "collab") => `${prefix}-mock`,
+  function getCollabModule(): CollabModuleMock {
+    const globals = globalThis as typeof globalThis & {
+      __collabModule?: CollabModuleMock;
     };
+    if (!globals.__collabModule) {
+      globals.__collabModule = {
+        generateCollaborationDocumentId: (prefix = "collab") => `${prefix}-mock`,
+      };
+    }
+    return globals.__collabModule;
   }
-  return globalThis.__collabModule;
-}
 
 vi.mock("$lib/features/collaboration/collabDocumentStore", () =>
   getCollabModule(),
@@ -608,13 +773,6 @@ vi.mock("../../src/lib/features/collaboration/collabDocumentStore", () =>
   getCollabModule(),
 );
 
-import type { Chat } from "$lib/features/chat/models/Chat";
-import type { Friend } from "$lib/features/friends/models/Friend";
-import type { Message } from "$lib/features/chat/models/Message";
-import type { User } from "$lib/features/auth/models/User";
-
-import ChatView from "$lib/features/chat/components/ChatView.svelte";
-import { resetChatDrafts } from "$lib/features/chat/utils/chatDraftStore";
 import {
   defaultSettings,
   settings,
@@ -622,14 +780,6 @@ import {
   setShowMessageAvatars,
   setShowMessageTimestamps,
 } from "$lib/features/settings/stores/settings";
-import {
-  messagesByChatId,
-  hasMoreByChatId,
-  loadingStateByChat,
-} from "$lib/features/chat/stores/chatStore";
-import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
-import { __setUser } from "$lib/stores/userStore";
-import { __resetMutedFriends } from "$lib/features/friends/stores/mutedFriendsStore";
 
 function getMessageContainer(messageText: string) {
   const messageNodes = screen.getAllByText(messageText);
@@ -1238,7 +1388,7 @@ describe("ChatView history loading", () => {
         });
       });
 
-      expect(screen.getByText(olderMessage.content)).toBeInTheDocument();
+      expect(screen.getByText(olderMessage.content)).toBeTruthy();
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       loadMoreSpy.mockRestore();
@@ -1336,7 +1486,7 @@ describe("ChatView history loading", () => {
         expect(scrollSpy).toHaveBeenCalled();
       });
 
-      expect(screen.getByText(olderMessage.content)).toBeInTheDocument();
+      expect(screen.getByText(olderMessage.content)).toBeTruthy();
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       loadMoreSpy.mockRestore();

@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/svelte";
 import { get, writable } from "svelte/store";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
 
 import type { FileTransferStore } from "../../src/lib/features/chat/stores/fileTransferStore";
 
@@ -36,7 +36,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 describe("fileTransferStore auto-download behaviour", () => {
   let fileTransferStore: FileTransferStore;
   let setAutoDownloadMediaEnabled: (value: boolean) => void;
-  let invokeMock: vi.MockedFunction<InvokeFunction>;
+  let invokeMock: MockedFunction<InvokeFunction>;
 
   async function loadModules() {
     const storeModule = await import(

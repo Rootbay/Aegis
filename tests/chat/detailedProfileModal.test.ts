@@ -1,14 +1,32 @@
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
 import { CREATE_GROUP_CONTEXT_KEY } from "../../src/lib/contextKeys";
 
 const mocks = vi.hoisted(() => {
-  const defaultInvoke = async (command: string, args?: any) => {
+  type FriendshipRecord = {
+    id: string;
+    user_a_id: string;
+    user_b_id: string;
+  };
+
+  type InvokeResult =
+    | null
+    | string[]
+    | FriendshipRecord[]
+    | {
+        server_id: string;
+        user_id: string;
+        already_member: boolean;
+      };
+
+  type MockInvoke = (command: string, args?: any) => Promise<InvokeResult>;
+
+  const defaultInvoke: MockInvoke = async (command: string, args?: any) => {
     switch (command) {
       case "get_friendships":
-        return [];
+        return [] as FriendshipRecord[];
       case "get_friendships_for_user":
-        return [];
+        return [] as string[];
       case "send_friend_request":
         return null;
       case "remove_friendship":
@@ -28,7 +46,7 @@ const mocks = vi.hoisted(() => {
     }
   };
 
-  const invoke = vi.fn(defaultInvoke);
+  const invoke: MockedFunction<MockInvoke> = vi.fn(defaultInvoke);
 
   const addToast = vi.fn();
 

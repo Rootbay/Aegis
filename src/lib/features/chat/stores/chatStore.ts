@@ -595,13 +595,22 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (!input) {
       return undefined;
     }
-    if (input instanceof Uint8Array) {
-      return input;
-    }
     if (input instanceof ArrayBuffer) {
       return new Uint8Array(input);
     }
-    return new Uint8Array(input);
+    if (input instanceof Uint8Array) {
+      return new Uint8Array(input);
+    }
+    return Uint8Array.from(input);
+  };
+
+  const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+    const { buffer, byteOffset, byteLength } = bytes;
+    if (buffer instanceof ArrayBuffer) {
+      return buffer.slice(byteOffset, byteOffset + byteLength);
+    }
+    const clone = bytes.slice();
+    return clone.buffer;
   };
 
   const activeAttachmentUrls = new Set<string>();
@@ -931,7 +940,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const bytes = ensureUint8Array(attachment.data);
     let objectUrl: string | undefined;
     if (bytes && bytes.length > 0) {
-      objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      const blobSource = toArrayBuffer(bytes);
+      objectUrl = URL.createObjectURL(new Blob([blobSource], { type: mime }));
       trackAttachmentUrl(objectUrl);
     }
 
@@ -1343,7 +1353,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         persistedExisting.map((msg) => [msg.id, { ...msg, pending: false }]),
       );
       for (const msg of deduped) {
-        persistedById.set(msg.id, msg);
+        persistedById.set(msg.id, { ...msg, pending: false });
       }
       const mergedPersisted = Array.from(persistedById.values()).sort((a, b) =>
         a.timestamp.localeCompare(b.timestamp),
@@ -1501,8 +1511,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           throw new Error("Attachment data was empty");
         }
         const mime = attachment.type || "application/octet-stream";
+        const blobSource = toArrayBuffer(bytes);
         const objectUrl = URL.createObjectURL(
-          new Blob([bytes], { type: mime }),
+          new Blob([blobSource], { type: mime }),
         );
         trackAttachmentUrl(objectUrl);
         updateMessagesForChat(chatId, (existing) =>
@@ -3149,4 +3160,3 @@ export const typingByChatId = chatStore.typingByChatId;
 export const activeChatTypingUsers = chatStore.activeChatTypingUsers;
 export const groupChats = chatStore.groupChats;
 export { createChatStore };
-export type { ChatMetadata };

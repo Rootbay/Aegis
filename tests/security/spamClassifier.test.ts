@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  SpamContext,
+  SpamFeatures,
+} from "../../src/lib/features/security/spamClassifier";
 
-const ensureLoadedMock = vi.hoisted(() => vi.fn<[], Promise<boolean>>());
-const runMock = vi.hoisted(() => vi.fn());
+const ensureLoadedMock = vi.hoisted(() =>
+  vi.fn<() => Promise<boolean>>(),
+);
+const runMock = vi.hoisted(() =>
+  vi.fn<(features: SpamFeatures, context: SpamContext) => Promise<number>>(),
+);
 
 vi.mock("$lib/stores/ToastStore", () => ({
   toasts: {
@@ -41,10 +49,7 @@ const weights = {
   profile: 0.3,
 };
 
-function logisticScore(
-  features: Parameters<typeof runMock>[0],
-  context: Parameters<typeof runMock>[1],
-) {
+function logisticScore(features: SpamFeatures, context: SpamContext) {
   const keywordHitsNorm = Math.min(features.keywordHits.length, 4) / 4;
   const urlNorm = Math.min(features.urlCount, 3) / 3;
   const punctuationNorm = Math.min(features.punctuationBursts, 3) / 3;

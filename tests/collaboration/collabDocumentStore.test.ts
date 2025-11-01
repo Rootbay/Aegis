@@ -6,7 +6,7 @@ import {
 } from "$lib/features/collaboration/collabDocumentStore";
 
 function waitForMicrotask() {
-  return new Promise((resolve) => queueMicrotask(resolve));
+  return new Promise<void>((resolve) => queueMicrotask(() => resolve()));
 }
 
 describe("collaborationStore", () => {

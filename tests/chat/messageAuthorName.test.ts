@@ -23,7 +23,7 @@ describe("MessageAuthorName", () => {
     });
 
     const button = getByRole("button");
-    expect(button).toHaveTextContent("Alice");
+    expect(button.textContent ?? "").toContain("Alice");
 
     invokeMock.mockResolvedValueOnce({
       channel_id: "channel-1",
@@ -31,7 +31,9 @@ describe("MessageAuthorName", () => {
     });
     await channelDisplayPreferencesStore.setHideMemberNames("channel-1", true);
 
-    await waitFor(() => expect(button).toHaveTextContent("Hidden Member"));
+    await waitFor(() =>
+      expect(button.textContent ?? "").toContain("Hidden Member"),
+    );
 
     invokeMock.mockResolvedValueOnce({
       channel_id: "channel-1",
@@ -39,6 +41,6 @@ describe("MessageAuthorName", () => {
     });
     await channelDisplayPreferencesStore.setHideMemberNames("channel-1", false);
 
-    await waitFor(() => expect(button).toHaveTextContent("Alice"));
+    await waitFor(() => expect(button.textContent ?? "").toContain("Alice"));
   });
 });

@@ -2,7 +2,7 @@ import type { Channel } from "$lib/features/channels/models/Channel";
 import type { User } from "$lib/features/auth/models/User";
 import type { Server } from "$lib/features/servers/models/Server";
 
-type BytePayload = number[] | Uint8Array;
+type BytePayload = number[] | Uint8Array | ArrayBuffer;
 
 export type CollaborationKind = "document" | "whiteboard";
 
@@ -20,6 +20,7 @@ export interface CollaborationUpdate {
 export interface AttachmentPayload {
   id: string;
   name: string;
+  type?: string;
   content_type?: string;
   contentType?: string;
   size?: number;
@@ -81,7 +82,9 @@ export interface ChatMessage {
   sender: string;
   content: string;
   channel_id?: string;
+  channelId?: string;
   server_id?: string;
+  serverId?: string;
   conversation_id?: string;
   conversationId?: string;
   attachments?: AttachmentPayload[];

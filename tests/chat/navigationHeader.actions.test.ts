@@ -1,19 +1,19 @@
 import { render, fireEvent, waitFor } from "@testing-library/svelte";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { get } from "svelte/store";
+import { get, writable, type Writable } from "svelte/store";
 import CallModalMock from "../mocks/CallModal.svelte";
 
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 
 const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
   vi.hoisted(() => {
-    const { writable, get } = require("svelte/store");
-    const state = writable(new Map<string, { hideMemberNames: boolean }>());
+    const state: Writable<Map<string, { hideMemberNames: boolean }>> =
+      writable(new Map<string, { hideMemberNames: boolean }>());
     return {
       preferencesState: state,
       toggleHideMemberNamesMock: vi.fn(async (channelId: string) => {
         const current = get(state).get(channelId)?.hideMemberNames ?? false;
-        state.update((map: Map<string, { hideMemberNames: boolean }>) => {
+        state.update((map) => {
           const next = new Map(map);
           next.set(channelId, { hideMemberNames: !current });
           return next;
@@ -22,7 +22,7 @@ const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
       }),
       setHideMemberNamesMock: vi.fn(
         async (channelId: string, hide: boolean) => {
-          state.update((map: Map<string, { hideMemberNames: boolean }>) => {
+          state.update((map) => {
             const next = new Map(map);
             next.set(channelId, { hideMemberNames: hide });
             return next;
@@ -33,33 +33,30 @@ const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
   });
 
 const { callState, initializeCallMock, startCallMock, setCallModalOpenMock } =
-  vi.hoisted(() => {
-    const { writable } = require("svelte/store");
-    return {
-      callState: writable({
-        activeCall: null,
-        deviceAvailability: { audioInput: true, videoInput: true },
-        permissions: { audio: "granted", video: "granted", checking: false },
-        showCallModal: false,
-      }),
-      initializeCallMock: vi.fn(),
-      startCallMock: vi.fn(),
-      setCallModalOpenMock: vi.fn(),
-    };
-  });
+  vi.hoisted(() => ({
+    callState: writable({
+      activeCall: null,
+      deviceAvailability: { audioInput: true, videoInput: true },
+      permissions: { audio: "granted", video: "granted", checking: false },
+      showCallModal: false,
+    }),
+    initializeCallMock: vi.fn(),
+    startCallMock: vi.fn(),
+    setCallModalOpenMock: vi.fn(),
+  }));
 
 const {
   memberSidebarState,
   toggleMemberSidebarVisibilityMock,
   setMemberSidebarVisibilityMock,
 } = vi.hoisted(() => {
-  const { writable } = require("svelte/store");
-  const state = writable(new Map<string, boolean>());
+  const state: Writable<Map<string, boolean>> =
+    writable(new Map<string, boolean>());
   return {
     memberSidebarState: state,
     toggleMemberSidebarVisibilityMock: vi.fn((chatId: string) => {
       let nextVisible = true;
-      state.update((map: Map<string, boolean>) => {
+      state.update((map) => {
         const current = map.get(chatId);
         nextVisible = !(current ?? true);
         const next = new Map(map);
@@ -74,7 +71,7 @@ const {
     }),
     setMemberSidebarVisibilityMock: vi.fn(
       (chatId: string, visible: boolean) => {
-        state.update((map: Map<string, boolean>) => {
+        state.update((map) => {
           const next = new Map(map);
           if (visible) {
             next.delete(chatId);

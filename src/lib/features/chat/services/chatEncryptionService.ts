@@ -113,9 +113,14 @@ export async function encryptOutgoingMessagePayload(
           attachment.data && attachment.data.length > 0
             ? new Uint8Array(attachment.data)
             : new Uint8Array();
+        const fallback = params.attachments[index];
+        const normalizedType =
+          attachment.content_type ??
+          attachment.type ??
+          fallback?.type;
         return {
           name: attachment.name,
-          type: attachment.type ?? attachment.content_type,
+          type: normalizedType,
           size:
             attachment.size ??
             params.attachments[index]?.size ??
@@ -159,7 +164,10 @@ export async function decodeIncomingMessagePayload(
             }
             return {
               name: attachment.name,
-              type: attachment.content_type ?? attachment.type,
+              type:
+                attachment.content_type ??
+                attachment.contentType ??
+                attachment.type,
               size: attachment.size,
               data,
             };
@@ -185,13 +193,18 @@ export async function decodeIncomingMessagePayload(
               : original?.data instanceof ArrayBuffer
                 ? new Uint8Array(original.data)
                 : (original?.data as Uint8Array | undefined);
+        const normalizedType =
+          attachment.content_type ??
+          attachment.type ??
+          original?.content_type ??
+          original?.contentType ??
+          original?.type;
         return {
           ...(original ?? { id: undefined }),
           name: attachment.name ?? original?.name ?? "",
-          content_type:
-            attachment.content_type ??
-            attachment.type ??
-            original?.content_type,
+          content_type: normalizedType ?? undefined,
+          contentType: normalizedType ?? undefined,
+          type: normalizedType ?? undefined,
           size: attachment.size ?? original?.size ?? bytes?.byteLength,
           data: bytes,
         } as BackendAttachment;

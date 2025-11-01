@@ -46,7 +46,7 @@
   });
 
   $effect(() => {
-    dialogOpen = shouldDisplayDialog;
+    dialogOpen = shouldDisplayDialog();
   });
 
   function formatBytes(bytes?: number) {
@@ -111,7 +111,7 @@
   }
 </script>
 
-{#if shouldDisplayDialog && activeRequest}
+{#if shouldDisplayDialog() && activeRequest}
   <AlertDialog bind:open={dialogOpen}>
     <AlertDialogContent class="max-w-md">
       <AlertDialogHeader>

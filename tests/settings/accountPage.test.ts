@@ -95,16 +95,21 @@ vi.mock("$lib/features/auth/stores/authStore", () => ({
 
 class FileReaderMock {
   public result: string | ArrayBuffer | null = null;
-  public onload:
-    | ((this: FileReader, ev: ProgressEvent<FileReader>) => void)
-    | null = null;
-  public onerror:
-    | ((this: FileReader, ev: ProgressEvent<FileReader>) => void)
-    | null = null;
+  public readyState = 2;
+  public onload: FileReader["onload"] = null;
+  public onerror: FileReader["onerror"] = null;
+  public onabort: FileReader["onabort"] = null;
+  public onloadend: FileReader["onloadend"] = null;
+  public onloadstart: FileReader["onloadstart"] = null;
+  public onprogress: FileReader["onprogress"] = null;
 
   readAsDataURL(_file: Blob) {
     this.result = "data:image/png;base64,uploaded-avatar";
-    this.onload?.(new ProgressEvent("load"));
+    const handler = this.onload;
+    if (handler) {
+      const event = new ProgressEvent("load") as ProgressEvent<FileReader>;
+      handler.call(this as unknown as FileReader, event);
+    }
   }
 }
 

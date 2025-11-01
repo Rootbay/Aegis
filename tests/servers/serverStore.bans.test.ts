@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import { get } from "svelte/store";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -49,7 +57,7 @@ const baseServer: Server = {
 };
 
 describe("serverStore bans helpers", () => {
-  const invokeMock = invoke as unknown as vi.Mock;
+  const invokeMock = invoke as unknown as Mock;
 
   beforeEach(() => {
     vi.stubGlobal("localStorage", createLocalStorageMock());

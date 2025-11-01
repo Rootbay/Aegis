@@ -60,7 +60,7 @@
       Pending: [],
     };
 
-    filteredFriends.forEach((friend) => {
+    filteredFriends.forEach((friend: Friend) => {
       const bucket = groups[friend.status] ?? groups.Offline;
       bucket.push(friend);
     });

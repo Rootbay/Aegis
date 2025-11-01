@@ -763,6 +763,7 @@ export function createConnectivityStore(): ConnectivityStore {
         averageSuccessRate,
         relays,
         activeRelayCount,
+        trustedDeviceSync: current.trustedDeviceSync,
       } satisfies ConnectivityState;
     });
   };
