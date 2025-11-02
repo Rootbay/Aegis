@@ -317,6 +317,8 @@ export interface AepMessage {
   FileTransferComplete?: FileTransferComplete;
   FileTransferError?: FileTransferError;
   MessageReaction?: MessageReaction;
+  DeleteMessage?: DeleteMessage;
+  EditMessage?: EditMessage;
   CreateGroupChat?: CreateGroupChat;
   LeaveGroupChat?: LeaveGroupChat;
   AddGroupChatMembers?: AddGroupChatMembers;

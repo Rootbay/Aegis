@@ -24,7 +24,10 @@ impl Identity {
         Self { keypair }
     }
 
-    pub fn from_encrypted_secret(encrypted_secret: &[u8], password: &[u8]) -> Result<Self, IdentityError> {
+    pub fn from_encrypted_secret(
+        encrypted_secret: &[u8],
+        password: &[u8],
+    ) -> Result<Self, IdentityError> {
         let (ciphertext, salt, nonce) = Self::unpack_encrypted_data(encrypted_secret)?;
         let mut decrypted_secret = crate::decrypt(&ciphertext, password, &salt, &nonce)
             .map_err(|e| IdentityError::Decoding(e.to_string()))?;
@@ -35,7 +38,9 @@ impl Identity {
     }
 
     pub fn to_encrypted_secret(&self, password: &[u8]) -> Result<Vec<u8>, IdentityError> {
-        let secret_bytes = self.to_secret_bytes().ok_or_else(|| IdentityError::Decoding("Could not get secret bytes".to_string()))?;
+        let secret_bytes = self
+            .to_secret_bytes()
+            .ok_or_else(|| IdentityError::Decoding("Could not get secret bytes".to_string()))?;
         let (ciphertext, salt, nonce) = crate::encrypt(&secret_bytes, password)
             .map_err(|e| IdentityError::Decoding(e.to_string()))?;
         Ok(Self::pack_encrypted_data(&ciphertext, &salt, &nonce))
@@ -55,7 +60,9 @@ impl Identity {
         const PREFIX_LEN: usize = SALT_LEN + NONCE_LEN;
 
         if data.len() < PREFIX_LEN {
-            return Err(IdentityError::Decoding("Invalid encrypted data length".to_string()));
+            return Err(IdentityError::Decoding(
+                "Invalid encrypted data length".to_string(),
+            ));
         }
         let salt = SaltString::from_b64(&String::from_utf8_lossy(&data[..SALT_LEN]))
             .map_err(|e| IdentityError::Decoding(e.to_string()))?;
@@ -70,8 +77,7 @@ impl Identity {
     pub fn to_secret_bytes(&self) -> Option<Vec<u8>> {
         if let Keypair::Ed25519(pair) = &self.keypair {
             Some(pair.secret().as_ref().to_vec())
-        }
-        else {
+        } else {
             None
         }
     }

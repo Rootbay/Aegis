@@ -1,6 +1,13 @@
 import { waitFor } from "@testing-library/svelte";
 import { get, writable } from "svelte/store";
-import { beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockedFunction,
+} from "vitest";
 
 import type { FileTransferStore } from "../../src/lib/features/chat/stores/fileTransferStore";
 

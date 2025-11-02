@@ -5,7 +5,7 @@ import { userCache } from "$lib/utils/cache";
 
 const { invokeMock, getInvokeMock, getUserSpy } = vi.hoisted(() => {
   const invoke = vi.fn();
-  const getInvoke = vi.fn<[], Promise<typeof invoke | null>>();
+  const getInvoke = vi.fn<() => Promise<typeof invoke | null>>();
   const getUser = vi.fn();
   return {
     invokeMock: invoke,

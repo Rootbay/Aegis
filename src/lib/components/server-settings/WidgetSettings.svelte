@@ -14,12 +14,21 @@
     ServerWidgetSettings,
   } from "$lib/features/servers/models/Server";
 
-  export let server: Server | null = null;
-  export let widgetSettings: ServerWidgetSettings | null | undefined = null;
-  export let channels: Channel[] = [];
-  export let onupdate_setting: unknown = undefined;
+  interface Props {
+    server?: Server | null;
+    widgetSettings?: ServerWidgetSettings | null | undefined;
+    channels?: Channel[];
+    onupdate_setting?: unknown;
+  }
 
-  const currentWidget = $derived<ServerWidgetSettings>(() => {
+  const {
+    server = null,
+    widgetSettings = null,
+    channels = [],
+    onupdate_setting = undefined,
+  }: Props = $props();
+
+  const currentWidget = $derived.by<ServerWidgetSettings>(() => {
     const firstChannelId =
       Array.isArray(channels) && channels.length > 0
         ? (channels[0]?.id ?? null)

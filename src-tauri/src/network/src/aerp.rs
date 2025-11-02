@@ -147,7 +147,12 @@ impl AerpRouter {
         &self.config
     }
 
-    pub fn update_parameters(&mut self, update_interval_secs: u64, min_quality: f32, max_hops: usize) {
+    pub fn update_parameters(
+        &mut self,
+        update_interval_secs: u64,
+        min_quality: f32,
+        max_hops: usize,
+    ) {
         self.config.update_interval_secs = update_interval_secs.max(1);
         self.config.min_route_quality = min_quality.clamp(0.0, 1.0);
         self.config.max_hops = max_hops.max(1);
@@ -373,22 +378,38 @@ mod tests {
         let peer_c = peer();
 
         let mut router = AerpRouter::new(local.clone());
-        router.observe_direct_link(local.clone(), peer_a.clone(), LinkQuality {
-            latency_ms: 10.0,
-            reliability: 0.9,
-        });
-        router.observe_direct_link(peer_a.clone(), peer_c.clone(), LinkQuality {
-            latency_ms: 20.0,
-            reliability: 0.9,
-        });
-        router.observe_direct_link(local.clone(), peer_b.clone(), LinkQuality {
-            latency_ms: 5.0,
-            reliability: 0.6,
-        });
-        router.observe_direct_link(peer_b.clone(), peer_c.clone(), LinkQuality {
-            latency_ms: 45.0,
-            reliability: 0.95,
-        });
+        router.observe_direct_link(
+            local.clone(),
+            peer_a.clone(),
+            LinkQuality {
+                latency_ms: 10.0,
+                reliability: 0.9,
+            },
+        );
+        router.observe_direct_link(
+            peer_a.clone(),
+            peer_c.clone(),
+            LinkQuality {
+                latency_ms: 20.0,
+                reliability: 0.9,
+            },
+        );
+        router.observe_direct_link(
+            local.clone(),
+            peer_b.clone(),
+            LinkQuality {
+                latency_ms: 5.0,
+                reliability: 0.6,
+            },
+        );
+        router.observe_direct_link(
+            peer_b.clone(),
+            peer_c.clone(),
+            LinkQuality {
+                latency_ms: 45.0,
+                reliability: 0.95,
+            },
+        );
 
         let route = router.compute_route(&peer_c).expect("route");
         assert_eq!(route.path[1], peer_a);
@@ -402,14 +423,22 @@ mod tests {
         let peer_b = peer();
 
         let mut router = AerpRouter::new(local.clone());
-        router.observe_direct_link(local.clone(), peer_a.clone(), LinkQuality {
-            latency_ms: 15.0,
-            reliability: 0.2,
-        });
-        router.observe_direct_link(local.clone(), peer_b.clone(), LinkQuality {
-            latency_ms: 35.0,
-            reliability: 0.95,
-        });
+        router.observe_direct_link(
+            local.clone(),
+            peer_a.clone(),
+            LinkQuality {
+                latency_ms: 15.0,
+                reliability: 0.2,
+            },
+        );
+        router.observe_direct_link(
+            local.clone(),
+            peer_b.clone(),
+            LinkQuality {
+                latency_ms: 35.0,
+                reliability: 0.95,
+            },
+        );
 
         let route = router.compute_route(&peer_b).expect("route");
         assert_eq!(route.via, Some(peer_b.clone()));

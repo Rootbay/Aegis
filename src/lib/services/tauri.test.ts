@@ -28,7 +28,7 @@ describe("getListen", () => {
 
     const { getListen } = await import("./tauri");
 
-    const listenFn: ListenFn = async () => vi.fn();
+    const listenFn: ListenFn = async () => () => {};
 
     setTimeout(() => {
       (
@@ -65,7 +65,7 @@ describe("getListen", () => {
   it("caches the resolved listen function to avoid re-polling", async () => {
     const { getListen } = await import("./tauri");
 
-    const listenFn: ListenFn = async () => vi.fn();
+    const listenFn: ListenFn = async () => () => {};
 
     (
       window as typeof window & {

@@ -1,5 +1,12 @@
 import { fireEvent, render, waitFor } from "@testing-library/svelte";
-import { beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockedFunction,
+} from "vitest";
 import { CREATE_GROUP_CONTEXT_KEY } from "../../src/lib/contextKeys";
 
 const mocks = vi.hoisted(() => {

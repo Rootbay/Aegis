@@ -1,6 +1,6 @@
-use sqlx::{Pool, QueryBuilder, Sqlite};
 use aegis_shared_types::User;
 use aegis_types::AegisError;
+use sqlx::{Pool, QueryBuilder, Sqlite};
 
 pub async fn insert_user(pool: &Pool<Sqlite>, user: &User) -> Result<(), AegisError> {
     sqlx::query!(
@@ -62,4 +62,3 @@ pub async fn update_user_presence(
     builder.build().execute(pool).await?;
     Ok(())
 }
-

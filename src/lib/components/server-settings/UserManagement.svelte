@@ -34,7 +34,7 @@
       : null,
   );
   let members = $derived(activeServer?.members ?? []);
-  let memberLookup = $derived(() => {
+  let memberLookup = $derived.by(() => {
     const lookup: Record<string, User> = {};
     for (const member of members) {
       lookup[member.id] = member;
@@ -42,7 +42,7 @@
     return lookup;
   });
   let invites = $derived(activeServer?.invites ?? []);
-  let sortedInvites = $derived(() =>
+  let sortedInvites = $derived.by(() =>
     invites.slice().sort((a, b) => {
       const aTime = new Date(a.createdAt).getTime();
       const bTime = new Date(b.createdAt).getTime();
@@ -100,7 +100,7 @@
   function inviteCreatorLabel(invite: ServerInvite) {
     const creator = memberLookup[invite.createdBy];
     if (creator) {
-      return creator.name || creator.username || invite.createdBy;
+      return creator.name || invite.createdBy;
     }
     return invite.createdBy;
   }

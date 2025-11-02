@@ -68,7 +68,7 @@ async function withOptimistic<T>(
     failureMessage: string;
   },
 ): Promise<WebhookServiceResult<T>> {
-  let rollback: ReturnType<OptimisticUpdate> | void;
+  let rollback: ReturnType<OptimisticUpdate> | void = undefined;
   try {
     if (optimisticUpdate) {
       rollback = optimisticUpdate();

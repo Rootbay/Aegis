@@ -3,28 +3,31 @@ pub mod bluetooth;
 pub mod transports;
 pub mod wifi_direct;
 
+use gossipsub::error::PublishError;
 use libp2p::{
     core::upgrade,
-    gossipsub::{self, Gossipsub, GossipsubConfig, MessageAuthenticity, GossipsubEvent},
+    gossipsub::{self, Gossipsub, GossipsubConfig, GossipsubEvent, MessageAuthenticity},
     identify,
     identity::Keypair,
-    mdns,
-    mplex, noise,
+    mdns, mplex, noise,
     noise::{Keypair as NoiseKeypair, X25519Spec},
     swarm::Swarm,
     tcp::TcpConfig,
     Transport,
 };
-use gossipsub::error::PublishError;
 use std::error::Error;
 // Derive macro re-exported at crate root for this libp2p version
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use libp2p::request_response::{
+    self, ProtocolName, RequestResponse, RequestResponseCodec, RequestResponseConfig,
+    RequestResponseEvent,
+};
 use libp2p::NetworkBehaviour;
-use libp2p::request_response::{self, ProtocolName, RequestResponse, RequestResponseCodec, RequestResponseConfig, RequestResponseEvent};
-use futures::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use std::io;
 
 pub use aerp::{
-    AerpConfig, AerpRouter, LinkQuality, RouteMetrics, RouteSnapshot, RouterSnapshot, RoutedEnvelope, RoutedFrame,
+    AerpConfig, AerpRouter, LinkQuality, RouteMetrics, RouteSnapshot, RoutedEnvelope, RoutedFrame,
+    RouterSnapshot,
 };
 pub type Topic = gossipsub::IdentTopic;
 pub use transports::{TransportMedium, TransportSnapshot};
@@ -47,16 +50,24 @@ pub enum ComposedEvent {
 }
 
 impl From<GossipsubEvent> for ComposedEvent {
-    fn from(e: GossipsubEvent) -> Self { ComposedEvent::Gossipsub(e) }
+    fn from(e: GossipsubEvent) -> Self {
+        ComposedEvent::Gossipsub(e)
+    }
 }
 impl From<identify::IdentifyEvent> for ComposedEvent {
-    fn from(e: identify::IdentifyEvent) -> Self { ComposedEvent::Identify(e) }
+    fn from(e: identify::IdentifyEvent) -> Self {
+        ComposedEvent::Identify(e)
+    }
 }
 impl From<mdns::MdnsEvent> for ComposedEvent {
-    fn from(e: mdns::MdnsEvent) -> Self { ComposedEvent::Mdns(e) }
+    fn from(e: mdns::MdnsEvent) -> Self {
+        ComposedEvent::Mdns(e)
+    }
 }
 impl From<RequestResponseEvent<FileTransferRequest, FileTransferResponse>> for ComposedEvent {
-    fn from(e: RequestResponseEvent<FileTransferRequest, FileTransferResponse>) -> Self { ComposedEvent::ReqRes(e) }
+    fn from(e: RequestResponseEvent<FileTransferRequest, FileTransferResponse>) -> Self {
+        ComposedEvent::ReqRes(e)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -73,13 +84,25 @@ pub struct FileTransferCodec;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum FileTransferRequest {
-    Init { filename: String, size: u64 },
-    Chunk { filename: String, index: u64, data: Vec<u8> },
-    Complete { filename: String },
+    Init {
+        filename: String,
+        size: u64,
+    },
+    Chunk {
+        filename: String,
+        index: u64,
+        data: Vec<u8>,
+    },
+    Complete {
+        filename: String,
+    },
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum FileTransferResponse { Ack, Error(String) }
+pub enum FileTransferResponse {
+    Ack,
+    Error(String),
+}
 
 #[async_trait::async_trait]
 impl RequestResponseCodec for FileTransferCodec {
@@ -87,7 +110,11 @@ impl RequestResponseCodec for FileTransferCodec {
     type Request = FileTransferRequest;
     type Response = FileTransferResponse;
 
-    async fn read_request<T>(&mut self, _: &FileTransferProtocol, io: &mut T) -> io::Result<Self::Request>
+    async fn read_request<T>(
+        &mut self,
+        _: &FileTransferProtocol,
+        io: &mut T,
+    ) -> io::Result<Self::Request>
     where
         T: AsyncRead + Unpin + Send,
     {
@@ -96,7 +123,11 @@ impl RequestResponseCodec for FileTransferCodec {
         bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
-    async fn read_response<T>(&mut self, _: &FileTransferProtocol, io: &mut T) -> io::Result<Self::Response>
+    async fn read_response<T>(
+        &mut self,
+        _: &FileTransferProtocol,
+        io: &mut T,
+    ) -> io::Result<Self::Response>
     where
         T: AsyncRead + Unpin + Send,
     {
@@ -105,19 +136,31 @@ impl RequestResponseCodec for FileTransferCodec {
         bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
-    async fn write_request<T>(&mut self, _: &FileTransferProtocol, io: &mut T, req: Self::Request) -> io::Result<()>
+    async fn write_request<T>(
+        &mut self,
+        _: &FileTransferProtocol,
+        io: &mut T,
+        req: Self::Request,
+    ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
     {
-        let bytes = bincode::serialize(&req).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let bytes =
+            bincode::serialize(&req).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         AsyncWriteExt::write_all(io, &bytes).await
     }
 
-    async fn write_response<T>(&mut self, _: &FileTransferProtocol, io: &mut T, res: Self::Response) -> io::Result<()>
+    async fn write_response<T>(
+        &mut self,
+        _: &FileTransferProtocol,
+        io: &mut T,
+        res: Self::Response,
+    ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
     {
-        let bytes = bincode::serialize(&res).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let bytes =
+            bincode::serialize(&res).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         AsyncWriteExt::write_all(io, &bytes).await
     }
 }
@@ -128,7 +171,6 @@ pub async fn initialize_network(
     let local_peer_id = libp2p::PeerId::from(local_key.public());
 
     transports::register_local_peer(local_peer_id.clone());
-
 
     let noise_keys = NoiseKeypair::<X25519Spec>::new().into_authentic(&local_key)?;
 
@@ -153,10 +195,18 @@ pub async fn initialize_network(
     let mdns = mdns::Mdns::new(mdns::MdnsConfig::default()).await?;
 
     let rr_cfg = RequestResponseConfig::default();
-    let protocols = std::iter::once((FileTransferProtocol, request_response::ProtocolSupport::Full));
+    let protocols = std::iter::once((
+        FileTransferProtocol,
+        request_response::ProtocolSupport::Full,
+    ));
     let req_res = RequestResponse::new(FileTransferCodec, protocols, rr_cfg);
 
-    let behaviour = Behaviour { gossipsub, identify, mdns, req_res };
+    let behaviour = Behaviour {
+        gossipsub,
+        identify,
+        mdns,
+        req_res,
+    };
     let router = AerpRouter::new(local_peer_id.clone());
 
     let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
@@ -177,9 +227,16 @@ pub async fn send_data(
     let routes = router.routes();
 
     if routes.is_empty() {
-        let frame = RoutedFrame::Broadcast { origin, payload: data };
+        let frame = RoutedFrame::Broadcast {
+            origin,
+            payload: data,
+        };
         let bytes = bincode::serialize(&frame)?;
-        match swarm.behaviour_mut().gossipsub.publish(topic.clone(), bytes) {
+        match swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic.clone(), bytes)
+        {
             Ok(_) => {}
             Err(PublishError::InsufficientPeers) => return Ok(()),
             Err(e) => return Err(Box::new(e)),
@@ -189,11 +246,7 @@ pub async fn send_data(
 
     let mut any_sent = false;
     for route in routes {
-        let path_strings: Vec<String> = route
-            .path
-            .iter()
-            .map(|peer| peer.to_base58())
-            .collect();
+        let path_strings: Vec<String> = route.path.iter().map(|peer| peer.to_base58()).collect();
         let destination = route.target.to_base58();
         let envelope = RoutedEnvelope {
             origin: origin.clone(),
@@ -204,7 +257,11 @@ pub async fn send_data(
         };
         let frame = RoutedFrame::Routed { envelope };
         let bytes = bincode::serialize(&frame)?;
-        match swarm.behaviour_mut().gossipsub.publish(topic.clone(), bytes) {
+        match swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic.clone(), bytes)
+        {
             Ok(_) => {
                 any_sent = true;
             }
@@ -214,9 +271,16 @@ pub async fn send_data(
     }
 
     if !any_sent {
-        let fallback = RoutedFrame::Broadcast { origin, payload: data };
+        let fallback = RoutedFrame::Broadcast {
+            origin,
+            payload: data,
+        };
         let bytes = bincode::serialize(&fallback)?;
-        match swarm.behaviour_mut().gossipsub.publish(topic.clone(), bytes) {
+        match swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish(topic.clone(), bytes)
+        {
             Ok(_) => {}
             Err(PublishError::InsufficientPeers) => return Ok(()),
             Err(e) => return Err(Box::new(e)),
@@ -242,7 +306,6 @@ pub fn transport_snapshot() -> TransportSnapshot {
     transports::snapshot()
 }
 
-pub fn subscribe_transport_events(
-) -> tokio::sync::broadcast::Receiver<TransportSnapshot> {
+pub fn subscribe_transport_events() -> tokio::sync::broadcast::Receiver<TransportSnapshot> {
     transports::subscribe_changes()
 }

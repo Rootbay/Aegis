@@ -10,7 +10,7 @@
     ignored = false,
   } = $props();
 
-  const menuItems = $derived(() => [
+  const menuItems = $derived.by(() => [
     { label: "Invite to Server", action: "invite_to_server" },
     { label: "View Reviews", action: "view_reviews" },
     { label: ignored ? "Unignore" : "Ignore", action: "ignore" },

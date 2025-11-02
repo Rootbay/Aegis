@@ -71,7 +71,7 @@
     displayStream: MediaStream | null;
   };
 
-  const participants = $derived(() => {
+  const participants = $derived.by(() => {
     const call = $callStore.activeCall;
     if (!call) {
       return [] as ParticipantView[];
@@ -86,13 +86,16 @@
     );
   });
 
-  const videoParticipants = $derived(() => {
+  const videoParticipants = $derived.by(() => {
     if (!activeCall || activeCall.type !== "video") {
       return [] as ParticipantView[];
     }
     return participants
       .slice()
-      .sort((a, b) => Number(b.isScreenSharing) - Number(a.isScreenSharing));
+      .sort(
+        (a: ParticipantView, b: ParticipantView) =>
+          Number(b.isScreenSharing) - Number(a.isScreenSharing),
+      );
   });
 
   function beginTimer(call: ActiveCall | null) {

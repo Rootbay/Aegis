@@ -84,7 +84,7 @@
     }
   }}
 >
-  <PopoverTrigger asChild>
+  <PopoverTrigger>
     <Button
       type="button"
       {variant}

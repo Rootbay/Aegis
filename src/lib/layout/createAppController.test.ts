@@ -147,7 +147,7 @@ vi.mock("$lib/features/servers/stores/serverStore", async () => {
   };
   const state = writable(initialState);
   const initialize = vi.fn(async () => {});
-  const handleServersUpdate = (servers: unknown[]) => {
+  const handleServersUpdate = (servers: Server[]) => {
     state.update((current) => ({ ...current, servers, loading: false }));
   };
   const setActiveServer = (serverId: string | null) => {

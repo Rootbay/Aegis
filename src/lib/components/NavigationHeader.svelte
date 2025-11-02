@@ -205,14 +205,14 @@
   let renameGroupError = $state<string | null>(null);
   let renameGroupInputRef = $state<HTMLInputElement | null>(null);
 
-  const hideMemberNamesActive = $derived(() => {
+  const hideMemberNamesActive = $derived.by(() => {
     if (!chat?.id) return false;
     return (
       $channelDisplayPreferencesStore.get(chat.id)?.hideMemberNames ?? false
     );
   });
 
-  const memberSidebarVisible = $derived(() => {
+  const memberSidebarVisible = $derived.by(() => {
     if (!chat?.id) return false;
     const state = $memberSidebarVisibilityStore;
     const entry = state.get(chat.id);
@@ -279,14 +279,14 @@
     allowedAuthorTypes: DEFAULT_AUTHOR_TYPES,
   }));
 
-  const parsedSearchAnalysis = $derived(() =>
+  const parsedSearchAnalysis = $derived(
     parseSearchQuery($chatSearchStore.query, searchParseOptions()),
   );
   const parsedSearchTokens = $derived<ParsedSearchToken[]>(
-    () => parsedSearchAnalysis().tokens,
+    parsedSearchAnalysis.tokens,
   );
   const searchValidationErrors = $derived<SearchFilterError[]>(
-    () => parsedSearchAnalysis().errors ?? [],
+    parsedSearchAnalysis.errors ?? [],
   );
 
   const filteredUserOptions = $derived(() => {
@@ -793,7 +793,7 @@
     callStore.initialize();
   });
 
-  let activeCallForChat = $derived(() => {
+  let activeCallForChat = $derived.by(() => {
     if (!chat?.id) return null;
     const active = $callStore.activeCall;
     return active && active.chatId === chat.id && active.chatType === chat.type
@@ -801,7 +801,7 @@
       : null;
   });
 
-  const isCallEligible = $derived(() => {
+  const isCallEligible = $derived.by(() => {
     if (!chat) {
       return false;
     }
@@ -810,7 +810,7 @@
     );
   });
 
-  let voiceButtonDisabled = $derived(() => {
+  let voiceButtonDisabled = $derived.by(() => {
     if (!chat?.id || !isCallEligible) return true;
     const state = $callStore;
     const active = state.activeCall;
@@ -834,7 +834,7 @@
     return false;
   });
 
-  let videoButtonDisabled = $derived(() => {
+  let videoButtonDisabled = $derived.by(() => {
     if (!chat?.id || !isCallEligible) return true;
     const state = $callStore;
     const active = state.activeCall;
@@ -893,7 +893,7 @@
       ];
     }
     if (chat.type === "group" || chat.type === "channel") {
-      return chat.members.map((member) => ({
+      return chat.members.map((member: { id: string; name: string }) => ({
         id: member.id,
         name: member.name,
       }));
@@ -1240,7 +1240,7 @@
                 class="flex min-h-8 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-background py-1 pl-8 pr-7 text-sm transition-[color,box-shadow] focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40"
               >
                 {#each tokens as token, index (token.key + ":" + token.value + ":" + index)}
-                  {@const tokenMeta = parsedSearchTokens()[index] ?? null}
+                  {@const tokenMeta = parsedSearchTokens[index] ?? null}
                   <Badge
                     variant="secondary"
                     class={cn(
@@ -1295,9 +1295,9 @@
                   <X class="h-3.5 w-3.5" />
                 </Button>
               {/if}
-              {#if searchValidationErrors().length}
+              {#if searchValidationErrors.length}
                 <div class="mt-1 space-y-0.5 text-xs text-destructive">
-                  {#each searchValidationErrors() as error (error.key + error.value)}
+                  {#each searchValidationErrors as error (error.key + error.value)}
                     <p>{error.message}</p>
                   {/each}
                 </div>

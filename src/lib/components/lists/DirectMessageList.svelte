@@ -67,7 +67,7 @@
     return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
   };
 
-  let sortedEntries = $derived(() => {
+  let sortedEntries = $derived.by(() => {
     const list = [...entries];
     list.sort((a, b) => {
       const diff =
@@ -81,11 +81,11 @@
     return list;
   });
 
-  let dmEntries = $derived(
+  let dmEntries = $derived.by(() =>
     sortedEntries.filter((entry) => entry.type === "dm" && entry.friend),
   );
 
-  let searchResults = $derived<SearchResults>(() =>
+  let searchResults = $derived.by(() =>
     computeSearchResults(sortedEntries, searchTerm),
   );
 

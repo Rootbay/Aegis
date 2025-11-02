@@ -100,25 +100,62 @@
 {/if}
 
 {#if activeModal === "detailedProfile"}
-  <DetailedProfileModal {...modalProps} close={closeModal} />
+  {@const detailedProfileProps = modalProps as {
+    profileUser?: import("$lib/features/auth/models/User").User;
+    mutualFriends?: import("$lib/features/auth/models/User").User[];
+    mutualServers?: import("$lib/features/servers/models/Server").Server[];
+    mutualGroups?: unknown[];
+  }}
+  {#if detailedProfileProps.profileUser}
+    <DetailedProfileModal
+      profileUser={detailedProfileProps.profileUser}
+      mutualFriends={detailedProfileProps.mutualFriends ?? []}
+      mutualServers={detailedProfileProps.mutualServers ?? []}
+      mutualGroups={detailedProfileProps.mutualGroups ?? []}
+      close={closeModal}
+    />
+  {/if}
 {/if}
 
 {#if activeModal === "profileReviews"}
-  <ProfileReviewsModal {...modalProps} close={closeModal} />
+  {@const profileReviewsProps = modalProps as {
+    subjectType?: "user" | "server";
+    subjectId?: string;
+    subjectName?: string;
+    subjectAvatarUrl?: string | null;
+  }}
+  {#if profileReviewsProps.subjectType && profileReviewsProps.subjectId}
+    <ProfileReviewsModal
+      subjectType={profileReviewsProps.subjectType}
+      subjectId={profileReviewsProps.subjectId}
+      subjectName={profileReviewsProps.subjectName}
+      subjectAvatarUrl={profileReviewsProps.subjectAvatarUrl}
+      close={closeModal}
+    />
+  {/if}
 {/if}
 
 {#if activeModal === "userCard" && modalProps?.profileUser}
+  {@const userCardProps = modalProps as {
+    profileUser: import("$lib/features/auth/models/User").User;
+    openDetailedProfileModal?: (
+      user: import("$lib/features/auth/models/User").User,
+    ) => void;
+    isServerMemberContext?: boolean;
+    x?: number;
+    y?: number;
+  }}
   <div class="fixed inset-0 z-[70]" onclick={closeModal} role="presentation">
     <div
       class="absolute"
-      style={`left: ${modalProps.x ?? 0}px; top: ${modalProps.y ?? 0}px;`}
+      style={`left: ${userCardProps.x ?? 0}px; top: ${userCardProps.y ?? 0}px;`}
       onclick={(event) => event.stopPropagation()}
       role="presentation"
     >
       <UserCardModal
-        profileUser={modalProps.profileUser}
-        openDetailedProfileModal={modalProps.openDetailedProfileModal}
-        isServerMemberContext={modalProps.isServerMemberContext ?? false}
+        profileUser={userCardProps.profileUser}
+        openDetailedProfileModal={userCardProps.openDetailedProfileModal}
+        isServerMemberContext={userCardProps.isServerMemberContext ?? false}
         close={closeModal}
       />
     </div>

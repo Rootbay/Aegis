@@ -420,8 +420,7 @@ pub struct AppState {
     pub voice_memos_enabled: Arc<AtomicBool>,
     pub relays: Arc<Mutex<Vec<RelayRecord>>>,
     pub trusted_devices: Arc<Mutex<Vec<TrustedDeviceRecord>>>,
-    pub pending_device_bundles:
-        Arc<Mutex<HashMap<String, PendingDeviceProvisioning>>>,
+    pub pending_device_bundles: Arc<Mutex<HashMap<String, PendingDeviceProvisioning>>>,
 }
 
 #[derive(Clone)]
@@ -459,4 +458,3 @@ pub enum FileTransferMode {
     Basic,
     Resilient,
 }
-

@@ -191,8 +191,7 @@ describe("callStore signaling", () => {
 
     MockRTCPeerConnection.instances = [];
     MockMediaStream.nextId = 1;
-    globalThis.MediaStream =
-      MockMediaStream as unknown as typeof MediaStream;
+    globalThis.MediaStream = MockMediaStream as unknown as typeof MediaStream;
     globalThis.RTCPeerConnection =
       MockRTCPeerConnection as unknown as typeof RTCPeerConnection;
 
@@ -270,9 +269,7 @@ describe("callStore signaling", () => {
 
     const signalCalls = selectSignalCalls();
     expect(signalCalls).toHaveLength(2);
-    expect(
-      signalCalls.map(([, payload]) => payload.recipientId ?? ""),
-    ).toEqual(
+    expect(signalCalls.map(([, payload]) => payload.recipientId ?? "")).toEqual(
       expect.arrayContaining(["peer-a", "peer-b"]),
     );
     expect(MockRTCPeerConnection.instances).toHaveLength(2);

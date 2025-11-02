@@ -4,6 +4,7 @@
     action?: string;
     isDestructive?: boolean;
     isSeparator?: boolean;
+    disabled?: boolean;
     data?: TData | null;
   };
 

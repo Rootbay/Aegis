@@ -77,7 +77,7 @@
     return chat.members ?? [];
   });
 
-  const memberLookup = $derived(() => {
+  const memberLookup = $derived.by(() => {
     const map = new SvelteMap<string, User>();
     chatParticipants.forEach((member) => {
       map.set(member.id, member);
@@ -98,13 +98,13 @@
     return map;
   });
 
-  const chatMessages = $derived(() => {
+  const chatMessages = $derived.by(() => {
     const chatId = chat?.id;
     if (!chatId) return [] as Message[];
     return ($messagesByChatId.get(chatId) ?? []) as Message[];
   });
 
-  const matchPreviews = $derived(() => {
+  const matchPreviews = $derived.by(() => {
     const matches = $chatSearchStore.matches;
     if (!matches.length) return [] as MatchPreview[];
     const query = $chatSearchStore.query;

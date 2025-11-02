@@ -1,10 +1,10 @@
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+use ratchetx2::{Ratchetx2, Scalar, SharedKeys};
 use ring::agreement::X25519;
-use ring::hkdf::{HKDF_SHA256, KeyType, Salt};
-use ring::rand::{SystemRandom, SecureRandom};
+use ring::hkdf::{KeyType, Salt, HKDF_SHA256};
+use ring::rand::{SecureRandom, SystemRandom};
 use ring::{aead, aead::BoundKey, hmac};
-use ratchetx2::{Ratchetx2, SharedKeys, Scalar};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -13,19 +13,23 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum E2eeError {
-    #[error("missing remote bundle for peer")] 
+    #[error("missing remote bundle for peer")]
     MissingBundle,
-    #[error("invalid bundle signature")] 
+    #[error("invalid bundle signature")]
     InvalidBundle,
-    #[error("crypto error: {0}")] 
+    #[error("crypto error: {0}")]
     Crypto(String),
-    #[error("no session for peer")] 
+    #[error("no session for peer")]
     NoSession,
 }
 
 // 96 bytes HKDF output -> 3x32: secret_key, header_key_alice, header_key_bob
 struct HkdfBytes96;
-impl KeyType for HkdfBytes96 { fn len(&self) -> usize { 96 } }
+impl KeyType for HkdfBytes96 {
+    fn len(&self) -> usize {
+        96
+    }
+}
 
 // Header format used by ratchetx2::party
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,9 +49,9 @@ pub struct InitMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrekeyBundle {
-    pub identity_key_bob: Vec<u8>, // XEdDSA public key
-    pub prekey: Vec<u8>,           // X25519 public prekey
-    pub prekey_signature: Vec<u8>, // signature by identity key
+    pub identity_key_bob: Vec<u8>,   // XEdDSA public key
+    pub prekey: Vec<u8>,             // X25519 public prekey
+    pub prekey_signature: Vec<u8>,   // signature by identity key
     pub one_time_keys: Vec<Vec<u8>>, // optional one-time prekeys
 }
 
@@ -68,7 +72,10 @@ struct SessionState {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct GroupKeyEntry { epoch: u64, key: Vec<u8> }
+struct GroupKeyEntry {
+    epoch: u64,
+    key: Vec<u8>,
+}
 
 pub struct Manager {
     // Identity for X3DH (XEdDSA)
@@ -144,8 +151,7 @@ impl Manager {
     ) -> Result<(), E2eeError> {
         // verify signature of prekey with identity key
         let xpub = ratchetx2::xeddsa::XEdDSAPublicKey::new(&bundle.identity_key_bob);
-        xpub
-            .verify(&bundle.prekey, &bundle.prekey_signature)
+        xpub.verify(&bundle.prekey, &bundle.prekey_signature)
             .map_err(|_| E2eeError::InvalidBundle)?;
         self.remote_bundles.insert(peer_id, bundle);
         let _ = self.save_all();
@@ -154,13 +160,23 @@ impl Manager {
 
     fn hkdf32x2(key: &[u8], info: &[&[u8]]) -> Result<([u8; 32], [u8; 32]), E2eeError> {
         struct HkdfBytes64;
-        impl KeyType for HkdfBytes64 { fn len(&self) -> usize { 64 } }
+        impl KeyType for HkdfBytes64 {
+            fn len(&self) -> usize {
+                64
+            }
+        }
         let salt = Salt::new(HKDF_SHA256, &[0; 32]);
         let prk = salt.extract(key);
-        let okm = prk.expand(info, HkdfBytes64).map_err(|e| E2eeError::Crypto(format!("hkdf: {e:?}")))?;
+        let okm = prk
+            .expand(info, HkdfBytes64)
+            .map_err(|e| E2eeError::Crypto(format!("hkdf: {e:?}")))?;
         let mut keys = [0; 64];
-        okm.fill(&mut keys).map_err(|e| E2eeError::Crypto(format!("hkdf: {e:?}")))?;
-        Ok((keys[..32].try_into().unwrap(), keys[32..].try_into().unwrap()))
+        okm.fill(&mut keys)
+            .map_err(|e| E2eeError::Crypto(format!("hkdf: {e:?}")))?;
+        Ok((
+            keys[..32].try_into().unwrap(),
+            keys[32..].try_into().unwrap(),
+        ))
     }
 
     fn encrypt_with_key(
@@ -230,11 +246,19 @@ impl Manager {
         Ok(pt.to_vec())
     }
 
-    pub fn encrypt_for(&mut self, peer_id: &str, plaintext: &[u8]) -> Result<EncryptedPacket, E2eeError> {
+    pub fn encrypt_for(
+        &mut self,
+        peer_id: &str,
+        plaintext: &[u8],
+    ) -> Result<EncryptedPacket, E2eeError> {
         // ensure session
         let mut init: Option<Vec<u8>> = None;
         if !self.sessions.contains_key(peer_id) {
-            let bundle = self.remote_bundles.get(peer_id).ok_or(E2eeError::MissingBundle)?.clone();
+            let bundle = self
+                .remote_bundles
+                .get(peer_id)
+                .ok_or(E2eeError::MissingBundle)?
+                .clone();
 
             // derive shared keys via X3DH-like KDF
             let mut key_material = vec![0xFF; 32];
@@ -250,24 +274,35 @@ impl Manager {
                 SystemRandom::new().fill(&mut b).unwrap();
                 b
             };
-            let ek_a_pub = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(ek_a)).as_bytes().to_vec();
+            let ek_a_pub = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(ek_a))
+                .as_bytes()
+                .to_vec();
             // DH(EK_A, IK_B)
             {
                 let ss = x25519_dalek::StaticSecret::from(ek_a);
-                let pk = x25519_dalek::PublicKey::from(<[u8;32]>::try_from(bundle.identity_key_bob.as_slice()).map_err(|_| E2eeError::Crypto("ikb bytes".into()))?);
+                let pk = x25519_dalek::PublicKey::from(
+                    <[u8; 32]>::try_from(bundle.identity_key_bob.as_slice())
+                        .map_err(|_| E2eeError::Crypto("ikb bytes".into()))?,
+                );
                 key_material.extend(ss.diffie_hellman(&pk).as_bytes());
             }
             // DH(EK_A, SPK_B)
             {
                 let ss = x25519_dalek::StaticSecret::from(ek_a);
-                let pk = x25519_dalek::PublicKey::from(<[u8;32]>::try_from(bundle.prekey.as_slice()).map_err(|_| E2eeError::Crypto("spkb bytes".into()))?);
+                let pk = x25519_dalek::PublicKey::from(
+                    <[u8; 32]>::try_from(bundle.prekey.as_slice())
+                        .map_err(|_| E2eeError::Crypto("spkb bytes".into()))?,
+                );
                 key_material.extend(ss.diffie_hellman(&pk).as_bytes());
             }
             // DH(EK_A, OPK_B) if present
             let chosen_opk = bundle.one_time_keys.first().cloned();
             if let Some(opk) = chosen_opk.as_ref() {
                 let ss = x25519_dalek::StaticSecret::from(ek_a);
-                let pk = x25519_dalek::PublicKey::from(<[u8;32]>::try_from(opk.as_slice()).map_err(|_| E2eeError::Crypto("opkb bytes".into()))?);
+                let pk = x25519_dalek::PublicKey::from(
+                    <[u8; 32]>::try_from(opk.as_slice())
+                        .map_err(|_| E2eeError::Crypto("opkb bytes".into()))?,
+                );
                 key_material.extend(ss.diffie_hellman(&pk).as_bytes());
             }
 
@@ -292,7 +327,13 @@ impl Manager {
             let ratchet = shared.alice(&bundle.prekey);
             self.sessions.insert(
                 peer_id.to_string(),
-                SessionState { ratchet: Some(ratchet), pn: 0, ns: 0, nr: 0, associated_data },
+                SessionState {
+                    ratchet: Some(ratchet),
+                    pn: 0,
+                    ns: 0,
+                    nr: 0,
+                    associated_data,
+                },
             );
             // Build init message
             let init_msg = InitMessage {
@@ -307,15 +348,29 @@ impl Manager {
         // encrypt header + content
         let sess = self.sessions.get_mut(peer_id).unwrap();
         let ratchet = sess.ratchet.as_mut().unwrap();
-        let header = Header { public_key: ratchet.public_key(), pn: sess.pn, n: sess.ns };
+        let header = Header {
+            public_key: ratchet.public_key(),
+            pn: sess.pn,
+            n: sess.ns,
+        };
         let header_bytes = bincode::serialize(&header).unwrap();
-        let enc_header = Self::encrypt_with_key(ratchet.header_key_s(), &[b"Header"], &sess.associated_data, &header_bytes)?;
+        let enc_header = Self::encrypt_with_key(
+            ratchet.header_key_s(),
+            &[b"Header"],
+            &sess.associated_data,
+            &header_bytes,
+        )?;
 
         let msg_key = ratchet.step_msgs();
-        let enc_content = Self::encrypt_with_key(msg_key, &[b"Content"], &sess.associated_data, plaintext)?;
+        let enc_content =
+            Self::encrypt_with_key(msg_key, &[b"Content"], &sess.associated_data, plaintext)?;
         sess.ns += 1;
 
-        Ok(EncryptedPacket { init, enc_header, enc_content })
+        Ok(EncryptedPacket {
+            init,
+            enc_header,
+            enc_content,
+        })
     }
 
     pub fn decrypt_from(
@@ -325,11 +380,9 @@ impl Manager {
     ) -> Result<Vec<u8>, E2eeError> {
         if !self.sessions.contains_key(peer_id) {
             // need init msg
-            let init_bytes = packet
-                .init
-                .as_ref()
-                .ok_or(E2eeError::NoSession)?;
-            let init: InitMessage = bincode::deserialize(init_bytes).map_err(|e| E2eeError::Crypto(format!("init decode: {e}")))?;
+            let init_bytes = packet.init.as_ref().ok_or(E2eeError::NoSession)?;
+            let init: InitMessage = bincode::deserialize(init_bytes)
+                .map_err(|e| E2eeError::Crypto(format!("init decode: {e}")))?;
 
             // build shared keys as in X3DH handle
             let mut key_material = vec![0xFF; 32];
@@ -341,7 +394,10 @@ impl Manager {
             // DH(SPK_B, IK_A)
             {
                 let ss = x25519_dalek::StaticSecret::from(prekey_sk);
-                let pk = x25519_dalek::PublicKey::from(<[u8;32]>::try_from(init.identity_key_alice.as_slice()).map_err(|_| E2eeError::Crypto("ika bytes".into()))?);
+                let pk = x25519_dalek::PublicKey::from(
+                    <[u8; 32]>::try_from(init.identity_key_alice.as_slice())
+                        .map_err(|_| E2eeError::Crypto("ika bytes".into()))?,
+                );
                 key_material.extend(ss.diffie_hellman(&pk).as_bytes());
             }
             // DH(IK_B, EK_A)
@@ -353,7 +409,10 @@ impl Manager {
             // DH(SPK_B, EK_A)
             {
                 let ss = x25519_dalek::StaticSecret::from(prekey_sk);
-                let pk = x25519_dalek::PublicKey::from(<[u8;32]>::try_from(init.ephemeral_public_key_alice.as_slice()).map_err(|_| E2eeError::Crypto("eka bytes".into()))?);
+                let pk = x25519_dalek::PublicKey::from(
+                    <[u8; 32]>::try_from(init.ephemeral_public_key_alice.as_slice())
+                        .map_err(|_| E2eeError::Crypto("eka bytes".into()))?,
+                );
                 key_material.extend(ss.diffie_hellman(&pk).as_bytes());
             }
             // DH(OTPK_B, EK_A) if provided
@@ -364,7 +423,10 @@ impl Manager {
                     .ok_or(E2eeError::Crypto("one-time prekey not found".into()))?;
                 let _ = self.save_all();
                 let ss = x25519_dalek::StaticSecret::from(ot_priv);
-                let pk = x25519_dalek::PublicKey::from(<[u8;32]>::try_from(init.ephemeral_public_key_alice.as_slice()).map_err(|_| E2eeError::Crypto("eka bytes".into()))?);
+                let pk = x25519_dalek::PublicKey::from(
+                    <[u8; 32]>::try_from(init.ephemeral_public_key_alice.as_slice())
+                        .map_err(|_| E2eeError::Crypto("eka bytes".into()))?,
+                );
                 key_material.extend(ss.diffie_hellman(&pk).as_bytes());
             }
             let mut sk = [0u8; 96];
@@ -386,11 +448,19 @@ impl Manager {
                 ad
             };
             // Construct bob ratchet with a dummy ephemeral; the derived keys carry confidentiality
-            let dummy = ring::agreement::EphemeralPrivateKey::generate(&X25519, &SystemRandom::new()).unwrap();
+            let dummy =
+                ring::agreement::EphemeralPrivateKey::generate(&X25519, &SystemRandom::new())
+                    .unwrap();
             let ratchet = shared.bob(dummy);
             self.sessions.insert(
                 peer_id.to_string(),
-                SessionState { ratchet: Some(ratchet), pn: 0, ns: 0, nr: 0, associated_data },
+                SessionState {
+                    ratchet: Some(ratchet),
+                    pn: 0,
+                    ns: 0,
+                    nr: 0,
+                    associated_data,
+                },
             );
         }
 
@@ -398,24 +468,39 @@ impl Manager {
         let ratchet = sess.ratchet.as_mut().unwrap();
         // try current header key, else try next and ratchet twice as in ratchetx2
         // decrypt header
-        let header_bytes = Self::decrypt_with_key(ratchet.header_key_r(), &[b"Header"], &sess.associated_data, &packet.enc_header);
+        let header_bytes = Self::decrypt_with_key(
+            ratchet.header_key_r(),
+            &[b"Header"],
+            &sess.associated_data,
+            &packet.enc_header,
+        );
         let (header, used_next) = match header_bytes {
             Ok(bytes) => (bytes, false),
             Err(_) => {
                 // step based on next header key
-                let _ = Self::decrypt_with_key(ratchet.next_header_key_r(), &[b"Header"], &sess.associated_data, &packet.enc_header)?;
+                let _ = Self::decrypt_with_key(
+                    ratchet.next_header_key_r(),
+                    &[b"Header"],
+                    &sess.associated_data,
+                    &packet.enc_header,
+                )?;
                 // perform two root steps per ratchetx2
                 // use header public key after decode
                 // Need to decode header to get public key
-                let hdr: Header = bincode::deserialize(
-                    &Self::decrypt_with_key(ratchet.next_header_key_r(), &[b"Header"], &sess.associated_data, &packet.enc_header)?
-                ).map_err(|e| E2eeError::Crypto(format!("hdr decode: {e}")))?;
+                let hdr: Header = bincode::deserialize(&Self::decrypt_with_key(
+                    ratchet.next_header_key_r(),
+                    &[b"Header"],
+                    &sess.associated_data,
+                    &packet.enc_header,
+                )?)
+                .map_err(|e| E2eeError::Crypto(format!("hdr decode: {e}")))?;
                 ratchet.step_dh_root(&hdr.public_key);
                 ratchet.step_dh_root(&hdr.public_key);
                 (bincode::serialize(&hdr).unwrap(), true)
             }
         };
-        let hdr: Header = bincode::deserialize(&header).map_err(|e| E2eeError::Crypto(format!("hdr decode: {e}")))?;
+        let hdr: Header = bincode::deserialize(&header)
+            .map_err(|e| E2eeError::Crypto(format!("hdr decode: {e}")))?;
         if !used_next {
             // normal case: possibly need to catch up receive chain keys if out-of-order
             // minimal support: step until n
@@ -426,80 +511,148 @@ impl Manager {
         }
         let msg_key = ratchet.step_msgr();
         sess.nr += 1;
-        let plaintext = Self::decrypt_with_key(msg_key, &[b"Content"], &sess.associated_data, &packet.enc_content)?;
+        let plaintext = Self::decrypt_with_key(
+            msg_key,
+            &[b"Content"],
+            &sess.associated_data,
+            &packet.enc_content,
+        )?;
         Ok(plaintext)
     }
 
     fn group_id(server_id: &str, channel_id: &Option<String>) -> String {
         match channel_id {
-            Some(c) => format!("{server}:{chan}", server=server_id, chan=c),
-            None => format!("{server}", server=server_id),
+            Some(c) => format!("{server}:{chan}", server = server_id, chan = c),
+            None => format!("{server}", server = server_id),
         }
     }
 
-    pub fn set_group_key(&mut self, server_id: &str, channel_id: &Option<String>, epoch: u64, key: &[u8]) {
+    pub fn set_group_key(
+        &mut self,
+        server_id: &str,
+        channel_id: &Option<String>,
+        epoch: u64,
+        key: &[u8],
+    ) {
         let id = Self::group_id(server_id, channel_id);
-        self.group_keys.insert(id, GroupKeyEntry { epoch, key: key.to_vec() });
+        self.group_keys.insert(
+            id,
+            GroupKeyEntry {
+                epoch,
+                key: key.to_vec(),
+            },
+        );
         let _ = self.save_all();
     }
 
-    pub fn get_group_key(&self, server_id: &str, channel_id: &Option<String>) -> Option<(u64, Vec<u8>)> {
+    pub fn get_group_key(
+        &self,
+        server_id: &str,
+        channel_id: &Option<String>,
+    ) -> Option<(u64, Vec<u8>)> {
         let id = Self::group_id(server_id, channel_id);
-        self.group_keys.get(&id).map(|entry| (entry.epoch, entry.key.clone()))
+        self.group_keys
+            .get(&id)
+            .map(|entry| (entry.epoch, entry.key.clone()))
     }
 
-    pub fn generate_and_set_group_key(&mut self, server_id: &str, channel_id: &Option<String>, epoch: u64) -> Vec<u8> {
+    pub fn generate_and_set_group_key(
+        &mut self,
+        server_id: &str,
+        channel_id: &Option<String>,
+        epoch: u64,
+    ) -> Vec<u8> {
         let mut key = [0u8; 32];
         SystemRandom::new().fill(&mut key).unwrap();
         self.set_group_key(server_id, channel_id, epoch, &key);
         key.to_vec()
     }
 
-    pub fn encrypt_group_message(&self, server_id: &str, channel_id: &Option<String>, plaintext: &[u8]) -> Result<(u64, Vec<u8>, Vec<u8>), E2eeError> {
+    pub fn encrypt_group_message(
+        &self,
+        server_id: &str,
+        channel_id: &Option<String>,
+        plaintext: &[u8],
+    ) -> Result<(u64, Vec<u8>, Vec<u8>), E2eeError> {
         let id = Self::group_id(server_id, channel_id);
-        let entry = self.group_keys.get(&id).ok_or(E2eeError::Crypto("missing group key".into()))?;
+        let entry = self
+            .group_keys
+            .get(&id)
+            .ok_or(E2eeError::Crypto("missing group key".into()))?;
         let epoch = entry.epoch;
         // Random 96-bit nonce
         let mut nonce = vec![0u8; aead::NONCE_LEN];
-        SystemRandom::new().fill(&mut nonce).map_err(|_| E2eeError::Crypto("rng".into()))?;
+        SystemRandom::new()
+            .fill(&mut nonce)
+            .map_err(|_| E2eeError::Crypto("rng".into()))?;
         struct OnceNonce(Vec<u8>, bool);
         impl aead::NonceSequence for OnceNonce {
             fn advance(&mut self) -> Result<aead::Nonce, ring::error::Unspecified> {
-                if self.1 { return Err(ring::error::Unspecified); }
+                if self.1 {
+                    return Err(ring::error::Unspecified);
+                }
                 self.1 = true;
                 let mut bytes = [0u8; aead::NONCE_LEN];
                 bytes.copy_from_slice(&self.0);
                 aead::Nonce::try_assume_unique_for_key(&bytes)
             }
         }
-        let key = aead::UnboundKey::new(&aead::AES_256_GCM, &entry.key).map_err(|e| E2eeError::Crypto(format!("aead: {e:?}")))?;
+        let key = aead::UnboundKey::new(&aead::AES_256_GCM, &entry.key)
+            .map_err(|e| E2eeError::Crypto(format!("aead: {e:?}")))?;
         let mut sealing = aead::SealingKey::new(key, OnceNonce(nonce.clone(), false));
         // Provide associated data = group id and epoch
-        let aad = [Self::group_id(server_id, channel_id).as_bytes(), &epoch.to_be_bytes()].concat();
+        let aad = [
+            Self::group_id(server_id, channel_id).as_bytes(),
+            &epoch.to_be_bytes(),
+        ]
+        .concat();
         let mut in_out = plaintext.to_vec();
-        sealing.seal_in_place_append_tag(aead::Aad::from(aad), &mut in_out).map_err(|_| E2eeError::Crypto("seal".into()))?;
+        sealing
+            .seal_in_place_append_tag(aead::Aad::from(aad), &mut in_out)
+            .map_err(|_| E2eeError::Crypto("seal".into()))?;
         Ok((epoch, nonce, in_out))
     }
 
-    pub fn decrypt_group_message(&self, server_id: &str, channel_id: &Option<String>, epoch: u64, nonce: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, E2eeError> {
+    pub fn decrypt_group_message(
+        &self,
+        server_id: &str,
+        channel_id: &Option<String>,
+        epoch: u64,
+        nonce: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<Vec<u8>, E2eeError> {
         let id = Self::group_id(server_id, channel_id);
-        let entry = self.group_keys.get(&id).ok_or(E2eeError::Crypto("missing group key".into()))?;
-        if entry.epoch != epoch { return Err(E2eeError::Crypto("epoch mismatch".into())); }
+        let entry = self
+            .group_keys
+            .get(&id)
+            .ok_or(E2eeError::Crypto("missing group key".into()))?;
+        if entry.epoch != epoch {
+            return Err(E2eeError::Crypto("epoch mismatch".into()));
+        }
         struct OnceNonce(Vec<u8>, bool);
         impl aead::NonceSequence for OnceNonce {
             fn advance(&mut self) -> Result<aead::Nonce, ring::error::Unspecified> {
-                if self.1 { return Err(ring::error::Unspecified); }
+                if self.1 {
+                    return Err(ring::error::Unspecified);
+                }
                 self.1 = true;
                 let mut bytes = [0u8; aead::NONCE_LEN];
                 bytes.copy_from_slice(&self.0);
                 aead::Nonce::try_assume_unique_for_key(&bytes)
             }
         }
-        let key = aead::UnboundKey::new(&aead::AES_256_GCM, &entry.key).map_err(|e| E2eeError::Crypto(format!("aead: {e:?}")))?;
+        let key = aead::UnboundKey::new(&aead::AES_256_GCM, &entry.key)
+            .map_err(|e| E2eeError::Crypto(format!("aead: {e:?}")))?;
         let mut opening = aead::OpeningKey::new(key, OnceNonce(nonce.to_vec(), false));
-        let aad = [Self::group_id(server_id, channel_id).as_bytes(), &epoch.to_be_bytes()].concat();
+        let aad = [
+            Self::group_id(server_id, channel_id).as_bytes(),
+            &epoch.to_be_bytes(),
+        ]
+        .concat();
         let mut in_out = ciphertext.to_vec();
-        let pt = opening.open_in_place(aead::Aad::from(aad), &mut in_out).map_err(|_| E2eeError::Crypto("open".into()))?;
+        let pt = opening
+            .open_in_place(aead::Aad::from(aad), &mut in_out)
+            .map_err(|_| E2eeError::Crypto("open".into()))?;
         Ok(pt.to_vec())
     }
 }
@@ -519,7 +672,10 @@ pub fn global() -> Option<Arc<Mutex<Manager>>> {
 // ---------- Persistence ----------
 
 #[derive(Serialize, Deserialize)]
-struct StoredPrekeyEntry { pubkey: Vec<u8>, secret: Vec<u8> }
+struct StoredPrekeyEntry {
+    pubkey: Vec<u8>,
+    secret: Vec<u8>,
+}
 
 #[derive(Serialize, Deserialize)]
 struct StoredState {
@@ -531,20 +687,42 @@ struct StoredState {
 }
 
 impl Manager {
-    pub fn set_storage_dir(&mut self, dir: PathBuf) { self.storage_dir = Some(dir); }
+    pub fn set_storage_dir(&mut self, dir: PathBuf) {
+        self.storage_dir = Some(dir);
+    }
 
-    fn storage_file(&self) -> Option<PathBuf> { self.storage_dir.as_ref().map(|d| d.join("state.json")) }
+    fn storage_file(&self) -> Option<PathBuf> {
+        self.storage_dir.as_ref().map(|d| d.join("state.json"))
+    }
 
     pub fn save_all(&self) -> Result<(), E2eeError> {
-        let path = self.storage_file().ok_or(E2eeError::Crypto("no storage dir".into()))?;
+        let path = self
+            .storage_file()
+            .ok_or(E2eeError::Crypto("no storage dir".into()))?;
         let st = StoredState {
             identity_seed: self.identity_seed.to_vec(),
-            prekeys: self.prekeys.iter().map(|(pk, sk)| StoredPrekeyEntry { pubkey: pk.clone(), secret: sk.to_vec() }).collect(),
-            one_time_prekeys: self.one_time_prekeys.iter().map(|(pk, sk)| StoredPrekeyEntry { pubkey: pk.clone(), secret: sk.to_vec() }).collect(),
+            prekeys: self
+                .prekeys
+                .iter()
+                .map(|(pk, sk)| StoredPrekeyEntry {
+                    pubkey: pk.clone(),
+                    secret: sk.to_vec(),
+                })
+                .collect(),
+            one_time_prekeys: self
+                .one_time_prekeys
+                .iter()
+                .map(|(pk, sk)| StoredPrekeyEntry {
+                    pubkey: pk.clone(),
+                    secret: sk.to_vec(),
+                })
+                .collect(),
             remote_bundles: self.remote_bundles.clone(),
             group_keys: self.group_keys.clone(),
         };
-        if let Some(parent) = path.parent() { let _ = std::fs::create_dir_all(parent); }
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
         let data = serde_json::to_vec_pretty(&st).map_err(|e| E2eeError::Crypto(e.to_string()))?;
         std::fs::write(path, data).map_err(|e| E2eeError::Crypto(e.to_string()))
     }
@@ -555,14 +733,39 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<Mutex<Manager>> {
     let mgr = if let Ok(bytes) = std::fs::read(dir.join("state.json")) {
         if let Ok(st) = serde_json::from_slice::<StoredState>(&bytes) {
             let mut seed = [0u8; 32];
-            if st.identity_seed.len() == 32 { seed.copy_from_slice(&st.identity_seed); }
+            if st.identity_seed.len() == 32 {
+                seed.copy_from_slice(&st.identity_seed);
+            }
             let scalar = Scalar::from_bytes_mod_order(seed);
             let xkey = ratchetx2::xeddsa::XEdDSAPrivateKey::from(scalar);
-            let mut m = Manager { identity_seed: seed, xeddsa_identity: xkey, prekeys: HashMap::new(), one_time_prekeys: HashMap::new(), remote_bundles: st.remote_bundles, sessions: HashMap::new(), storage_dir: Some(dir.clone()), group_keys: st.group_keys };
-            for e in st.prekeys { if e.secret.len()==32 { let mut sk=[0u8;32]; sk.copy_from_slice(&e.secret); m.prekeys.insert(e.pubkey, sk); } }
-            for e in st.one_time_prekeys { if e.secret.len()==32 { let mut sk=[0u8;32]; sk.copy_from_slice(&e.secret); m.one_time_prekeys.insert(e.pubkey, sk); } }
+            let mut m = Manager {
+                identity_seed: seed,
+                xeddsa_identity: xkey,
+                prekeys: HashMap::new(),
+                one_time_prekeys: HashMap::new(),
+                remote_bundles: st.remote_bundles,
+                sessions: HashMap::new(),
+                storage_dir: Some(dir.clone()),
+                group_keys: st.group_keys,
+            };
+            for e in st.prekeys {
+                if e.secret.len() == 32 {
+                    let mut sk = [0u8; 32];
+                    sk.copy_from_slice(&e.secret);
+                    m.prekeys.insert(e.pubkey, sk);
+                }
+            }
+            for e in st.one_time_prekeys {
+                if e.secret.len() == 32 {
+                    let mut sk = [0u8; 32];
+                    sk.copy_from_slice(&e.secret);
+                    m.one_time_prekeys.insert(e.pubkey, sk);
+                }
+            }
             Arc::new(Mutex::new(m))
-        } else { Arc::new(Mutex::new(Manager::new())) }
+        } else {
+            Arc::new(Mutex::new(Manager::new()))
+        }
     } else {
         Arc::new(Mutex::new(Manager::new()))
     };

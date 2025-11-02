@@ -7,8 +7,9 @@ const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 
 const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
   vi.hoisted(() => {
-    const state: Writable<Map<string, { hideMemberNames: boolean }>> =
-      writable(new Map<string, { hideMemberNames: boolean }>());
+    const state: Writable<Map<string, { hideMemberNames: boolean }>> = writable(
+      new Map<string, { hideMemberNames: boolean }>(),
+    );
     return {
       preferencesState: state,
       toggleHideMemberNamesMock: vi.fn(async (channelId: string) => {
@@ -50,8 +51,9 @@ const {
   toggleMemberSidebarVisibilityMock,
   setMemberSidebarVisibilityMock,
 } = vi.hoisted(() => {
-  const state: Writable<Map<string, boolean>> =
-    writable(new Map<string, boolean>());
+  const state: Writable<Map<string, boolean>> = writable(
+    new Map<string, boolean>(),
+  );
   return {
     memberSidebarState: state,
     toggleMemberSidebarVisibilityMock: vi.fn((chatId: string) => {

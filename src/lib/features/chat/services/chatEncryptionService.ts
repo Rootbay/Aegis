@@ -115,9 +115,7 @@ export async function encryptOutgoingMessagePayload(
             : new Uint8Array();
         const fallback = params.attachments[index];
         const normalizedType =
-          attachment.content_type ??
-          attachment.type ??
-          fallback?.type;
+          attachment.content_type ?? attachment.type ?? fallback?.type;
         return {
           name: attachment.name,
           type: normalizedType,

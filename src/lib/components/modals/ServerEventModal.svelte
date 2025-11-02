@@ -181,7 +181,7 @@
       <div class="space-y-2">
         <Label for="server-event-channel">Channel</Label>
         {#if channelOptions.length > 0}
-          <Select bind:value={channelId}>
+          <Select type="single" bind:value={channelId}>
             <SelectTrigger class="w-full">
               {#if channelId}
                 {channelOptions.find((option) => option.id === channelId)
@@ -216,7 +216,7 @@
     </div>
 
     <DialogFooter class="pt-4">
-      <DialogClose asChild>
+      <DialogClose>
         <Button type="button" variant="outline" disabled={submitting}>
           Cancel
         </Button>

@@ -4,9 +4,17 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import type { ServerSticker } from "$lib/features/servers/models/Server";
 
-  export let stickers: ServerSticker[] = [];
-  export let onupdate_setting: unknown = undefined;
-  export let onbutton_click: unknown = undefined;
+  interface Props {
+    stickers?: ServerSticker[];
+    onupdate_setting?: unknown;
+    onbutton_click?: unknown;
+  }
+
+  const {
+    stickers = [],
+    onupdate_setting = undefined,
+    onbutton_click = undefined,
+  }: Props = $props();
 
   const sortedStickers = $derived(
     Array.isArray(stickers)

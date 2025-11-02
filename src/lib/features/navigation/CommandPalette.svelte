@@ -20,7 +20,7 @@
   let searchInput = $state<HTMLInputElement | null>(null);
   let dialogElement = $state<HTMLDivElement | null>(null);
 
-  let groupedCommands = $derived(() => {
+  let groupedCommands = $derived.by(() => {
     const commands = $filteredCommands;
     const groups: Array<{
       title: CommandPaletteSection;
@@ -47,7 +47,7 @@
     return groups;
   });
 
-  let activeDescendant = $derived(() => {
+  let activeDescendant = $derived.by(() => {
     const commands = $filteredCommands;
     const active = commands[$highlightedIndex];
     return active ? toDomId(active.id) : undefined;

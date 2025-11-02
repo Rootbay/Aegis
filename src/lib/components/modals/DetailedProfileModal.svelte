@@ -198,7 +198,7 @@
   let sendingInvite = $state(false);
 
   let ignoredUsers = $state<Set<string>>(new Set());
-  const isIgnored = $derived(() => {
+  const isIgnored = $derived.by(() => {
     const id = profileUser?.id;
     if (!id) {
       return false;

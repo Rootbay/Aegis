@@ -75,7 +75,7 @@
     MAX_REVIEW_LENGTH - trimmedContentLength,
   );
 
-  const reviewSummary = $derived(() => {
+  const reviewSummary = $derived.by(() => {
     if (reviews.length === 0) {
       return { average: null as number | null, count: 0 };
     }

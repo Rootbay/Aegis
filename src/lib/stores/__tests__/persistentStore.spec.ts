@@ -3,13 +3,13 @@ import type { Mock } from "vitest";
 import { get } from "svelte/store";
 
 type MockedDiskStore = {
-  get: Mock<[string], Promise<unknown>>;
-  set: Mock<[string, unknown], Promise<void>>;
-  save: Mock<[], Promise<void>>;
+  get: Mock<(key: string) => Promise<unknown>>;
+  set: Mock<(key: string, value: unknown) => Promise<void>>;
+  save: Mock<() => Promise<void>>;
 };
 
 let diskStore: MockedDiskStore;
-let loadSpy: Mock<[string], Promise<MockedDiskStore>>;
+let loadSpy: Mock<(key: string) => Promise<MockedDiskStore>>;
 
 const waitFor = (ms: number) =>
   new Promise<void>((resolve) => {

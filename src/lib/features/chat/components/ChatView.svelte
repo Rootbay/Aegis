@@ -1485,14 +1485,14 @@
     allowedAuthorTypes: DEFAULT_AUTHOR_TYPES,
   }));
 
-  let callForChat = $derived(() => {
+  let callForChat = $derived.by(() => {
     if (!chat?.id) return null;
     const activeCall = $callStore.activeCall;
     return activeCall && activeCall.chatId === chat.id ? activeCall : null;
   });
 
   function hangUpCurrentCall() {
-    const call = callForChat();
+    const call = callForChat;
     if (!call) {
       callStore.dismissCall();
       return;
@@ -1739,10 +1739,10 @@
 <div class="grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
     <div class="flex min-h-0 grow flex-col">
-      {#if callForChat()}
+      {#if callForChat}
         <div class="px-4 pt-4">
           <CallStatusBanner
-            call={callForChat()}
+            call={callForChat}
             onLeave={hangUpCurrentCall}
             onDismiss={dismissCallStatus}
             onOpenModal={reopenCallModal}

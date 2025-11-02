@@ -51,7 +51,11 @@ pub enum AepMessage {
         ciphertext: Vec<u8>,
         signature: Option<Vec<u8>>,
     },
-    PeerDiscovery { peer_id: String, address: String, signature: Option<Vec<u8>> },
+    PeerDiscovery {
+        peer_id: String,
+        address: String,
+        signature: Option<Vec<u8>>,
+    },
     PresenceUpdate {
         user_id: String,
         is_online: bool,
@@ -59,12 +63,36 @@ pub enum AepMessage {
         location: Option<String>,
         signature: Option<Vec<u8>>,
     },
-    ProfileUpdate { user: User, signature: Option<Vec<u8>> },
-    FriendRequest { sender_id: String, target_id: String, signature: Option<Vec<u8>> },
-    FriendRequestResponse { sender_id: String, target_id: String, accepted: bool, signature: Option<Vec<u8>> },
-    BlockUser { blocker_id: String, blocked_id: String, signature: Option<Vec<u8>> },
-    UnblockUser { unblocker_id: String, unblocked_id: String, signature: Option<Vec<u8>> },
-    RemoveFriendship { remover_id: String, removed_id: String, signature: Option<Vec<u8>> },
+    ProfileUpdate {
+        user: User,
+        signature: Option<Vec<u8>>,
+    },
+    FriendRequest {
+        sender_id: String,
+        target_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    FriendRequestResponse {
+        sender_id: String,
+        target_id: String,
+        accepted: bool,
+        signature: Option<Vec<u8>>,
+    },
+    BlockUser {
+        blocker_id: String,
+        blocked_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    UnblockUser {
+        unblocker_id: String,
+        unblocked_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    RemoveFriendship {
+        remover_id: String,
+        removed_id: String,
+        signature: Option<Vec<u8>>,
+    },
     CreateGroupChat {
         group_id: String,
         name: Option<String>,
@@ -96,12 +124,32 @@ pub enum AepMessage {
         remover_id: String,
         signature: Option<Vec<u8>>,
     },
-    CreateServer { server: Server, signature: Option<Vec<u8>> },
-    JoinServer { server_id: String, user_id: String, signature: Option<Vec<u8>> },
-    CreateChannel { channel: Channel, signature: Option<Vec<u8>> },
-    DeleteChannel { channel_id: String, signature: Option<Vec<u8>> },
-    DeleteServer { server_id: String, signature: Option<Vec<u8>> },
-    SendServerInvite { server_id: String, user_id: String, signature: Option<Vec<u8>> },
+    CreateServer {
+        server: Server,
+        signature: Option<Vec<u8>>,
+    },
+    JoinServer {
+        server_id: String,
+        user_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    CreateChannel {
+        channel: Channel,
+        signature: Option<Vec<u8>>,
+    },
+    DeleteChannel {
+        channel_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    DeleteServer {
+        server_id: String,
+        signature: Option<Vec<u8>>,
+    },
+    SendServerInvite {
+        server_id: String,
+        user_id: String,
+        signature: Option<Vec<u8>>,
+    },
     FileTransferRequest {
         sender_id: String,
         recipient_id: String,
@@ -398,7 +446,10 @@ pub struct BlockUserData {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct UnblockUserData { pub unblocker_id: String, pub unblocked_id: String, }
+pub struct UnblockUserData {
+    pub unblocker_id: String,
+    pub unblocked_id: String,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RemoveFriendshipData {
@@ -441,7 +492,7 @@ pub struct FileTransferErrorData {
 }
 
 // Re-exporting types from aegis_types for convenience
-pub use aegis_shared_types::{User, Server, Channel};
+pub use aegis_shared_types::{Channel, Server, User};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EncryptedDmSlot {

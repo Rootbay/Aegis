@@ -12,11 +12,13 @@ describe("createToastStore", () => {
     });
 
   let now = 0;
-  let nowSpy: ReturnType<typeof vi.spyOn> | undefined;
+  let nowSpy: ReturnType<typeof vi.spyOn<() => number>> | undefined;
 
   beforeEach(() => {
     now = 0;
-    nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+    nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now) as ReturnType<
+      typeof vi.spyOn<() => number>
+    >;
   });
 
   afterEach(() => {

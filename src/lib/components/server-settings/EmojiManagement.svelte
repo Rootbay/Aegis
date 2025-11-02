@@ -9,9 +9,17 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import type { ServerEmoji } from "$lib/features/servers/models/Server";
 
-  export let emojis: ServerEmoji[] = [];
-  export let onupdate_setting: unknown = undefined;
-  export let onbutton_click: unknown = undefined;
+  interface Props {
+    emojis?: ServerEmoji[];
+    onupdate_setting?: unknown;
+    onbutton_click?: unknown;
+  }
+
+  const {
+    emojis = [],
+    onupdate_setting = undefined,
+    onbutton_click = undefined,
+  }: Props = $props();
 
   const sortedEmojis = $derived(
     Array.isArray(emojis)

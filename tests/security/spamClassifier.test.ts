@@ -4,9 +4,7 @@ import type {
   SpamFeatures,
 } from "../../src/lib/features/security/spamClassifier";
 
-const ensureLoadedMock = vi.hoisted(() =>
-  vi.fn<() => Promise<boolean>>(),
-);
+const ensureLoadedMock = vi.hoisted(() => vi.fn<() => Promise<boolean>>());
 const runMock = vi.hoisted(() =>
   vi.fn<(features: SpamFeatures, context: SpamContext) => Promise<number>>(),
 );

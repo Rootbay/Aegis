@@ -172,14 +172,11 @@ type ServerStoreModule = {
 const messagesByChatId = messagesByChatIdReadable as unknown as WritableStore<
   Map<string, Message[]>
 >;
-const hasMoreByChatId =
-  hasMoreByChatIdReadable as unknown as WritableStore<
-    Map<string, boolean>
-  >;
+const hasMoreByChatId = hasMoreByChatIdReadable as unknown as WritableStore<
+  Map<string, boolean>
+>;
 const loadingStateByChat =
-  loadingStateByChatReadable as unknown as WritableStore<
-    Map<string, boolean>
-  >;
+  loadingStateByChatReadable as unknown as WritableStore<Map<string, boolean>>;
 const { __setUser } = getUserStoreModule();
 const { __resetMutedFriends } = getMutedFriendsModule();
 
@@ -490,12 +487,9 @@ function getChatStoreModule(): ChatStoreModule {
     __chatStoreModule?: ChatStoreModule;
   };
   if (!globals.__chatStoreModule) {
-    const messagesByChatId =
-      createWritable<Map<string, Message[]>>(new Map());
-    const hasMoreByChatId =
-      createWritable<Map<string, boolean>>(new Map());
-    const loadingStateByChat =
-      createWritable<Map<string, boolean>>(new Map());
+    const messagesByChatId = createWritable<Map<string, Message[]>>(new Map());
+    const hasMoreByChatId = createWritable<Map<string, boolean>>(new Map());
+    const loadingStateByChat = createWritable<Map<string, boolean>>(new Map());
 
     globals.__chatStoreModule = {
       chatStore: {
@@ -565,64 +559,64 @@ vi.mock("../../src/lib/features/chat/stores/chatSearchStore", () =>
   getChatSearchModule(),
 );
 
-  function getUserStoreModule(): UserStoreModule {
-    const globals = globalThis as typeof globalThis & {
-      __userStoreModule?: UserStoreModule;
-    };
-    if (!globals.__userStoreModule) {
-      const state = createWritable<{ me: User; loading: boolean }>({
-        me: {
-          id: "user-current",
-          name: "Current User",
-          avatar: "https://example.com/me.png",
-          online: true,
-        },
-        loading: false,
-      });
+function getUserStoreModule(): UserStoreModule {
+  const globals = globalThis as typeof globalThis & {
+    __userStoreModule?: UserStoreModule;
+  };
+  if (!globals.__userStoreModule) {
+    const state = createWritable<{ me: User; loading: boolean }>({
+      me: {
+        id: "user-current",
+        name: "Current User",
+        avatar: "https://example.com/me.png",
+        online: true,
+      },
+      loading: false,
+    });
 
-      globals.__userStoreModule = {
-        userStore: {
-          subscribe: state.subscribe,
-        },
-        __setUser: (user: User) => {
-          state.set({ me: user, loading: false });
-        },
-      };
-    }
-    return globals.__userStoreModule;
+    globals.__userStoreModule = {
+      userStore: {
+        subscribe: state.subscribe,
+      },
+      __setUser: (user: User) => {
+        state.set({ me: user, loading: false });
+      },
+    };
   }
+  return globals.__userStoreModule;
+}
 
 vi.mock("$lib/stores/userStore", () => getUserStoreModule());
 vi.mock("../../src/lib/stores/userStore", () => getUserStoreModule());
 
-  function getMutedFriendsModule(): MutedFriendsModule {
-    const globals = globalThis as typeof globalThis & {
-      __mutedFriendsModule?: MutedFriendsModule;
+function getMutedFriendsModule(): MutedFriendsModule {
+  const globals = globalThis as typeof globalThis & {
+    __mutedFriendsModule?: MutedFriendsModule;
+  };
+  if (!globals.__mutedFriendsModule) {
+    const muted = new Set<string>();
+    const mutedFriendsStore = {
+      isMuted: vi.fn((id: string) => muted.has(id)),
+      mute: vi.fn((id: string) => {
+        muted.add(id);
+      }),
+      unmute: vi.fn((id: string) => {
+        muted.delete(id);
+      }),
     };
-    if (!globals.__mutedFriendsModule) {
-      const muted = new Set<string>();
-      const mutedFriendsStore = {
-        isMuted: vi.fn((id: string) => muted.has(id)),
-        mute: vi.fn((id: string) => {
-          muted.add(id);
-        }),
-        unmute: vi.fn((id: string) => {
-          muted.delete(id);
-        }),
-      };
 
-      globals.__mutedFriendsModule = {
-        mutedFriendsStore,
-        __resetMutedFriends: () => {
-          muted.clear();
-          mutedFriendsStore.isMuted.mockClear();
-          mutedFriendsStore.mute.mockClear();
-          mutedFriendsStore.unmute.mockClear();
-        },
-      };
-    }
-    return globals.__mutedFriendsModule;
+    globals.__mutedFriendsModule = {
+      mutedFriendsStore,
+      __resetMutedFriends: () => {
+        muted.clear();
+        mutedFriendsStore.isMuted.mockClear();
+        mutedFriendsStore.mute.mockClear();
+        mutedFriendsStore.unmute.mockClear();
+      },
+    };
   }
+  return globals.__mutedFriendsModule;
+}
 
 vi.mock("$lib/features/friends/stores/mutedFriendsStore", () =>
   getMutedFriendsModule(),
@@ -631,29 +625,29 @@ vi.mock("../../src/lib/features/friends/stores/mutedFriendsStore", () =>
   getMutedFriendsModule(),
 );
 
-  function getFriendStoreModule(): FriendStoreModule {
-    const globals = globalThis as typeof globalThis & {
-      __friendStoreModule?: FriendStoreModule;
-    };
-    if (!globals.__friendStoreModule) {
-      const removeFriend = vi.fn(
-        async (_friendshipId: string, _friendId: string) => {},
-      );
-      const initialize = vi.fn(async () => Promise.resolve());
+function getFriendStoreModule(): FriendStoreModule {
+  const globals = globalThis as typeof globalThis & {
+    __friendStoreModule?: FriendStoreModule;
+  };
+  if (!globals.__friendStoreModule) {
+    const removeFriend = vi.fn(
+      async (_friendshipId: string, _friendId: string) => {},
+    );
+    const initialize = vi.fn(async () => Promise.resolve());
 
-      globals.__friendStoreModule = {
-        friendStore: {
-          removeFriend,
-          initialize,
-        },
-        __resetFriendStore: () => {
-          removeFriend.mockClear();
-          initialize.mockClear();
-        },
-      };
-    }
-    return globals.__friendStoreModule;
+    globals.__friendStoreModule = {
+      friendStore: {
+        removeFriend,
+        initialize,
+      },
+      __resetFriendStore: () => {
+        removeFriend.mockClear();
+        initialize.mockClear();
+      },
+    };
   }
+  return globals.__friendStoreModule;
+}
 
 vi.mock("$lib/features/friends/stores/friendStore", () =>
   getFriendStoreModule(),
@@ -662,47 +656,47 @@ vi.mock("../../src/lib/features/friends/stores/friendStore", () =>
   getFriendStoreModule(),
 );
 
-  function getCallStoreModule(): CallStoreModule {
-    const globals = globalThis as typeof globalThis & {
-      __callStoreModule?: CallStoreModule;
-    };
-    if (!globals.__callStoreModule) {
-      const state = createWritable<{ activeCall: unknown }>({
-        activeCall: null,
-      });
+function getCallStoreModule(): CallStoreModule {
+  const globals = globalThis as typeof globalThis & {
+    __callStoreModule?: CallStoreModule;
+  };
+  if (!globals.__callStoreModule) {
+    const state = createWritable<{ activeCall: unknown }>({
+      activeCall: null,
+    });
 
-      globals.__callStoreModule = {
-        callStore: {
-          subscribe: state.subscribe,
-          initialize: vi.fn(),
-          startCall: vi.fn(),
-          setCallModalOpen: vi.fn(),
-        },
-      };
-    }
-    return globals.__callStoreModule;
+    globals.__callStoreModule = {
+      callStore: {
+        subscribe: state.subscribe,
+        initialize: vi.fn(),
+        startCall: vi.fn(),
+        setCallModalOpen: vi.fn(),
+      },
+    };
   }
+  return globals.__callStoreModule;
+}
 
 vi.mock("$lib/features/calls/stores/callStore", () => getCallStoreModule());
 vi.mock("../../src/lib/features/calls/stores/callStore", () =>
   getCallStoreModule(),
 );
 
-  function getServerStoreModule(): ServerStoreModule {
-    const globals = globalThis as typeof globalThis & {
-      __serverStoreModule?: ServerStoreModule;
-    };
-    if (!globals.__serverStoreModule) {
-      const state = createWritable<{ servers: unknown[] }>({ servers: [] });
+function getServerStoreModule(): ServerStoreModule {
+  const globals = globalThis as typeof globalThis & {
+    __serverStoreModule?: ServerStoreModule;
+  };
+  if (!globals.__serverStoreModule) {
+    const state = createWritable<{ servers: unknown[] }>({ servers: [] });
 
-      globals.__serverStoreModule = {
-        serverStore: {
-          subscribe: state.subscribe,
-        },
-      };
-    }
-    return globals.__serverStoreModule;
+    globals.__serverStoreModule = {
+      serverStore: {
+        subscribe: state.subscribe,
+      },
+    };
   }
+  return globals.__serverStoreModule;
+}
 
 vi.mock("$lib/features/servers/stores/serverStore", () =>
   getServerStoreModule(),
@@ -711,60 +705,60 @@ vi.mock("../../src/lib/features/servers/stores/serverStore", () =>
   getServerStoreModule(),
 );
 
-  function getToastModule(): ToastModuleMock {
-    const globals = globalThis as typeof globalThis & {
-      __toastModule?: ToastModuleMock;
-    };
-    if (!globals.__toastModule) {
-      const addToast = vi.fn();
-      const showErrorToast = vi.fn();
+function getToastModule(): ToastModuleMock {
+  const globals = globalThis as typeof globalThis & {
+    __toastModule?: ToastModuleMock;
+  };
+  if (!globals.__toastModule) {
+    const addToast = vi.fn();
+    const showErrorToast = vi.fn();
 
-      globals.__toastModule = {
-        toasts: {
-          addToast,
-          showErrorToast,
-        },
-        __resetToasts: () => {
-          addToast.mockClear();
-          showErrorToast.mockClear();
-        },
-      };
-    }
-    return globals.__toastModule;
+    globals.__toastModule = {
+      toasts: {
+        addToast,
+        showErrorToast,
+      },
+      __resetToasts: () => {
+        addToast.mockClear();
+        showErrorToast.mockClear();
+      },
+    };
   }
+  return globals.__toastModule;
+}
 
 vi.mock("$lib/stores/ToastStore", () => getToastModule());
 vi.mock("../../src/lib/stores/ToastStore", () => getToastModule());
 
-  function getContextMenuModule(): ContextMenuModuleMock {
-    const globals = globalThis as typeof globalThis & {
-      __contextMenuModule?: ContextMenuModuleMock;
+function getContextMenuModule(): ContextMenuModuleMock {
+  const globals = globalThis as typeof globalThis & {
+    __contextMenuModule?: ContextMenuModuleMock;
+  };
+  if (!globals.__contextMenuModule) {
+    globals.__contextMenuModule = {
+      buildGroupModalOptions: () => ({}),
+      buildReportUserPayload: () => ({}),
     };
-    if (!globals.__contextMenuModule) {
-      globals.__contextMenuModule = {
-        buildGroupModalOptions: () => ({}),
-        buildReportUserPayload: () => ({}),
-      };
-    }
-    return globals.__contextMenuModule;
   }
+  return globals.__contextMenuModule;
+}
 
 vi.mock("$lib/features/chat/utils/contextMenu", () => getContextMenuModule());
 vi.mock("../../src/lib/features/chat/utils/contextMenu", () =>
   getContextMenuModule(),
 );
 
-  function getCollabModule(): CollabModuleMock {
-    const globals = globalThis as typeof globalThis & {
-      __collabModule?: CollabModuleMock;
+function getCollabModule(): CollabModuleMock {
+  const globals = globalThis as typeof globalThis & {
+    __collabModule?: CollabModuleMock;
+  };
+  if (!globals.__collabModule) {
+    globals.__collabModule = {
+      generateCollaborationDocumentId: (prefix = "collab") => `${prefix}-mock`,
     };
-    if (!globals.__collabModule) {
-      globals.__collabModule = {
-        generateCollaborationDocumentId: (prefix = "collab") => `${prefix}-mock`,
-      };
-    }
-    return globals.__collabModule;
   }
+  return globals.__collabModule;
+}
 
 vi.mock("$lib/features/collaboration/collabDocumentStore", () =>
   getCollabModule(),

@@ -8,7 +8,9 @@ import type { Friend } from "$lib/features/friends/models/Friend";
 import type { Server } from "$lib/features/servers/models/Server";
 
 const invokeMock = vi.fn();
-const showNativeNotificationMock = vi.fn(() => Promise.resolve());
+const showNativeNotificationMock = vi.fn((_payload: unknown) =>
+  Promise.resolve(),
+);
 
 const createDeferred = <T>() => {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -61,7 +63,9 @@ describe("chatStore attachment lifecycle", () => {
       notificationSound: "Default Silent Chime",
     }));
     focusSpy?.mockRestore();
-    focusSpy = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    focusSpy = vi
+      .spyOn(document, "hasFocus")
+      .mockReturnValue(true) as ReturnType<typeof vi.spyOn>;
     Object.defineProperty(document, "visibilityState", {
       value: "visible",
       configurable: true,

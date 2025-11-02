@@ -1,7 +1,7 @@
 use aegis_shared_types::AppState;
 use aes_gcm::aead::Aead;
-use aes_gcm::{Aes256Gcm, Key, Nonce};
 use aes_gcm::KeyInit;
+use aes_gcm::{Aes256Gcm, Key, Nonce};
 use libp2p::PeerId;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -10,7 +10,6 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use typenum::U12;
-
 
 const CHUNK_SIZE: usize = 1024 * 1024; // 1MB
 
@@ -28,14 +27,22 @@ pub fn generate_symmetric_key() -> ([u8; 32], [u8; 12]) {
     (key, nonce)
 }
 
-pub fn encrypt_file_chunk(data: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Result<Vec<u8>, String> {
+pub fn encrypt_file_chunk(
+    data: &[u8],
+    key: &[u8; 32],
+    nonce: &[u8; 12],
+) -> Result<Vec<u8>, String> {
     let key = Key::<Aes256Gcm>::from(*key);
     let cipher = Aes256Gcm::new(&key);
     let nonce = Nonce::<U12>::from(*nonce);
     cipher.encrypt(&nonce, data).map_err(|e| e.to_string())
 }
 
-pub fn decrypt_file_chunk(data: &[u8], key: &[u8; 32], nonce: &[u8; 12]) -> Result<Vec<u8>, String> {
+pub fn decrypt_file_chunk(
+    data: &[u8],
+    key: &[u8; 32],
+    nonce: &[u8; 12],
+) -> Result<Vec<u8>, String> {
     let key = Key::<Aes256Gcm>::from(*key);
     let cipher = Aes256Gcm::new(&key);
     let nonce = Nonce::<U12>::from(*nonce);
@@ -61,7 +68,11 @@ pub async fn send_file(
     // In a real application, this would be a major security vulnerability.
     let _encrypted_key = key.to_vec();
 
-    state.network_tx.send(request_message_bytes).await.map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(request_message_bytes)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut _chunk_index = 0;
     let mut buffer = vec![0; CHUNK_SIZE];
@@ -74,12 +85,20 @@ pub async fn send_file(
         let chunk_data = &buffer[..bytes_read];
         let _encrypted_chunk = encrypt_file_chunk(chunk_data, &key, &nonce)?;
 
-        state.network_tx.send(chunk_message_bytes.clone()).await.map_err(|e| e.to_string())?;
+        state
+            .network_tx
+            .send(chunk_message_bytes.clone())
+            .await
+            .map_err(|e| e.to_string())?;
 
         _chunk_index += 1;
     }
 
-    state.network_tx.send(complete_message_bytes).await.map_err(|e| e.to_string())?;
+    state
+        .network_tx
+        .send(complete_message_bytes)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }

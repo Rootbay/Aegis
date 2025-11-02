@@ -26,7 +26,7 @@ fn build_app_state(
     let (network_tx, network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
-    let app_data_dir = temp_dir.into_path();
+    let (_dir_handle, app_data_dir) = temp_dir.keep().expect("Failed to keep temp dir");
     let app_state = AppState {
         identity,
         network_tx,
@@ -75,6 +75,8 @@ async fn block_and_unblock_friend_flow_updates_status() {
         public_key: Some(public_key.clone()),
         bio: None,
         tag: None,
+        status_message: None,
+        location: None,
     };
     let target = User {
         id: target_id.clone(),
@@ -84,6 +86,8 @@ async fn block_and_unblock_friend_flow_updates_status() {
         public_key: Some(public_key),
         bio: None,
         tag: None,
+        status_message: None,
+        location: None,
     };
 
     seed_users(&db_pool, &me, &target).await;

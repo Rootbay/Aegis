@@ -1,5 +1,5 @@
-use aegis::commands::servers::{list_server_bans, unban_server_member, ServerBanUpdate};
-use aegis::commands::state::AppStateContainer;
+use aegis_lib::commands::servers::{list_server_bans, unban_server_member, ServerBanUpdate};
+use aegis_lib::commands::state::AppStateContainer;
 use aegis_shared_types::{
     AppState, ConnectivityEventPayload, FileAclPolicy, FileTransferCommand, IncomingFile,
 };
@@ -88,6 +88,9 @@ async fn unban_command_removes_ban_and_emits_event() {
         app_data_dir: dir.path().to_path_buf(),
         connectivity_snapshot: Arc::new(AsyncMutex::new(None::<ConnectivityEventPayload>)),
         voice_memos_enabled: Arc::new(AtomicBool::new(false)),
+        relays: Arc::new(AsyncMutex::new(Vec::new())),
+        trusted_devices: Arc::new(AsyncMutex::new(Vec::new())),
+        pending_device_bundles: Arc::new(AsyncMutex::new(HashMap::<String, aegis_shared_types::PendingDeviceProvisioning>::new())),
     };
 
     let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));

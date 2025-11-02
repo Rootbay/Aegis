@@ -112,7 +112,7 @@
     context === "group" ? (providedGroupOwnerId ?? null) : null,
   );
 
-  const currentUserId = $derived(() => $userStore.me?.id ?? null);
+  const currentUserId = $derived($userStore.me?.id ?? null);
 
   let inviteeSelection = $state(new SvelteSet<string>());
   let showInviteMembersDialog = $state(false);
@@ -130,7 +130,7 @@
       currentUserId === resolvedGroupOwnerId,
   );
 
-  const memberIdSet = $derived(() => {
+  const memberIdSet = $derived.by(() => {
     const set = new SvelteSet<string>();
     for (const member of members) {
       if (typeof member.id === "string") {
@@ -140,7 +140,7 @@
     return set;
   });
 
-  const inviteCandidates = $derived(() => {
+  const inviteCandidates = $derived.by(() => {
     if (!canInviteMembers) {
       return [] as GroupModalUser[];
     }

@@ -1,12 +1,12 @@
 //--- FILE: src/aep/src/database.rs ---
-use sqlx::{sqlite::SqlitePoolOptions, FromRow, Pool, QueryBuilder, Sqlite};
-use serde::{Deserialize, Serialize};
+use aegis_types::AegisError;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use sqlx::{sqlite::SqlitePoolOptions, FromRow, Pool, QueryBuilder, Sqlite};
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt;
-use serde_json;
-use aegis_types::AegisError;
 
 pub use aegis_shared_types::{Channel, ChannelCategory, Role, Server, ServerInvite, User};
 
@@ -71,12 +71,13 @@ impl TryFrom<&str> for FriendshipStatus {
             "accepted" => Ok(FriendshipStatus::Accepted),
             "blocked_by_a" => Ok(FriendshipStatus::BlockedByA),
             "blocked_by_b" => Ok(FriendshipStatus::BlockedByB),
-            _ => Err(AegisError::InvalidInput(format!("Unknown friendship status: {}", s))),
+            _ => Err(AegisError::InvalidInput(format!(
+                "Unknown friendship status: {}",
+                s
+            ))),
         }
     }
 }
-
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Attachment {
@@ -361,7 +362,10 @@ pub async fn initialize_db(db_path: std::path::PathBuf) -> Result<Pool<Sqlite>, 
     Ok(pool)
 }
 
-pub async fn insert_friendship(pool: &Pool<Sqlite>, friendship: &Friendship) -> Result<(), sqlx::Error> {
+pub async fn insert_friendship(
+    pool: &Pool<Sqlite>,
+    friendship: &Friendship,
+) -> Result<(), sqlx::Error> {
     let created_at_str = friendship.created_at.to_rfc3339();
     let updated_at_str = friendship.updated_at.to_rfc3339();
     sqlx::query!(
@@ -378,7 +382,11 @@ pub async fn insert_friendship(pool: &Pool<Sqlite>, friendship: &Friendship) -> 
     Ok(())
 }
 
-pub async fn update_friendship_status(pool: &Pool<Sqlite>, friendship_id: &str, status: FriendshipStatus) -> Result<(), sqlx::Error> {
+pub async fn update_friendship_status(
+    pool: &Pool<Sqlite>,
+    friendship_id: &str,
+    status: FriendshipStatus,
+) -> Result<(), sqlx::Error> {
     let updated_at = Utc::now().to_rfc3339();
     let status_str = status.to_string();
     sqlx::query!(
@@ -392,7 +400,11 @@ pub async fn update_friendship_status(pool: &Pool<Sqlite>, friendship_id: &str, 
     Ok(())
 }
 
-pub async fn get_friendship(pool: &Pool<Sqlite>, user_a_id: &str, user_b_id: &str) -> Result<Option<Friendship>, sqlx::Error> {
+pub async fn get_friendship(
+    pool: &Pool<Sqlite>,
+    user_a_id: &str,
+    user_b_id: &str,
+) -> Result<Option<Friendship>, sqlx::Error> {
     let friendship = sqlx::query_as!(Friendship,
         "SELECT id, user_a_id, user_b_id, status, created_at as \"created_at!: DateTime<Utc>\", updated_at as \"updated_at!: DateTime<Utc>\" FROM friendships WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)",
         user_a_id,
@@ -405,7 +417,10 @@ pub async fn get_friendship(pool: &Pool<Sqlite>, user_a_id: &str, user_b_id: &st
     Ok(friendship)
 }
 
-pub async fn get_all_friendships_for_user(pool: &Pool<Sqlite>, user_id: &str) -> Result<Vec<Friendship>, sqlx::Error> {
+pub async fn get_all_friendships_for_user(
+    pool: &Pool<Sqlite>,
+    user_id: &str,
+) -> Result<Vec<Friendship>, sqlx::Error> {
     let friendships = sqlx::query_as!(Friendship,
         "SELECT id, user_a_id, user_b_id, status, created_at as \"created_at!: DateTime<Utc>\", updated_at as \"updated_at!: DateTime<Utc>\" FROM friendships WHERE user_a_id = ? OR user_b_id = ?",
         user_id,
@@ -555,14 +570,20 @@ pub async fn get_friendship_with_profile_for_user(
     Ok(result)
 }
 
-pub async fn delete_friendship(pool: &Pool<Sqlite>, friendship_id: &str) -> Result<(), sqlx::Error> {
+pub async fn delete_friendship(
+    pool: &Pool<Sqlite>,
+    friendship_id: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM friendships WHERE id = ?", friendship_id)
         .execute(pool)
         .await?;
     Ok(())
 }
 
-pub async fn get_friendship_by_id(pool: &Pool<Sqlite>, friendship_id: &str) -> Result<Option<Friendship>, sqlx::Error> {
+pub async fn get_friendship_by_id(
+    pool: &Pool<Sqlite>,
+    friendship_id: &str,
+) -> Result<Option<Friendship>, sqlx::Error> {
     let friendship = sqlx::query_as!(Friendship,
         "SELECT id, user_a_id, user_b_id, status, created_at as \"created_at!: DateTime<Utc>\", updated_at as \"updated_at!: DateTime<Utc>\" FROM friendships WHERE id = ?",
         friendship_id,
@@ -639,9 +660,7 @@ pub async fn update_server_metadata(
         }
         if let Some(allow_invites) = update.allow_invites {
             has_updates = true;
-            separated
-                .push("allow_invites = ")
-                .push_bind(allow_invites);
+            separated.push("allow_invites = ").push_bind(allow_invites);
         }
     }
 
@@ -702,7 +721,10 @@ pub async fn update_server_moderation(
     Ok(())
 }
 
-pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Result<Vec<Server>, sqlx::Error> {
+pub async fn get_all_servers(
+    pool: &Pool<Sqlite>,
+    current_user_id: &str,
+) -> Result<Vec<Server>, sqlx::Error> {
     #[derive(FromRow)]
     struct ServerRow {
         id: String,
@@ -757,7 +779,10 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
     let mut servers: Vec<Server> = Vec::new();
     for server_row in server_rows {
         let created_at = parse_timestamp(&server_row.created_at)?;
-        let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
+        let channels = channels_map
+            .get(&server_row.id)
+            .cloned()
+            .unwrap_or_default();
         let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
         let categories = categories_map
             .get(&server_row.id)
@@ -778,9 +803,7 @@ pub async fn get_all_servers(pool: &Pool<Sqlite>, current_user_id: &str) -> Resu
             explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
             transparent_edits: Some(bool_from_i64(server_row.transparent_edits)),
             deleted_message_display: Some(server_row.deleted_message_display.clone()),
-            read_receipts_enabled: server_row
-                .read_receipts_enabled
-                .map(bool_from_i64),
+            read_receipts_enabled: server_row.read_receipts_enabled.map(bool_from_i64),
             channels,
             categories,
             members,
@@ -852,7 +875,10 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
     let invites_map = get_invites_for_servers(pool, &server_ids).await?;
     let roles_map = get_roles_for_servers(pool, &server_ids).await?;
 
-    let channels = channels_map.get(&server_row.id).cloned().unwrap_or_default();
+    let channels = channels_map
+        .get(&server_row.id)
+        .cloned()
+        .unwrap_or_default();
     let members = members_map.get(&server_row.id).cloned().unwrap_or_default();
     let categories = categories_map
         .get(&server_row.id)
@@ -874,9 +900,7 @@ pub async fn get_server_by_id(pool: &Pool<Sqlite>, server_id: &str) -> Result<Se
         explicit_content_filter: Some(bool_from_i64(server_row.explicit_content_filter)),
         transparent_edits: Some(bool_from_i64(server_row.transparent_edits)),
         deleted_message_display: Some(server_row.deleted_message_display.clone()),
-        read_receipts_enabled: server_row
-            .read_receipts_enabled
-            .map(bool_from_i64),
+        read_receipts_enabled: server_row.read_receipts_enabled.map(bool_from_i64),
         channels,
         categories,
         members,
@@ -891,10 +915,7 @@ pub async fn insert_server_event(
 ) -> Result<(), sqlx::Error> {
     let scheduled_for = event.scheduled_for.to_rfc3339();
     let created_at = event.created_at.to_rfc3339();
-    let cancelled_at = event
-        .cancelled_at
-        .as_ref()
-        .map(|dt| dt.to_rfc3339());
+    let cancelled_at = event.cancelled_at.as_ref().map(|dt| dt.to_rfc3339());
 
     sqlx::query!(
         "INSERT INTO server_events (id, server_id, title, description, channel_id, scheduled_for, created_by, created_at, status, cancelled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1190,7 +1211,10 @@ pub async fn replace_server_channels(
     Ok(())
 }
 
-pub async fn get_channel_by_id(pool: &Pool<Sqlite>, channel_id: &str) -> Result<Channel, sqlx::Error> {
+pub async fn get_channel_by_id(
+    pool: &Pool<Sqlite>,
+    channel_id: &str,
+) -> Result<Channel, sqlx::Error> {
     sqlx::query_as!(
         Channel,
         "SELECT id, server_id, name, channel_type, private, category_id FROM channels WHERE id = ?",
@@ -1200,14 +1224,20 @@ pub async fn get_channel_by_id(pool: &Pool<Sqlite>, channel_id: &str) -> Result<
     .await
 }
 
-pub async fn get_channels_for_server(pool: &Pool<Sqlite>, server_id: &str) -> Result<Vec<Channel>, sqlx::Error> {
+pub async fn get_channels_for_server(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+) -> Result<Vec<Channel>, sqlx::Error> {
     let channels = sqlx::query_as!(Channel, "SELECT id, server_id, name, channel_type, private, category_id FROM channels WHERE server_id = ?", server_id)
         .fetch_all(pool)
         .await?;
     Ok(channels)
 }
 
-pub async fn get_channels_for_servers(pool: &Pool<Sqlite>, server_ids: &[String]) -> Result<HashMap<String, Vec<Channel>>, sqlx::Error> {
+pub async fn get_channels_for_servers(
+    pool: &Pool<Sqlite>,
+    server_ids: &[String],
+) -> Result<HashMap<String, Vec<Channel>>, sqlx::Error> {
     let mut channels_map: HashMap<String, Vec<Channel>> = HashMap::new();
 
     if server_ids.is_empty() {
@@ -1226,7 +1256,10 @@ pub async fn get_channels_for_servers(pool: &Pool<Sqlite>, server_ids: &[String]
     let channels = q.fetch_all(pool).await?;
 
     for channel in channels {
-        channels_map.entry(channel.server_id.clone()).or_insert_with(Vec::new).push(channel);
+        channels_map
+            .entry(channel.server_id.clone())
+            .or_insert_with(Vec::new)
+            .push(channel);
     }
 
     Ok(channels_map)
@@ -1364,10 +1397,9 @@ pub async fn insert_message(pool: &Pool<Sqlite>, message: &Message) -> Result<()
         }
         let size_i64 = attachment.size as i64;
 
-        let data = attachment
-            .data
-            .clone()
-            .ok_or_else(|| sqlx::Error::Protocol("attachment is missing binary data for insert".into()))?;
+        let data = attachment.data.clone().ok_or_else(|| {
+            sqlx::Error::Protocol("attachment is missing binary data for insert".into())
+        })?;
 
         sqlx::query!(
             "INSERT INTO attachments (id, message_id, name, content_type, size, data) VALUES (?, ?, ?, ?, ?, ?)",
@@ -1517,7 +1549,10 @@ pub async fn get_group_chats_for_user(
     let mut records = Vec::with_capacity(chats.len());
     for chat in chats {
         let members = members_by_chat.remove(&chat.id).unwrap_or_default();
-        let member_ids = members.iter().map(|member| member.user_id.clone()).collect();
+        let member_ids = members
+            .iter()
+            .map(|member| member.user_id.clone())
+            .collect();
         records.push(GroupChatRecord { chat, member_ids });
     }
 
@@ -1599,10 +1634,7 @@ pub async fn get_group_chat_record(
     .fetch_all(pool)
     .await?;
 
-    let member_ids = member_rows
-        .into_iter()
-        .map(|row| row.user_id)
-        .collect();
+    let member_ids = member_rows.into_iter().map(|row| row.user_id).collect();
 
     Ok(Some(GroupChatRecord {
         chat: GroupChat {
@@ -1715,12 +1747,9 @@ pub async fn mark_message_as_read(
     pool: &Pool<Sqlite>,
     message_id: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        "UPDATE messages SET read = 1 WHERE id = ?",
-        message_id
-    )
-    .execute(pool)
-    .await?;
+    sqlx::query!("UPDATE messages SET read = 1 WHERE id = ?", message_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -1825,8 +1854,12 @@ pub async fn remove_reaction_from_message(
     Ok(())
 }
 
-
-pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i64, offset: i64) -> Result<Vec<Message>, sqlx::Error> {
+pub async fn get_messages_for_chat(
+    pool: &Pool<Sqlite>,
+    chat_id: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Message>, sqlx::Error> {
     #[derive(FromRow)]
     struct MessageRaw {
         id: String,
@@ -1933,14 +1966,17 @@ pub async fn get_messages_for_chat(pool: &Pool<Sqlite>, chat_id: &str, limit: i6
         let mut attachments_map: HashMap<String, Vec<Attachment>> = HashMap::new();
         for row in attachment_rows {
             let size_u64 = if row.size < 0 { 0 } else { row.size as u64 };
-            attachments_map.entry(row.message_id.clone()).or_default().push(Attachment {
-                id: row.id,
-                message_id: row.message_id,
-                name: row.name,
-                content_type: row.content_type,
-                size: size_u64,
-                data: None,
-            });
+            attachments_map
+                .entry(row.message_id.clone())
+                .or_default()
+                .push(Attachment {
+                    id: row.id,
+                    message_id: row.message_id,
+                    name: row.name,
+                    content_type: row.content_type,
+                    size: size_u64,
+                    data: None,
+                });
         }
 
         for message in &mut messages {
@@ -1999,12 +2035,9 @@ pub async fn get_attachment_data(
     pool: &Pool<Sqlite>,
     attachment_id: &str,
 ) -> Result<Vec<u8>, sqlx::Error> {
-    let record = sqlx::query!(
-        "SELECT data FROM attachments WHERE id = ?",
-        attachment_id
-    )
-    .fetch_optional(pool)
-    .await?;
+    let record = sqlx::query!("SELECT data FROM attachments WHERE id = ?", attachment_id)
+        .fetch_optional(pool)
+        .await?;
 
     match record {
         Some(row) => Ok(row.data),
@@ -2012,10 +2045,18 @@ pub async fn get_attachment_data(
     }
 }
 
-pub async fn add_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &str) -> Result<(), sqlx::Error> {
-    sqlx::query!("INSERT OR IGNORE INTO server_members (server_id, user_id) VALUES (?, ?)", server_id, user_id)
-        .execute(pool)
-        .await?;
+pub async fn add_server_member(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "INSERT OR IGNORE INTO server_members (server_id, user_id) VALUES (?, ?)",
+        server_id,
+        user_id
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
@@ -2035,15 +2076,25 @@ pub async fn server_has_member(
     Ok(count > 0)
 }
 
-pub async fn remove_server_member(pool: &Pool<Sqlite>, server_id: &str, user_id: &str) -> Result<(), sqlx::Error> {
-    sqlx::query!("DELETE FROM server_members WHERE server_id = ? AND user_id = ?", server_id, user_id)
-        .execute(pool)
-        .await?;
+pub async fn remove_server_member(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "DELETE FROM server_members WHERE server_id = ? AND user_id = ?",
+        server_id,
+        user_id
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
-
-pub async fn get_server_members(pool: &Pool<Sqlite>, server_id: &str) -> Result<Vec<User>, sqlx::Error> {
+pub async fn get_server_members(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+) -> Result<Vec<User>, sqlx::Error> {
     let members = sqlx::query_as!(User,
         "SELECT u.id, u.username, u.avatar, u.is_online, u.public_key, u.bio, u.tag, u.status_message, u.location FROM users u JOIN server_members sm ON u.id = sm.user_id WHERE sm.server_id = ?",
         server_id
@@ -2053,7 +2104,10 @@ pub async fn get_server_members(pool: &Pool<Sqlite>, server_id: &str) -> Result<
     Ok(members)
 }
 
-pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String]) -> Result<HashMap<String, Vec<User>>, sqlx::Error> {
+pub async fn get_members_for_servers(
+    pool: &Pool<Sqlite>,
+    server_ids: &[String],
+) -> Result<HashMap<String, Vec<User>>, sqlx::Error> {
     let mut members_map: HashMap<String, Vec<User>> = HashMap::new();
 
     if server_ids.is_empty() {
@@ -2097,7 +2151,10 @@ pub async fn get_members_for_servers(pool: &Pool<Sqlite>, server_ids: &[String])
             status_message: row.status_message,
             location: row.location,
         };
-        members_map.entry(row.server_id).or_insert_with(Vec::new).push(member);
+        members_map
+            .entry(row.server_id)
+            .or_insert_with(Vec::new)
+            .push(member);
     }
 
     Ok(members_map)
@@ -2177,7 +2234,11 @@ pub async fn get_roles_for_servers(
         return Ok(roles_map);
     }
 
-    let placeholders = server_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let placeholders = server_ids
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(", ");
     let query = format!(
         "SELECT id, server_id, name, color, hoist, mentionable, permissions FROM server_roles WHERE server_id IN ({})",
         placeholders
@@ -2448,7 +2509,11 @@ pub async fn get_invites_for_servers(
         return Ok(invites_map);
     }
 
-    let placeholders = server_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let placeholders = server_ids
+        .iter()
+        .map(|_| "?")
+        .collect::<Vec<_>>()
+        .join(", ");
     let query = format!(
         "SELECT id, server_id, code, created_by, created_at, expires_at, max_uses, uses FROM server_invites WHERE server_id IN ({})",
         placeholders
@@ -2490,10 +2555,7 @@ pub async fn get_server_invite_by_id(
     }
 }
 
-pub async fn delete_server_invite(
-    pool: &Pool<Sqlite>,
-    invite_id: &str,
-) -> Result<(), sqlx::Error> {
+pub async fn delete_server_invite(pool: &Pool<Sqlite>, invite_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("DELETE FROM server_invites WHERE id = ?", invite_id)
         .execute(pool)
         .await?;
@@ -2536,10 +2598,7 @@ pub async fn create_server_invite(
     .into_invite()
 }
 
-pub async fn insert_review(
-    pool: &Pool<Sqlite>,
-    review: &NewReview,
-) -> Result<(), sqlx::Error> {
+pub async fn insert_review(pool: &Pool<Sqlite>, review: &NewReview) -> Result<(), sqlx::Error> {
     let subject = review.subject.as_str().to_owned();
     let created_at = review.created_at.to_rfc3339();
     sqlx::query!(
@@ -2579,8 +2638,7 @@ pub async fn list_reviews_by_subject(
     .fetch_all(pool)
     .await?;
 
-    rows
-        .into_iter()
+    rows.into_iter()
         .map(Review::try_from)
         .collect::<Result<Vec<_>, _>>()
 }

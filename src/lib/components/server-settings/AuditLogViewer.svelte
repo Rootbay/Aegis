@@ -12,12 +12,16 @@
   import type { User } from "$lib/features/auth/models/User";
   import type { ServerAuditLogEntry } from "$lib/features/servers/models/Server";
 
-  export let entries: ServerAuditLogEntry[] = [];
-  export let members: User[] = [];
+  interface Props {
+    entries?: ServerAuditLogEntry[];
+    members?: User[];
+  }
+
+  const { entries = [], members = [] }: Props = $props();
 
   let query = $state("");
 
-  const memberDirectory = $derived<SvelteMap<string, User>>(() => {
+  const memberDirectory = $derived.by(() => {
     const directory = new SvelteMap<string, User>();
     for (const member of members ?? []) {
       if (member?.id) {
@@ -39,7 +43,7 @@
       : [],
   );
 
-  const filteredEntries = $derived(() => {
+  const filteredEntries = $derived.by(() => {
     if (!query) {
       return normalizedEntries;
     }

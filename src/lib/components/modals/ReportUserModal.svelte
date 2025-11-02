@@ -150,7 +150,7 @@
       </div>
 
       <DialogFooter class="pt-2">
-        <DialogClose asChild>
+        <DialogClose>
           <Button type="button" variant="outline">Cancel</Button>
         </DialogClose>
         <Button type="button" disabled={submitting} onclick={submitReport}>

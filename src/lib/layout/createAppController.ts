@@ -156,6 +156,7 @@ export type AppController = {
     openModal: PageState["openModal"];
     closeModal: PageState["closeModal"];
     openDetailedProfileModal: PageState["openDetailedProfileModal"];
+    openProfileReviewsModal: PageState["openProfileReviewsModal"];
     openCommandPalette: () => void;
     closeCommandPalette: () => void;
   };
@@ -307,7 +308,7 @@ export function createAppController(): AppController {
   };
 
   const openCreateGroupModalWithOptions: PageState["openCreateGroupModal"] = (
-    options = {},
+    options = { preselectedUserIds: [] },
   ) => {
     openModal("createGroup", options);
   };
@@ -493,7 +494,7 @@ export function createAppController(): AppController {
               statusMessage: normalizedStatusMessage,
               location: normalizedLocation,
             });
-            if ($userStore.me?.id === user_id) {
+            if (get(userStore).me?.id === user_id) {
               userStore.applyPresence({
                 online: is_online,
                 statusMessage: normalizedStatusMessage,
@@ -512,9 +513,16 @@ export function createAppController(): AppController {
                 (payload.kind ?? "document") === "whiteboard"
                   ? "whiteboard"
                   : "document";
-              const updateArray = Array.isArray(payload.update)
-                ? payload.update
-                : Array.from(payload.update ?? []);
+              let updateArray: number[];
+              if (Array.isArray(payload.update)) {
+                updateArray = payload.update;
+              } else if (payload.update instanceof ArrayBuffer) {
+                updateArray = Array.from(new Uint8Array(payload.update));
+              } else if (payload.update instanceof Uint8Array) {
+                updateArray = Array.from(payload.update);
+              } else {
+                updateArray = Array.from(payload.update ?? []);
+              }
               collaborationStore.receiveRemoteUpdate({
                 documentId,
                 update: updateArray,
