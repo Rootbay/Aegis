@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { Home, Plus, RadioTower, Settings } from "@lucide/svelte";
+  import { House, Plus, RadioTower, Settings } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import { page } from "$app/stores";
@@ -317,7 +317,7 @@
 <Sidebar
   side="left"
   variant="solid"
-  class="flex flex-col w-16 min-w-[64px] items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
+  class="flex flex-col w-16 min-w-16 items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
   aria-label="Server navigation"
 >
   <TooltipProvider>
@@ -338,7 +338,7 @@
               }
             }}
           >
-            <Home class="size-4" />
+            <House class="size-4" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">Home</TooltipContent>

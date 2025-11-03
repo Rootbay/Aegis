@@ -5,7 +5,7 @@
     Smartphone,
     Clock,
     Trash2,
-    AlertTriangle,
+    TriangleAlert,
   } from "@lucide/svelte";
   import {
     authStore,
@@ -59,7 +59,6 @@
     </div>
   </div>
 
-  <!-- Session Timeout -->
   <div class="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
     <div class="flex items-center gap-2">
       <Clock size={18} />
@@ -89,7 +88,6 @@
     </div>
   </div>
 
-  <!-- 2FA Settings -->
   <div class="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
     <div class="flex items-center gap-2">
       <Lock size={18} />
@@ -119,7 +117,6 @@
     </div>
   </div>
 
-  <!-- Trusted Devices -->
   <div class="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
     <div class="flex items-center gap-2">
       <Smartphone size={18} />
@@ -161,10 +158,9 @@
     {/if}
   </div>
 
-  <!-- Security Audit -->
   <div class="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
     <div class="flex items-center gap-2">
-      <AlertTriangle size={18} />
+      <TriangleAlert size={18} />
       <h3 class="font-semibold">Security Status</h3>
     </div>
 

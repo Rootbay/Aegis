@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Clock, Filter, ListChecks } from "@lucide/svelte";
+  import { Clock, ListFilter, ListChecks } from "@lucide/svelte";
   import {
     Avatar,
     AvatarImage,
@@ -115,7 +115,7 @@
         bind:value={query}
         class="pr-9"
       />
-      <Filter
+      <ListFilter
         class="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
       />
     </div>

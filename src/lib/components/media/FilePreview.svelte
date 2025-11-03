@@ -5,7 +5,7 @@
     X,
     File as FileIcon,
     Download as DownloadIcon,
-    Loader2,
+    LoaderCircle,
   } from "@lucide/svelte";
   import { onDestroy } from "svelte";
 
@@ -223,7 +223,7 @@
           disabled={attachment.isLoading}
         >
           {#if attachment.isLoading}
-            <Loader2 size={12} class="animate-spin" />
+            <LoaderCircle size={12} class="animate-spin" />
             Loading
           {:else}
             Load image
@@ -265,7 +265,7 @@
           aria-label={`Download attachment ${attachment.name}`}
         >
           {#if attachment.isLoading}
-            <Loader2 size={12} class="animate-spin" />
+            <LoaderCircle size={12} class="animate-spin" />
           {:else}
             <DownloadIcon size={12} />
           {/if}

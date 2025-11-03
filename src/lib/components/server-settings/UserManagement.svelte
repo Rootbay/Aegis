@@ -6,7 +6,7 @@
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { toasts } from "$lib/stores/ToastStore";
   import { invoke } from "@tauri-apps/api/core";
-  import { Copy, Loader2, RefreshCcw, Trash2 } from "@lucide/svelte";
+  import { Copy, LoaderCircle, RefreshCcw, Trash2 } from "@lucide/svelte";
   import type { User } from "$lib/features/auth/models/User";
 
   type ServerInviteResponse = {
@@ -372,7 +372,7 @@
               disabled={isRefreshingInvites}
             >
               {#if isRefreshingInvites}
-                <Loader2 class="h-4 w-4 animate-spin" />
+                <LoaderCircle class="h-4 w-4 animate-spin" />
                 Refreshing…
               {:else}
                 <RefreshCcw class="h-4 w-4" />
@@ -452,7 +452,7 @@
                           disabled={isInviteProcessing(invite.id)}
                         >
                           {#if isInviteProcessing(invite.id)}
-                            <Loader2 class="h-4 w-4 animate-spin" />
+                            <LoaderCircle class="h-4 w-4 animate-spin" />
                           {:else}
                             <Trash2 class="h-4 w-4" />
                           {/if}

@@ -12,7 +12,7 @@
     MessageCircle,
     Ban,
     UserMinus,
-    Unlock,
+    LockOpen,
     X,
     MapPin,
   } from "@lucide/svelte";
@@ -383,7 +383,7 @@
           disabled={actionInProgress === "unblock"}
           aria-busy={actionInProgress === "unblock"}
         >
-          <Unlock class="size-4" /> Unblock
+          <LockOpen class="size-4" /> Unblock
         </Button>
       {/if}
       <Button

@@ -146,7 +146,7 @@
           Deny
         </AlertDialogCancel>
         <AlertDialogAction
-          class="min-w-[6rem]"
+          class="min-w-24"
           onclick={handleApprove}
           disabled={actionInFlight === "reject"}
         >

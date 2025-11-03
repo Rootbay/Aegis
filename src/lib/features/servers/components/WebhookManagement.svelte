@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Loader2, Pencil, Plus, Save, Trash2, X } from "@lucide/svelte";
+  import { LoaderCircle, Pencil, Plus, Save, Trash2, X } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import type { Webhook } from "$lib/features/servers/models/Webhook";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -230,7 +230,7 @@
       disabled={submittingCreate}
     >
       {#if submittingCreate}
-        <Loader2 class="h-4 w-4 animate-spin" />
+        <LoaderCircle class="h-4 w-4 animate-spin" />
         Creating…
       {:else}
         <Plus class="h-4 w-4" />
@@ -250,7 +250,7 @@
       </h4>
       {#if isLoading}
         <div class="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 class="h-4 w-4 animate-spin" />
+          <LoaderCircle class="h-4 w-4 animate-spin" />
           Syncing…
         </div>
       {/if}
@@ -343,7 +343,7 @@
                         disabled={submittingEdit}
                       >
                         {#if submittingEdit}
-                          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                          <LoaderCircle class="h-3.5 w-3.5 animate-spin" />
                           Saving…
                         {:else}
                           <Save class="h-3.5 w-3.5" />
@@ -377,7 +377,7 @@
                         disabled={deletingId === webhook.id}
                       >
                         {#if deletingId === webhook.id}
-                          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+                          <LoaderCircle class="h-3.5 w-3.5 animate-spin" />
                           Removing…
                         {:else}
                           <Trash2 class="h-3.5 w-3.5" />

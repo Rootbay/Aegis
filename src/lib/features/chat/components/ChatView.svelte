@@ -4,7 +4,7 @@
   import {
     CircleAlert,
     Link,
-    Loader2,
+    LoaderCircle,
     Mic,
     SendHorizontal,
     Square,
@@ -1864,7 +1864,7 @@
               <div
                 class="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground"
               >
-                <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                <LoaderCircle class="h-4 w-4 animate-spin" aria-hidden="true" />
                 <span>Loading previous messages…</span>
               </div>
             {/if}
@@ -2086,14 +2086,11 @@
                           {/if}
                         {/each}
                       {:else}
-                        <p class="text-base whitespace-pre-wrap break-words">
+                        <p class="text-base whitespace-pre-wrap wrap-break-word">
                           {msg.content}
                         </p>
                         {#if $settings.enableLinkPreviews}
-                          {@const previewUrl = extractFirstLink(
-                            msg.content ?? "",
-                          )}
-                          {#if previewUrl}
+                          {#if (previewUrl = extractFirstLink(msg.content ?? ""))}
                             <div class="mt-2">
                               <LinkPreview url={previewUrl} />
                             </div>
@@ -2101,19 +2098,14 @@
                         {/if}
                       {/if}
                       {#if showTransparentEditHistory() && msg.editHistory?.length}
-                        {@const historyEntries = [...msg.editHistory].reverse()}
                         <div
                           class="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs text-white/80"
                         >
-                          <p
-                            class="text-[0.625rem] uppercase tracking-wide opacity-70"
-                          >
+                          <p class="text-[0.625rem] uppercase tracking-wide opacity-70">
                             Edit history
                           </p>
-                          {#each historyEntries as previous, historyIndex (historyIndex)}
-                            <p
-                              class="whitespace-pre-wrap break-words text-white/80"
-                            >
+                          {#each [...msg.editHistory].reverse() as previous, historyIndex (historyIndex)}
+                            <p class="whitespace-pre-wrap wrap-break-word text-white/80">
                               {previous}
                             </p>
                           {/each}
@@ -2122,25 +2114,22 @@
                     </div>
                   {/if}
                   {#if msg.reactions}
-                    {@const reactionEntries: Array<[string, string[]]> = Object.entries(msg.reactions)}
                     <div class="mt-1 flex gap-1 flex-wrap">
-                      {#each reactionEntries as [emoji, users] (emoji)}
+                      {#each Object.entries(msg.reactions) as [emoji, users] (emoji)}
                         <button
                           type="button"
                           class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
                           aria-pressed={users.includes(myId || "")}
                           onclick={() => {
                             if (users.includes(myId || "")) {
-                              chatStore.removeReaction(
-                                msg.chatId,
-                                msg.id,
-                                emoji,
-                              );
+                              chatStore.removeReaction(msg.chatId, msg.id, emoji);
                             } else {
                               chatStore.addReaction(msg.chatId, msg.id, emoji);
                             }
-                          }}>{emoji} {users.length}</button
+                          }}
                         >
+                          {emoji} {users.length}
+                        </button>
                       {/each}
                       <div class="relative inline-block">
                         <button
@@ -2161,8 +2150,7 @@
                             onkeydown={(event) => event.stopPropagation()}
                           >
                             <EmojiPicker
-                              on:select={(event) =>
-                                handleReactionSelect(event.detail.emoji)}
+                              on:select={(event) => handleReactionSelect(event.detail.emoji)}
                               on:close={closeReactionPicker}
                             />
                           </div>
@@ -2220,54 +2208,45 @@
                       {/each}
                     </div>
                   {/if}
-                  {@const deliveryState = resolveMessageDeliveryState(msg)}
-                  <div
-                    class={`mt-1 flex items-center gap-2 text-[0.625rem] ${
-                      deliveryState.state === "failed"
-                        ? "text-destructive/90"
-                        : "text-muted-foreground/80"
-                    }`}
-                    role={deliveryState.state === "sent" ? undefined : "status"}
-                    aria-live={deliveryState.state === "sent"
-                      ? "off"
-                      : "polite"}
-                    aria-atomic={deliveryState.state === "sent"
-                      ? undefined
-                      : "true"}
-                  >
-                    {#if deliveryState.state === "pending"}
-                      <Loader2
-                        class="h-3 w-3 animate-spin"
-                        aria-hidden="true"
-                      />
-                      <span>Sending…</span>
-                    {:else if deliveryState.state === "failed"}
-                      <CircleAlert class="h-3 w-3" aria-hidden="true" />
-                      <span
-                        >{deliveryState.reason ??
-                          "Message failed to send"}</span
-                      >
-                      {#if isMe && msg.status === "failed" && msg.retryable}
-                        <button
-                          type="button"
-                          class="text-xs font-semibold text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
-                          onclick={() => void retryFailedMessage(msg)}
-                        >
-                          Tap to retry
-                        </button>
+                  {#if (deliveryState = resolveMessageDeliveryState(msg))}
+                    <div
+                      class={`mt-1 flex items-center gap-2 text-[0.625rem] ${
+                        deliveryState.state === "failed"
+                          ? "text-destructive/90"
+                          : "text-muted-foreground/80"
+                      }`}
+                      role={deliveryState.state === "sent" ? undefined : "status"}
+                      aria-live={deliveryState.state === "sent" ? "off" : "polite"}
+                      aria-atomic={deliveryState.state === "sent" ? undefined : "true"}
+                    >
+                      {#if deliveryState.state === "pending"}
+                        <LoaderCircle class="h-3 w-3 animate-spin" aria-hidden="true" />
+                        <span>Sending…</span>
+                      {:else if deliveryState.state === "failed"}
+                        <CircleAlert class="h-3 w-3" aria-hidden="true" />
+                        <span>{deliveryState.reason ?? "Message failed to send"}</span>
+                        {#if isMe && msg.status === "failed" && msg.retryable}
+                          <button
+                            type="button"
+                            class="text-xs font-semibold text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
+                            onclick={() => void retryFailedMessage(msg)}
+                          >
+                            Tap to retry
+                          </button>
+                        {/if}
+                      {:else}
+                        <span class="uppercase tracking-wide">
+                          {isMe
+                            ? msg.read
+                              ? "Read by recipient"
+                              : "Not read yet"
+                            : msg.read
+                              ? "Read"
+                              : "Unread"}
+                        </span>
                       {/if}
-                    {:else}
-                      <span class="uppercase tracking-wide">
-                        {isMe
-                          ? msg.read
-                            ? "Read by recipient"
-                            : "Not read yet"
-                          : msg.read
-                            ? "Read"
-                            : "Unread"}
-                      </span>
-                    {/if}
-                  </div>
+                    </div>
+                  {/if}
                 </div>
               </div>
             </div>

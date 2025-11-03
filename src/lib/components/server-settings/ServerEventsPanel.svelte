@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { CalendarPlus, Clock3, MapPin, XCircle } from "@lucide/svelte";
+  import { CalendarPlus, Clock3, MapPin, CircleMinus } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import {
     Card,
@@ -220,7 +220,7 @@
                   <CardTitle
                     class="text-base text-foreground flex items-center gap-2"
                   >
-                    <XCircle class="size-4 text-muted-foreground" />
+                    <CircleMinus class="size-4 text-muted-foreground" />
                     {event.title}
                   </CardTitle>
                   <CardDescription>{renderSchedule(event)}</CardDescription>

@@ -554,7 +554,7 @@
                 <p class="text-sm font-semibold text-foreground">
                   {relay.config.label}
                 </p>
-                <p class="text-xs text-muted-foreground break-words">
+                <p class="text-xs text-muted-foreground wrap-break-word">
                   {relay.config.urls.join(", ")}
                 </p>
               </div>

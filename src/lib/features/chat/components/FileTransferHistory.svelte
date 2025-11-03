@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { Check, Clock, RefreshCcw, XCircle } from "@lucide/svelte";
+  import { Check, Clock, RefreshCcw, CircleMinus } from "@lucide/svelte";
   import { Badge, type BadgeVariant } from "$lib/components/ui/badge";
   import {
     Card,
@@ -97,7 +97,7 @@
   function statusIcon(entry: FileTransferRecord) {
     switch (entry.status) {
       case "denied":
-        return XCircle;
+        return CircleMinus;
       case "received":
       case "completed":
         return Check;

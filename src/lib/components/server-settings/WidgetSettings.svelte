@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle2, Copy, Link2, RefreshCcw } from "@lucide/svelte";
+  import { CircleCheck, Copy, Link2, RefreshCcw } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import {
     Select,
@@ -264,7 +264,7 @@
       </div>
     </div>
     <p class="mt-3 text-xs text-muted-foreground">
-      <CheckCircle2
+      <CircleCheck
         class="mr-1 inline h-3.5 w-3.5 align-middle text-emerald-400"
       />
       Last synced {formatDate(currentWidget.lastSyncedAt)}

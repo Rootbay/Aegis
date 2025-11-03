@@ -27,12 +27,12 @@
   import { connectivityStore } from "$lib/stores/connectivityStore";
   import { toasts } from "$lib/stores/ToastStore";
   import {
-    Loader2,
+    LoaderCircle,
     RefreshCw,
     Copy,
     ShieldCheck,
     ShieldOff,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
 
   let trustedDevices = $state<TrustedDevice[]>(get(settings).trustedDevices);
   let provisioning = $state<DeviceProvisioningState[]>([]);
@@ -357,7 +357,7 @@
         disabled={isInventoryLoading}
       >
         {#if isInventoryLoading}
-          <Loader2 class="h-4 w-4 animate-spin" />
+          <LoaderCircle class="h-4 w-4 animate-spin" />
         {:else}
           <RefreshCw class="h-4 w-4" />
         {/if}
@@ -381,7 +381,7 @@
       <div class="flex items-end">
         <Button type="submit" disabled={isGeneratingBundle}>
           {#if isGeneratingBundle}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" /> Generating…
+            <LoaderCircle class="mr-2 h-4 w-4 animate-spin" /> Generating…
           {:else}
             Create provisioning bundle
           {/if}
@@ -456,7 +456,7 @@
                   disabled={approvalBusy[state.bundle.bundleId]}
                 >
                   {#if approvalBusy[state.bundle.bundleId]}
-                    <Loader2 class="mr-2 h-4 w-4 animate-spin" /> Approving…
+                    <LoaderCircle class="mr-2 h-4 w-4 animate-spin" /> Approving…
                   {:else}
                     <ShieldCheck class="mr-2 h-4 w-4" /> Approve
                   {/if}
@@ -468,7 +468,7 @@
                   disabled={approvalBusy[state.bundle.bundleId]}
                 >
                   {#if approvalBusy[state.bundle.bundleId]}
-                    <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                    <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
                   {:else}
                     <ShieldOff class="mr-2 h-4 w-4" /> Decline
                   {/if}
@@ -540,7 +540,7 @@
       <div class="md:col-span-2 flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={isSubmittingRequest}>
           {#if isSubmittingRequest}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" /> Requesting…
+            <LoaderCircle class="mr-2 h-4 w-4 animate-spin" /> Requesting…
           {:else}
             Request approval
           {/if}
@@ -552,7 +552,7 @@
           disabled={connectivity.trustedDeviceSync.inProgress}
         >
           {#if connectivity.trustedDeviceSync.inProgress}
-            <Loader2 class="mr-2 h-4 w-4 animate-spin" /> Syncing…
+            <LoaderCircle class="mr-2 h-4 w-4 animate-spin" /> Syncing…
           {:else}
             Complete sync
           {/if}

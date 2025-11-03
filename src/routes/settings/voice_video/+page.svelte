@@ -22,13 +22,13 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { getEnvTurnServers } from "$lib/features/calls/utils/iceServers";
   import {
-    AlertCircle,
+    CircleAlert,
     Video,
     Mic,
     Plus,
     Trash2,
     ServerCog,
-  } from "lucide-svelte";
+  } from "@lucide/svelte";
 
   type DeviceOption = {
     deviceId: string;
@@ -525,7 +525,7 @@
   </div>
   {#if enumerationError}
     <p class="flex items-center gap-2 text-red-400">
-      <AlertCircle class="h-4 w-4" aria-hidden="true" />
+      <CircleAlert class="h-4 w-4" aria-hidden="true" />
       {enumerationError}
     </p>
   {/if}
@@ -596,7 +596,7 @@
           {micTestActive ? "Stop microphone test" : "Test microphone"}
         </Button>
         {#if micTestActive}
-          <div class="min-w-[160px] flex-1">
+          <div class="min-w-40 flex-1">
             <div class="h-2 rounded-full bg-zinc-800">
               <div
                 class="h-full rounded-full bg-emerald-500 transition-all"
@@ -611,7 +611,7 @@
       </div>
       {#if micTestError}
         <p class="flex items-center gap-2 text-xs text-red-400">
-          <AlertCircle class="h-3 w-3" aria-hidden="true" />
+          <CircleAlert class="h-3 w-3" aria-hidden="true" />
           {micTestError}
         </p>
       {/if}
@@ -677,7 +677,7 @@
         </Button>
         {#if testSoundError}
           <p class="flex items-center gap-2 text-xs text-red-400">
-            <AlertCircle class="h-3 w-3" aria-hidden="true" />
+            <CircleAlert class="h-3 w-3" aria-hidden="true" />
             {testSoundError}
           </p>
         {/if}
@@ -743,7 +743,7 @@
         </Button>
         {#if previewError}
           <p class="flex items-center gap-2 text-xs text-red-400">
-            <AlertCircle class="h-3 w-3" aria-hidden="true" />
+            <CircleAlert class="h-3 w-3" aria-hidden="true" />
             {previewError}
           </p>
         {/if}

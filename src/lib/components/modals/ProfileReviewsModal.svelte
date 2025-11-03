@@ -15,7 +15,7 @@
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Textarea } from "$lib/components/ui/textarea";
   import { userStore } from "$lib/stores/userStore";
-  import { Loader2, Star } from "@lucide/svelte";
+  import { LoaderCircle, Star } from "@lucide/svelte";
   import type {
     Review,
     ReviewSubjectType,
@@ -282,7 +282,7 @@
 
       {#if loading}
         <div class="flex h-40 items-center justify-center">
-          <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
+          <LoaderCircle class="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       {:else}
         {#if errorMessage}
@@ -414,7 +414,7 @@
             <Button type="button" variant="ghost" onclick={close}>Close</Button>
             <Button type="submit" disabled={isSubmitDisabled}>
               {#if submitting}
-                <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+                <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
               {/if}
               Submit review
             </Button>
