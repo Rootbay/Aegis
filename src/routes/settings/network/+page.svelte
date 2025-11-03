@@ -649,7 +649,7 @@
       </p>
       <form
         class="mt-4 grid gap-4 sm:grid-cols-2"
-        onsubmit|preventDefault={handleAddRelay}
+        onsubmit={handleAddRelay}
       >
         <div class="sm:col-span-1">
           <Label

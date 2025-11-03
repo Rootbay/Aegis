@@ -65,7 +65,7 @@
       <Label class="text-sm font-medium text-zinc-200">Command palette</Label>
       <Input
         bind:value={commandPalette}
-        on:blur={() => handleBlur("command")}
+        onblur={() => handleBlur("command")}
         placeholder="Ctrl+K"
         aria-label="Command palette shortcut"
       />
@@ -78,7 +78,7 @@
       <Label class="text-sm font-medium text-zinc-200">Push-to-talk</Label>
       <Input
         bind:value={pushToTalk}
-        on:blur={() => handleBlur("pushToTalk")}
+        onblur={() => handleBlur("pushToTalk")}
         placeholder="Shift+Space"
         aria-label="Push-to-talk shortcut"
       />
@@ -91,7 +91,7 @@
       <Label class="text-sm font-medium text-zinc-200">Toggle mute</Label>
       <Input
         bind:value={toggleMute}
-        on:blur={() => handleBlur("toggleMute")}
+        onblur={() => handleBlur("toggleMute")}
         placeholder="Ctrl+Shift+M"
         aria-label="Toggle mute shortcut"
       />

@@ -114,7 +114,7 @@
         type="number"
         min={0}
         bind:value={ephemeralMinutes}
-        on:blur={handleEphemeralBlur}
+        onblur={handleEphemeralBlur}
         aria-label="Ephemeral message duration in minutes"
       />
       <p class="text-xs text-muted-foreground">
