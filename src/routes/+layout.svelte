@@ -13,7 +13,6 @@
   import SearchSidebar from "$lib/components/sidebars/SearchSidebar.svelte";
   import DirectMessageList from "$lib/components/lists/DirectMessageList.svelte";
   import NavigationHeader from "$lib/components/NavigationHeader.svelte";
-  import ConnectivityBanner from "$lib/components/ConnectivityBanner.svelte";
   import AppModals from "$lib/layout/AppModals.svelte";
   import { ChatView } from "$features/chat";
   import { createAppController } from "$lib/layout/createAppController";
@@ -34,22 +33,13 @@
     currentUser,
     currentChat,
     allUsers,
-    groupChats,
     directMessages,
     isAnySettingsPage,
     isFriendsOrRootPage,
     activeTab,
     modal,
     handlers,
-    connectivity,
   } = appController;
-
-  const {
-    state: connectivityState,
-    statusMessage: connectivityStatusMessage,
-    fallbackMessage: connectivityFallbackMessage,
-    showBridgePrompt,
-  } = connectivity;
 
   const friendsLayoutContext = getContext<FriendsLayoutContext | undefined>(
     FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
@@ -71,15 +61,11 @@
 
   const { activeModal, modalProps } = modal;
 
-  const shouldShowMemberSidebar = $derived(() => {
-    const chat = $currentChat;
-    if (!chat) {
-      return false;
-    }
-    const visibilityState = $memberSidebarVisibilityStore;
-    const entry = visibilityState.get(chat.id);
-    return entry !== false;
-  });
+const shouldShowMemberSidebar = $derived(
+  $currentChat
+    ? $memberSidebarVisibilityStore.get($currentChat.id) !== false
+    : false,
+);
 
   $effect(() => {
     if ($theme === "dark") {
@@ -128,12 +114,6 @@
       {/if}
     {/if}
     <main class="flex-1 min-h-0 flex flex-col">
-      <ConnectivityBanner
-        state={$connectivityState}
-        statusMessage={$connectivityStatusMessage}
-        fallbackMessage={$connectivityFallbackMessage}
-        showBridgePrompt={$showBridgePrompt}
-      />
       {#if $isFriendsOrRootPage}
         <NavigationHeader
           chat={$currentChat}

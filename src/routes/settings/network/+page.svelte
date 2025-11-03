@@ -27,6 +27,7 @@
     RelayStatus,
   } from "$lib/features/settings/models/relay";
   import MeshExplorerPanel from "$lib/features/mesh/components/MeshExplorerPanel.svelte";
+  import ConnectivityBanner from "$lib/components/ConnectivityBanner.svelte";
 
   let enableCrossDeviceSync = $state(get(settings).enableCrossDeviceSync);
   let preferWifiDirect = $state(get(settings).preferWifiDirect);
@@ -56,6 +57,12 @@
   let refreshingRelay = $state<Record<string, boolean>>({});
   const relays = $derived(() => $relayStore.relays);
   const relayLoading = $derived(() => $relayStore.loading);
+
+  const connectivityStatusMessageStore = connectivityStore.statusMessage;
+  const connectivityFallbackMessageStore = connectivityStore.fallbackMessage;
+  const showConnectivityBridgePrompt = $derived(
+    !$settings.enableBridgeMode && $connectivityStore.bridgeSuggested,
+  );
 
   onMount(() => {
     void relayStore.initialize();
@@ -758,6 +765,14 @@
         Inspect live mesh connectivity, peer presence, and relay health without
         leaving Settings.
       </p>
+    </div>
+    <div class="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/50">
+      <ConnectivityBanner
+        state={$connectivityStore}
+        statusMessage={$connectivityStatusMessageStore}
+        fallbackMessage={$connectivityFallbackMessageStore}
+        showBridgePrompt={showConnectivityBridgePrompt}
+      />
     </div>
     <MeshExplorerPanel />
   </section>
