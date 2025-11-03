@@ -87,6 +87,12 @@
       keywords: ["alerts", "push", "email"],
     },
     {
+      label: "Network",
+      href: "/settings/network",
+      section: "app",
+      keywords: ["mesh", "connectivity", "relays", "network"],
+    },
+    {
       label: "Keybinds",
       href: "/settings/keybinds",
       section: "app",

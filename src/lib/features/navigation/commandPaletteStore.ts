@@ -95,11 +95,11 @@ const ACTION_COMMANDS: CommandPaletteCommand[] = [
   {
     id: "action:mesh",
     section: "Actions",
-    label: "Open Mesh Map",
+    label: "Open Mesh Explorer",
     description: "Inspect mesh connectivity",
     keywords: ["network", "connectivity"],
     perform: () => {
-      void goto("/mesh");
+      void goto("/settings/network#mesh-explorer");
     },
   },
 ];

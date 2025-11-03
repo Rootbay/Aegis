@@ -9,6 +9,7 @@
   import type { ConnectivityState } from "$lib/stores/connectivityStore";
   import { TriangleAlert, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
 
   let {
     state: connectivityState,
@@ -178,7 +179,7 @@
 
   function openMeshExplorer() {
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    goto("/mesh");
+    goto(resolve("/settings/network#mesh-explorer"));
   }
 </script>
 
