@@ -1,8 +1,7 @@
 import { page } from "$app/stores";
-import { onDestroy, onMount, untrack } from "svelte";
-import { derived, get, writable, type Unsubscriber } from "svelte/store";
+import { onDestroy, onMount } from "svelte";
+import { derived } from "svelte/store";
 import { authStore } from "$lib/features/auth/stores/authStore";
-import type { AuthState } from "$lib/features/auth/stores/authStore";
 import { userStore } from "$lib/stores/userStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -19,7 +18,6 @@ import {
 } from "$lib/features/chat/stores/chatStore";
 import { directMessageRoster } from "$lib/features/chat/stores/directMessageRoster";
 import { getListen } from "$services/tauri";
-import type { User } from "$lib/features/auth/models/User";
 import { connectivityStore } from "$lib/stores/connectivityStore";
 import { createModalManager } from "./app/modalManager";
 import { createAppHandlers } from "./app/handlers";
@@ -28,6 +26,8 @@ import { createPageState } from "./app/pageState";
 import type { AppController } from "./app/types";
 import { createPostAuthBootstrap } from "./app/controller/postAuthBootstrap";
 import { createCurrentChatStore } from "./app/controller/currentChat";
+import { createAuthLifecycle } from "./app/controller/authLifecycle";
+import { createServerSelectionController } from "./app/controller/serverSelection";
 
 export type { AppController };
 export type {
@@ -42,22 +42,6 @@ export function createAppController(): AppController {
   const connectivity = createConnectivityBindings();
   const handlers = createAppHandlers(modalManager);
 
-  const authState = writable<AuthState>(get(authStore));
-  const currentUser = writable<User | null>(get(userStore).me ?? null);
-  const postAuthInitialized = writable(false);
-  let unlistenHandlers: Array<() => void> = [];
-
-  const clearUnlistenHandlers = () => {
-    for (const handler of unlistenHandlers) {
-      try {
-        handler();
-      } catch (error) {
-        console.error("Failed to detach event listener:", error);
-      }
-    }
-    unlistenHandlers = [];
-  };
-
   const runPostAuthBootstrap = createPostAuthBootstrap({
     chatStore,
     friendStore,
@@ -68,77 +52,26 @@ export function createAppController(): AppController {
     getListen,
   });
 
-  const bootstrapAfterAuthentication = async () => {
-    clearUnlistenHandlers();
-    const handlers = await runPostAuthBootstrap();
-    unlistenHandlers = handlers;
-  };
-
-  const unsubscribeAuth = authStore.subscribe((value) => {
-    authState.set(value);
+  const authLifecycle = createAuthLifecycle({
+    authStore,
+    userStore,
+    chatStore,
+    serverStore,
+    runPostAuthBootstrap,
   });
 
-  const unsubscribeUser = userStore.subscribe((value) => {
-    currentUser.set(value.me ?? null);
+  const serverSelectionController = createServerSelectionController({
+    serverStore,
+    chatStore,
+    activeChatId,
+    activeChatType,
+    activeServerChannelId,
   });
 
-  const unsubscribeAuthState: Unsubscriber = authState.subscribe((state) => {
-    if (state.status !== "authenticated") {
-      postAuthInitialized.set(false);
-      clearUnlistenHandlers();
-      chatStore.clearActiveChat();
-      serverStore.setActiveServer(null);
-      return;
-    }
+  authLifecycle.initialize();
+  serverSelectionController.initialize();
 
-    if (!get(postAuthInitialized)) {
-      postAuthInitialized.set(true);
-      bootstrapAfterAuthentication().catch((error) =>
-        console.error("Post-auth bootstrap failed:", error),
-      );
-    }
-  });
-
-  const unsubscribeActiveServer = serverStore.subscribe(($serverState) => {
-    const serverId = $serverState.activeServerId;
-    if (!serverId) {
-      return;
-    }
-    const server = $serverState.servers.find((s) => s.id === serverId);
-    if (!server || !server.channels || server.channels.length === 0) {
-      return;
-    }
-
-    const generalChannel = server.channels.find(
-      (channel) => channel.name === "general",
-    );
-    const targetChannelId = generalChannel
-      ? generalChannel.id
-      : server.channels[0].id;
-
-    const chatType = get(activeChatType);
-    const chatId = get(activeChatId);
-    const selectedChannelId = get(activeServerChannelId);
-
-    const hasValidChannel =
-      Boolean(selectedChannelId) &&
-      server.channels.some((channel) => channel.id === selectedChannelId);
-
-    if (!hasValidChannel) {
-      untrack(() => {
-        chatStore.setActiveChat(server.id, "server", targetChannelId);
-      });
-      return;
-    }
-
-    const isServerChat = chatType === "server" && chatId === server.id;
-
-    if (!isServerChat) {
-      untrack(() => {
-        chatStore.setActiveChat(server.id, "server");
-      });
-    }
-  });
+  const { authState, currentUser } = authLifecycle;
 
   onMount(() => {
     void connectivityStore.initialize();
@@ -146,11 +79,8 @@ export function createAppController(): AppController {
   });
 
   onDestroy(() => {
-    unsubscribeAuth();
-    unsubscribeUser();
-    unsubscribeAuthState();
-    unsubscribeActiveServer();
-    clearUnlistenHandlers();
+    authLifecycle.teardown();
+    serverSelectionController.teardown();
     connectivityStore.teardown();
   });
 
