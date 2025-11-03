@@ -28,6 +28,12 @@ export interface Message {
   attachments?: AttachmentMeta[];
   reactions?: Record<string, string[]>;
   pending?: boolean;
+  status?: string;
+  retryable?: boolean;
+  sendFailed?: boolean;
+  sendError?: string;
+  errorMessage?: string;
+  failureReason?: string;
   editedAt?: string;
   editedBy?: string;
   expiresAt?: string;
