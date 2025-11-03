@@ -21,7 +21,11 @@ import {
   loadingStateByChat as loadingStateByChatReadable,
 } from "$lib/features/chat/stores/chatStore";
 import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
-import { resetChatDrafts } from "$lib/features/chat/utils/chatDraftStore";
+import {
+  loadChatDraft,
+  resetChatDrafts,
+  saveChatDraft,
+} from "$lib/features/chat/utils/chatDraftStore";
 import ChatView from "$lib/features/chat/components/ChatView.svelte";
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Friend } from "$lib/features/friends/models/Friend";
@@ -230,8 +234,8 @@ vi.mock("@tauri-apps/plugin-store", () => {
 });
 
 describe("ChatView drafts", () => {
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
     mockExtractFirstLink.mockReset();
     mockExtractFirstLink.mockImplementation(() => null);
     mockGetLinkPreviewMetadata.mockReset();
@@ -351,11 +355,114 @@ describe("ChatView drafts", () => {
     expect(screen.queryByText("Attachments")).not.toBeNull();
     expect(screen.queryByText(`Replying to ${friendA.name}`)).not.toBeNull();
   });
+
+  it("restores a persisted draft when opening a chat", async () => {
+    const chatId = "chat-restore-persisted";
+    const friend: Friend = {
+      id: "friend-restore",
+      name: "Persistent Pat",
+      avatar: "https://example.com/pat.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    await saveChatDraft(chatId, {
+      messageInput: "Resume our last conversation",
+      attachments: [],
+      replyTargetMessageId: null,
+      replyPreview: null,
+      textareaHeight: "88px",
+    });
+
+    messagesByChatId.set(new Map([[chatId, []]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    const composer = (await screen.findByPlaceholderText(
+      `Message @${friend.name}`,
+    )) as HTMLTextAreaElement;
+
+    await waitFor(() => {
+      expect(composer.value).toBe("Resume our last conversation");
+    });
+  });
+
+  it("removes the persisted draft once the message is sent", async () => {
+    const chatId = "chat-clear-after-send";
+    const friend: Friend = {
+      id: "friend-clear",
+      name: "Clearing Casey",
+      avatar: "https://example.com/casey.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    messagesByChatId.set(new Map([[chatId, []]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    const composer = (await screen.findByPlaceholderText(
+      `Message @${friend.name}`,
+    )) as HTMLTextAreaElement;
+
+    await fireEvent.input(composer, {
+      target: { value: "Message heading out" },
+    });
+
+    await waitFor(async () => {
+      const draft = await loadChatDraft(chatId);
+      expect(draft?.messageInput).toBe("Message heading out");
+    });
+
+    const form = composer.closest("form");
+    expect(form).not.toBeNull();
+    await fireEvent.submit(form as HTMLFormElement);
+
+    await waitFor(async () => {
+      const draft = await loadChatDraft(chatId);
+      expect(draft).toBeUndefined();
+    });
+  });
+
+  it("clears persisted drafts when logging out", async () => {
+    const chatId = "chat-clear-on-logout";
+
+    await saveChatDraft(chatId, {
+      messageInput: "Keep this safe",
+      attachments: [],
+      replyTargetMessageId: null,
+      replyPreview: null,
+      textareaHeight: "72px",
+    });
+
+    await resetChatDrafts();
+
+    const restored = await loadChatDraft(chatId);
+    expect(restored).toBeUndefined();
+  });
 });
 
 describe("ChatView mentions", () => {
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
     mockExtractFirstLink.mockReset();
     mockExtractFirstLink.mockImplementation(() => null);
     mockGetLinkPreviewMetadata.mockReset();
@@ -788,7 +895,7 @@ function getMessageContainer(messageText: string) {
   return container as HTMLElement;
 }
 
-function resetChatViewState() {
+async function resetChatViewState() {
   const baseline = structuredClone(defaultSettings);
   baseline.showMessageAvatars = true;
   baseline.showMessageTimestamps = true;
@@ -798,7 +905,7 @@ function resetChatViewState() {
   hasMoreByChatId.set(new Map());
   loadingStateByChat.set(new Map());
   chatSearchStore.reset();
-  resetChatDrafts();
+  await resetChatDrafts();
   __setUser({
     id: "user-current",
     name: "Current User",
@@ -815,8 +922,8 @@ function resetChatViewState() {
 }
 
 describe("ChatView privacy preferences", () => {
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
     mockExtractFirstLink.mockReset();
     mockExtractFirstLink.mockImplementation(() => null);
     mockGetLinkPreviewMetadata.mockReset();
@@ -922,8 +1029,8 @@ describe("ChatView link previews", () => {
     imageUrl: "https://example.com/image.png",
   };
 
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
     const baseline = structuredClone(defaultSettings);
     baseline.enableLinkPreviews = true;
     settings.set(baseline);
@@ -1021,8 +1128,8 @@ describe("ChatView link previews", () => {
 });
 
 describe("ChatView friend removal", () => {
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
   });
 
   function renderChatWithFriend(friend: Friend) {
@@ -1205,8 +1312,8 @@ describe("ChatView friend removal", () => {
 });
 
 describe("ChatView reactions", () => {
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
     mockExtractFirstLink.mockReset();
     mockExtractFirstLink.mockImplementation(() => null);
     mockGetLinkPreviewMetadata.mockReset();
@@ -1285,8 +1392,8 @@ function createDeferred<T>() {
 }
 
 describe("ChatView history loading", () => {
-  beforeEach(() => {
-    resetChatViewState();
+  beforeEach(async () => {
+    await resetChatViewState();
   });
 
   it("loads older messages when the reply target is outside the current window", async () => {
