@@ -82,7 +82,7 @@ const shouldShowMemberSidebar = $derived(
 
 <div
   class="flex h-screen bg-base-100 text-foreground"
-  data-friends-loading={friendsLoading ? "true" : undefined}
+  data-friends-loading={friendsLoading() ? "true" : undefined}
 >
   {#if $authState.status !== "authenticated" || !$currentUser}
     <InitialSetup />

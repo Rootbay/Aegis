@@ -134,7 +134,7 @@
 
 {#if show}
   <div
-    class="fixed inset-0 flex items-center justify-center z-[9999]"
+    class="fixed inset-0 flex items-center justify-center z-9999"
     style="background-color: rgba(0, 0, 0, 0.7);"
     onclick={closeLightbox}
     onkeydown={(e) => {

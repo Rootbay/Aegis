@@ -926,7 +926,7 @@
 
           <DropdownMenuContent
             align="center"
-            class="w-[218px] [&>*]:cursor-pointer"
+            class="w-[218px] *:cursor-pointer"
           >
             <DropdownMenuItem onselect={handleInviteToServerClick}>
               <UserPlus size={12} class="mr-2" /> Invite to Server
@@ -1012,7 +1012,7 @@
                     <ChevronDown
                       size={10}
                       class={`ml-1 transition-transform duration-200 ${
-                        collapsed ? "rotate-[-90deg]" : ""
+                        collapsed ? "-rotate-90" : ""
                       }`}
                     />
                   </CollapsibleTrigger>
@@ -1190,7 +1190,7 @@
                 <ChevronDown
                   size={10}
                   class="ml-1 transition-transform duration-200 {textChannelsCollapsed
-                    ? 'rotate-[-90deg]'
+                    ? '-rotate-90'
                     : ''}"
                 />
               </CollapsibleTrigger>
@@ -1299,7 +1299,7 @@
                 <ChevronDown
                   size={10}
                   class="ml-1 transition-transform duration-200 {voiceChannelsCollapsed
-                    ? 'rotate-[-90deg]'
+                    ? '-rotate-90'
                     : ''}"
                 />
               </CollapsibleTrigger>
@@ -1415,10 +1415,6 @@
     y={channelContextMenuY}
     channel={selectedChannelForContextMenu}
     onaction={handleChannelAction}
-    onclose={() => {
-      showChannelContextMenu = false;
-      selectedChannelForContextMenu = null;
-    }}
   />
 {/if}
 

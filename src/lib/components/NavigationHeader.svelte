@@ -1037,9 +1037,9 @@
               <span class="truncate">{chat.friend.location}</span>
             </p>
           {/if}
-          {#if typingStatusLabel}
+          {#if typingStatusLabel()}
             <p class="text-xs text-cyan-400 whitespace-nowrap">
-              {typingStatusLabel}
+              {typingStatusLabel()}
             </p>
           {/if}
         </div>
@@ -1048,16 +1048,16 @@
           <Users class="w-4 h-4 text-muted-foreground shrink-0" />
           <h2 class="font-semibold text-lg truncate">{chat.name}</h2>
         </div>
-        {#if typingStatusLabel}
-          <p class="text-xs text-cyan-400 truncate">{typingStatusLabel}</p>
+        {#if typingStatusLabel()}
+          <p class="text-xs text-cyan-400 truncate">{typingStatusLabel()}</p>
         {/if}
       {:else}
         <div class="flex items-center gap-2 min-w-0">
           <Hash class="w-4 h-4 text-muted-foreground shrink-0" />
           <h2 class="font-semibold text-lg truncate">{chat.name}</h2>
         </div>
-        {#if typingStatusLabel}
-          <p class="text-xs text-cyan-400 truncate">{typingStatusLabel}</p>
+        {#if typingStatusLabel()}
+          <p class="text-xs text-cyan-400 truncate">{typingStatusLabel()}</p>
         {/if}
       {/if}
     </div>

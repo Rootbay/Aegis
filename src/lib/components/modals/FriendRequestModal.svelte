@@ -69,7 +69,7 @@
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-50 bg-black/50" />
     <Dialog.Content
-      class="fixed z-[51] w-96 max-w-[92vw] rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg focus:outline-none"
+      class="fixed z-51 w-96 max-w-[92vw] rounded-xl border bg-popover p-6 text-popover-foreground shadow-lg focus:outline-none"
       style="left:50%; top:50%; transform:translate(-50%,-50%);"
     >
       <Dialog.Title class="text-xl font-bold mb-4"

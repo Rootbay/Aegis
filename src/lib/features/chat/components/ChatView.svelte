@@ -93,11 +93,11 @@
     pending?: boolean | string;
     failed?: boolean | string;
     sendFailed?: boolean | string;
-    sendError?: string;
-    failureReason?: string;
-    failure_reason?: string;
     deliveryStatus?: string;
     status?: string;
+    failureReason?: string;
+    failure_reason?: string;
+    sendError?: string;
     errorMessage?: string;
     error_message?: string;
   };
@@ -106,7 +106,7 @@
     message: Message,
   ): { state: MessageDeliveryState; reason?: string } => {
     const extended = message as DeliveryAwareMessage;
-    const pendingState = extended.pending;
+    const pendingState = extended.pending as string | boolean | undefined;
 
     if (pendingState === true) {
       return { state: "pending" };
@@ -136,16 +136,14 @@
       pendingIndicatesFailure ||
       extended.failed === true ||
       (typeof extended.failed === "string" &&
-        ["true", "failed", "error"].includes(extended.failed.toLowerCase())) ||
+        ["true", "failed", "error"].includes((extended.failed as string).toLowerCase())) ||
       extended.sendFailed === true ||
       (typeof extended.sendFailed === "string" &&
-        ["true", "failed", "error"].includes(
-          extended.sendFailed.toLowerCase(),
-        )) ||
+        ["true", "failed", "error"].includes((extended.sendFailed as string).toLowerCase())) ||
       (typeof extended.deliveryStatus === "string" &&
-        extended.deliveryStatus.toLowerCase() === "failed") ||
+        (extended.deliveryStatus as string).toLowerCase() === "failed") ||
       (typeof extended.status === "string" &&
-        extended.status.toLowerCase() === "failed") ||
+        (extended.status as string).toLowerCase() === "failed") ||
       reasonCandidates.length > 0;
 
     if (hasFailureIndicator) {
@@ -2090,7 +2088,8 @@
                           {msg.content}
                         </p>
                         {#if $settings.enableLinkPreviews}
-                          {#if (previewUrl = extractFirstLink(msg.content ?? ""))}
+                          {@const previewUrl = extractFirstLink(msg.content ?? "")}
+                          {#if previewUrl}
                             <div class="mt-2">
                               <LinkPreview url={previewUrl} />
                             </div>
@@ -2208,44 +2207,47 @@
                       {/each}
                     </div>
                   {/if}
-                  {#if (deliveryState = resolveMessageDeliveryState(msg))}
-                    <div
-                      class={`mt-1 flex items-center gap-2 text-[0.625rem] ${
-                        deliveryState.state === "failed"
-                          ? "text-destructive/90"
-                          : "text-muted-foreground/80"
-                      }`}
-                      role={deliveryState.state === "sent" ? undefined : "status"}
-                      aria-live={deliveryState.state === "sent" ? "off" : "polite"}
-                      aria-atomic={deliveryState.state === "sent" ? undefined : "true"}
-                    >
-                      {#if deliveryState.state === "pending"}
-                        <LoaderCircle class="h-3 w-3 animate-spin" aria-hidden="true" />
-                        <span>Sending…</span>
-                      {:else if deliveryState.state === "failed"}
-                        <CircleAlert class="h-3 w-3" aria-hidden="true" />
-                        <span>{deliveryState.reason ?? "Message failed to send"}</span>
-                        {#if isMe && msg.status === "failed" && msg.retryable}
-                          <button
-                            type="button"
-                            class="text-xs font-semibold text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
-                            onclick={() => void retryFailedMessage(msg)}
-                          >
-                            Tap to retry
-                          </button>
+                  {#if msg}
+                    {@const deliveryState = resolveMessageDeliveryState(msg) as { state: MessageDeliveryState; reason?: string }}
+                    {#if deliveryState}
+                      <div
+                        class={`mt-1 flex items-center gap-2 text-[0.625rem] ${
+                          deliveryState.state === "failed"
+                            ? "text-destructive/90"
+                            : "text-muted-foreground/80"
+                        }`}
+                        role={deliveryState.state === "sent" ? undefined : "status"}
+                        aria-live={deliveryState.state === "sent" ? "off" : "polite"}
+                        aria-atomic={deliveryState.state === "sent" ? undefined : "true"}
+                      >
+                        {#if deliveryState.state === "pending"}
+                          <LoaderCircle class="h-3 w-3 animate-spin" aria-hidden="true" />
+                          <span>Sending…</span>
+                        {:else if deliveryState.state === "failed"}
+                          <CircleAlert class="h-3 w-3" aria-hidden="true" />
+                          <span>{deliveryState.reason ?? "Message failed to send"}</span>
+                          {#if isMe && msg.status === "failed" && msg.retryable}
+                            <button
+                              type="button"
+                              class="text-xs font-semibold text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
+                              onclick={() => void retryFailedMessage(msg)}
+                            >
+                              Tap to retry
+                            </button>
+                          {/if}
+                        {:else}
+                          <span class="uppercase tracking-wide">
+                            {isMe
+                              ? msg.read
+                                ? "Read by recipient"
+                                : "Not read yet"
+                              : msg.read
+                                ? "Read"
+                                : "Unread"}
+                          </span>
                         {/if}
-                      {:else}
-                        <span class="uppercase tracking-wide">
-                          {isMe
-                            ? msg.read
-                              ? "Read by recipient"
-                              : "Not read yet"
-                            : msg.read
-                              ? "Read"
-                              : "Unread"}
-                        </span>
-                      {/if}
-                    </div>
+                      </div>
+                    {/if}
                   {/if}
                 </div>
               </div>

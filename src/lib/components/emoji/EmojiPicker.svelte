@@ -170,7 +170,7 @@
             {#each category.emojis as emoji, index (emoji + index)}
               <button
                 type="button"
-                class="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-700 text-xl transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500 hover:bg-zinc-600"
+                class="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-700 text-xl transition focus-visible:outline focus-visible:outline-cyan-500 hover:bg-zinc-600"
                 data-emoji={emoji}
                 aria-label={`React with ${emoji}`}
                 onclick={() => handleSelect(emoji)}

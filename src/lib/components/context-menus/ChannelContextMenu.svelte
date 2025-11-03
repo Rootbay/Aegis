@@ -11,14 +11,14 @@
   import type { Channel } from "$lib/features/channels/models/Channel";
 
   type ChannelContextMenuDetail = {
-    action: string;
+    action: "mark_as_read" | "invite_people" | "copy_link" | "mute_channel" | 
+          "notification_settings" | "edit_channel" | "duplicate_channel" |
+          "create_text_channel" | "delete_channel" | "copy_channel_id" |
+          "open_chat" | "hide_names" | "create_voice_channel";
     channelId: string;
   };
 
-  type ChannelContextMenuHandler = ({
-    action,
-    channelId,
-  }: ChannelContextMenuDetail) => void;
+  type ChannelContextMenuHandler = (detail: ChannelContextMenuDetail) => void;
 
   type ChannelContextMenuProps = {
     x: number;
@@ -36,7 +36,11 @@
     onaction,
   }: ChannelContextMenuProps = $props();
 
-  function handleAction(action: string) {
+  function handleAction(action: "mark_as_read" | "invite_people" | "copy_link" | 
+                      "mute_channel" | "notification_settings" | "edit_channel" |
+                      "duplicate_channel" | "create_text_channel" | 
+                      "delete_channel" | "copy_channel_id" | 
+                      "open_chat" | "hide_names" | "create_voice_channel") {
     onaction?.({ action, channelId: channel.id });
   }
 </script>

@@ -142,7 +142,7 @@
 
 {#if $isOpen}
   <div
-    class="fixed inset-0 z-[60] flex items-start justify-center bg-background/80 backdrop-blur-sm p-4"
+    class="fixed inset-0 z-60 flex items-start justify-center bg-background/80 backdrop-blur-sm p-4"
     role="presentation"
     onclick={handleBackdropClick}
   >

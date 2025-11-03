@@ -571,7 +571,6 @@
                                 </SidebarMenuButton>
                               </Popover.Trigger>
                               <Popover.Content
-                                let:close
                                 class="w-auto border-none p-0"
                               >
                                 <UserCardModal

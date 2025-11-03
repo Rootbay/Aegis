@@ -63,7 +63,7 @@
 </script>
 
 <div
-  class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]"
+  class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-60"
 >
   <div class="bg-card p-6 rounded-lg shadow-lg w-full max-w-md relative">
     <button

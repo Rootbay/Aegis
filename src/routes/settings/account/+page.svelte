@@ -362,7 +362,7 @@
           bind:value={profileBio}
           maxlength={280}
           disabled={savingProfile}
-          class="w-full min-h-[80px]"
+          class="w-full min-h-20"
         />
       </div>
       <div class="md:col-span-2 flex items-center justify-between gap-4">
