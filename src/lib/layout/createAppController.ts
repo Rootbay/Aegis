@@ -1,14 +1,8 @@
-import { goto } from "$app/navigation";
 import { page } from "$app/stores";
-import { onDestroy, onMount, setContext, untrack } from "svelte";
-import {
-  derived,
-  get,
-  writable,
-  type Readable,
-  type Unsubscriber,
-} from "svelte/store";
-import { authStore, type AuthState } from "$lib/features/auth/stores/authStore";
+import { onDestroy, onMount, untrack } from "svelte";
+import { derived, get, writable, type Unsubscriber } from "svelte/store";
+import { authStore } from "$lib/features/auth/stores/authStore";
+import type { AuthState } from "$lib/features/auth/stores/authStore";
 import { userStore } from "$lib/stores/userStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -31,15 +25,7 @@ import {
   type MessageReadReceiptEvent,
   type TypingIndicatorEvent,
 } from "$lib/features/chat/stores/chatStore";
-import {
-  directMessageRoster,
-  type DirectMessageListEntry,
-} from "$lib/features/chat/stores/directMessageRoster";
-import {
-  CREATE_GROUP_CONTEXT_KEY,
-  FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
-} from "$lib/contextKeys";
-import type { FriendsLayoutContext } from "$lib/contextTypes";
+import { directMessageRoster } from "$lib/features/chat/stores/directMessageRoster";
 import { getListen } from "$services/tauri";
 import type { AepMessage } from "$lib/features/chat/models/AepMessage";
 import type { Friend } from "$lib/features/friends/models/Friend";
@@ -47,210 +33,29 @@ import type { Server } from "$lib/features/servers/models/Server";
 import type { Message } from "$lib/features/chat/models/Message";
 import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
-import type { GroupChatSummary } from "$lib/features/chat/stores/chatStore";
-import type {
-  GroupModalOptions,
-  ReportUserModalPayload,
-} from "$lib/features/chat/utils/contextMenu";
-import type { CollaborationSessionKind } from "$lib/features/collaboration/collabDocumentStore";
-import {
-  connectivityStore,
-  type ConnectivityState,
-} from "$lib/stores/connectivityStore";
-import { settings } from "$lib/features/settings/stores/settings";
-import { commandPaletteStore } from "$lib/features/navigation/commandPaletteStore";
+import { connectivityStore } from "$lib/stores/connectivityStore";
+import { createModalManager } from "./app/modalManager";
+import { createAppHandlers } from "./app/handlers";
+import { createConnectivityBindings } from "./app/connectivity";
+import { createPageState } from "./app/pageState";
+import type { AppController } from "./app/types";
 
-export type AppModalType =
-  | "createGroup"
-  | "serverManagement"
-  | "detailedProfile"
-  | "profileReviews"
-  | "userCard"
-  | "reportUser"
-  | "collaborationDocument"
-  | "collaborationWhiteboard";
-
-type ProfileModalSource = User & {
-  bio?: string;
-  pfpUrl?: string;
-  bannerUrl?: string;
-  isOnline?: boolean;
-  publicKey?: string;
-};
-
-type PageState = {
-  readonly friends: Friend[];
-  readonly allUsers: Friend[];
-  readonly groupChats: GroupChatSummary[];
-  readonly directMessages: DirectMessageListEntry[];
-  readonly currentChat: Chat | null;
-  readonly openModal: (
-    modalType: AppModalType,
-    props?: Record<string, unknown>,
-  ) => void;
-  readonly closeModal: () => void;
-  readonly openUserCardModal: (
-    user: User,
-    x: number,
-    y: number,
-    isServerMemberContext: boolean,
-  ) => void;
-  readonly openDetailedProfileModal: (user: User) => void;
-  readonly openProfileReviewsModal: (
-    options: ProfileReviewsModalOptions,
-  ) => void;
-  readonly openCreateGroupModal: (options?: GroupModalOptions) => void;
-  readonly openReportUserModal: (payload: ReportUserModalPayload) => void;
-  readonly openCollaborativeDocument: (options?: {
-    documentId?: string;
-    initialContent?: string;
-    kind?: CollaborationSessionKind;
-  }) => void;
-  readonly openCollaborativeWhiteboard: (options?: {
-    documentId?: string;
-  }) => void;
-  readonly messagesByChatId: typeof messagesByChatId;
-};
-
-type ProfileReviewsModalOptions = {
-  subjectType: "user" | "server";
-  subjectId: string;
-  subjectName?: string;
-  subjectAvatarUrl?: string | null;
-};
-
-type ModalState = {
-  activeModal: Readable<AppModalType | null>;
-  modalProps: Readable<Record<string, unknown>>;
-};
-
-type ConnectivityBindings = {
-  state: Readable<ConnectivityState>;
-  statusMessage: Readable<string>;
-  fallbackMessage: Readable<string | null>;
-  showBridgePrompt: Readable<boolean>;
-};
-
-export type AppController = {
-  authState: Readable<AuthState>;
-  currentUser: Readable<User | null>;
-  currentChat: Readable<Chat | null>;
-  allUsers: Readable<Friend[]>;
-  groupChats: Readable<GroupChatSummary[]>;
-  directMessages: Readable<DirectMessageListEntry[]>;
-  isAnySettingsPage: Readable<boolean>;
-  isFriendsOrRootPage: Readable<boolean>;
-  activeTab: Readable<string>;
-  modal: ModalState;
-  pageState: PageState;
-  connectivity: ConnectivityBindings;
-  handlers: {
-    handleKeydown: (event: KeyboardEvent) => void;
-    handleFriendsTabSelect: (tab: string) => void;
-    handleFriendsAddClick: () => void;
-    handleSelectChannel: (serverId: string, channelId: string | null) => void;
-    handleSelectDirectMessage: (params: {
-      chatId: string | null;
-      type?: "dm" | "group";
-    }) => void;
-    openModal: PageState["openModal"];
-    closeModal: PageState["closeModal"];
-    openDetailedProfileModal: PageState["openDetailedProfileModal"];
-    openProfileReviewsModal: PageState["openProfileReviewsModal"];
-    openCommandPalette: () => void;
-    closeCommandPalette: () => void;
-  };
-};
-
-const CARD_WIDTH = 300;
-const CARD_HEIGHT = 410;
-const CARD_MARGIN = 16;
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function withProfileDefaults(user: User): ProfileModalSource {
-  const source = user as ProfileModalSource;
-  return {
-    ...user,
-    bio: source.bio ?? "",
-    pfpUrl: source.pfpUrl ?? user.avatar,
-    bannerUrl: source.bannerUrl ?? "",
-    isOnline: source.isOnline ?? user.online ?? false,
-    publicKey: source.publicKey ?? "",
-  };
-}
-
-function computeUserCardPosition(clickX: number, clickY: number) {
-  const viewportWidth =
-    typeof window !== "undefined"
-      ? window.innerWidth
-      : CARD_WIDTH + CARD_MARGIN * 2;
-  const viewportHeight =
-    typeof window !== "undefined"
-      ? window.innerHeight
-      : CARD_HEIGHT + CARD_MARGIN * 2;
-
-  const safeX = Number.isFinite(clickX) ? clickX : viewportWidth - CARD_MARGIN;
-  const safeY = Number.isFinite(clickY) ? clickY : viewportHeight - CARD_MARGIN;
-
-  const x = clamp(
-    safeX - CARD_WIDTH / 2,
-    CARD_MARGIN,
-    Math.max(CARD_MARGIN, viewportWidth - CARD_WIDTH - CARD_MARGIN),
-  );
-
-  let y = safeY - CARD_HEIGHT - CARD_MARGIN;
-  const maxY = Math.max(
-    CARD_MARGIN,
-    viewportHeight - CARD_HEIGHT - CARD_MARGIN,
-  );
-
-  if (y < CARD_MARGIN) {
-    y = clamp(safeY + CARD_MARGIN, CARD_MARGIN, maxY);
-  } else {
-    y = Math.min(y, maxY);
-  }
-
-  return { x, y };
-}
-
-function toProfileModalUser(user: User) {
-  const normalizedUser = withProfileDefaults(user);
-  return {
-    id: normalizedUser.id,
-    name: normalizedUser.name ?? "Unknown User",
-    bio: normalizedUser.bio,
-    pfpUrl: normalizedUser.pfpUrl,
-    bannerUrl: normalizedUser.bannerUrl,
-    isOnline: normalizedUser.isOnline,
-    publicKey: normalizedUser.publicKey,
-  };
-}
-
-function navigateToUrl(url: URL) {
-  const target = `${url.pathname}${url.search}`;
-  // eslint-disable-next-line svelte/no-navigation-without-resolve
-  goto(target);
-}
+export type { AppController };
+export type {
+  AppModalType,
+  AppHandlers,
+  ModalState,
+  PageState,
+} from "./app/types";
 
 export function createAppController(): AppController {
+  const modalManager = createModalManager();
+  const connectivity = createConnectivityBindings();
+  const handlers = createAppHandlers(modalManager);
+
   const authState = writable<AuthState>(get(authStore));
   const currentUser = writable<User | null>(get(userStore).me ?? null);
-  const activeModal = writable<AppModalType | null>(null);
-  const modalProps = writable<Record<string, unknown>>({});
   const postAuthInitialized = writable(false);
-  const connectivityState: Readable<ConnectivityState> = {
-    subscribe: connectivityStore.subscribe,
-  };
-  const connectivityStatusMessage = connectivityStore.statusMessage;
-  const connectivityFallbackMessage = connectivityStore.fallbackMessage;
-  const connectivityBridgePrompt = derived(
-    [connectivityState, settings],
-    ([state, appSettings]) =>
-      state.bridgeSuggested && appSettings.enableBridgeMode === false,
-  );
   let unlistenHandlers: Array<() => void> = [];
 
   const clearUnlistenHandlers = () => {
@@ -262,128 +67,6 @@ export function createAppController(): AppController {
       }
     }
     unlistenHandlers = [];
-  };
-
-  const openModal: PageState["openModal"] = (modalType, props = {}) => {
-    activeModal.set(modalType);
-    modalProps.set(props);
-  };
-
-  const closeModal: PageState["closeModal"] = () => {
-    activeModal.set(null);
-    modalProps.set({});
-  };
-
-  const openUserCardModal: PageState["openUserCardModal"] = (
-    user,
-    x,
-    y,
-    isServerMemberContext,
-  ) => {
-    const normalizedUser = withProfileDefaults(user);
-    const position = computeUserCardPosition(x, y);
-    openModal("userCard", {
-      profileUser: normalizedUser,
-      x: position.x,
-      y: position.y,
-      isServerMemberContext,
-      openDetailedProfileModal,
-    });
-  };
-
-  const openDetailedProfileModal: PageState["openDetailedProfileModal"] = (
-    user,
-  ) => {
-    const friends = get(friendStore).friends;
-    openModal("detailedProfile", {
-      profileUser: toProfileModalUser(user),
-      isFriend: friends.some((friend) => friend.id === user.id),
-    });
-  };
-
-  const openProfileReviewsModal: PageState["openProfileReviewsModal"] = (
-    options,
-  ) => {
-    openModal("profileReviews", options);
-  };
-
-  const openCreateGroupModalWithOptions: PageState["openCreateGroupModal"] = (
-    options = { preselectedUserIds: [] },
-  ) => {
-    openModal("createGroup", options);
-  };
-
-  const openReportUserModal: PageState["openReportUserModal"] = (payload) => {
-    openModal("reportUser", payload);
-  };
-
-  const openCollaborativeDocument: PageState["openCollaborativeDocument"] = (
-    options = {},
-  ) => {
-    openModal("collaborationDocument", options);
-  };
-
-  const openCollaborativeWhiteboard: PageState["openCollaborativeWhiteboard"] =
-    (options = {}) => {
-      openModal("collaborationWhiteboard", options);
-    };
-
-  const handleFriendsTabSelect = (tab: string) => {
-    const url = new URL(get(page).url);
-    if (url.pathname === "/friends/add") {
-      url.pathname = "/friends";
-    }
-    url.searchParams.set("tab", tab);
-    navigateToUrl(url);
-  };
-
-  const handleFriendsAddClick = () => {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve
-    goto("/friends/add");
-  };
-
-  const handleSelectChannel = (serverId: string, channelId: string | null) => {
-    if (channelId) {
-      chatStore.setActiveChat(serverId, "server", channelId);
-    }
-  };
-
-  const handleSelectDirectMessage = ({
-    chatId,
-    type = "dm",
-  }: {
-    chatId: string | null;
-    type?: "dm" | "group";
-  }) => {
-    if (chatId) {
-      chatStore.setActiveChat(chatId, type);
-    }
-  };
-
-  const handleKeydown = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase();
-    if ((event.ctrlKey || event.metaKey) && key === "k") {
-      event.preventDefault();
-      event.stopPropagation();
-      if (typeof event.stopImmediatePropagation === "function") {
-        event.stopImmediatePropagation();
-      }
-      commandPaletteStore.open();
-      return;
-    }
-
-    if (key === "escape") {
-      if (get(commandPaletteStore.isOpen)) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (typeof event.stopImmediatePropagation === "function") {
-          event.stopImmediatePropagation();
-        }
-        commandPaletteStore.close();
-        return;
-      }
-      closeModal();
-    }
   };
 
   const bootstrapAfterAuthentication = async () => {
@@ -1009,49 +692,14 @@ export function createAppController(): AppController {
     return "All";
   });
 
-  const pageState: PageState = {
-    get friends() {
-      return get(friendStore).friends;
-    },
-    get allUsers() {
-      return get(allUsers);
-    },
-    get groupChats() {
-      return get(groupChatList);
-    },
-    get directMessages() {
-      return get(directMessageRoster);
-    },
-    get currentChat() {
-      return get(currentChat);
-    },
-    openModal,
-    closeModal,
-    openUserCardModal,
-    openDetailedProfileModal,
-    openProfileReviewsModal,
-    openCreateGroupModal: openCreateGroupModalWithOptions,
-    openReportUserModal,
-    openCollaborativeDocument,
-    openCollaborativeWhiteboard,
-    messagesByChatId,
-  };
-
-  setContext(CREATE_GROUP_CONTEXT_KEY, pageState);
-
-  const friendsLayoutContext: FriendsLayoutContext = {
-    get friends() {
-      return get(friendStore).friends;
-    },
-    get activeTab() {
-      return get(activeTab);
-    },
-    get loading() {
-      return get(friendStore).loading;
-    },
-  };
-
-  setContext(FRIENDS_LAYOUT_DATA_CONTEXT_KEY, friendsLayoutContext);
+  const { pageState } = createPageState({
+    modalManager,
+    allUsers,
+    groupChats: groupChatList,
+    currentChat,
+    messages: messagesByChatId,
+    activeTab,
+  });
 
   return {
     authState,
@@ -1063,29 +711,9 @@ export function createAppController(): AppController {
     isAnySettingsPage,
     isFriendsOrRootPage,
     activeTab,
-    modal: {
-      activeModal,
-      modalProps,
-    },
-    connectivity: {
-      state: connectivityState,
-      statusMessage: connectivityStatusMessage,
-      fallbackMessage: connectivityFallbackMessage,
-      showBridgePrompt: connectivityBridgePrompt,
-    },
+    modal: modalManager.state,
+    connectivity,
     pageState,
-    handlers: {
-      handleKeydown,
-      handleFriendsTabSelect,
-      handleFriendsAddClick,
-      handleSelectChannel,
-      handleSelectDirectMessage,
-      openModal,
-      closeModal,
-      openDetailedProfileModal,
-      openProfileReviewsModal,
-      openCommandPalette: commandPaletteStore.open,
-      closeCommandPalette: commandPaletteStore.close,
-    },
+    handlers,
   };
 }

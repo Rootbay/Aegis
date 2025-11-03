@@ -3,168 +3,18 @@
 <script lang="ts">
   import "../app.css";
   import { getContext } from "svelte";
-  import { theme } from "$lib/stores/theme";
-  import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
-  import InitialSetup from "$lib/features/auth/components/auth/InitialSetup.svelte";
-  import Sidebar from "$lib/components/sidebars/Sidebar.svelte";
-  import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
-  import MemberSidebar from "$lib/components/sidebars/MemberSidebar.svelte";
-  import SearchSidebar from "$lib/components/sidebars/SearchSidebar.svelte";
-  import DirectMessageList from "$lib/components/lists/DirectMessageList.svelte";
-  import NavigationHeader from "$lib/components/NavigationHeader.svelte";
-  import AppModals from "$lib/layout/AppModals.svelte";
-  import { ChatView } from "$features/chat";
   import { createAppController } from "$lib/layout/createAppController";
-  import CommandPalette from "$lib/features/navigation/CommandPalette.svelte";
-  import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
+  import AppLayoutShell from "$lib/layout/app/AppLayoutShell.svelte";
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
   import type { FriendsLayoutContext } from "$lib/contextTypes";
-  import type { User } from "$lib/features/auth/models/User";
-
-  type MemberWithRoles = User & Record<string, unknown>;
 
   let { children } = $props();
 
-  const appController = createAppController();
-
-  const {
-    authState,
-    currentUser,
-    currentChat,
-    allUsers,
-    directMessages,
-    isAnySettingsPage,
-    isFriendsOrRootPage,
-    activeTab,
-    modal,
-    handlers,
-  } = appController;
-
+  const controller = createAppController();
   const friendsLayoutContext = getContext<FriendsLayoutContext | undefined>(
     FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
   );
-
   const friendsLoading = $derived(() => friendsLayoutContext?.loading ?? false);
-
-  const {
-    handleKeydown,
-    handleFriendsTabSelect,
-    handleFriendsAddClick,
-    handleSelectChannel,
-    handleSelectDirectMessage,
-    openModal,
-    closeModal,
-    openDetailedProfileModal,
-    closeCommandPalette,
-  } = handlers;
-
-  const { activeModal, modalProps } = modal;
-
-const shouldShowMemberSidebar = $derived(
-  $currentChat
-    ? $memberSidebarVisibilityStore.get($currentChat.id) !== false
-    : false,
-);
-
-  $effect(() => {
-    if ($theme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");
-    }
-  });
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<div
-  class="flex h-screen bg-base-100 text-foreground"
-  data-friends-loading={friendsLoading() ? "true" : undefined}
->
-  {#if $authState.status !== "authenticated" || !$currentUser}
-    <InitialSetup />
-  {:else}
-    {#if !$isAnySettingsPage}
-      <Sidebar
-        onCreateJoinServerClick={() => openModal("serverManagement")}
-        {openDetailedProfileModal}
-      />
-    {/if}
-    {#if !$isAnySettingsPage}
-      {#if $serverStore.activeServerId}
-        <ServerSidebar
-          server={$serverStore.servers.find(
-            (s) => s.id === $serverStore.activeServerId,
-          )!}
-          onSelectChannel={handleSelectChannel}
-        />
-      {:else}
-        <DirectMessageList
-          entries={$directMessages}
-          activeChatId={$currentChat &&
-          ($currentChat.type === "dm" || $currentChat.type === "group")
-            ? $currentChat.id
-            : null}
-          onSelect={handleSelectDirectMessage}
-          onCreateGroupClick={() => openModal("createGroup")}
-        />
-      {/if}
-    {/if}
-    <main class="flex-1 min-h-0 flex flex-col">
-      {#if $isFriendsOrRootPage}
-        <NavigationHeader
-          chat={$currentChat}
-          onOpenDetailedProfile={openDetailedProfileModal}
-          isFriendsOrRootPage={true}
-          friendsActiveTab={$activeTab}
-          onFriendsTabSelect={handleFriendsTabSelect}
-          onFriendsAddClick={handleFriendsAddClick}
-        />
-        {@render children()}
-      {:else if $currentChat}
-        <div class="flex flex-1 min-h-0 flex-col">
-          <NavigationHeader
-            chat={$currentChat}
-            onOpenDetailedProfile={openDetailedProfileModal}
-          />
-
-          <div class="flex flex-1 min-h-0">
-            <div class="flex flex-1 flex-col min-w-0">
-              <ChatView chat={$currentChat} />
-            </div>
-            {#if $chatSearchStore.searching}
-              <SearchSidebar chat={$currentChat} />
-            {:else if shouldShowMemberSidebar && $currentChat.type === "channel"}
-              <MemberSidebar
-                members={$currentChat.members as MemberWithRoles[]}
-                {openDetailedProfileModal}
-              />
-            {:else if shouldShowMemberSidebar && $currentChat.type === "group"}
-              <MemberSidebar
-                members={$currentChat.members as MemberWithRoles[]}
-                {openDetailedProfileModal}
-                context="group"
-                groupId={$currentChat.id}
-                groupOwnerId={$currentChat.ownerId}
-              />
-            {/if}
-          </div>
-        </div>
-      {:else}
-        {@render children()}
-      {/if}
-    </main>
-  {/if}
-</div>
-
-<AppModals
-  activeModal={$activeModal}
-  modalProps={$modalProps}
-  allUsers={$allUsers}
-  {closeModal}
-/>
-
-<CommandPalette on:close={closeCommandPalette} />
+<AppLayoutShell {controller} {friendsLoading} {children} />
