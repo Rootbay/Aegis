@@ -1143,7 +1143,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       content: decoded.content,
       timestamp,
       timestampMs: Number.isNaN(timestampMs) ? undefined : timestampMs,
-      read: message.read ?? true,
+      read: typeof message.read === "boolean" ? message.read : false,
       pinned,
       pending: false,
       attachments: attachments.length > 0 ? attachments : undefined,
@@ -1907,7 +1907,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       senderId: me.id,
       content: content,
       timestamp,
-      read: true,
+      read: false,
       pinned: false,
       pending: true,
       status: "pending",
@@ -2035,7 +2035,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       senderId: me.id,
       content: content,
       timestamp: newMessageTimestamp,
-      read: true,
+      read: false,
       pinned: false,
       attachments:
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
@@ -2505,13 +2505,23 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         }
       : undefined;
 
+    const backendLike = message as BackendMessage;
+    const hasExplicitRead = Object.prototype.hasOwnProperty.call(
+      backendLike,
+      "read",
+    );
+    const resolvedRead =
+      hasExplicitRead && typeof backendLike.read === "boolean"
+        ? backendLike.read
+        : false;
+
     const newMessage: Message = {
       id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
       chatId: targetChatId,
       senderId: sender,
       content: decoded.content,
       timestamp: normalizeTimestamp(timestampFromPayload),
-      read: sender === me?.id,
+      read: resolvedRead,
       pinned: Boolean((message as BackendMessage).pinned),
       attachments:
         decoded.attachments && decoded.attachments.length > 0
