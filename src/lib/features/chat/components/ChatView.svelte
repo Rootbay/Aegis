@@ -1326,6 +1326,23 @@
     }
   }
 
+  async function retryFailedMessage(message: Message) {
+    if (message.pending) {
+      return;
+    }
+
+    try {
+      await chatStore.retryMessageSend(message.chatId, message.id);
+    } catch (error) {
+      console.error("Failed to retry message send", error);
+      const messageText =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : "Failed to resend message.";
+      toasts.addToast(messageText, "error");
+    }
+  }
+
   function handleFileSelect(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files) {
@@ -2230,6 +2247,15 @@
                         >{deliveryState.reason ??
                           "Message failed to send"}</span
                       >
+                      {#if isMe && msg.status === "failed" && msg.retryable}
+                        <button
+                          type="button"
+                          class="text-xs font-semibold text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
+                          onclick={() => void retryFailedMessage(msg)}
+                        >
+                          Tap to retry
+                        </button>
+                      {/if}
                     {:else}
                       <span class="uppercase tracking-wide">
                         {isMe

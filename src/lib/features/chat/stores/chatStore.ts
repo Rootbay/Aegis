@@ -89,6 +89,16 @@ type BackendAttachment = {
   data?: number[] | Uint8Array | ArrayBuffer;
 };
 
+type RetryableMessagePayload = {
+  chatType: "dm" | "server" | "group";
+  chatId: string;
+  channelId: string | null;
+  messageChatId: string;
+  content: string;
+  attachments?: MessageAttachmentPayload[];
+  options?: SendMessageOptions;
+};
+
 export type BackendGroupChat = {
   id: string;
   name?: string | null;
@@ -152,6 +162,7 @@ interface ChatStore {
     files: File[],
     options?: SendMessageOptions,
   ) => Promise<void>;
+  retryMessageSend: (chatId: string, messageId: string) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   pinMessage: (chatId: string, messageId: string) => Promise<void>;
   unpinMessage: (chatId: string, messageId: string) => Promise<void>;
@@ -614,6 +625,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const activeAttachmentUrls = new Set<string>();
+  const retryableMessagePayloads = new Map<string, RetryableMessagePayload>();
   const pendingAttachmentFetches = new Map<string, Promise<string>>();
 
   type ModerationPreferences = {
@@ -861,6 +873,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
       if (next === existing) {
         return map;
+      }
+
+      const nextIds = new Set(next.map((message) => message.id));
+      for (const message of existing) {
+        if (!nextIds.has(message.id)) {
+          retryableMessagePayloads.delete(message.id);
+        }
       }
 
       const existingUrls = collectAttachmentUrlsFromMessages(existing);
@@ -1596,6 +1615,275 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return payload;
   };
 
+  const cloneSendOptions = (
+    options?: SendMessageOptions,
+  ): SendMessageOptions | undefined => {
+    if (!options) {
+      return undefined;
+    }
+
+    const clone: SendMessageOptions = {};
+    if (options.replyToMessageId) {
+      clone.replyToMessageId = options.replyToMessageId;
+    }
+    if (options.replySnapshot) {
+      clone.replySnapshot = { ...options.replySnapshot };
+    }
+    return clone;
+  };
+
+  const cloneAttachmentPayloads = (
+    attachments: MessageAttachmentPayload[],
+  ): MessageAttachmentPayload[] =>
+    attachments.map((attachment) => ({
+      ...attachment,
+      data:
+        attachment.data instanceof Uint8Array
+          ? attachment.data.slice()
+          : attachment.data.slice(0),
+    }));
+
+  const extractErrorMessage = (error: unknown): string | undefined => {
+    if (error instanceof Error) {
+      const trimmed = error.message?.trim();
+      if (trimmed && trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+    if (typeof error === "string") {
+      const trimmed = error.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+    return undefined;
+  };
+
+  const markMessageAsFailed = (
+    targetChatId: string,
+    messageId: string,
+    reason?: string,
+  ) => {
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        const next: Message = {
+          ...message,
+          pending: false,
+          status: "failed",
+          retryable: true,
+          sendFailed: true,
+        };
+        next.failureReason = reason;
+        next.sendError = reason;
+        next.errorMessage = reason;
+        return next;
+      }),
+    );
+  };
+
+  const markMessageAsSending = (targetChatId: string, messageId: string) => {
+    updateMessagesForChat(targetChatId, (existing) =>
+      existing.map((message) => {
+        if (message.id !== messageId) {
+          return message;
+        }
+        const next: Message = {
+          ...message,
+          pending: true,
+          status: "pending",
+          retryable: false,
+          sendFailed: false,
+        };
+        next.failureReason = undefined;
+        next.sendError = undefined;
+        next.errorMessage = undefined;
+        return next;
+      }),
+    );
+  };
+
+  const transmitMessagePayload = async (payload: RetryableMessagePayload) => {
+    const me = get(userStore).me;
+    if (!me) {
+      throw new Error("Cannot send message without a logged in user");
+    }
+
+    const replyPayload = buildReplyMetadataPayload(payload.options);
+    const expiresAt = computeExpiryForTimestamp(new Date().toISOString());
+
+    if (!payload.attachments || payload.attachments.length === 0) {
+      const plaintextContent = payload.content;
+      let backendContent = plaintextContent;
+      let encryptedFailed = false;
+
+      try {
+        const encrypted = await encryptOutgoingMessagePayload({
+          content: payload.content,
+          attachments: [],
+          chatType: payload.chatType,
+          chatId: payload.chatId,
+          channelId: payload.channelId,
+          senderId: me.id,
+          recipientId: payload.chatType === "dm" ? payload.chatId : null,
+        });
+        backendContent = encrypted.wasEncrypted
+          ? encrypted.content
+          : payload.content;
+      } catch (error) {
+        console.warn(
+          "Message content encryption failed, using plaintext",
+          error,
+        );
+        backendContent = plaintextContent;
+      }
+
+      try {
+        if (payload.chatType === "dm") {
+          await invoke("send_encrypted_dm", {
+            message: backendContent,
+            recipientId: payload.chatId,
+            recipient_id: payload.chatId,
+            expiresAt,
+            expires_at: expiresAt,
+            ...replyPayload,
+          });
+        } else {
+          await invoke("send_encrypted_group_message", {
+            message: backendContent,
+            channelId: payload.channelId,
+            channel_id: payload.channelId,
+            serverId: payload.chatId,
+            server_id: payload.chatId,
+            expiresAt,
+            expires_at: expiresAt,
+            ...replyPayload,
+          });
+        }
+      } catch (error) {
+        encryptedFailed = true;
+        console.warn(
+          "Encrypted send failed, attempting plaintext fallback",
+          error,
+        );
+        try {
+          if (payload.chatType === "dm") {
+            await invoke("send_direct_message", {
+              message: plaintextContent,
+              recipientId: payload.chatId,
+              recipient_id: payload.chatId,
+              expiresAt,
+              expires_at: expiresAt,
+              ...replyPayload,
+            });
+          } else {
+            await invoke("send_message", {
+              message: plaintextContent,
+              channelId: payload.channelId,
+              channel_id: payload.channelId,
+              serverId: payload.chatId,
+              server_id: payload.chatId,
+              expiresAt,
+              expires_at: expiresAt,
+              ...replyPayload,
+            });
+          }
+        } catch (fallbackError) {
+          throw fallbackError instanceof Error
+            ? fallbackError
+            : new Error(String(fallbackError));
+        }
+      }
+
+      if (encryptedFailed) {
+        console.info(
+          "Sent plaintext message after encryption fallback for",
+          payload.messageChatId,
+        );
+      }
+      return;
+    }
+
+    const plaintextAttachments = cloneAttachmentPayloads(payload.attachments);
+    let attachmentsForSend = cloneAttachmentPayloads(payload.attachments);
+    let contentForSend = payload.content;
+    let encryptedFailed = false;
+
+    try {
+      const encrypted = await encryptOutgoingMessagePayload({
+        content: payload.content,
+        attachments: attachmentsForSend,
+        chatType: payload.chatType,
+        chatId: payload.chatId,
+        channelId: payload.channelId,
+        senderId: me.id,
+        recipientId: payload.chatType === "dm" ? payload.chatId : null,
+      });
+      if (!encrypted.wasEncrypted) {
+        throw new Error("Attachment payload returned without encryption");
+      }
+      contentForSend = encrypted.content;
+      attachmentsForSend = encrypted.attachments;
+    } catch (error) {
+      console.error("Attachment encryption failed", error);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
+    try {
+      if (payload.chatType === "dm") {
+        try {
+          await invoke("send_encrypted_dm_with_attachments", {
+            message: contentForSend,
+            recipientId: payload.chatId,
+            recipient_id: payload.chatId,
+            expiresAt,
+            expires_at: expiresAt,
+            attachments: attachmentsForSend,
+            ...replyPayload,
+          });
+        } catch (error) {
+          encryptedFailed = true;
+          console.warn(
+            "Encrypted attachment send failed, attempting plaintext fallback",
+            error,
+          );
+          await invoke("send_direct_message_with_attachments", {
+            message: payload.content,
+            recipientId: payload.chatId,
+            recipient_id: payload.chatId,
+            expiresAt,
+            expires_at: expiresAt,
+            attachments: plaintextAttachments,
+            ...replyPayload,
+          });
+        }
+      } else {
+        await invoke("send_message_with_attachments", {
+          message: contentForSend,
+          attachments: attachmentsForSend,
+          channelId: payload.channelId,
+          channel_id: payload.channelId,
+          serverId: payload.chatId,
+          server_id: payload.chatId,
+          expiresAt,
+          expires_at: expiresAt,
+          ...replyPayload,
+        });
+      }
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+
+    if (encryptedFailed) {
+      console.info(
+        "Sent plaintext attachments after encryption fallback for",
+        payload.messageChatId,
+      );
+    }
+  };
+
   const sendMessage = async (
     content: string,
     options: SendMessageOptions = {},
@@ -1622,6 +1910,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       read: true,
       pinned: false,
       pending: true,
+      status: "pending",
+      retryable: false,
+      sendFailed: false,
       expiresAt: optimisticExpiresAt,
       replyToMessageId: options.replyToMessageId,
       replySnapshot: options.replySnapshot,
@@ -1632,89 +1923,24 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       newMessage,
     ]);
 
-    const plaintextContent = content;
-    const replyPayload = buildReplyMetadataPayload(options);
-    let encryptedFailed = false;
-    let backendContent = plaintextContent;
-    try {
-      const encrypted = await encryptOutgoingMessagePayload({
-        content,
-        attachments: [],
-        chatType: type,
-        chatId,
-        channelId: channelId,
-        senderId: me.id,
-        recipientId: type === "dm" ? chatId : null,
-      });
-      backendContent = encrypted.wasEncrypted ? encrypted.content : content;
-    } catch (error) {
-      console.warn("Message content encryption failed, using plaintext", error);
-      backendContent = plaintextContent;
-    }
-    try {
-      if (type === "dm") {
-        await invoke("send_encrypted_dm", {
-          message: backendContent,
-          recipientId: chatId,
-          recipient_id: chatId,
-          expiresAt: optimisticExpiresAt,
-          expires_at: optimisticExpiresAt,
-          ...replyPayload,
-        });
-      } else {
-        await invoke("send_encrypted_group_message", {
-          message: backendContent,
-          channelId: channelId,
-          channel_id: channelId,
-          serverId: chatId,
-          server_id: chatId,
-          expiresAt: optimisticExpiresAt,
-          expires_at: optimisticExpiresAt,
-          ...replyPayload,
-        });
-      }
-    } catch (error) {
-      encryptedFailed = true;
-      console.warn(
-        "Encrypted send failed, attempting plaintext fallback",
-        error,
-      );
-      try {
-        if (type === "dm") {
-          await invoke("send_direct_message", {
-            message: plaintextContent,
-            recipientId: chatId,
-            recipient_id: chatId,
-            expiresAt: optimisticExpiresAt,
-            expires_at: optimisticExpiresAt,
-            ...replyPayload,
-          });
-        } else {
-          await invoke("send_message", {
-            message: plaintextContent,
-            channelId: channelId,
-            channel_id: channelId,
-            serverId: chatId,
-            server_id: chatId,
-            expiresAt: optimisticExpiresAt,
-            expires_at: optimisticExpiresAt,
-            ...replyPayload,
-          });
-        }
-      } catch (fallbackError) {
-        console.error("Failed to send message:", fallbackError);
-        updateMessagesForChat(messageChatId, (existing) =>
-          existing.filter((msg) => msg.id !== tempId),
-        );
-        throw fallbackError;
-      }
-    }
+    const payload: RetryableMessagePayload = {
+      chatType: type,
+      chatId,
+      channelId: channelId ?? null,
+      messageChatId,
+      content,
+      options: cloneSendOptions(options),
+    };
 
-    if (encryptedFailed) {
-      console.info(
-        "Sent plaintext message after encryption fallback for",
-        messageChatId,
-      );
+    retryableMessagePayloads.set(tempId, payload);
+
+    try {
+      await transmitMessagePayload(payload);
+      retryableMessagePayloads.delete(tempId);
+    } catch (error) {
+      const reason = extractErrorMessage(error);
+      markMessageAsFailed(messageChatId, tempId, reason);
+      throw error instanceof Error ? error : new Error(String(error));
     }
   };
 
@@ -1796,34 +2022,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const backendAttachments = attachmentsCombined.map(
       (entry) => entry.backend,
     );
-    const plaintextContent = content;
     const plaintextAttachments = backendAttachments.map((attachment) => ({
       ...attachment,
     }));
-    let contentForSend = plaintextContent;
-    let attachmentsForSend = backendAttachments;
-    try {
-      const encrypted = await encryptOutgoingMessagePayload({
-        content,
-        attachments: backendAttachments,
-        chatType: type,
-        chatId,
-        channelId: channelId,
-        senderId: me.id,
-        recipientId: type === "dm" ? chatId : null,
-      });
-      if (!encrypted.wasEncrypted) {
-        throw new Error("Attachment payload returned without encryption");
-      }
-      contentForSend = encrypted.content;
-      attachmentsForSend = encrypted.attachments;
-    } catch (error) {
-      console.error("Attachment encryption failed", error);
-      updateMessagesForChat(messageChatId, (existing) =>
-        existing.filter((msg) => msg.id !== tempId),
-      );
-      throw error instanceof Error ? error : new Error(String(error));
-    }
     const optimisticAttachments = attachmentsCombined.map((entry) => entry.ui);
 
     const newMessageTimestamp = timestamp;
@@ -1839,6 +2040,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       attachments:
         optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
       pending: true,
+      status: "pending",
+      retryable: false,
+      sendFailed: false,
       expiresAt: optimisticExpiresAt,
       replyToMessageId: options.replyToMessageId,
       replySnapshot: options.replySnapshot,
@@ -1848,62 +2052,46 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       newMessage,
     ]);
 
-    let encryptedFailed = false;
-    const replyPayload = buildReplyMetadataPayload(options);
+    const payload: RetryableMessagePayload = {
+      chatType: type,
+      chatId,
+      channelId: channelId ?? null,
+      messageChatId,
+      content,
+      attachments: cloneAttachmentPayloads(plaintextAttachments),
+      options: cloneSendOptions(options),
+    };
+
+    retryableMessagePayloads.set(tempId, payload);
+
     try {
-      if (type === "dm") {
-        try {
-          await invoke("send_encrypted_dm_with_attachments", {
-            message: contentForSend,
-            recipientId: chatId,
-            recipient_id: chatId,
-            expiresAt: optimisticExpiresAt,
-            expires_at: optimisticExpiresAt,
-            attachments: attachmentsForSend,
-            ...replyPayload,
-          });
-        } catch (error) {
-          encryptedFailed = true;
-          console.warn(
-            "Encrypted attachment send failed, attempting plaintext fallback",
-            error,
-          );
-          await invoke("send_direct_message_with_attachments", {
-            message: plaintextContent,
-            recipientId: chatId,
-            recipient_id: chatId,
-            expiresAt: optimisticExpiresAt,
-            expires_at: optimisticExpiresAt,
-            attachments: plaintextAttachments,
-            ...replyPayload,
-          });
-        }
-      } else {
-        await invoke("send_message_with_attachments", {
-          message: contentForSend,
-          attachments: attachmentsForSend,
-          channelId: channelId,
-          channel_id: channelId,
-          serverId: chatId,
-          server_id: chatId,
-          expiresAt: optimisticExpiresAt,
-          expires_at: optimisticExpiresAt,
-          ...replyPayload,
-        });
-      }
+      await transmitMessagePayload(payload);
+      retryableMessagePayloads.delete(tempId);
     } catch (error) {
-      console.error("Failed to send message with attachments:", error);
-      updateMessagesForChat(messageChatId, (existing) =>
-        existing.filter((msg) => msg.id !== tempId),
-      );
+      const reason = extractErrorMessage(error);
+      markMessageAsFailed(messageChatId, tempId, reason);
       throw error instanceof Error ? error : new Error(String(error));
     }
+  };
 
-    if (encryptedFailed) {
-      console.info(
-        "Sent plaintext attachments after encryption fallback for",
-        messageChatId,
-      );
+  const retryMessageSend = async (chatId: string, messageId: string) => {
+    const payload = retryableMessagePayloads.get(messageId);
+    if (!payload) {
+      throw new Error("No retry payload available for this message");
+    }
+
+    const targetChatId =
+      chatId === payload.messageChatId ? chatId : payload.messageChatId;
+
+    markMessageAsSending(targetChatId, messageId);
+
+    try {
+      await transmitMessagePayload(payload);
+      retryableMessagePayloads.delete(messageId);
+    } catch (error) {
+      const reason = extractErrorMessage(error);
+      markMessageAsFailed(targetChatId, messageId, reason);
+      throw error instanceof Error ? error : new Error(String(error));
     }
   };
 
@@ -1947,6 +2135,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         messageId,
         message_id: messageId,
       });
+      retryableMessagePayloads.delete(messageId);
       if (showTombstone && previous) {
         revokeAttachmentsForMessages([previous]);
       }
@@ -2647,6 +2836,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return;
     }
 
+    retryableMessagePayloads.delete(messageId);
+
     const preferences = resolveModerationForChat(chatId);
     if (preferences.deletedMessageDisplay === "tombstone") {
       const removed: Message[] = [];
@@ -3115,6 +3306,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleMessagesUpdate,
     sendMessage,
     sendMessageWithAttachments,
+    retryMessageSend,
     deleteMessage,
     pinMessage,
     unpinMessage,
