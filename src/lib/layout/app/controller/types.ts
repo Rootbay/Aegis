@@ -1,0 +1,11 @@
+export type ChatStoreType = typeof import("$lib/features/chat/stores/chatStore").chatStore;
+export type FriendStoreType = typeof import("$lib/features/friends/stores/friendStore").friendStore;
+export type ServerStoreType = typeof import("$lib/features/servers/stores/serverStore").serverStore;
+export type FileTransferStoreType = typeof import("$lib/features/chat/stores/fileTransferStore").fileTransferStore;
+export type CollaborationStoreType = typeof import("$lib/features/collaboration/collabDocumentStore").collaborationStore;
+export type UserStoreType = typeof import("$lib/stores/userStore").userStore;
+export type GroupChatsReadable = typeof import("$lib/features/chat/stores/chatStore").groupChats;
+export type MessagesByChatIdReadable = typeof import("$lib/features/chat/stores/chatStore").messagesByChatId;
+export type ActiveChatIdReadable = typeof import("$lib/features/chat/stores/chatStore").activeChatId;
+export type ActiveChatTypeReadable = typeof import("$lib/features/chat/stores/chatStore").activeChatType;
+export type ActiveChannelIdReadable = typeof import("$lib/features/chat/stores/chatStore").activeChannelId;
