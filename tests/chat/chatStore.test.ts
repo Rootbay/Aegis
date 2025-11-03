@@ -98,7 +98,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { createChatStore } from "../../src/lib/features/chat/stores/chatStore";
-import type { EditMessage } from "../../src/lib/features/chat/models/AepMessage";
+import type { EditMessage, ChatMessage } from "../../src/lib/features/chat/models/AepMessage";
 import type { MessageAttachmentPayload } from "../../src/lib/features/chat/services/chatEncryptionService";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -218,6 +218,41 @@ describe("chatStore message editing", () => {
     });
     return store;
   };
+
+  it("defaults read to false for self-authored events without explicit flag", async () => {
+    const store = createChatStore();
+    const timestamp = new Date().toISOString();
+
+    await store.handleNewMessageEvent({
+      id: "self-1",
+      sender: "user-123",
+      content: "Hello there",
+      timestamp,
+      conversation_id: "chat-self",
+    });
+
+    const messages = get(store.messagesByChatId).get("chat-self") ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.read).toBe(false);
+  });
+
+  it("respects explicit read flags on new message events", async () => {
+    const store = createChatStore();
+    const timestamp = new Date().toISOString();
+
+    await store.handleNewMessageEvent({
+      id: "self-2",
+      sender: "user-123",
+      content: "Delivery confirmed",
+      timestamp,
+      conversation_id: "chat-self-flag",
+      read: true,
+    } as ChatMessage & { read: boolean });
+
+    const messages = get(store.messagesByChatId).get("chat-self-flag") ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.read).toBe(true);
+  });
 
   it("optimistically updates content and metadata when editing", async () => {
     const store = await seedMessage();

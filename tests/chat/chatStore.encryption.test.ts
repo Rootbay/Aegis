@@ -156,6 +156,7 @@ describe("chatStore encrypted messaging", () => {
     let messages = get(store.messagesByChatId).get("friend-1") ?? [];
     expect(messages).toHaveLength(1);
     expect(messages[0].pending).toBe(true);
+    expect(messages[0].read).toBe(false);
     expect(invokeMock).toHaveBeenCalledWith(
       "send_encrypted_dm",
       expect.objectContaining({
@@ -178,6 +179,7 @@ describe("chatStore encrypted messaging", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0].id).toBe("remote-1");
     expect(messages[0].pending).toBe(false);
+    expect(messages[0].read).toBe(false);
   });
 
   it("falls back to plaintext command when encrypted send fails", async () => {
@@ -214,6 +216,7 @@ describe("chatStore encrypted messaging", () => {
     const messages = get(store.messagesByChatId).get("friend-2") ?? [];
     expect(messages).toHaveLength(1);
     expect(messages[0].pending).toBe(true);
+    expect(messages[0].read).toBe(false);
   });
 
   it("encrypts attachments before invoking backend commands", async () => {
@@ -222,6 +225,10 @@ describe("chatStore encrypted messaging", () => {
     const file = createMockFile(originalBytes, "secret.txt", "text/plain");
 
     await store.sendMessageWithAttachments("Encrypted file", [file]);
+
+    const pendingWithAttachments =
+      get(store.messagesByChatId).get("friend-1") ?? [];
+    expect(pendingWithAttachments[0]?.read).toBe(false);
 
     const attachmentCall = invokeMock.mock.calls.find(
       ([command]) => command === "send_encrypted_dm_with_attachments",
@@ -271,6 +278,10 @@ describe("chatStore encrypted messaging", () => {
       "send_direct_message_with_attachments",
       expect.objectContaining({ message: "Attachment fallback" }),
     );
+
+    const pendingFallback =
+      get(store.messagesByChatId).get("friend-attachments") ?? [];
+    expect(pendingFallback[0]?.read).toBe(false);
   });
 
   it("removes optimistic entries when attachment encryption fails", async () => {
