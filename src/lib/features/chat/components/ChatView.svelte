@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import {
+    CircleAlert,
     Link,
     Loader2,
     Mic,
@@ -84,6 +85,77 @@
     messageId: string;
     author?: string;
     snippet?: string;
+  };
+
+  type MessageDeliveryState = "pending" | "failed" | "sent";
+
+  type DeliveryAwareMessage = Message & {
+    pending?: boolean | string;
+    failed?: boolean | string;
+    sendFailed?: boolean | string;
+    sendError?: string;
+    failureReason?: string;
+    failure_reason?: string;
+    deliveryStatus?: string;
+    status?: string;
+    errorMessage?: string;
+    error_message?: string;
+  };
+
+  const resolveMessageDeliveryState = (
+    message: Message,
+  ): { state: MessageDeliveryState; reason?: string } => {
+    const extended = message as DeliveryAwareMessage;
+    const pendingState = extended.pending;
+
+    if (pendingState === true) {
+      return { state: "pending" };
+    }
+
+    const normalizedPendingState =
+      typeof pendingState === "string" ? pendingState.toLowerCase() : null;
+    const pendingIndicatesFailure =
+      normalizedPendingState !== null &&
+      ["failed", "error"].includes(normalizedPendingState);
+
+    const reasonCandidates = [
+      extended.failureReason,
+      extended.failure_reason,
+      extended.sendError,
+      extended.errorMessage,
+      extended.error_message,
+      pendingIndicatesFailure && typeof pendingState === "string"
+        ? pendingState
+        : undefined,
+    ].filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    );
+
+    const hasFailureIndicator =
+      pendingIndicatesFailure ||
+      extended.failed === true ||
+      (typeof extended.failed === "string" &&
+        ["true", "failed", "error"].includes(extended.failed.toLowerCase())) ||
+      extended.sendFailed === true ||
+      (typeof extended.sendFailed === "string" &&
+        ["true", "failed", "error"].includes(
+          extended.sendFailed.toLowerCase(),
+        )) ||
+      (typeof extended.deliveryStatus === "string" &&
+        extended.deliveryStatus.toLowerCase() === "failed") ||
+      (typeof extended.status === "string" &&
+        extended.status.toLowerCase() === "failed") ||
+      reasonCandidates.length > 0;
+
+    if (hasFailureIndicator) {
+      return {
+        state: "failed",
+        reason: reasonCandidates[0],
+      };
+    }
+
+    return { state: "sent" };
   };
 
   function persistChatDraft(chatId: string) {
@@ -2131,19 +2203,45 @@
                       {/each}
                     </div>
                   {/if}
-                  {#if !msg.pending}
-                    <p
-                      class="mt-1 text-[0.625rem] uppercase tracking-wide text-muted-foreground/80"
-                    >
-                      {isMe
-                        ? msg.read
-                          ? "Read by recipient"
-                          : "Not read yet"
-                        : msg.read
-                          ? "Read"
-                          : "Unread"}
-                    </p>
-                  {/if}
+                  {@const deliveryState = resolveMessageDeliveryState(msg)}
+                  <div
+                    class={`mt-1 flex items-center gap-2 text-[0.625rem] ${
+                      deliveryState.state === "failed"
+                        ? "text-destructive/90"
+                        : "text-muted-foreground/80"
+                    }`}
+                    role={deliveryState.state === "sent" ? undefined : "status"}
+                    aria-live={deliveryState.state === "sent"
+                      ? "off"
+                      : "polite"}
+                    aria-atomic={deliveryState.state === "sent"
+                      ? undefined
+                      : "true"}
+                  >
+                    {#if deliveryState.state === "pending"}
+                      <Loader2
+                        class="h-3 w-3 animate-spin"
+                        aria-hidden="true"
+                      />
+                      <span>Sending…</span>
+                    {:else if deliveryState.state === "failed"}
+                      <CircleAlert class="h-3 w-3" aria-hidden="true" />
+                      <span
+                        >{deliveryState.reason ??
+                          "Message failed to send"}</span
+                      >
+                    {:else}
+                      <span class="uppercase tracking-wide">
+                        {isMe
+                          ? msg.read
+                            ? "Read by recipient"
+                            : "Not read yet"
+                          : msg.read
+                            ? "Read"
+                            : "Unread"}
+                      </span>
+                    {/if}
+                  </div>
                 </div>
               </div>
             </div>
