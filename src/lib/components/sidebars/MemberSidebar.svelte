@@ -473,7 +473,7 @@
               size="sm"
               variant="outline"
               onclick={openInviteMembersDialog}
-              disabled={!hasInviteCandidates}
+              disabled={!hasInviteCandidates()}
             >
               <UserPlus class="mr-2 h-3.5 w-3.5" /> Invite members
             </Button>
@@ -512,7 +512,7 @@
                       {#each group.members as member (member.id)}
                         <SidebarMenuItem>
                           <div class="flex items-center gap-1">
-                            <Popover.Root class="flex-1">
+                            <Popover.Root>
                               <Popover.Trigger class="flex-1">
                                 <SidebarMenuButton
                                   class="flex w-full items-center gap-3"
@@ -632,7 +632,7 @@
         users={inviteCandidates}
         selectedUserIds={inviteeSelection}
         onToggleUser={toggleInviteeSelection}
-        emptyStateMessage={hasInviteCandidates
+        emptyStateMessage={hasInviteCandidates()
           ? "No users found."
           : "No friends available to invite."}
       />

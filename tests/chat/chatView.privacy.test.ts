@@ -6,6 +6,7 @@ import {
   within,
 } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { tick } from "svelte";
 
 import Passthrough from "../mocks/Passthrough.svelte";
@@ -72,10 +73,6 @@ type WritableStore<T> = {
   update: (updater: (value: T) => T) => void;
 };
 
-type MockedFn<Args extends unknown[], Return> = ReturnType<
-  typeof vi.fn<Args, Return>
->;
-
 type ToastModuleMock = {
   toasts: {
     addToast: ReturnType<typeof vi.fn>;
@@ -139,17 +136,19 @@ type UserStoreModule = {
 
 type MutedFriendsModule = {
   mutedFriendsStore: {
-    isMuted: (id: string) => boolean;
-    mute: (id: string) => void;
-    unmute: (id: string) => void;
+    isMuted: Mock<(id: string) => boolean>;
+    mute: Mock<(id: string) => void>;
+    unmute: Mock<(id: string) => void>;
   };
   __resetMutedFriends: () => void;
 };
 
 type FriendStoreModule = {
   friendStore: {
-    removeFriend: (friendshipId: string, friendId: string) => Promise<void>;
-    initialize: () => Promise<void>;
+    removeFriend: Mock<
+      (friendshipId: string, friendId: string) => Promise<void>
+    >;
+    initialize: Mock<() => Promise<void>>;
   };
   __resetFriendStore?: () => void;
 };
@@ -439,6 +438,7 @@ const mockGetLinkPreviewMetadata = linkPreviewMocks.getLinkPreviewMetadata;
 
 vi.mock("@lucide/svelte", () => ({
   Link: Passthrough,
+  LoaderCircle: Passthrough,
   Mic: Passthrough,
   SendHorizontal: Passthrough,
   Square: Passthrough,
@@ -1382,7 +1382,8 @@ describe("ChatView history loading", () => {
         });
       });
 
-      expect(screen.getByText(olderMessage.content)).toBeTruthy();
+      const matches = screen.getAllByText(olderMessage.content);
+      expect(matches.length).toBeGreaterThan(0);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       loadMoreSpy.mockRestore();
@@ -1480,7 +1481,8 @@ describe("ChatView history loading", () => {
         expect(scrollSpy).toHaveBeenCalled();
       });
 
-      expect(screen.getByText(olderMessage.content)).toBeTruthy();
+      const matches = screen.getAllByText(olderMessage.content);
+      expect(matches.length).toBeGreaterThan(0);
     } finally {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       loadMoreSpy.mockRestore();

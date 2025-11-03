@@ -178,8 +178,11 @@
   }
 
   function openMeshExplorer() {
+    const meshExplorerUrl = `${resolve("/settings/network")}#mesh-explorer` as Parameters<
+      typeof goto
+    >[0];
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    goto(resolve("/settings/network#mesh-explorer"));
+    void goto(meshExplorerUrl);
   }
 </script>
 

@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { get, writable } from "svelte/store";
 
 vi.mock("$lib/stores/userStore", () => {
@@ -49,7 +50,10 @@ const createLocalStorageMock = () => {
 
 let createObjectURLSpy: ReturnType<typeof vi.fn>;
 let revokeObjectURLSpy: ReturnType<typeof vi.fn>;
-const invokeMock = vi.mocked(invoke);
+type InvokePayload = Record<string, unknown> | undefined;
+const invokeMock = vi.mocked(invoke) as Mock<
+  (command: string, payload?: InvokePayload) => Promise<unknown>
+>;
 
 describe("chatStore.handleMessageDeleted", () => {
   beforeEach(() => {
@@ -63,11 +67,15 @@ describe("chatStore.handleMessageDeleted", () => {
     } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        content?: string;
+        attachments?: unknown[];
+      };
       if (command === "decrypt_chat_payload") {
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
           wasEncrypted: true,
         };
       }

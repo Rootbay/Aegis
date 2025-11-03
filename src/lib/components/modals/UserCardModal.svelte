@@ -207,7 +207,7 @@
           type="text"
           placeholder={`Message @${profileUser.name}`}
           bind:value={draftMessage}
-          bind:this={messageInputElement}
+          bind:ref={messageInputElement}
           onkeydown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();

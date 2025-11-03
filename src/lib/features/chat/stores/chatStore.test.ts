@@ -1,4 +1,12 @@
-import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
+import {
+  describe,
+  beforeEach,
+  afterEach,
+  it,
+  expect,
+  vi,
+} from "vitest";
+import type { MockInstance } from "vitest";
 import { get } from "svelte/store";
 import { createChatStore } from "./chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
@@ -43,7 +51,8 @@ vi.mock("$lib/stores/userStore", () => ({
 describe("chatStore attachment lifecycle", () => {
   let createdUrls: string[];
   let revokeSpy: ReturnType<typeof vi.fn>;
-  let focusSpy: ReturnType<typeof vi.spyOn> | undefined;
+  type DocumentHasFocusSpy = MockInstance<() => boolean>;
+  let focusSpy: DocumentHasFocusSpy | undefined;
 
   beforeEach(() => {
     createdUrls = [];
@@ -63,9 +72,9 @@ describe("chatStore attachment lifecycle", () => {
       notificationSound: "Default Silent Chime",
     }));
     focusSpy?.mockRestore();
-    focusSpy = vi
-      .spyOn(document, "hasFocus")
-      .mockReturnValue(true) as ReturnType<typeof vi.spyOn>;
+    const hasFocusSpy = vi.spyOn(document, "hasFocus");
+    hasFocusSpy.mockReturnValue(true);
+    focusSpy = hasFocusSpy;
     Object.defineProperty(document, "visibilityState", {
       value: "visible",
       configurable: true,

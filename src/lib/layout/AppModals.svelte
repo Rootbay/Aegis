@@ -76,6 +76,18 @@
     kind: import("$lib/features/collaboration/collabDocumentStore").CollaborationSessionKind;
   }>;
 
+  type DetailedProfileProps = {
+    profileUser?: import("$lib/features/auth/models/User").User;
+    mutualFriends?: import("$lib/features/auth/models/User").User[];
+    mutualServers?: import("$lib/features/servers/models/Server").Server[];
+    mutualGroups?: Array<{
+      serverId: string;
+      serverName: string;
+      channelId: string;
+      channelName: string;
+    }>;
+  };
+
   const collaborationWhiteboardProps = modalProps as Partial<{
     documentId: string;
   }>;
@@ -100,12 +112,7 @@
 {/if}
 
 {#if activeModal === "detailedProfile"}
-  {@const detailedProfileProps = modalProps as {
-    profileUser?: import("$lib/features/auth/models/User").User;
-    mutualFriends?: import("$lib/features/auth/models/User").User[];
-    mutualServers?: import("$lib/features/servers/models/Server").Server[];
-    mutualGroups?: unknown[];
-  }}
+  {@const detailedProfileProps = modalProps as DetailedProfileProps}
   {#if detailedProfileProps.profileUser}
     <DetailedProfileModal
       profileUser={detailedProfileProps.profileUser}
@@ -154,7 +161,9 @@
     >
       <UserCardModal
         profileUser={userCardProps.profileUser}
-        openDetailedProfileModal={userCardProps.openDetailedProfileModal}
+        openDetailedProfileModal={
+          userCardProps.openDetailedProfileModal ?? (() => {})
+        }
         isServerMemberContext={userCardProps.isServerMemberContext ?? false}
         close={closeModal}
       />

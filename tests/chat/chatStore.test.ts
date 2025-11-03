@@ -1,11 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import type { SpamClassification } from "../../src/lib/features/security/spamClassifier";
 import { spamSamples } from "../fixtures/spamSamples";
 
 const spamClassifierMock = vi.hoisted(() => ({
   scoreText: vi.fn<
-    [string, { context?: string | undefined; subjectId?: string | undefined }],
-    Promise<SpamClassification>
+    (text: string, options?: { context?: string; subjectId?: string }) =>
+      Promise<SpamClassification>
   >(),
   clearCache: vi.fn(),
   loadModel: vi.fn(),
@@ -101,7 +102,12 @@ import type { EditMessage } from "../../src/lib/features/chat/models/AepMessage"
 import type { MessageAttachmentPayload } from "../../src/lib/features/chat/services/chatEncryptionService";
 import { invoke } from "@tauri-apps/api/core";
 
-const invokeMock = vi.mocked(invoke);
+type InvokePayload = Record<string, unknown> | undefined;
+type InvokeMock = Mock<
+  (command: string, payload?: InvokePayload) => Promise<unknown>
+>;
+
+const invokeMock = vi.mocked(invoke) as InvokeMock;
 const mutedFriendsStoreMock = mutedFriendsModule.store;
 
 beforeEach(() => {
@@ -180,11 +186,15 @@ describe("chatStore message editing", () => {
     } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        content?: string;
+        attachments?: unknown[];
+      };
       if (command === "decrypt_chat_payload") {
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
           wasEncrypted: true,
         };
       }
@@ -327,11 +337,15 @@ describe("chatStore metadata derivations", () => {
 describe("chatStore spam classification", () => {
   beforeEach(() => {
     invokeMock.mockReset();
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        content?: string;
+        attachments?: unknown[];
+      };
       if (command === "decrypt_chat_payload") {
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
           wasEncrypted: true,
         };
       }
@@ -409,11 +423,17 @@ describe("chatStore encrypted message refresh", () => {
     } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        content?: string;
+        attachments?: unknown[];
+        chatId?: string;
+        chat_id?: string;
+      };
       if (command === "decrypt_chat_payload") {
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
           wasEncrypted: true,
         };
       }
@@ -422,7 +442,7 @@ describe("chatStore encrypted message refresh", () => {
         return [
           {
             id: "encrypted-1",
-            chat_id: payload?.chatId ?? payload?.chat_id ?? "friend-456",
+            chat_id: args.chatId ?? args.chat_id ?? "friend-456",
             sender_id: "friend-456",
             content: "Encrypted hello",
             timestamp: now,
@@ -498,7 +518,7 @@ describe("chatStore plaintext encryption fallbacks", () => {
 
   const setupActiveDm = async () => {
     const store = createChatStore();
-    invokeMock.mockImplementation(async (command) => {
+    invokeMock.mockImplementation(async (command: string) => {
       if (command === "get_messages") {
         return [];
       }
@@ -510,7 +530,7 @@ describe("chatStore plaintext encryption fallbacks", () => {
 
   it("sends plaintext content to fallback command when encrypted send fails", async () => {
     const store = await setupActiveDm();
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, _payload: InvokePayload) => {
       if (command === "get_messages") {
         return [];
       }
@@ -526,14 +546,14 @@ describe("chatStore plaintext encryption fallbacks", () => {
     await store.sendMessage("Plaintext fallback");
 
     const encryptedCall = invokeMock.mock.calls.find(
-      ([command]) => command === "send_encrypted_dm",
+      (call: [string, InvokePayload?]) => call[0] === "send_encrypted_dm",
     );
     expect(encryptedCall?.[1]).toEqual(
       expect.objectContaining({ message: "cipher:Plaintext fallback" }),
     );
 
     const fallbackCall = invokeMock.mock.calls.find(
-      ([command]) => command === "send_direct_message",
+      (call: [string, InvokePayload?]) => call[0] === "send_direct_message",
     );
     expect(fallbackCall?.[1]).toEqual(
       expect.objectContaining({ message: "Plaintext fallback" }),
@@ -551,25 +571,26 @@ describe("chatStore plaintext encryption fallbacks", () => {
     );
 
     encryptionMocks.encryptMock.mockImplementationOnce(
-      async ({
-        content,
-        attachments,
-      }: {
-        content: string;
-        attachments: MessageAttachmentPayload[];
-      }) => ({
-        content: `cipher:${content}`,
-        attachments: attachments.map((item) => ({
-          ...item,
-          data: new Uint8Array(
-            (item.data as Uint8Array).map((value) => value ^ 0xff),
-          ),
-        })),
-        wasEncrypted: true,
-      }),
+      async ({ content, attachments }) => {
+        const typedAttachments = (attachments ?? []) as MessageAttachmentPayload[];
+        return {
+          content: `cipher:${content}`,
+          attachments: typedAttachments.map((item) => ({
+            ...item,
+            data: new Uint8Array(
+              (item.data as Uint8Array).map((value) => value ^ 0xff),
+            ),
+          })),
+          wasEncrypted: true,
+        };
+      },
     );
 
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        message?: string;
+        attachments?: unknown[];
+      };
       if (command === "get_messages") {
         return [];
       }
@@ -577,8 +598,9 @@ describe("chatStore plaintext encryption fallbacks", () => {
         throw new Error("no session");
       }
       if (command === "send_direct_message_with_attachments") {
-        expect(payload?.message).toBe("Attachment fallback");
-        const sent = payload?.attachments?.[0]?.data as Uint8Array;
+        expect(args.message).toBe("Attachment fallback");
+        const sent = (args.attachments?.[0] as MessageAttachmentPayload | undefined)
+          ?.data as Uint8Array;
         expect(Array.from(sent)).toEqual(Array.from(originalBytes));
         return undefined;
       }
@@ -591,14 +613,16 @@ describe("chatStore plaintext encryption fallbacks", () => {
     await store.sendMessageWithAttachments("Attachment fallback", [attachment]);
 
     const encryptedAttachmentCall = invokeMock.mock.calls.find(
-      ([command]) => command === "send_encrypted_dm_with_attachments",
+      (call: [string, InvokePayload?]) =>
+        call[0] === "send_encrypted_dm_with_attachments",
     );
     expect(encryptedAttachmentCall?.[1]).toEqual(
       expect.objectContaining({ message: "cipher:Attachment fallback" }),
     );
 
     const fallbackAttachmentCall = invokeMock.mock.calls.find(
-      ([command]) => command === "send_direct_message_with_attachments",
+      (call: [string, InvokePayload?]) =>
+        call[0] === "send_direct_message_with_attachments",
     );
     expect(fallbackAttachmentCall?.[1]).toEqual(
       expect.objectContaining({ message: "Attachment fallback" }),
@@ -629,15 +653,21 @@ describe("chatStore reply metadata mapping", () => {
       reply_snapshot_snippet: "Snippet text",
     };
 
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        chatId?: string;
+        chat_id?: string;
+        content?: string;
+        attachments?: unknown[];
+      };
       if (command === "get_messages") {
-        expect(payload?.chatId ?? payload?.chat_id).toBe("chat-reply");
+        expect(args.chatId ?? args.chat_id).toBe("chat-reply");
         return [backendMessage];
       }
       if (command === "decrypt_chat_payload") {
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
           wasEncrypted: false,
         };
       }
@@ -674,14 +704,18 @@ describe("chatStore history loading", () => {
     const store = createChatStore();
     const deferred = createDeferred<any[]>();
 
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
+      const args = (payload ?? {}) as {
+        content?: string;
+        attachments?: unknown[];
+      };
       if (command === "get_messages") {
         return deferred.promise;
       }
       if (command === "decrypt_chat_payload") {
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
           wasEncrypted: false,
         };
       }
@@ -696,7 +730,7 @@ describe("chatStore history loading", () => {
     await Promise.all([promiseA, promiseB]);
 
     const fetchCalls = invokeMock.mock.calls.filter(
-      ([command]) => command === "get_messages",
+      (call: [string, InvokePayload?]) => call[0] === "get_messages",
     );
     expect(fetchCalls).toHaveLength(1);
   });

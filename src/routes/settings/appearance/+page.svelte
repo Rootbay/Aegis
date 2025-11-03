@@ -16,9 +16,9 @@
   } from "$lib/features/settings/stores/settings";
 
   let currentTheme = $state<"light" | "dark">(get(theme));
-  let fontSize = $state<[number]>([get(settings).fontSize]);
+  let fontSize = $state(get(settings).fontSize);
 
-  const fontSizeValue = $derived(fontSize[0]);
+  const fontSizeValue = $derived(fontSize);
 
   $effect(() => {
     const unsubscribe = theme.subscribe((value) => {
@@ -36,8 +36,8 @@
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
-      if (fontSize[0] !== value.fontSize) {
-        fontSize = [value.fontSize];
+      if (fontSize !== value.fontSize) {
+        fontSize = value.fontSize;
       }
       const desiredTheme = value.enableDarkMode ? "dark" : "light";
       if (currentTheme !== desiredTheme) {
@@ -51,7 +51,7 @@
 
   $effect(() => {
     const current = get(settings);
-    const desiredFontSize = fontSize[0];
+    const desiredFontSize = fontSize;
 
     if (current.fontSize !== desiredFontSize) {
       setFontSize(desiredFontSize);

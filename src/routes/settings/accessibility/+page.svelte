@@ -32,10 +32,9 @@
   let screenReaderVerbosity = $state<"concise" | "detailed">(
     get(settings).screenReaderVerbosity,
   );
-  let speechRate = $state<[number]>([get(settings).textToSpeechRate]);
+  let speechRate = $state(get(settings).textToSpeechRate);
 
-  const speechRateValue = $derived(speechRate[0]);
-  const speechRateLabel = $derived(() => `${speechRateValue.toFixed(2)}×`);
+  const speechRateLabel = $derived(() => `${speechRate.toFixed(2)}×`);
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
@@ -43,8 +42,8 @@
       reducedMotion = value.enableReducedMotion;
       liveCaptions = value.enableLiveCaptions;
       screenReaderVerbosity = value.screenReaderVerbosity;
-      if (speechRate[0] !== value.textToSpeechRate) {
-        speechRate = [value.textToSpeechRate];
+      if (speechRate !== value.textToSpeechRate) {
+        speechRate = value.textToSpeechRate;
       }
     });
 
@@ -65,8 +64,8 @@
     if (current.screenReaderVerbosity !== screenReaderVerbosity) {
       setScreenReaderVerbosity(screenReaderVerbosity);
     }
-    if (current.textToSpeechRate !== speechRateValue) {
-      setTextToSpeechRate(speechRateValue);
+    if (current.textToSpeechRate !== speechRate) {
+      setTextToSpeechRate(speechRate);
     }
   });
 </script>
@@ -145,7 +144,7 @@
       <Label class="text-sm font-medium text-zinc-200"
         >Screen reader verbosity</Label
       >
-      <Select bind:value={screenReaderVerbosity}>
+      <Select type="single" bind:value={screenReaderVerbosity}>
         <SelectTrigger class="w-full">
           {screenReaderVerbosityOptions.find(
             (option) => option.value === screenReaderVerbosity,
@@ -171,6 +170,7 @@
         <span class="text-xs text-muted-foreground">{speechRateLabel}</span>
       </div>
       <Slider
+        type="single"
         class="pt-2"
         min={0.5}
         max={2}

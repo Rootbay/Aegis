@@ -64,7 +64,7 @@
     };
   }
 
-  const chatParticipants = $derived(() => {
+  const chatParticipants = $derived.by((): User[] => {
     if (!chat) return [] as User[];
     if (chat.type === "dm") {
       const participants: User[] = [chat.friend];
@@ -79,7 +79,7 @@
 
   const memberLookup = $derived.by(() => {
     const map = new SvelteMap<string, User>();
-    chatParticipants.forEach((member) => {
+    chatParticipants.forEach((member: User) => {
       map.set(member.id, member);
     });
     const activeServerId = $serverStore.activeServerId;
@@ -98,13 +98,13 @@
     return map;
   });
 
-  const chatMessages = $derived.by(() => {
+  const chatMessages = $derived.by((): Message[] => {
     const chatId = chat?.id;
     if (!chatId) return [] as Message[];
     return ($messagesByChatId.get(chatId) ?? []) as Message[];
   });
 
-  const matchPreviews = $derived.by(() => {
+  const matchPreviews = $derived.by((): MatchPreview[] => {
     const matches = $chatSearchStore.matches;
     if (!matches.length) return [] as MatchPreview[];
     const query = $chatSearchStore.query;
@@ -236,9 +236,10 @@
               Results
             </SidebarGroupLabel>
             <SidebarGroupContent class="space-y-2">
-              {#if matchPreviews.length}
+              {@const previews = matchPreviews}
+              {#if previews.length}
                 <div class="space-y-2">
-                  {#each matchPreviews as match (match.id)}
+                  {#each previews as match (match.id)}
                     {@const isActive =
                       match.matchIndex === $chatSearchStore.activeMatchIndex}
                     <button

@@ -29,6 +29,22 @@ export default defineConfig({
         projectRootDir,
         "tests/shims/tauri-notification.ts",
       ),
+      "@tauri-apps/api/core": resolve(
+        projectRootDir,
+        "tests/shims/tauri-core.ts",
+      ),
+      "@tauri-apps/plugin-store": resolve(
+        projectRootDir,
+        "tests/shims/tauri-store.ts",
+      ),
+      "onnxruntime-web": resolve(
+        projectRootDir,
+        "tests/shims/onnxruntime-web.ts",
+      ),
+      "onnxruntime-web/wasm": resolve(
+        projectRootDir,
+        "tests/shims/onnxruntime-web-wasm.ts",
+      ),
     },
     conditions: ["browser"],
   },

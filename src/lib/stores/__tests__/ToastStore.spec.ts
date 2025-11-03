@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import type { MockInstance } from "vitest";
 
 import { createToastStore } from "../ToastStore";
 import type { ToastStoreOptions } from "../ToastStore";
@@ -12,13 +13,14 @@ describe("createToastStore", () => {
     });
 
   let now = 0;
-  let nowSpy: ReturnType<typeof vi.spyOn<() => number>> | undefined;
+  type DateNowSpy = MockInstance<() => number>;
+  let nowSpy: DateNowSpy | undefined;
 
   beforeEach(() => {
     now = 0;
-    nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now) as ReturnType<
-      typeof vi.spyOn<() => number>
-    >;
+    const dateNowSpy = vi.spyOn(Date, "now");
+    dateNowSpy.mockImplementation(() => now);
+    nowSpy = dateNowSpy;
   });
 
   afterEach(() => {
