@@ -198,10 +198,10 @@
     <h3 class="text-lg font-semibold mb-2">Your Friendships</h3>
     <ul>
       {#each friendships as friendship (friendship.id)}
+        {@const friendRecord = findFriendByFriendship(friendship.id)}
         <li
           class="bg-muted p-3 rounded-lg mb-2 flex justify-between items-center"
         >
-          {@const friendRecord = findFriendByFriendship(friendship.id)}
           <span>
             {friendship.user_a_id === currentUser?.id
               ? "You"

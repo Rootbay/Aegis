@@ -23,7 +23,7 @@
 
   let hovered = $state<HoverState>(null);
 
-  let containerEl: HTMLDivElement | null = null;
+  let containerEl = $state<HTMLDivElement | null>(null);
 
   const dimensions = {
     width: 720,
@@ -65,14 +65,14 @@
     const centerX = width / 2;
     const centerY = height / 2;
     const radius = Math.min(width, height) / 2 - padding;
-    const maxHop = peerData.reduce((acc, peer) => {
+    const maxHop = peerData.reduce((acc: number, peer: MeshPeer) => {
       if (peer.hopCount !== null && peer.hopCount > acc) {
         return peer.hopCount;
       }
       return acc;
     }, 0);
 
-    const nodes = peerData.map((peer, index) => {
+    const nodes = peerData.map((peer: MeshPeer, index: number) => {
       const angle =
         peerData.length > 1
           ? (index / peerData.length) * Math.PI * 2 - Math.PI / 2
@@ -100,10 +100,12 @@
       } satisfies PositionedNode;
     });
 
-    const nodeMap = new Map(nodes.map((node) => [node.peer.id, node]));
+    const nodeMap = new Map<string, PositionedNode>(
+      nodes.map((node: PositionedNode) => [node.peer.id, node]),
+    );
 
     const edges = linkData
-      .map((link) => {
+      .map((link: MeshLink) => {
         const source = nodeMap.get(link.source);
         const target = nodeMap.get(link.target);
 
@@ -132,7 +134,7 @@
           targetLabel: target.peer.label,
         } satisfies PositionedEdge;
       })
-      .filter((edge): edge is PositionedEdge => edge !== null);
+      .filter((edge: PositionedEdge | null): edge is PositionedEdge => edge !== null);
 
     return { nodes, edges };
   });

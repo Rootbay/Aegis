@@ -141,7 +141,7 @@ vi.mock("$lib/features/servers/stores/serverStore", async () => {
   const { writable } =
     await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const initialState = {
-    servers: [],
+    servers: [] as Server[],
     loading: false,
     activeServerId: null as string | null,
   };

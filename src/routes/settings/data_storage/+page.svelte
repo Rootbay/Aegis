@@ -13,21 +13,21 @@
   } from "$lib/features/settings/stores/settings";
 
   let autoDownload = $state(get(settings).autoDownloadMedia);
-  let keepMediaDays = $state<[number]>([get(settings).keepMediaDuration]);
+  let keepMediaDays = $state(get(settings).keepMediaDuration);
   let clearCache = $state(get(settings).clearCacheOnExit);
   let ephemeralMinutes = $state(
     get(settings).ephemeralMessageDuration.toString(),
   );
 
   const keepMediaLabel = $derived(
-    () => `${keepMediaDays[0]} day${keepMediaDays[0] === 1 ? "" : "s"}`,
+    () => `${keepMediaDays} day${keepMediaDays === 1 ? "" : "s"}`,
   );
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
       autoDownload = value.autoDownloadMedia;
-      if (keepMediaDays[0] !== value.keepMediaDuration) {
-        keepMediaDays = [value.keepMediaDuration];
+      if (keepMediaDays !== value.keepMediaDuration) {
+        keepMediaDays = value.keepMediaDuration;
       }
       clearCache = value.clearCacheOnExit;
       ephemeralMinutes = value.ephemeralMessageDuration.toString();
@@ -41,8 +41,8 @@
     if (current.autoDownloadMedia !== autoDownload) {
       setAutoDownloadMediaEnabled(autoDownload);
     }
-    if (current.keepMediaDuration !== keepMediaDays[0]) {
-      setKeepMediaDuration(keepMediaDays[0]);
+    if (current.keepMediaDuration !== keepMediaDays) {
+      setKeepMediaDuration(keepMediaDays);
     }
     if (current.clearCacheOnExit !== clearCache) {
       setClearCacheOnExit(clearCache);
@@ -95,6 +95,7 @@
         <span class="text-xs text-muted-foreground">{keepMediaLabel}</span>
       </div>
       <Slider
+        type="single"
         min={1}
         max={90}
         step={1}

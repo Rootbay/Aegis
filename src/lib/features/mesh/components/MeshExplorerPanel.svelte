@@ -95,8 +95,9 @@
         <CardTitle>Current status</CardTitle>
         <CardDescription>{$statusMessageStore}</CardDescription>
       </div>
+      {@const StatusIcon = statusIcon()}
       <Badge variant={statusVariant()} class="flex items-center gap-1">
-        <svelte:component this={statusIcon()} class="size-3" />
+        <StatusIcon class="size-3" />
         {statusLabel()}
       </Badge>
     </CardHeader>
@@ -203,7 +204,7 @@
                 </div>
                 <div>
                   <dt class="font-medium text-foreground">Medium</dt>
-                  <dd class="capitalize">{peer.medium ?? "–"}</dd>
+                  <dd class="capitalize">{peer.connection ?? "–"}</dd>
                 </div>
               </dl>
             </div>
@@ -250,13 +251,17 @@
                 </div>
                 <div>
                   <dt class="font-medium text-foreground">Last check</dt>
-                  <dd>{relay.lastChecked ? new Date(relay.lastChecked).toLocaleString() : "–"}</dd>
+                  <dd>
+                    {relay.lastCheckedAt
+                      ? new Date(relay.lastCheckedAt).toLocaleString()
+                      : "–"}
+                  </dd>
                 </div>
                 <div>
-                  <dt class="font-medium text-foreground">Success rate</dt>
+                  <dt class="font-medium text-foreground">Uptime</dt>
                   <dd>
-                    {relay.successRate !== null
-                      ? `${Math.round((relay.successRate ?? 0) * 100)}%`
+                    {typeof relay.uptimePercent === "number"
+                      ? `${Math.round(relay.uptimePercent)}%`
                       : "–"}
                   </dd>
                 </div>

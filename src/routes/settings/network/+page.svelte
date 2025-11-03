@@ -397,7 +397,9 @@
       bind:checked={enableBridgeMode}
       aria-label="Toggle bridge mode"
       disabled={togglingBridge}
-      on:change={handleBridgeModeChange}
+      onCheckedChange={() => {
+        void handleBridgeModeChange();
+      }}
     />
   </section>
 
@@ -461,6 +463,7 @@
       >
     </div>
     <Slider
+      type="single"
       min={2}
       max={60}
       step={1}
@@ -486,6 +489,7 @@
       </span>
     </div>
     <Slider
+      type="single"
       min={0}
       max={1}
       step={0.05}

@@ -32,8 +32,10 @@
   );
 
   const selectedProviderMeta = $derived(
-    () => providers.find((provider) => provider.value === selectedProvider)!,
-  );
+    () =>
+      providers.find((provider) => provider.value === selectedProvider) ??
+      providers[0],
+  ) satisfies () => (typeof providers)[number];
 
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
@@ -113,7 +115,7 @@
           {/each}
         </select>
         <p class="text-xs text-muted-foreground">
-          Grants: {selectedProviderMeta.scopes.join(", ")}
+          Grants: {selectedProviderMeta().scopes.join(", ")}
         </p>
       </div>
       <div class="flex-1 space-y-1">

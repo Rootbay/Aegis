@@ -35,14 +35,12 @@
   let autoDownload = $state(get(settings).autoDownloadUpdates);
   let includePreRelease = $state(get(settings).includePreReleaseUpdates);
   let remindAboutUpdates = $state(get(settings).remindAboutUpdates);
-  let reminderInterval = $state<[number]>([
-    get(settings).updateReminderIntervalDays,
-  ]);
+  let reminderInterval = $state(get(settings).updateReminderIntervalDays);
 
   const reminderLabel = $derived(
     () =>
-      `${Math.round(reminderInterval[0])} day${
-        Math.round(reminderInterval[0]) === 1 ? "" : "s"
+      `${Math.round(reminderInterval)} day${
+        Math.round(reminderInterval) === 1 ? "" : "s"
       }`,
   );
 
@@ -51,8 +49,8 @@
       autoDownload = value.autoDownloadUpdates;
       includePreRelease = value.includePreReleaseUpdates;
       remindAboutUpdates = value.remindAboutUpdates;
-      if (reminderInterval[0] !== value.updateReminderIntervalDays) {
-        reminderInterval = [value.updateReminderIntervalDays];
+      if (reminderInterval !== value.updateReminderIntervalDays) {
+        reminderInterval = value.updateReminderIntervalDays;
       }
     });
     return () => unsubscribe();
@@ -69,8 +67,8 @@
     if (current.remindAboutUpdates !== remindAboutUpdates) {
       setRemindAboutUpdates(remindAboutUpdates);
     }
-    if (current.updateReminderIntervalDays !== reminderInterval[0]) {
-      setUpdateReminderInterval(reminderInterval[0]);
+    if (current.updateReminderIntervalDays !== reminderInterval) {
+      setUpdateReminderInterval(reminderInterval);
     }
   });
 </script>
@@ -129,6 +127,7 @@
       </div>
       <div class="w-40">
         <Slider
+          type="single"
           min={1}
           max={30}
           step={1}

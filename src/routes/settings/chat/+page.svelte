@@ -20,9 +20,7 @@
   } from "$lib/features/settings/stores/settings";
 
   let messageDensity = $state(get(settings).messageDensity);
-  let ephemeralDuration = $state<[number]>([
-    get(settings).ephemeralMessageDuration,
-  ]);
+  let ephemeralDuration = $state(get(settings).ephemeralMessageDuration);
   let enableLinkPreviews = $state(get(settings).enableLinkPreviews);
   let enableResilientFileTransfer = $state(
     get(settings).enableResilientFileTransfer,
@@ -33,7 +31,7 @@
   let autoDownloadMedia = $state(get(settings).autoDownloadMedia);
 
   const ephemeralDurationLabel = $derived(() => {
-    const minutes = ephemeralDuration[0] ?? 0;
+    const minutes = ephemeralDuration ?? 0;
     if (minutes === 0) {
       return "Keep indefinitely";
     }
@@ -56,7 +54,7 @@
   $effect(() => {
     const unsubscribe = settings.subscribe((value) => {
       messageDensity = value.messageDensity;
-      ephemeralDuration = [value.ephemeralMessageDuration];
+      ephemeralDuration = value.ephemeralMessageDuration;
       enableLinkPreviews = value.enableLinkPreviews;
       enableResilientFileTransfer = value.enableResilientFileTransfer;
       enableWalkieTalkieVoiceMemos = value.enableWalkieTalkieVoiceMemos;
@@ -72,7 +70,7 @@
       setMessageDensity(messageDensity);
     }
 
-    const duration = ephemeralDuration[0] ?? current.ephemeralMessageDuration;
+    const duration = ephemeralDuration ?? current.ephemeralMessageDuration;
     if (current.ephemeralMessageDuration !== duration) {
       setEphemeralMessageDuration(duration);
     }

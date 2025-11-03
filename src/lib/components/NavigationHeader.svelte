@@ -1192,7 +1192,7 @@
                   <Label for="rename-group-input">Group name</Label>
                   <Input
                     id="rename-group-input"
-                    bind:this={renameGroupInputRef}
+                    bind:ref={renameGroupInputRef}
                     bind:value={renameGroupName}
                     placeholder="Enter group name"
                     disabled={renameGroupPending}

@@ -198,10 +198,11 @@
   }
 
   function drawCanvas() {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const currentCanvas = canvas;
+    if (!currentCanvas) return;
+    const ctx = currentCanvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, currentCanvas.width, currentCanvas.height);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = 4;
@@ -213,9 +214,12 @@
       ctx.strokeStyle = stroke.color;
       ctx.beginPath();
       const [first, ...rest] = stroke.points;
-      ctx.moveTo(first.x * canvas.width, first.y * canvas.height);
+      ctx.moveTo(first.x * currentCanvas.width, first.y * currentCanvas.height);
       for (const point of rest) {
-        ctx.lineTo(point.x * canvas.width, point.y * canvas.height);
+        ctx.lineTo(
+          point.x * currentCanvas.width,
+          point.y * currentCanvas.height,
+        );
       }
       ctx.stroke();
       ctx.restore();
@@ -231,8 +235,9 @@
   }
 
   function getRelativePoint(event: PointerEvent): StrokePoint {
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
+    const currentCanvas = canvas;
+    if (!currentCanvas) return { x: 0, y: 0 };
+    const rect = currentCanvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
     return {

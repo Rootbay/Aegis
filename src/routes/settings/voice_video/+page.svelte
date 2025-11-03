@@ -55,6 +55,12 @@
 
   const envTurnServers = getEnvTurnServers();
 
+  const mediaDevices = browser
+    ? (navigator.mediaDevices as MediaDevices & {
+        selectAudioOutput?: (deviceId?: string) => Promise<MediaDeviceInfo>;
+      })
+    : null;
+
   function toEditableTurnServer(config: TurnServerConfig): EditableTurnServer {
     return {
       urls: config.urls.join(", "),
@@ -198,7 +204,7 @@
   let enumerating = $state(false);
   let enumerationError = $state<string | null>(null);
 
-  const previewVideo = $state<HTMLVideoElement | null>(null);
+  let previewVideo = $state<HTMLVideoElement | null>(null);
   let previewStream: MediaStream | null = null;
   let previewActive = $state(false);
   let previewError = $state<string | null>(null);
@@ -305,7 +311,7 @@
       };
       previewStream = await navigator.mediaDevices.getUserMedia(constraints);
       previewActive = true;
-      const videoElement = previewVideo();
+      const videoElement = previewVideo;
       if (videoElement) {
         videoElement.srcObject = previewStream;
         await videoElement.play();
@@ -323,7 +329,7 @@
     previewStream?.getTracks().forEach((track) => track.stop());
     previewStream = null;
     previewActive = false;
-    const videoElement = previewVideo();
+    const videoElement = previewVideo;
     if (videoElement) {
       videoElement.pause();
       videoElement.srcObject = null;
@@ -639,8 +645,7 @@
         value={audioOutputId}
         onValueChange={(value: string) => (audioOutputId = value)}
         disabled={enumerating ||
-          (!navigator.mediaDevices?.selectAudioOutput &&
-            audioOutputDevices.length === 0)}
+          (!mediaDevices?.selectAudioOutput && audioOutputDevices.length === 0)}
       >
         <SelectTrigger class="w-full" aria-label="Select speaker">
           <span data-slot="select-value" class="flex-1 text-left">
@@ -653,7 +658,7 @@
           </SelectItem>
           {#if audioOutputDevices.length === 0}
             <div class="px-3 py-2 text-sm text-muted-foreground">
-              {navigator.mediaDevices?.selectAudioOutput
+              {mediaDevices?.selectAudioOutput
                 ? "No speakers detected."
                 : "This browser cannot enumerate audio outputs."}
             </div>
@@ -838,7 +843,7 @@
                 autocomplete="off"
                 autocapitalize="none"
                 spellcheck={false}
-                on:input={(event) =>
+                oninput={(event) =>
                   handleTurnServerInput(index, "urls", event)}
               />
               <p class="text-[0.65rem] text-muted-foreground">
@@ -853,7 +858,7 @@
                 autocomplete="off"
                 autocapitalize="none"
                 spellcheck={false}
-                on:input={(event) =>
+                oninput={(event) =>
                   handleTurnServerInput(index, "username", event)}
               />
             </div>
@@ -868,7 +873,7 @@
                 value={server.credential}
                 placeholder="Optional"
                 autocomplete="new-password"
-                on:input={(event) =>
+                oninput={(event) =>
                   handleTurnServerInput(index, "credential", event)}
               />
             </div>

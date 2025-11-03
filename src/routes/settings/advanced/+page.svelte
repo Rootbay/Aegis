@@ -172,8 +172,7 @@
           id={`advanced-${flag.key}`}
           class="shrink-0"
           checked={advancedState[flag.key]}
-          on:change={(event) =>
-            toggleFlag(flag.key, (event.target as HTMLInputElement).checked)}
+          onCheckedChange={(checked) => toggleFlag(flag.key, checked)}
           aria-label={flag.label}
         />
       </div>

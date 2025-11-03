@@ -142,6 +142,7 @@
   <div class="grid gap-4 md:grid-cols-2">
     <div class="space-y-2">
       <label
+        for="widget-channel-select"
         class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
       >
         Widget Channel
@@ -153,7 +154,7 @@
           disabled={!canUpdate}
           onValueChange={(value: string) => updateWidget({ channelId: value })}
         >
-          <SelectTrigger class="w-full">
+          <SelectTrigger id="widget-channel-select" class="w-full">
             <span data-slot="select-value" class="flex-1 text-left">
               {channelOptions.find(
                 (option) => option.value === currentWidget.channelId,
@@ -177,6 +178,7 @@
 
     <div class="space-y-2">
       <label
+        for="widget-appearance-select"
         class="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
       >
         Appearance
@@ -187,7 +189,7 @@
         disabled={!canUpdate}
         onValueChange={(value: string) => updateWidget({ theme: value })}
       >
-        <SelectTrigger class="w-full">
+        <SelectTrigger id="widget-appearance-select" class="w-full">
           <span data-slot="select-value" class="flex-1 text-left capitalize">
             {currentWidget.theme ?? "dark"}
           </span>
