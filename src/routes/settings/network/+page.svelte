@@ -26,6 +26,7 @@
     RelayScope,
     RelayStatus,
   } from "$lib/features/settings/models/relay";
+  import MeshExplorerPanel from "$lib/features/mesh/components/MeshExplorerPanel.svelte";
 
   let enableCrossDeviceSync = $state(get(settings).enableCrossDeviceSync);
   let preferWifiDirect = $state(get(settings).preferWifiDirect);
@@ -745,5 +746,19 @@
         </div>
       </form>
     </div>
+  </section>
+
+  <section
+    id="mesh-explorer"
+    class="space-y-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-6"
+  >
+    <div>
+      <h2 class="text-lg font-semibold text-zinc-100">Mesh Explorer</h2>
+      <p class="text-sm text-muted-foreground">
+        Inspect live mesh connectivity, peer presence, and relay health without
+        leaving Settings.
+      </p>
+    </div>
+    <MeshExplorerPanel />
   </section>
 </div>

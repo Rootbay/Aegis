@@ -435,7 +435,7 @@
               variant="ghost"
               class="rounded-xl cursor-pointer"
               aria-label="Mesh Explorer"
-              onclick={() => gotoResolved("/mesh")}
+              onclick={() => gotoResolved("/settings/network#mesh-explorer")}
             >
               <RadioTower class="size-4" />
             </Button>
