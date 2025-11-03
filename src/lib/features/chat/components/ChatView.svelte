@@ -2232,7 +2232,7 @@
                               class="text-xs font-semibold text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
                               onclick={() => void retryFailedMessage(msg)}
                             >
-                              Tap to retry
+                              Retry message
                             </button>
                           {/if}
                         {:else}
@@ -2328,6 +2328,7 @@
             type="button"
             onclick={() => fileInput?.click()}
             class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
+            aria-label="Attach files"
           >
             <Link size={12} />
           </button>
@@ -2419,6 +2420,11 @@
             class:opacity-50={!voiceMemosEnabled}
             class:cursor-not-allowed={!voiceMemosEnabled}
             aria-disabled={!voiceMemosEnabled}
+            aria-label={voiceMemosEnabled
+              ? isRecording
+                ? "Stop recording voice message"
+                : "Record voice message"
+              : "Voice memos are disabled in settings"}
             title={voiceMemosEnabled
               ? isRecording
                 ? "Stop recording voice message"
@@ -2436,6 +2442,7 @@
             class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
             disabled={sending}
             aria-busy={sending}
+            aria-label="Send message"
           >
             <SendHorizontal size={12} />
           </button>
