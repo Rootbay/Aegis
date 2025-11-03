@@ -5,6 +5,7 @@
   import AppModals from "$lib/layout/AppModals.svelte";
   import CommandPalette from "$lib/features/navigation/CommandPalette.svelte";
   import { theme } from "$lib/stores/theme";
+  import { applyDocumentTheme } from "$lib/theme/applyDocumentTheme";
   import AppSidebarRegion from "./AppSidebarRegion.svelte";
   import AppMainContent from "./AppMainContent.svelte";
   import type { AppController } from "./types";
@@ -21,14 +22,12 @@
 
   const { authState, currentUser, modal, allUsers, handlers } = controller;
 
+  const showInitialSetup = $derived(
+    $authState.status !== "authenticated" || !$currentUser,
+  );
+
   $effect(() => {
-    if ($theme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");
-    }
+    applyDocumentTheme($theme);
   });
 </script>
 
@@ -38,7 +37,7 @@
   class="flex h-screen bg-base-100 text-foreground"
   data-friends-loading={friendsLoading() ? "true" : undefined}
 >
-  {#if $authState.status !== "authenticated" || !$currentUser}
+  {#if showInitialSetup}
     <InitialSetup />
   {:else}
     <AppSidebarRegion {controller} />
