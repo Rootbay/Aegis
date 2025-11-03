@@ -156,24 +156,32 @@
     return { state: "sent" };
   };
 
-  function persistChatDraft(chatId: string) {
-    const shouldPersist =
-      messageInput.trim().length > 0 ||
-      attachedFiles.length > 0 ||
-      replyTargetMessageId !== null;
-
-    if (!shouldPersist) {
-      clearChatDraft(chatId);
-      return;
-    }
-
-    saveChatDraft(chatId, {
+  function buildCurrentDraft(): ChatDraft {
+    return {
       messageInput,
       attachments: [...attachedFiles],
       replyTargetMessageId,
       replyPreview: replyPreview ? { ...replyPreview } : null,
       textareaHeight: textareaRef?.style.height ?? "",
-    });
+    } satisfies ChatDraft;
+  }
+
+  async function persistChatDraft(chatId: string, draft: ChatDraft) {
+    if (!chatId) {
+      return;
+    }
+
+    const shouldPersist =
+      draft.messageInput.trim().length > 0 ||
+      draft.attachments.length > 0 ||
+      draft.replyTargetMessageId !== null;
+
+    if (!shouldPersist) {
+      await clearChatDraft(chatId);
+      return;
+    }
+
+    await saveChatDraft(chatId, draft);
   }
 
   let { chat } = $props<{ chat: Chat | null }>();
@@ -205,6 +213,8 @@
   let lastTopLoad = 0;
   let attachedFiles = $state<File[]>([]);
   let sending = $state(false);
+  let isRestoringDraft = $state(false);
+  let activeDraftLoadToken: symbol | null = null;
   let isAtBottom = $state(true);
   let unseenCount = $state(0);
   let typingActive = $state(false);
@@ -578,7 +588,7 @@
 
   onDestroy(() => {
     if (chat?.id) {
-      persistChatDraft(chat.id);
+      void persistChatDraft(chat.id, buildCurrentDraft());
     }
     if (isRecording || mediaRecorder || recordingStream) {
       stopRecording({ save: false, silent: true });
@@ -607,45 +617,73 @@
       return;
     }
 
-    if (prevChatId) {
-      persistChatDraft(prevChatId);
-    }
-
     unseenCount = 0;
     isAtBottom = true;
     prevCount = 0;
     chatSearchStore.reset();
+    const previousChatId = prevChatId;
+    const previousDraft = previousChatId ? buildCurrentDraft() : null;
     prevChatId = nextChatId;
 
-    let restoredDraft: ChatDraft | undefined;
+    const loadToken = Symbol("chat-draft-load");
+    activeDraftLoadToken = loadToken;
 
-    if (nextChatId) {
-      restoredDraft = loadChatDraft(nextChatId);
-      if (restoredDraft) {
-        messageInput = restoredDraft.messageInput;
-        attachedFiles = [...restoredDraft.attachments];
-        replyTargetMessageId = restoredDraft.replyTargetMessageId;
-        replyPreview = restoredDraft.replyPreview
-          ? { ...restoredDraft.replyPreview }
-          : null;
-      } else {
-        messageInput = "";
-        attachedFiles = [];
-        replyTargetMessageId = null;
-        replyPreview = null;
+    const previousPersistence =
+      previousChatId && previousDraft
+        ? persistChatDraft(previousChatId, previousDraft)
+        : Promise.resolve();
+
+    isRestoringDraft = true;
+    messageInput = "";
+    attachedFiles = [];
+    replyTargetMessageId = null;
+    replyPreview = null;
+
+    void (async () => {
+      try {
+        if (!nextChatId) {
+          await tick();
+          if (activeDraftLoadToken === loadToken && textareaRef) {
+            textareaRef.style.height = "";
+            adjustTextareaHeight();
+          }
+          return;
+        }
+
+        const restoredDraft = await loadChatDraft(nextChatId);
+        if (activeDraftLoadToken !== loadToken) {
+          return;
+        }
+
+        if (restoredDraft) {
+          messageInput = restoredDraft.messageInput;
+          attachedFiles = [...restoredDraft.attachments];
+          replyTargetMessageId = restoredDraft.replyTargetMessageId;
+          replyPreview = restoredDraft.replyPreview
+            ? { ...restoredDraft.replyPreview }
+            : null;
+        }
+
+        await tick();
+        if (activeDraftLoadToken !== loadToken) {
+          return;
+        }
+
+        if (textareaRef) {
+          textareaRef.style.height = restoredDraft?.textareaHeight ?? "";
+          adjustTextareaHeight();
+        }
+      } finally {
+        try {
+          await previousPersistence;
+        } catch (error) {
+          console.warn("[ChatView] Failed to persist chat draft:", error);
+        }
+        if (activeDraftLoadToken === loadToken) {
+          isRestoringDraft = false;
+        }
       }
-    } else {
-      messageInput = "";
-      attachedFiles = [];
-      replyTargetMessageId = null;
-      replyPreview = null;
-    }
-
-    void tick().then(() => {
-      if (!textareaRef) return;
-      textareaRef.style.height = restoredDraft?.textareaHeight ?? "";
-      adjustTextareaHeight();
-    });
+    })();
   });
 
   $effect(() => {
@@ -687,6 +725,16 @@
       }
       prevCount = count;
     }
+  });
+
+  $effect(() => {
+    const chatId = chat?.id ?? null;
+    if (!chatId || isRestoringDraft) {
+      return;
+    }
+
+    const snapshot = buildCurrentDraft();
+    void persistChatDraft(chatId, snapshot);
   });
 
   const myId = $userStore.me?.id;
@@ -1305,7 +1353,7 @@
         await chatStore.sendMessage(messageInput, replyOptions);
       }
       if (chat?.id) {
-        clearChatDraft(chat.id);
+        await clearChatDraft(chat.id);
       }
       messageInput = "";
       attachedFiles = [];
