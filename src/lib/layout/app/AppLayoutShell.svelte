@@ -5,39 +5,32 @@
   import AppModals from "$lib/layout/AppModals.svelte";
   import CommandPalette from "$lib/features/navigation/CommandPalette.svelte";
   import { theme } from "$lib/stores/theme";
-  import { applyDocumentTheme } from "$lib/theme/applyDocumentTheme";
+  import { bindDocumentTheme } from "$lib/theme/bindDocumentTheme";
   import AppSidebarRegion from "./AppSidebarRegion.svelte";
   import AppMainContent from "./AppMainContent.svelte";
   import type { AppController } from "./types";
 
   let {
     controller,
-    friendsLoading,
     children,
   }: {
     controller: AppController;
-    friendsLoading: () => boolean;
     children: () => unknown;
   } = $props();
 
-  const { authState, currentUser, modal, allUsers, handlers } = controller;
+  const { modal, allUsers, handlers, friendsLoading, shouldShowInitialSetup } =
+    controller;
 
-  const showInitialSetup = $derived(
-    $authState.status !== "authenticated" || !$currentUser,
-  );
-
-  $effect(() => {
-    applyDocumentTheme($theme);
-  });
+  bindDocumentTheme(theme);
 </script>
 
 <svelte:window onkeydown={handlers.handleKeydown} />
 
 <div
   class="flex h-screen bg-base-100 text-foreground"
-  data-friends-loading={friendsLoading() ? "true" : undefined}
+  data-friends-loading={$friendsLoading ? "true" : undefined}
 >
-  {#if showInitialSetup}
+  {#if $shouldShowInitialSetup}
     <InitialSetup />
   {:else}
     <AppSidebarRegion {controller} />

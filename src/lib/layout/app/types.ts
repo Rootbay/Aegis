@@ -100,12 +100,14 @@ export type AppController = {
   currentUser: Readable<User | null>;
   currentChat: Readable<Chat | null>;
   allUsers: Readable<Friend[]>;
+  friendsLoading: Readable<boolean>;
   groupChats: Readable<GroupChatSummary[]>;
   directMessages: Readable<DirectMessageListEntry[]>;
   isAnySettingsPage: Readable<boolean>;
   isFriendsOrRootPage: Readable<boolean>;
   activeTab: Readable<string>;
   modal: ModalState;
+  shouldShowInitialSetup: Readable<boolean>;
   pageState: PageState;
   connectivity: ConnectivityBindings;
   handlers: AppHandlers;

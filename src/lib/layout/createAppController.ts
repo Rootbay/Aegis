@@ -73,6 +73,12 @@ export function createAppController(): AppController {
 
   const { authState, currentUser } = authLifecycle;
 
+  const shouldShowInitialSetup = derived(
+    [authState, currentUser],
+    ([$authState, $currentUser]) =>
+      $authState.status !== "authenticated" || !$currentUser,
+  );
+
   onMount(() => {
     void connectivityStore.initialize();
     authStore.bootstrap();
@@ -87,6 +93,11 @@ export function createAppController(): AppController {
   const allUsers = derived(friendStore, ($friendStore) => [
     ...$friendStore.friends,
   ]);
+
+  const friendsLoading = derived(
+    friendStore,
+    ($friendStore) => $friendStore.loading,
+  );
 
   const groupChatList = derived(groupChats, ($groupChats) =>
     Array.from($groupChats.values()),
@@ -148,6 +159,8 @@ export function createAppController(): AppController {
     isFriendsOrRootPage,
     activeTab,
     modal: modalManager.state,
+    shouldShowInitialSetup,
+    friendsLoading,
     connectivity,
     pageState,
     handlers,
