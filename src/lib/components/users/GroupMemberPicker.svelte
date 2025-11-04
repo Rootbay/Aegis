@@ -1,13 +1,12 @@
 <script lang="ts">
   import { Search } from "@lucide/svelte";
-  import { SvelteSet } from "svelte/reactivity";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 
   type Props = {
     users?: GroupModalUser[];
-    selectedUserIds: SvelteSet<string>;
+    selectedUserIds: Set<string>;
     onToggleUser?: (userId: string) => void; // eslint-disable-line no-unused-vars
     emptyStateMessage?: string;
     searchPlaceholder?: string;

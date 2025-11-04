@@ -3,7 +3,6 @@
   import type { User } from "$lib/features/auth/models/User";
   import type { Role } from "$lib/features/servers/models/Role";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Separator } from "$lib/components/ui/separator";
   import {
@@ -40,24 +39,17 @@
   import { userStore } from "$lib/stores/userStore";
   import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
   import type { Friend } from "$lib/features/friends/models/Friend";
-
-  type MemberWithRoles = User & Record<string, unknown>;
+  import {
+    groupMembersByRole,
+    type MemberGroup,
+    type MemberWithRoles,
+  } from "$lib/components/sidebars/memberSidebar/groupMembers";
+  import { buildInviteCandidates } from "$lib/components/sidebars/memberSidebar/inviteCandidates";
 
   type OpenUserCardModalHandler = (
     ...args: [User, number, number, boolean]
   ) => void;
   type OpenDetailedProfileHandler = (...args: [User]) => void; // eslint-disable-line no-unused-vars
-
-  interface MemberGroup {
-    id: string;
-    label: string;
-    color?: string;
-    hoist?: boolean;
-    members: MemberWithRoles[];
-  }
-
-  const FALLBACK_GROUP_ID = "uncategorized";
-  const FALLBACK_GROUP_LABEL = "Members";
 
   let {
     members = [],
@@ -114,10 +106,10 @@
 
   const currentUserId = $derived($userStore.me?.id ?? null);
 
-  let inviteeSelection = $state(new SvelteSet<string>());
+  let inviteeSelection = $state(new Set<string>());
   let showInviteMembersDialog = $state(false);
   let inviteMembersPending = $state(false);
-  let removingMembers = $state(new SvelteSet<string>());
+  let removingMembers = $state(new Set<string>());
 
   const canInviteMembers = $derived(
     context === "group" && resolvedGroupId !== null,
@@ -131,7 +123,7 @@
   );
 
   const memberIdSet = $derived.by(() => {
-    const set = new SvelteSet<string>();
+    const set = new Set<string>();
     for (const member of members) {
       if (typeof member.id === "string") {
         set.add(member.id);
@@ -145,188 +137,14 @@
       return [] as GroupModalUser[];
     }
     const friends = ($friendStore.friends ?? []) as Friend[];
-    const candidates: GroupModalUser[] = [];
-    for (const friend of friends) {
-      if (!friend?.id) {
-        continue;
-      }
-      if (friend.id === currentUserId) {
-        continue;
-      }
-      if (memberIdSet.has(friend.id)) {
-        continue;
-      }
-      candidates.push({
-        id: friend.id,
-        name: friend.name,
-        avatar: friend.avatar,
-        isFriend: true,
-        isPinned: Boolean(friend.isPinned),
-      });
-    }
-    return candidates;
+    return buildInviteCandidates({
+      friends,
+      currentUserId,
+      existingMemberIds: memberIdSet,
+    });
   });
 
   let groupedMembers = $derived(groupMembersByRole(members, resolvedRoles));
-
-  function extractMemberRoleValues(member: MemberWithRoles): string[] {
-    const source = member as Record<string, unknown>;
-    const values = new SvelteSet<string>();
-
-    const pushValue = (value: unknown) => {
-      if (typeof value === "string" && value.trim().length > 0) {
-        values.add(value);
-      }
-    };
-
-    const pushMany = (raw: unknown) => {
-      if (Array.isArray(raw)) {
-        for (const entry of raw) {
-          pushValue(entry);
-        }
-      } else {
-        pushValue(raw);
-      }
-    };
-
-    pushMany(source.roles);
-    pushMany(source.roleIds);
-    pushMany(source.role_ids);
-    pushMany(source.roleNames);
-    pushMany(source.role_names);
-    pushMany(source.roleId);
-    pushMany(source.role_id);
-    pushValue(source.role);
-    pushValue(source.roleName);
-    pushValue(source.role_name);
-    pushValue(source.primaryRole);
-    pushValue(source.primary_role);
-    pushValue(source.primaryRoleId);
-    pushValue(source.primary_role_id);
-
-    return Array.from(values.values());
-  }
-
-  function groupMembersByRole(
-    memberList: MemberWithRoles[],
-    roleList: Role[],
-  ): MemberGroup[] {
-    if (!memberList.length) {
-      return [];
-    }
-
-    const groups = new SvelteMap<string, MemberGroup>();
-    const roleById = new SvelteMap<string, Role>();
-    for (const role of roleList) {
-      roleById.set(role.id, role);
-    }
-    const roleByName = new SvelteMap<string, Role>();
-    for (const role of roleList) {
-      roleByName.set(role.name.toLowerCase(), role);
-    }
-    const orderByGroupId = new SvelteMap<string, number>();
-    roleList.forEach((role, index) => {
-      orderByGroupId.set(`role:${role.id}`, index);
-    });
-
-    const ensureGroup = (
-      key: string,
-      label: string,
-      color?: string,
-      hoist = false,
-    ) => {
-      if (!groups.has(key)) {
-        groups.set(key, { id: key, label, color, hoist, members: [] });
-      }
-      return groups.get(key)!;
-    };
-
-    const fallbackGroup = ensureGroup(FALLBACK_GROUP_ID, FALLBACK_GROUP_LABEL);
-
-    for (const member of memberList) {
-      const roleIdentifiers = extractMemberRoleValues(member);
-      let targetGroup: MemberGroup | null = null;
-
-      for (const identifier of roleIdentifiers) {
-        const role = roleById.get(identifier);
-        if (role) {
-          targetGroup = ensureGroup(
-            `role:${role.id}`,
-            role.name,
-            role.color,
-            role.hoist,
-          );
-          break;
-        }
-      }
-
-      if (!targetGroup) {
-        for (const identifier of roleIdentifiers) {
-          const role = roleByName.get(identifier.toLowerCase());
-          if (role) {
-            targetGroup = ensureGroup(
-              `role:${role.id}`,
-              role.name,
-              role.color,
-              role.hoist,
-            );
-            break;
-          }
-        }
-      }
-
-      if (!targetGroup && roleIdentifiers.length) {
-        const label = roleIdentifiers[0];
-        targetGroup = ensureGroup(`custom:${label}`, label);
-      }
-
-      (targetGroup ?? fallbackGroup).members.push(member as MemberWithRoles);
-    }
-
-    const result = Array.from(groups.values()).filter(
-      (group) => group.members.length > 0,
-    );
-
-    result.sort((a, b) => {
-      const hoistA = a.hoist ? 1 : 0;
-      const hoistB = b.hoist ? 1 : 0;
-      if (hoistA !== hoistB) {
-        return hoistB - hoistA;
-      }
-
-      const orderA = orderByGroupId.has(a.id)
-        ? orderByGroupId.get(a.id)!
-        : Number.MAX_SAFE_INTEGER;
-      const orderB = orderByGroupId.has(b.id)
-        ? orderByGroupId.get(b.id)!
-        : Number.MAX_SAFE_INTEGER;
-      if (orderA !== orderB) {
-        return orderA - orderB;
-      }
-
-      if (a.id === FALLBACK_GROUP_ID || b.id === FALLBACK_GROUP_ID) {
-        if (a.id === FALLBACK_GROUP_ID && b.id !== FALLBACK_GROUP_ID) {
-          return 1;
-        }
-        if (b.id === FALLBACK_GROUP_ID && a.id !== FALLBACK_GROUP_ID) {
-          return -1;
-        }
-      }
-
-      return a.label.localeCompare(b.label);
-    });
-
-    for (const group of result) {
-      group.members.sort((left, right) => {
-        if (left.online !== right.online) {
-          return (right.online ? 1 : 0) - (left.online ? 1 : 0);
-        }
-        return left.name.localeCompare(right.name);
-      });
-    }
-
-    return result;
-  }
 
   const hasInviteCandidates = $derived(() => inviteCandidates.length > 0);
 
@@ -335,7 +153,7 @@
   );
 
   function resetInviteSelection() {
-    inviteeSelection = new SvelteSet();
+    inviteeSelection = new Set();
   }
 
   function openInviteMembersDialog() {
@@ -344,7 +162,7 @@
   }
 
   function toggleInviteeSelection(userId: string) {
-    const next = new SvelteSet(inviteeSelection);
+    const next = new Set(inviteeSelection);
     if (next.has(userId)) {
       next.delete(userId);
     } else {
@@ -425,7 +243,7 @@
       return;
     }
 
-    const next = new SvelteSet(removingMembers);
+    const next = new Set(removingMembers);
     next.add(member.id);
     removingMembers = next;
 
@@ -439,7 +257,7 @@
       console.error("Failed to remove group member", error);
       toasts.addToast("Failed to remove member from the group.", "error");
     } finally {
-      const cleanup = new SvelteSet(removingMembers);
+      const cleanup = new Set(removingMembers);
       cleanup.delete(member.id);
       removingMembers = cleanup;
     }

@@ -1,6 +1,9 @@
 import type { User } from "$lib/features/auth/models/User";
 import type { Friend } from "$lib/features/friends/models/Friend";
 import type { Chat } from "$lib/features/chat/models/Chat";
+import type { Server } from "$lib/features/servers/models/Server";
+import type { Channel } from "$lib/features/channels/models/Channel";
+import type { ServerMember } from "$lib/features/servers/services/serverDataService";
 import type {
   GroupModalOptions,
   ReportUserModalPayload,
@@ -35,4 +38,10 @@ export interface FriendsLayoutContext {
   friends: Friend[];
   activeTab: string;
   loading: boolean;
+}
+
+export interface ServerLayoutContext {
+  server: () => (Server & { channels: Channel[]; members: ServerMember[] }) | null;
+  channels: () => Channel[];
+  members: () => ServerMember[];
 }

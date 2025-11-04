@@ -2,99 +2,64 @@
   import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
   import MemberSidebar from "$lib/components/sidebars/MemberSidebar.svelte";
   import { page } from "$app/stores";
-  import { invoke } from "@tauri-apps/api/core";
-  import { toasts } from "$lib/stores/ToastStore";
   import { goto } from "$app/navigation";
+  import { toasts } from "$lib/stores/ToastStore";
   import { setContext, getContext } from "svelte";
   import {
     SERVER_LAYOUT_DATA_CONTEXT_KEY,
     CREATE_GROUP_CONTEXT_KEY,
   } from "$lib/contextKeys";
-  import type { CreateGroupContext } from "$lib/contextTypes";
+  import type { CreateGroupContext, ServerLayoutContext } from "$lib/contextTypes";
+  import { createServerLayoutController } from "$lib/layout/server/createServerLayoutController";
 
-  let serverId = $state<string | null>(null);
-  let server = $state<any>(null);
-  let channels = $state<any[]>([]);
-  let members = $state<any[]>([]);
-  let loading = $state(true);
   let { children } = $props();
 
-  const { openUserCardModal } = getContext<CreateGroupContext>(
+  const createGroupContext = getContext<CreateGroupContext>(
     CREATE_GROUP_CONTEXT_KEY,
   );
+  const { openUserCardModal } = createGroupContext;
 
-  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
-
-  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
-
-  function handleSelectChannel(serverId: string, channelId: string) {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve
-    gotoUnsafe(`/channels/${serverId}/${channelId}`);
-  }
-
-  $effect(() => {
-    if ($page.params.serverId) {
-      serverId = $page.params.serverId;
-      fetchServerData(serverId);
-    }
+  const controller = createServerLayoutController({
+    navigate: (value) => goto(value),
+    notifyError: (message) => toasts.addToast(message, "error"),
   });
 
-  async function fetchServerData(id: string) {
-    loading = true;
-    try {
-      const fetchedServer = await invoke("get_server_details", {
-        serverId: id,
-        server_id: id,
-      });
-      const fetchedChannels = (await invoke("get_channels_for_server", {
-        serverId: id,
-        server_id: id,
-      })) as any[];
-      const fetchedMembers = (await invoke("get_members_for_server", {
-        serverId: id,
-        server_id: id,
-      })) as any[];
-      server = fetchedServer
-        ? {
-            ...fetchedServer,
-            channels: fetchedChannels,
-            members: fetchedMembers,
-          }
-        : null;
-      channels = fetchedChannels;
-      members = fetchedMembers;
-    } catch (error) {
-      console.error("Failed to fetch server data:", error);
-      const message =
-        error instanceof Error ? error.message : "Failed to load server data.";
-      toasts.addToast(message, "error");
-      server = null;
-      channels = [];
-      members = [];
-    } finally {
-      loading = false;
-    }
-  }
+  setContext<ServerLayoutContext>(
+    SERVER_LAYOUT_DATA_CONTEXT_KEY,
+    controller.context,
+  );
 
-  setContext(SERVER_LAYOUT_DATA_CONTEXT_KEY, {
-    server: () => server,
-    channels: () => channels,
-    members: () => members,
+  const serverStore = controller.server;
+  const membersStore = controller.members;
+  const loadingStore = controller.loading;
+  const hasServerStore = controller.hasServer;
+
+  const showSidebars = $derived(!$page.url.pathname.includes("/settings"));
+
+  $effect(() => {
+    const activeServerId = $page.params.serverId ?? null;
+    controller.setActiveServerId(activeServerId);
   });
 </script>
 
 <div class="flex h-full w-full">
-  {#if loading}
+  {#if $loadingStore}
     <p class="text-muted-foreground text-center mt-8">Loading server data...</p>
-  {:else if server}
-    {#if !$page.url.pathname.includes("/settings")}
-      <ServerSidebar {server} onSelectChannel={handleSelectChannel} />
+  {:else if $hasServerStore && $serverStore}
+    {#if showSidebars}
+      <ServerSidebar
+        server={$serverStore}
+        onSelectChannel={controller.handleSelectChannel}
+      />
     {/if}
     <main class="grow flex flex-col bg-muted">
       {@render children()}
     </main>
-    {#if !$page.url.pathname.includes("/settings")}
-      <MemberSidebar {members} {openUserCardModal} />
+    {#if showSidebars}
+      <MemberSidebar
+        members={$membersStore}
+        openUserCardModal={openUserCardModal}
+      />
     {/if}
   {:else}
     <p class="text-muted-foreground text-center mt-8">
