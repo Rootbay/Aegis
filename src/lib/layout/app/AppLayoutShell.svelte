@@ -18,8 +18,13 @@
     children: () => unknown;
   } = $props();
 
-  const { modal, allUsers, handlers, friendsLoading, shouldShowInitialSetup } =
-    controller;
+  const {
+    modal: { activeModal, modalProps },
+    allUsers,
+    handlers,
+    friendsLoading,
+    shouldShowInitialSetup,
+  } = controller;
 
   bindDocumentTheme(theme);
 </script>
@@ -39,8 +44,8 @@
 </div>
 
 <AppModals
-  activeModal={$modal.activeModal}
-  modalProps={$modal.modalProps}
+  activeModal={$activeModal}
+  modalProps={$modalProps}
   allUsers={$allUsers}
   closeModal={handlers.closeModal}
 />

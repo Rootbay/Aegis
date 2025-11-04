@@ -10,4 +10,6 @@
   const controller = createAppController();
 </script>
 
-<AppLayoutShell {controller} {children} />
+<AppLayoutShell {controller}>
+  {@render children()}
+</AppLayoutShell>
