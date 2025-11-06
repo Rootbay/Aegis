@@ -8,6 +8,12 @@ export interface ChatSearchState {
   dropdownOpen: boolean;
   history: string[];
   searching: boolean;
+  loading: boolean;
+  hasMore: boolean;
+  nextCursor: string | null;
+  searchRequestId: number;
+  pagesLoaded: number;
+  resultsReceived: number;
 }
 
 interface ChatSearchHandlers {
@@ -23,6 +29,12 @@ const BASE_STATE = {
   activeMatchIndex: 0,
   dropdownOpen: false,
   searching: false,
+  loading: false,
+  hasMore: false,
+  nextCursor: null,
+  searchRequestId: 0,
+  pagesLoaded: 0,
+  resultsReceived: 0,
 } satisfies Omit<ChatSearchState, "history">;
 
 const initialState: ChatSearchState = {
@@ -57,7 +69,7 @@ function createChatSearchStore() {
       );
     },
     reset() {
-      update((state) => ({ ...state, ...BASE_STATE }));
+      set(initialState);
     },
     setQuery(query: string) {
       update((state) => {
@@ -69,6 +81,12 @@ function createChatSearchStore() {
           ...state,
           query,
           searching: trimmed.length > 0 ? state.searching : false,
+          loading:
+            trimmed.length > 0 && state.searching ? state.loading : false,
+          hasMore: trimmed.length > 0 ? state.hasMore : false,
+          nextCursor: trimmed.length > 0 ? state.nextCursor : null,
+          pagesLoaded: trimmed.length > 0 ? state.pagesLoaded : 0,
+          resultsReceived: trimmed.length > 0 ? state.resultsReceived : 0,
         };
       });
     },
@@ -135,17 +153,30 @@ function createChatSearchStore() {
       update((state) => {
         const trimmed = state.query.trim();
         if (!trimmed.length) {
-          return { ...state, searching: false };
+          return {
+            ...state,
+            searching: false,
+            loading: false,
+            hasMore: false,
+            nextCursor: null,
+          };
         }
         const nextHistory = [
           trimmed,
           ...state.history.filter((entry) => entry !== trimmed),
         ].slice(0, MAX_HISTORY);
+        const nextRequestId = state.searchRequestId + 1;
         return {
           ...state,
           searching: true,
+          loading: true,
           history: nextHistory,
           dropdownOpen: false,
+          hasMore: true,
+          nextCursor: null,
+          searchRequestId: nextRequestId,
+          pagesLoaded: 0,
+          resultsReceived: 0,
         };
       });
     },
@@ -153,6 +184,35 @@ function createChatSearchStore() {
       update((state) =>
         state.history.length ? { ...state, history: [] } : state,
       );
+    },
+    setSearchLoading(requestId: number, loading: boolean) {
+      update((state) => {
+        if (state.searchRequestId !== requestId) {
+          return state;
+        }
+        return state.loading === loading ? state : { ...state, loading };
+      });
+    },
+    recordSearchPage(
+      requestId: number,
+      page: { cursor: string | null; hasMore: boolean; results: number },
+    ) {
+      update((state) => {
+        if (state.searchRequestId !== requestId) {
+          return state;
+        }
+        const { cursor, hasMore, results } = page;
+        return {
+          ...state,
+          nextCursor: cursor,
+          hasMore,
+          pagesLoaded: state.pagesLoaded + 1,
+          resultsReceived:
+            results > 0
+              ? state.resultsReceived + results
+              : state.resultsReceived,
+        };
+      });
     },
   };
 }

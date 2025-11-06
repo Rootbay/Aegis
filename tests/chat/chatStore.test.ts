@@ -770,3 +770,96 @@ describe("chatStore history loading", () => {
     expect(fetchCalls).toHaveLength(1);
   });
 });
+
+describe("chatStore searchMessages", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("invokes the backend search and merges new messages", async () => {
+    const store = createChatStore();
+    const filters = {
+      pinned: true,
+      from: ["user-123"],
+      mentions: ["user-999"],
+      has: ["link" as const],
+      before: 1_700_000_000_000,
+      after: 1_600_000_000_000,
+      in: ["channel-5"],
+      authorType: ["bot" as const],
+    };
+
+    const backendMessage = {
+      id: "search-msg-1",
+      chat_id: "search-chat",
+      sender_id: "user-123",
+      content: "Searchable content",
+      timestamp: new Date().toISOString(),
+    };
+
+    invokeMock.mockImplementation(async (command: string, payload?: InvokePayload) => {
+      if (command === "search_messages") {
+        return {
+          messages: [backendMessage],
+          has_more: true,
+          next_cursor: "cursor-123",
+        };
+      }
+      if (command === "decrypt_chat_payload") {
+        const args = (payload ?? {}) as { content?: string; attachments?: unknown[] };
+        return {
+          content: args.content ?? "",
+          attachments: args.attachments ?? [],
+          wasEncrypted: false,
+        };
+      }
+      return undefined;
+    });
+
+    const result = await store.searchMessages({
+      chatId: "search-chat",
+      query: "Searchable",
+      filters,
+    });
+
+    expect(result).toEqual({
+      received: 1,
+      hasMore: true,
+      nextCursor: "cursor-123",
+    });
+
+    await Promise.resolve();
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "search_messages",
+      expect.objectContaining({
+        chatId: "search-chat",
+        query: "Searchable",
+        filters: expect.objectContaining({
+          pinned: true,
+          from: filters.from,
+          mentions: filters.mentions,
+          has: filters.has,
+          before: filters.before,
+          after: filters.after,
+          in: filters.in,
+          in_channels: filters.in,
+          authorType: filters.authorType,
+          author_type: filters.authorType,
+        }),
+      }),
+    );
+
+    const messages = get(store.messagesByChatId).get("search-chat");
+    expect(messages).toBeDefined();
+    expect(messages).toHaveLength(1);
+    expect(messages?.[0].id).toBe("search-msg-1");
+    expect(messages?.[0].content).toBe("Searchable content");
+  });
+});

@@ -27,6 +27,11 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
       createdAt: new Date().toISOString(),
     })),
     setActiveChat: vi.fn(async () => {}),
+    searchMessages: async () => ({
+      received: 0,
+      hasMore: false,
+      nextCursor: null,
+    }),
   },
 }));
 
