@@ -7,6 +7,7 @@
     LoaderCircle,
     Mic,
     SendHorizontal,
+    Smile,
     Square,
     Users,
   } from "@lucide/svelte";
@@ -250,6 +251,8 @@
   let listRef: any = $state();
   let fileInput: HTMLInputElement | null = $state(null);
   let textareaRef: HTMLTextAreaElement | null = $state(null);
+  let composerEmojiButton: HTMLButtonElement | null = $state(null);
+  let composerEmojiPickerEl: HTMLDivElement | null = $state(null);
   let viewportEl: HTMLElement | null = null;
   let detachViewportListener: (() => void) | null = null;
   let showMsgMenu = $state(false);
@@ -264,6 +267,10 @@
   let replyTargetMessageId = $state<string | null>(null);
   let replyPreview = $state<ReplyPreview | null>(null);
   const mentionSuggestions = createMentionSuggestionsStore();
+  let showComposerEmojiPicker = $state(false);
+  const composerEmojiPickerId = $derived(
+    () => `chat-composer-emoji-picker-${chat?.id ?? "unknown"}`,
+  );
 
   const mentionableMembers = $derived(() => {
     if (!chat) return [] as MentionCandidate[];
@@ -316,6 +323,60 @@
         void chatStore.sendTypingIndicator(false);
       }
     }, TYPING_IDLE_TIMEOUT_MS);
+  };
+
+  const closeComposerEmojiPicker = (options?: { focusComposer?: boolean }) => {
+    if (!showComposerEmojiPicker) {
+      return;
+    }
+    showComposerEmojiPicker = false;
+    if (options?.focusComposer) {
+      queueMicrotask(() => {
+        textareaRef?.focus();
+      });
+    }
+  };
+
+  const toggleComposerEmojiPicker = () => {
+    if (showComposerEmojiPicker) {
+      closeComposerEmojiPicker();
+      return;
+    }
+    showComposerEmojiPicker = true;
+  };
+
+  const insertEmojiIntoComposer = (emoji: string) => {
+    const textarea = textareaRef;
+    const selectionStart = textarea?.selectionStart ?? messageInput.length;
+    const selectionEnd = textarea?.selectionEnd ?? messageInput.length;
+    const before = messageInput.slice(0, selectionStart);
+    const after = messageInput.slice(selectionEnd);
+    messageInput = `${before}${emoji}${after}`;
+
+    if (!typingActive) {
+      typingActive = true;
+      void chatStore.sendTypingIndicator(true);
+    }
+
+    const nextCaret = before.length + emoji.length;
+
+    queueMicrotask(() => {
+      const el = textareaRef;
+      if (!el) {
+        return;
+      }
+      el.focus();
+      el.setSelectionRange(nextCaret, nextCaret);
+      adjustTextareaHeight();
+      updateMentionSuggestions(nextCaret);
+    });
+
+    scheduleTypingStop();
+  };
+
+  const handleComposerEmojiSelect = (emoji: string) => {
+    insertEmojiIntoComposer(emoji);
+    closeComposerEmojiPicker();
   };
 
   const baseModerationPreferences = {
@@ -609,6 +670,31 @@
     }
   });
 
+  $effect(() => {
+    if (!showComposerEmojiPicker) {
+      return;
+    }
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (
+        (target && composerEmojiButton?.contains(target)) ||
+        (target && composerEmojiPickerEl?.contains(target))
+      ) {
+        return;
+      }
+      closeComposerEmojiPicker();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  });
+
   let prevCount = $state(0);
   let prevChatId = $state<string | null>(null);
   $effect(() => {
@@ -638,6 +724,7 @@
     attachedFiles = [];
     replyTargetMessageId = null;
     replyPreview = null;
+    showComposerEmojiPicker = false;
 
     void (async () => {
       try {
@@ -2479,6 +2566,34 @@
           >
             <Link size={12} />
           </button>
+          <div class="relative ml-1">
+            <button
+              type="button"
+              class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
+              aria-label="Insert emoji"
+              aria-haspopup="dialog"
+              aria-expanded={showComposerEmojiPicker}
+              aria-controls={composerEmojiPickerId}
+              onclick={toggleComposerEmojiPicker}
+              bind:this={composerEmojiButton}
+              title="Insert emoji"
+            >
+              <Smile size={12} />
+            </button>
+            {#if showComposerEmojiPicker}
+              <div
+                class="absolute bottom-full left-0 z-30 mb-2"
+                id={composerEmojiPickerId}
+                bind:this={composerEmojiPickerEl}
+                role="presentation"
+              >
+                <EmojiPicker
+                  on:select={(event) => handleComposerEmojiSelect(event.detail.emoji)}
+                  on:close={() => closeComposerEmojiPicker({ focusComposer: true })}
+                />
+              </div>
+            {/if}
+          </div>
           <div class="relative mx-2 flex-1">
             <textarea
               rows="1"
