@@ -565,6 +565,7 @@ vi.mock("@lucide/svelte", () => ({
   LoaderCircle: Passthrough,
   Mic: Passthrough,
   SendHorizontal: Passthrough,
+  Smile: Passthrough,
   Square: Passthrough,
   Users: Passthrough,
 }));
@@ -604,6 +605,19 @@ vi.mock("$lib/components/context-menus/BaseContextMenu.svelte", () => ({
 
 vi.mock("$lib/features/chat/components/MessageAuthorName.svelte", () => ({
   default: MessageAuthorNameStub,
+}));
+
+vi.mock("$lib/components/emoji/emojiData", () => ({
+  loadEmojiData: vi.fn(async () => ({
+    categories: [
+      {
+        id: "smileys",
+        label: "Smileys & Emotion",
+        emojis: ["😀", "😁", "😂", "🤣"],
+      },
+    ],
+    usedFallback: true,
+  })),
 }));
 
 function getChatStoreModule(): ChatStoreModule {
@@ -1636,5 +1650,72 @@ describe("ChatView history loading", () => {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       loadMoreSpy.mockRestore();
     }
+  });
+});
+
+describe("ChatView composer emoji picker", () => {
+  beforeEach(async () => {
+    await resetChatViewState();
+  });
+
+  it("toggles the emoji picker and inserts the selected emoji into the composer", async () => {
+    const chatId = "chat-emoji-picker";
+    const friend: Friend = {
+      id: "friend-emoji-picker",
+      name: "Emoji Friend",
+      avatar: "https://example.com/emoji.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    messagesByChatId.set(new Map([[chatId, []]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    const composer = (await screen.findByPlaceholderText(
+      `Message @${friend.name}`,
+    )) as HTMLTextAreaElement;
+
+    const emojiToggle = await screen.findByRole("button", {
+      name: "Insert emoji",
+    });
+
+    expect(emojiToggle.getAttribute("aria-expanded")).toBe("false");
+    await fireEvent.click(emojiToggle);
+
+    expect(emojiToggle.getAttribute("aria-expanded")).toBe("true");
+
+    await screen.findByRole("dialog", { name: "Emoji picker" });
+    const [firstEmojiButton] = (await screen.findAllByRole("button", {
+      name: /React with/,
+    })) as HTMLButtonElement[];
+    expect(firstEmojiButton).toBeDefined();
+    const selectedEmoji = firstEmojiButton.textContent?.trim() ?? "";
+    expect(selectedEmoji).not.toBe("");
+
+    await fireEvent.click(firstEmojiButton);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Emoji picker" })).toBeNull();
+    });
+
+    await waitFor(() => {
+      expect(composer.value).toBe(selectedEmoji);
+    });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(composer);
+    });
+
+    expect(emojiToggle.getAttribute("aria-expanded")).toBe("false");
   });
 });
