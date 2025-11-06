@@ -4,13 +4,14 @@
   import ActiveChatContent from "./ActiveChatContent.svelte";
   import FriendsContent from "./FriendsContent.svelte";
   import type { AppController } from "./types";
+  import type { Snippet } from "svelte";
 
   let {
     controller,
     children,
   }: {
     controller: AppController;
-    children: () => unknown;
+    children?: Snippet | null;
   } = $props();
 
   const { currentChat, isFriendsOrRootPage, handlers, activeTab } = controller;
@@ -20,11 +21,11 @@
     handleFriendsAddClick,
   } = handlers;
 
-  const shouldRenderFriendsView = $derived($isFriendsOrRootPage);
+  const shouldRenderFriendsView = $derived(() => $isFriendsOrRootPage);
 </script>
 
 <main class="flex-1 min-h-0 flex flex-col">
-  {#if shouldRenderFriendsView}
+  {#if shouldRenderFriendsView()}
     <FriendsContent
       chat={$currentChat}
       openDetailedProfileModal={openDetailedProfileModal}
@@ -39,6 +40,8 @@
       openDetailedProfileModal={openDetailedProfileModal}
     />
   {:else}
-    {@render children()}
+    {#if children}
+      {@render children()}
+    {/if}
   {/if}
 </main>

@@ -4,6 +4,7 @@
   import NavigationHeader from "$lib/components/NavigationHeader.svelte";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
+  import type { Snippet } from "svelte";
 
   let {
     chat,
@@ -18,7 +19,7 @@
     friendsActiveTab: string;
     onFriendsTabSelect: (tab: string) => void;
     onFriendsAddClick: () => void;
-    children: () => unknown;
+    children?: Snippet | null;
   } = $props();
 </script>
 
@@ -33,6 +34,8 @@
   />
 
   <section class="flex-1 min-h-0 flex flex-col">
-    {@render children()}
+    {#if children}
+      {@render children()}
+    {/if}
   </section>
 </div>

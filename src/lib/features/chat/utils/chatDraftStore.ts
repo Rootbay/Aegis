@@ -215,8 +215,13 @@ export async function loadChatDraft(
   }
 
   const attachments = stored.attachments.map((item) => {
-    const bytes = decodeBase64(item.data);
-    return new File([bytes], item.name, {
+    const decoded = decodeBase64(item.data);
+    const buffer = decoded.buffer as ArrayBuffer;
+    const slice = buffer.slice(
+      decoded.byteOffset,
+      decoded.byteOffset + decoded.byteLength,
+    );
+    return new File([slice], item.name, {
       type: item.type,
       lastModified: item.lastModified,
     });

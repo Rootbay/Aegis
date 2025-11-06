@@ -97,7 +97,7 @@ export function parseQuery(query: string): {
     }
 
     if (currentToken) {
-      const nextValue = currentToken.value
+      const nextValue: string = currentToken.value
         ? `${currentToken.value} ${word}`
         : word;
       currentToken = { ...currentToken, value: nextValue };
