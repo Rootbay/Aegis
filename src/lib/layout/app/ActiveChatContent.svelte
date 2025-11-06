@@ -20,11 +20,15 @@
     openDetailedProfileModal: (user: User) => void;
   } = $props();
 
-  const isGroupChat = $derived(chat.type === "group");
-  const sidebarContext = $derived(isGroupChat ? "group" : "server");
-  const groupOwnerId = $derived(isGroupChat ? chat.ownerId ?? null : null);
+  const isGroupChat = $derived(() => chat.type === "group");
+  const sidebarContext = $derived(() => (isGroupChat() ? "group" : "server"));
+  const groupOwnerId = $derived(() =>
+    chat.type === "group" ? chat.ownerId ?? null : null,
+  );
 
-  const members = $derived(() => chat.members as MemberWithRoles[]);
+  const members = $derived(() =>
+    chat.type === "dm" ? [] : (chat.members as MemberWithRoles[]),
+  );
 
   const shouldShowMemberSidebar = $derived(() => {
     const visibility = $memberSidebarVisibilityStore;
@@ -32,7 +36,7 @@
     return entry !== false;
   });
 
-  const showSearchSidebar = $derived($chatSearchStore.searching);
+  const showSearchSidebar = $derived(() => $chatSearchStore.searching);
 </script>
 
 <div class="flex flex-1 min-h-0 flex-col">
@@ -43,15 +47,15 @@
       <ChatView {chat} />
     </div>
 
-    {#if showSearchSidebar}
+    {#if showSearchSidebar()}
       <SearchSidebar {chat} />
-    {:else if shouldShowMemberSidebar && chat.type !== "dm"}
+    {:else if shouldShowMemberSidebar() && chat.type !== "dm"}
       <MemberSidebar
-        members={members}
+        members={members()}
         {openDetailedProfileModal}
-        context={sidebarContext}
-        groupId={isGroupChat ? chat.id : undefined}
-        groupOwnerId={groupOwnerId ?? undefined}
+        context={sidebarContext()}
+        groupId={isGroupChat() ? chat.id : undefined}
+        groupOwnerId={groupOwnerId() ?? undefined}
       />
     {/if}
   </div>

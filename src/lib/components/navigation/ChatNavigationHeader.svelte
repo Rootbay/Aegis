@@ -11,6 +11,7 @@
 
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
+  import type { Component } from "svelte";
 
   type OpenUserCardModal = (
     user: User,
@@ -25,7 +26,10 @@
     onOpenDetailedProfile: (user: User) => void;
   }>();
 
-  let chatSearchRef = $state<InstanceType<typeof ChatSearch> | null>(null);
+  type ComponentExports<T> = T extends Component<any, infer Exports> ? Exports : never;
+  type ChatSearchExports = ComponentExports<typeof ChatSearch>;
+
+  let chatSearchRef = $state<ChatSearchExports | null>(null);
 
   const typingStatusLabel = $derived(() =>
     getTypingStatusLabel(chat, $activeChatTypingUsers, $userStore.me),
@@ -53,7 +57,7 @@
 >
   <ChatSummary
     {chat}
-    typingStatus={typingStatusLabel}
+    typingStatus={typingStatusLabel()}
     onAvatarClick={handleAvatarClick}
     onNameClick={handleNameClick}
     onNameDoubleClick={handleNameDoubleClick}

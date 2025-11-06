@@ -43,6 +43,9 @@ export function createServerSelectionController({
     }
 
     const server = $serverState.servers.find((candidate) => candidate.id === serverId);
+    if (!server) {
+      return;
+    }
     const channels = server?.channels ?? [];
     if (channels.length === 0) {
       return;

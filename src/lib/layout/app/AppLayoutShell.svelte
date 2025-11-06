@@ -9,13 +9,14 @@
   import AppSidebarRegion from "./AppSidebarRegion.svelte";
   import AppMainContent from "./AppMainContent.svelte";
   import type { AppController } from "./types";
+  import type { Snippet } from "svelte";
 
   let {
     controller,
     children,
   }: {
     controller: AppController;
-    children: () => unknown;
+    children?: Snippet | null;
   } = $props();
 
   const {
