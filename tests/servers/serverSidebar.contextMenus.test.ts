@@ -185,6 +185,11 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
       },
     },
     setActiveChannelForServer: setActiveChannelForServerMock,
+    searchMessages: async () => ({
+      received: 0,
+      hasMore: false,
+      nextCursor: null,
+    }),
   },
   chatMetadataByChatId: {
     subscribe: (run: (value: Map<string, unknown>) => void) => {

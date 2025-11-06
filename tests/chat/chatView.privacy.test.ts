@@ -108,6 +108,11 @@ type ChatStoreModule = {
     removeReaction: () => void;
     pinMessage: () => Promise<void>;
     unpinMessage: () => Promise<void>;
+    searchMessages: () => Promise<{
+      received: number;
+      hasMore: boolean;
+      nextCursor: string | null;
+    }>;
   };
   messagesByChatId: WritableStore<Map<string, Message[]>>;
   hasMoreByChatId: WritableStore<Map<string, boolean>>;
@@ -118,6 +123,13 @@ type ChatSearchState = {
   query: string;
   matches: number[];
   activeMatchIndex: number;
+  searching: boolean;
+  loading: boolean;
+  hasMore: boolean;
+  nextCursor: string | null;
+  searchRequestId: number;
+  pagesLoaded: number;
+  resultsReceived: number;
 };
 
 type ChatSearchModule = {
@@ -128,6 +140,11 @@ type ChatSearchModule = {
     setActiveMatchIndex: (index: number) => void;
     registerHandlers: () => () => void;
     reset: () => void;
+    setSearchLoading: (requestId: number, loading: boolean) => void;
+    recordSearchPage: (
+      requestId: number,
+      page: { cursor: string | null; hasMore: boolean; results: number },
+    ) => void;
   };
 };
 
@@ -612,6 +629,11 @@ function getChatStoreModule(): ChatStoreModule {
         removeReaction: () => {},
         pinMessage: () => Promise.resolve(),
         unpinMessage: () => Promise.resolve(),
+        searchMessages: async () => ({
+          received: 0,
+          hasMore: false,
+          nextCursor: null,
+        }),
       },
       messagesByChatId,
       hasMoreByChatId,
@@ -635,6 +657,13 @@ function getChatSearchModule(): ChatSearchModule {
       query: "",
       matches: [] as number[],
       activeMatchIndex: 0,
+      searching: false,
+      loading: false,
+      hasMore: false,
+      nextCursor: null,
+      searchRequestId: 0,
+      pagesLoaded: 0,
+      resultsReceived: 0,
     });
 
     globals.__chatSearchModule = {
@@ -651,8 +680,21 @@ function getChatSearchModule(): ChatSearchModule {
         },
         registerHandlers: () => () => {},
         reset: () => {
-          state.set({ query: "", matches: [], activeMatchIndex: 0 });
+          state.set({
+            query: "",
+            matches: [],
+            activeMatchIndex: 0,
+            searching: false,
+            loading: false,
+            hasMore: false,
+            nextCursor: null,
+            searchRequestId: 0,
+            pagesLoaded: 0,
+            resultsReceived: 0,
+          });
         },
+        setSearchLoading: () => {},
+        recordSearchPage: () => {},
       },
     };
   }

@@ -27,6 +27,7 @@ import {
 import { showNativeNotification } from "$lib/utils/nativeNotification";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
 import type { Server } from "$lib/features/servers/models/Server";
+import type { ParsedSearchFilters } from "$lib/features/chat/utils/chatSearch";
 
 type BackendMessage = {
   id: string;
@@ -217,10 +218,25 @@ interface ChatStore {
   handleGroupMemberLeft: (groupId: string, memberId: string) => void;
   handleGroupMembersAdded: (groupId: string, memberIds: string[]) => void;
   groupChats: Readable<Map<string, GroupChatSummary>>;
+  searchMessages: (options: SearchMessagesOptions) => Promise<SearchMessagesResult>;
 }
 
 type ChatStoreOptions = {
   maxMessagesPerChat?: number;
+};
+
+export type SearchMessagesOptions = {
+  chatId: string;
+  query: string;
+  filters?: ParsedSearchFilters;
+  cursor?: string | null;
+  limit?: number;
+};
+
+export type SearchMessagesResult = {
+  received: number;
+  hasMore: boolean;
+  nextCursor: string | null;
 };
 
 const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
@@ -1435,10 +1451,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
               !matchedPendingIds.has(msg.id) &&
               isOptimisticMatch(msg, incoming, selfId),
           );
-          const normalized = mergeOptimisticDetails(incoming, optimisticMatch);
-          if (optimisticMatch) {
-            matchedPendingIds.add(optimisticMatch.id);
-          }
+      const normalized = mergeOptimisticDetails(incoming, optimisticMatch);
+      if (optimisticMatch) {
+        matchedPendingIds.add(optimisticMatch.id);
+      }
           seen.add(normalized.id);
           deduped.push(normalized);
         }
@@ -2697,6 +2713,122 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     });
   };
 
+  const normalizeSearchFilters = (
+    filters?: ParsedSearchFilters,
+  ): Record<string, unknown> | undefined => {
+    if (!filters) {
+      return undefined;
+    }
+    const payload: Record<string, unknown> = {};
+    if (filters.pinned !== undefined) {
+      payload.pinned = filters.pinned;
+    }
+    if (filters.from && filters.from.length) {
+      payload.from = filters.from;
+    }
+    if (filters.mentions && filters.mentions.length) {
+      payload.mentions = filters.mentions;
+    }
+    if (filters.has && filters.has.length) {
+      payload.has = filters.has;
+    }
+    if (filters.before !== undefined) {
+      payload.before = filters.before;
+    }
+    if (filters.after !== undefined) {
+      payload.after = filters.after;
+    }
+    if (filters.in && filters.in.length) {
+      payload.in = filters.in;
+      payload.in_channels = filters.in;
+    }
+    if (filters.authorType && filters.authorType.length) {
+      payload.authorType = filters.authorType;
+      payload.author_type = filters.authorType;
+    }
+    return payload;
+  };
+
+  const searchMessages = async (
+    options: SearchMessagesOptions,
+  ): Promise<SearchMessagesResult> => {
+    const { chatId, query, filters, cursor = null, limit = PAGE_LIMIT } = options;
+    const payload: Record<string, unknown> = {
+      chatId,
+      chat_id: chatId,
+      query,
+      limit,
+    };
+    if (cursor) {
+      payload.cursor = cursor;
+    }
+    const normalizedFilters = normalizeSearchFilters(filters);
+    if (normalizedFilters) {
+      payload.filters = normalizedFilters;
+    }
+
+    const response = await invoke<
+      | BackendMessage[]
+      | {
+          messages?: BackendMessage[];
+          results?: BackendMessage[];
+          has_more?: boolean;
+          hasMore?: boolean;
+          next_cursor?: string | null;
+          nextCursor?: string | null;
+          cursor?: string | null;
+        }
+    >("search_messages", payload);
+
+    const backendMessages = Array.isArray(response)
+      ? response
+      : response?.messages ?? response?.results ?? [];
+
+    const mapped = (
+      await Promise.all(
+        backendMessages.map((message) => mapBackendMessage(message, chatId)),
+      )
+    ).sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    const selfId = get(userStore).me?.id;
+    updateMessagesForChat(chatId, (existing) => {
+      if (mapped.length === 0) {
+        return existing;
+      }
+
+      const persisted = new Map(
+        existing.filter((msg) => !msg.pending).map((msg) => [msg.id, msg]),
+      );
+      const pending = existing.filter((msg) => msg.pending);
+
+      for (const incoming of mapped) {
+        const optimistic = pending.find((msg) =>
+          isOptimisticMatch(msg, incoming, selfId),
+        );
+        const merged = mergeOptimisticDetails(incoming, optimistic);
+        persisted.set(merged.id, merged);
+      }
+
+      const merged = [...persisted.values(), ...pending].sort((a, b) =>
+        a.timestamp.localeCompare(b.timestamp),
+      );
+      return merged;
+    });
+
+    const hasMore = Boolean(
+      Array.isArray(response) ? false : response?.has_more ?? response?.hasMore,
+    );
+    const nextCursorRaw = Array.isArray(response)
+      ? null
+      : response?.next_cursor ?? response?.nextCursor ?? response?.cursor ?? null;
+
+    return {
+      received: mapped.length,
+      hasMore,
+      nextCursor: typeof nextCursorRaw === "string" ? nextCursorRaw : null,
+    };
+  };
+
   const handleTypingIndicator = (payload: TypingIndicatorEvent) => {
     const chatId = normalizeEventId(payload.chat_id ?? payload.chatId);
     const userId = normalizeEventId(payload.user_id ?? payload.userId);
@@ -3345,6 +3477,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleGroupMemberLeft,
     handleGroupMembersAdded,
     refreshChatFromStorage,
+    searchMessages,
   };
 }
 

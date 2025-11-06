@@ -44,6 +44,11 @@ vi.mock("$lib/features/chat/stores/directMessageRoster", () => ({
 vi.mock("$lib/features/chat/stores/chatStore", () => ({
   chatStore: {
     setActiveChat: setActiveChatMock,
+    searchMessages: async () => ({
+      received: 0,
+      hasMore: false,
+      nextCursor: null,
+    }),
   },
   chatMetadataByChatId: { subscribe: metadataState.subscribe },
 }));

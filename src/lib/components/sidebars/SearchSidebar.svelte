@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, Search as SearchIcon, X } from "@lucide/svelte";
+  import {
+    ArrowDown,
+    ArrowUp,
+    LoaderCircle,
+    Search as SearchIcon,
+    X,
+  } from "@lucide/svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { Button } from "$lib/components/ui/button";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
@@ -177,6 +183,26 @@
           <div>
             <p class="font-medium text-foreground">Start typing to search</p>
             <p>Use the filters to narrow results quickly.</p>
+          </div>
+        </div>
+      {:else if ($chatSearchStore.loading)}
+        <div
+          class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground"
+        >
+          <LoaderCircle class="h-10 w-10 animate-spin text-muted-foreground/60" />
+          <div>
+            <p class="font-medium text-foreground">Searching conversation…</p>
+            <p>We&rsquo;ll show results as soon as they are ready.</p>
+          </div>
+        </div>
+      {:else if !$chatSearchStore.searching}
+        <div
+          class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground"
+        >
+          <SearchIcon class="h-10 w-10 text-muted-foreground/60" />
+          <div>
+            <p class="font-medium text-foreground">Ready to search</p>
+            <p>Press Enter to search the conversation with your filters.</p>
           </div>
         </div>
       {:else if !$chatSearchStore.matches.length}

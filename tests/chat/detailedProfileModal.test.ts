@@ -225,6 +225,11 @@ const mocks = vi.hoisted(() => {
       return () => {};
     },
     setActiveChat: vi.fn(async () => {}),
+    searchMessages: vi.fn(async () => ({
+      received: 0,
+      hasMore: false,
+      nextCursor: null,
+    })),
   };
 
   return {
