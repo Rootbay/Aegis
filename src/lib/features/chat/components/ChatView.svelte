@@ -6,10 +6,12 @@
     Link,
     LoaderCircle,
     Mic,
+    RadioTower,
     SendHorizontal,
     Smile,
     Square,
     Users,
+    Wifi,
   } from "@lucide/svelte";
   import { invoke } from "@tauri-apps/api/core";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
@@ -64,6 +66,7 @@
     createMentionSuggestionsStore,
     type MentionCandidate,
   } from "$lib/features/chat/stores/mentionSuggestions";
+  import { connectivityStore } from "$lib/stores/connectivityStore";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -137,10 +140,14 @@
       pendingIndicatesFailure ||
       extended.failed === true ||
       (typeof extended.failed === "string" &&
-        ["true", "failed", "error"].includes((extended.failed as string).toLowerCase())) ||
+        ["true", "failed", "error"].includes(
+          (extended.failed as string).toLowerCase(),
+        )) ||
       extended.sendFailed === true ||
       (typeof extended.sendFailed === "string" &&
-        ["true", "failed", "error"].includes((extended.sendFailed as string).toLowerCase())) ||
+        ["true", "failed", "error"].includes(
+          (extended.sendFailed as string).toLowerCase(),
+        )) ||
       (typeof extended.deliveryStatus === "string" &&
         (extended.deliveryStatus as string).toLowerCase() === "failed") ||
       (typeof extended.status === "string" &&
@@ -222,6 +229,7 @@
   let typingResetTimer: ReturnType<typeof setTimeout> | null = null;
   const TYPING_IDLE_TIMEOUT_MS = 2_500;
   const MAX_REPLY_SNIPPET_LENGTH = 120;
+  const CONNECTIVITY_WARNING_THROTTLE_MS = 4_000;
 
   const supportsVoiceRecording =
     typeof window !== "undefined" && "MediaRecorder" in window;
@@ -241,6 +249,95 @@
   let mediaRecorder: MediaRecorder | null = null;
   let recordingStream: MediaStream | null = null;
   let recordedChunks: Blob[] = [];
+  let lastConnectivityWarningAt = 0;
+
+  type ComposerConnectivityTone = "info" | "warning" | "success";
+
+  const connectivityNoticeToneClasses: Record<
+    ComposerConnectivityTone,
+    string
+  > = {
+    info: "border-cyan-500/40 bg-cyan-500/10 text-cyan-100",
+    warning: "border-amber-500/40 bg-amber-500/10 text-amber-200",
+    success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+  };
+
+  const connectivityNoticeIcons = {
+    info: RadioTower,
+    warning: CircleAlert,
+    success: Wifi,
+  } as const;
+
+  const connectivitySendBlocked = $derived(() => {
+    const status = $connectivityStore.status;
+    return status === "offline" || status === "initializing";
+  });
+
+  const connectivitySendBlockedMessage = $derived(() => {
+    const status = $connectivityStore.status;
+    switch (status) {
+      case "offline":
+        return "You're offline. Messages will send when connectivity returns.";
+      case "initializing":
+        return "Connectivity is still starting up. Please wait a moment before sending.";
+      default:
+        return null;
+    }
+  });
+
+  type ComposerConnectivityNotice = {
+    tone: ComposerConnectivityTone;
+    message: string;
+  } | null;
+
+  const composerConnectivityNotice = $derived<ComposerConnectivityNotice>(
+    () => {
+      const state = $connectivityStore;
+      const { status, bridgeSuggested, gatewayStatus } = state;
+
+      if (gatewayStatus.bridgeModeEnabled) {
+        if (gatewayStatus.forwarding) {
+          return {
+            tone: "success",
+            message:
+              "Bridge Mode is forwarding traffic upstream. Messages will sync beyond nearby peers.",
+          } satisfies ComposerConnectivityNotice;
+        }
+
+        return {
+          tone: "warning",
+          message:
+            status === "mesh-only"
+              ? "Bridge Mode enabled. Waiting for an uplink so mesh messages can reach the wider network."
+              : "Bridge Mode enabled. Establishing an uplink before messages can leave the mesh.",
+        } satisfies ComposerConnectivityNotice;
+      }
+
+      if (status === "mesh-only") {
+        if (bridgeSuggested) {
+          return {
+            tone: "warning",
+            message:
+              "Mesh-only connectivity. Messages will queue until a bridge forwards them to the wider network.",
+          } satisfies ComposerConnectivityNotice;
+        }
+
+        return {
+          tone: "info",
+          message:
+            "Mesh-only connectivity. Messages reach nearby peers and will sync globally once an uplink is available.",
+        } satisfies ComposerConnectivityNotice;
+      }
+
+      return null;
+    },
+  );
+
+  $effect(() => {
+    if (!connectivitySendBlocked()) {
+      lastConnectivityWarningAt = 0;
+    }
+  });
 
   $effect(() => {
     if (!voiceMemosEnabled && isRecording) {
@@ -1418,6 +1515,19 @@
       sending
     )
       return;
+    if (connectivitySendBlocked()) {
+      const reason = connectivitySendBlockedMessage();
+      const now = Date.now();
+      if (
+        reason &&
+        (lastConnectivityWarningAt === 0 ||
+          now - lastConnectivityWarningAt >= CONNECTIVITY_WARNING_THROTTLE_MS)
+      ) {
+        toasts.addToast(reason, "warning");
+        lastConnectivityWarningAt = now;
+      }
+      return;
+    }
     try {
       sending = true;
       const replyOptions =
@@ -1800,7 +1910,11 @@
       let hasMore = true;
       let pagesFetched = 0;
 
-      while (!controller.cancelled && hasMore && pagesFetched < REMOTE_SEARCH_MAX_PAGES) {
+      while (
+        !controller.cancelled &&
+        hasMore &&
+        pagesFetched < REMOTE_SEARCH_MAX_PAGES
+      ) {
         try {
           const result = await chatStore.searchMessages({
             chatId,
@@ -2318,11 +2432,15 @@
                           {/if}
                         {/each}
                       {:else}
-                        <p class="text-base whitespace-pre-wrap wrap-break-word">
+                        <p
+                          class="text-base whitespace-pre-wrap wrap-break-word"
+                        >
                           {msg.content}
                         </p>
                         {#if $settings.enableLinkPreviews}
-                          {@const previewUrl = extractFirstLink(msg.content ?? "")}
+                          {@const previewUrl = extractFirstLink(
+                            msg.content ?? "",
+                          )}
                           {#if previewUrl}
                             <div class="mt-2">
                               <LinkPreview url={previewUrl} />
@@ -2334,11 +2452,15 @@
                         <div
                           class="mt-3 space-y-1 border-t border-white/10 pt-2 text-xs text-white/80"
                         >
-                          <p class="text-[0.625rem] uppercase tracking-wide opacity-70">
+                          <p
+                            class="text-[0.625rem] uppercase tracking-wide opacity-70"
+                          >
                             Edit history
                           </p>
                           {#each [...msg.editHistory].reverse() as previous, historyIndex (historyIndex)}
-                            <p class="whitespace-pre-wrap wrap-break-word text-white/80">
+                            <p
+                              class="whitespace-pre-wrap wrap-break-word text-white/80"
+                            >
                               {previous}
                             </p>
                           {/each}
@@ -2355,13 +2477,18 @@
                           aria-pressed={users.includes(myId || "")}
                           onclick={() => {
                             if (users.includes(myId || "")) {
-                              chatStore.removeReaction(msg.chatId, msg.id, emoji);
+                              chatStore.removeReaction(
+                                msg.chatId,
+                                msg.id,
+                                emoji,
+                              );
                             } else {
                               chatStore.addReaction(msg.chatId, msg.id, emoji);
                             }
                           }}
                         >
-                          {emoji} {users.length}
+                          {emoji}
+                          {users.length}
                         </button>
                       {/each}
                       <div class="relative inline-block">
@@ -2383,7 +2510,8 @@
                             onkeydown={(event) => event.stopPropagation()}
                           >
                             <EmojiPicker
-                              on:select={(event) => handleReactionSelect(event.detail.emoji)}
+                              on:select={(event) =>
+                                handleReactionSelect(event.detail.emoji)}
                               on:close={closeReactionPicker}
                             />
                           </div>
@@ -2442,7 +2570,9 @@
                     </div>
                   {/if}
                   {#if msg}
-                    {@const deliveryState = resolveMessageDeliveryState(msg) as { state: MessageDeliveryState; reason?: string }}
+                    {@const deliveryState = resolveMessageDeliveryState(
+                      msg,
+                    ) as { state: MessageDeliveryState; reason?: string }}
                     {#if deliveryState}
                       <div
                         class={`mt-1 flex items-center gap-2 text-[0.625rem] ${
@@ -2450,16 +2580,28 @@
                             ? "text-destructive/90"
                             : "text-muted-foreground/80"
                         }`}
-                        role={deliveryState.state === "sent" ? undefined : "status"}
-                        aria-live={deliveryState.state === "sent" ? "off" : "polite"}
-                        aria-atomic={deliveryState.state === "sent" ? undefined : "true"}
+                        role={deliveryState.state === "sent"
+                          ? undefined
+                          : "status"}
+                        aria-live={deliveryState.state === "sent"
+                          ? "off"
+                          : "polite"}
+                        aria-atomic={deliveryState.state === "sent"
+                          ? undefined
+                          : "true"}
                       >
                         {#if deliveryState.state === "pending"}
-                          <LoaderCircle class="h-3 w-3 animate-spin" aria-hidden="true" />
+                          <LoaderCircle
+                            class="h-3 w-3 animate-spin"
+                            aria-hidden="true"
+                          />
                           <span>Sending…</span>
                         {:else if deliveryState.state === "failed"}
                           <CircleAlert class="h-3 w-3" aria-hidden="true" />
-                          <span>{deliveryState.reason ?? "Message failed to send"}</span>
+                          <span
+                            >{deliveryState.reason ??
+                              "Message failed to send"}</span
+                          >
                           {#if isMe && msg.status === "failed" && msg.retryable}
                             <button
                               type="button"
@@ -2534,6 +2676,23 @@
             </button>
           </div>
         {/if}
+        {#if composerConnectivityNotice()}
+          {@const notice = composerConnectivityNotice()}
+          {@const IconComponent = connectivityNoticeIcons[notice.tone]}
+          <div
+            class={`mb-2 flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed ${
+              connectivityNoticeToneClasses[notice.tone]
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <IconComponent
+              class="mt-0.5 h-3.5 w-3.5 shrink-0"
+              aria-hidden="true"
+            />
+            <span class="flex-1">{notice.message}</span>
+          </div>
+        {/if}
         {#if attachedFiles.length > 0}
           <div class="p-2 mb-2 border-b border-zinc-700/50">
             <p class="text-sm font-semibold mb-2 text-zinc-300">Attachments</p>
@@ -2588,8 +2747,10 @@
                 role="presentation"
               >
                 <EmojiPicker
-                  on:select={(event) => handleComposerEmojiSelect(event.detail.emoji)}
-                  on:close={() => closeComposerEmojiPicker({ focusComposer: true })}
+                  on:select={(event) =>
+                    handleComposerEmojiSelect(event.detail.emoji)}
+                  on:close={() =>
+                    closeComposerEmojiPicker({ focusComposer: true })}
                 />
               </div>
             {/if}
@@ -2702,9 +2863,14 @@
           <button
             type="submit"
             class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
-            disabled={sending}
+            disabled={sending || connectivitySendBlocked()}
             aria-busy={sending}
-            aria-label="Send message"
+            aria-label={connectivitySendBlocked()
+              ? (connectivitySendBlockedMessage() ?? "Send message")
+              : "Send message"}
+            title={connectivitySendBlocked()
+              ? (connectivitySendBlockedMessage() ?? "Connectivity unavailable")
+              : "Send message"}
           >
             <SendHorizontal size={12} />
           </button>
