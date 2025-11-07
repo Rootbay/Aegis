@@ -4,6 +4,7 @@ import { tick } from "svelte";
 
 import { createAppHandlers } from "$lib/layout/app/handlers";
 import ChannelPage from "../../src/routes/channels/[serverId]/[channelId]/+page.svelte";
+import ServerRootPage from "../../src/routes/channels/[serverId]/+page.svelte";
 import type { ModalManager } from "$lib/layout/app/modalManager";
 
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
@@ -164,6 +165,13 @@ function resetPageTo(serverId: string, channelId: string) {
   });
 }
 
+function setServerPage(serverId: string) {
+  setPage({
+    params: { serverId },
+    url: new URL(`http://localhost/channels/${serverId}`),
+  });
+}
+
 describe("handleSelectChannel navigation", () => {
   beforeEach(() => {
     gotoMock.mockClear();
@@ -194,6 +202,140 @@ describe("handleSelectChannel navigation", () => {
 
     expect(setActiveChatMock).not.toHaveBeenCalled();
     expect(gotoMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("server root channel activation", () => {
+  beforeEach(() => {
+    gotoMock.mockClear();
+    setActiveChatMock.mockClear();
+    setServerState({
+      servers: [
+        {
+          id: "server-1",
+          name: "Root Server",
+          channels: [
+            {
+              id: "channel-general",
+              server_id: "server-1",
+              name: "general",
+              channel_type: "text",
+              private: false,
+            },
+            {
+              id: "channel-random",
+              server_id: "server-1",
+              name: "random",
+              channel_type: "text",
+              private: false,
+            },
+            {
+              id: "voice-1",
+              server_id: "server-1",
+              name: "Lounge",
+              channel_type: "voice",
+              private: false,
+            },
+          ],
+          members: [],
+        },
+      ],
+    });
+    activeChatTypeStore.set(null);
+    activeChatIdStore.set(null);
+    activeServerChannelIdStore.set(null);
+    setServerPage("server-1");
+  });
+
+  afterEach(() => {
+    setActiveChatMock.mockClear();
+  });
+
+  it("activates the stored channel when present", async () => {
+    activeServerChannelIdStore.set("channel-random");
+
+    render(ServerRootPage);
+    await tick();
+
+    expect(setActiveChatMock).toHaveBeenCalledWith(
+      "server-1",
+      "server",
+      "channel-random",
+    );
+  });
+
+  it("falls back to the general channel when no stored selection exists", async () => {
+    render(ServerRootPage);
+    await tick();
+
+    expect(setActiveChatMock).toHaveBeenCalledWith(
+      "server-1",
+      "server",
+      "channel-general",
+    );
+  });
+
+  it("uses the first text channel when general is unavailable", async () => {
+    setServerState({
+      servers: [
+        {
+          id: "server-1",
+          name: "Root Server",
+          channels: [
+            {
+              id: "channel-alpha",
+              server_id: "server-1",
+              name: "alpha",
+              channel_type: "text",
+              private: false,
+            },
+            {
+              id: "voice-1",
+              server_id: "server-1",
+              name: "Lounge",
+              channel_type: "voice",
+              private: false,
+            },
+          ],
+          members: [],
+        },
+      ],
+    });
+
+    render(ServerRootPage);
+    await tick();
+
+    expect(setActiveChatMock).toHaveBeenCalledWith(
+      "server-1",
+      "server",
+      "channel-alpha",
+    );
+  });
+
+  it("does not activate a chat when there are no text channels", async () => {
+    setServerState({
+      servers: [
+        {
+          id: "server-1",
+          name: "Root Server",
+          channels: [
+            {
+              id: "voice-1",
+              server_id: "server-1",
+              name: "Lounge",
+              channel_type: "voice",
+              private: false,
+            },
+          ],
+          members: [],
+        },
+      ],
+    });
+
+    render(ServerRootPage);
+    await tick();
+
+    expect(setActiveChatMock).not.toHaveBeenCalled();
   });
 });
 
