@@ -35,6 +35,8 @@ export function createAppHandlers(modalManager: ModalManager): AppHandlers {
   ) => {
     if (channelId) {
       chatStore.setActiveChat(serverId, "server", channelId);
+      // eslint-disable-next-line svelte/no-navigation-without-resolve
+      goto(`/channels/${serverId}/${channelId}`);
     }
   };
 
