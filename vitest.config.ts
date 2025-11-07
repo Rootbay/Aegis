@@ -17,6 +17,7 @@ export default defineConfig({
   resolve: {
     alias: {
       $lib: resolve(projectRootDir, "src/lib"),
+      $features: resolve(projectRootDir, "src/lib/features"),
       $services: resolve(projectRootDir, "src/lib/services"),
       "$app/environment": resolve(
         projectRootDir,
