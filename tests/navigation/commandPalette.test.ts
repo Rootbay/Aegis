@@ -171,7 +171,7 @@ describe("CommandPalette", () => {
 
     expect(setActiveChatMock).toHaveBeenCalledWith("user-123", "dm");
     expect(setActiveServerMock).toHaveBeenCalledWith(null);
-    expect(gotoMock).toHaveBeenCalledWith("/");
+    expect(gotoMock).toHaveBeenCalledWith("/dm/user-123");
 
     await waitFor(() => {
       expect(queryByText("Alice")).toBeNull();

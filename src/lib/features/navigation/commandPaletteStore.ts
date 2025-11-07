@@ -128,7 +128,9 @@ function buildRecentChatCommands(
     sortKey: entry.lastActivityAt,
     perform: () => {
       serverStore.setActiveServer(null);
-      void goto("/");
+      const target =
+        entry.type === "group" ? `/groups/${entry.id}` : `/dm/${entry.id}`;
+      void goto(target);
       void chatStore.setActiveChat(entry.id, entry.type);
     },
   }));
