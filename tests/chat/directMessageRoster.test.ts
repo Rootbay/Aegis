@@ -1,13 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import type { Friend } from "../../src/lib/features/friends/models/Friend";
 import type {
   ChatMetadata,
   GroupChatSummary,
 } from "../../src/lib/features/chat/stores/chatStore";
 import type { Message } from "../../src/lib/features/chat/models/Message";
-import { mergeDirectMessageRoster } from "../../src/lib/features/chat/stores/directMessageRoster";
+import { mergeDirectMessageRoster } from "../../src/lib/features/chat/stores/directMessageRosterCore";
 
-const createFriend = (id: string, name: string, timestamp: string): Friend => ({
+vi.mock("onnxruntime-web/wasm", () =>
+  import("../shims/onnxruntime-web-wasm").then((module) => module),
+);
+
+
+const createFriend = (
+  id: string,
+  name: string,
+  timestamp: string,
+  overrides: Partial<Friend> = {},
+): Friend => ({
   id,
   name,
   avatar: `https://example.com/${id}.png`,
@@ -15,6 +25,7 @@ const createFriend = (id: string, name: string, timestamp: string): Friend => ({
   status: "Offline",
   timestamp,
   messages: [],
+  ...overrides,
 });
 
 const createMessage = (
@@ -108,5 +119,41 @@ describe("mergeDirectMessageRoster", () => {
 
     const fallbackEntry = entries.find((entry) => entry.id === "friend-2");
     expect(fallbackEntry?.lastActivityAt).toBe("2024-01-01T09:00:00.000Z");
+  });
+
+  it("excludes blocked or pending friends from the roster", () => {
+    const actionableFriend = createFriend(
+      "friend-1",
+      "Actionable",
+      "2024-01-01T10:00:00.000Z",
+    );
+    const pendingFriend = createFriend(
+      "friend-2",
+      "Pending Pal",
+      "2024-01-01T11:00:00.000Z",
+      { status: "Pending", relationshipStatus: "pending" },
+    );
+    const blockedFriend = createFriend(
+      "friend-3",
+      "Blocked Buddy",
+      "2024-01-01T12:00:00.000Z",
+      { status: "Blocked", relationshipStatus: "blocked" },
+    );
+    const blockedByRelationship = createFriend(
+      "friend-4",
+      "Blocked by Other",
+      "2024-01-01T09:30:00.000Z",
+      { relationshipStatus: "blocked_by_a" },
+    );
+
+    const entries = mergeDirectMessageRoster(
+      [actionableFriend, pendingFriend, blockedFriend, blockedByRelationship],
+      [],
+      new Map(),
+      "friend-1",
+    );
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.id).toBe("friend-1");
   });
 });
