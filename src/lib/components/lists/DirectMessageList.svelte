@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount, onDestroy } from "svelte";
   import { browser } from "$app/environment";
@@ -41,6 +42,7 @@
   type SelectChatParams = {
     chatId: string | null;
     type?: "dm" | "group";
+    skipNavigation?: boolean;
   };
 
   type SelectChatHandler = (params: SelectChatParams) => void; // eslint-disable-line no-unused-vars
@@ -99,13 +101,23 @@
     }
   }
 
+  function navigateToChat(chatId: string, type: "dm" | "group") {
+    if (!chatId) {
+      return;
+    }
+    onSelect({ chatId, type, skipNavigation: true });
+    const target = type === "group" ? `/groups/${chatId}` : `/dm/${chatId}`;
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
+    goto(target);
+  }
+
   function handleContextItem(
     action: "open" | "mute" | "remove",
     entryId: string,
   ) {
     const item = dmEntries.find((entry) => entry.id === entryId)?.friend;
     if (!item) return;
-    if (action === "open") onSelect({ chatId: entryId, type: "dm" });
+    if (action === "open") navigateToChat(entryId, "dm");
     if (action === "mute") {
       toggleMute(item);
     }
@@ -242,7 +254,7 @@
                   variant="ghost"
                   class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
                   data-active={activeChatId === entry.id}
-                  onclick={() => onSelect({ chatId: entry.id, type: "dm" })}
+                  onclick={() => navigateToChat(entry.id, "dm")}
                 >
                   <div class="relative">
                     <Avatar class="h-10 w-10">
@@ -311,7 +323,7 @@
               variant="ghost"
               class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
               data-active={activeChatId === entry.id}
-              onclick={() => onSelect({ chatId: entry.id, type: "group" })}
+              onclick={() => navigateToChat(entry.id, "group")}
             >
               <div
                 class="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground"
@@ -376,7 +388,7 @@
                         variant="ghost"
                         class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
                         onclick={() => {
-                          onSelect({ chatId: item.id, type: "dm" });
+                          navigateToChat(item.id, "dm");
                           showSearch = false;
                           searchTerm = "";
                         }}
@@ -421,7 +433,7 @@
                       variant="ghost"
                       class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
                       onclick={() => {
-                        onSelect({ chatId: item.id, type: "group" });
+                        navigateToChat(item.id, "group");
                         showSearch = false;
                         searchTerm = "";
                       }}

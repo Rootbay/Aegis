@@ -86,6 +86,7 @@ export type AppHandlers = {
   handleSelectDirectMessage: (params: {
     chatId: string | null;
     type?: "dm" | "group";
+    skipNavigation?: boolean;
   }) => void;
   openModal: PageState["openModal"];
   closeModal: PageState["closeModal"];

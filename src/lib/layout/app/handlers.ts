@@ -2,6 +2,7 @@ import { goto } from "$app/navigation";
 import { page } from "$app/stores";
 import { get } from "svelte/store";
 import { chatStore } from "$lib/features/chat/stores/chatStore";
+import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { commandPaletteStore } from "$lib/features/navigation/commandPaletteStore";
 import type { ModalManager } from "./modalManager";
 import type { AppHandlers } from "./types";
@@ -43,9 +44,17 @@ export function createAppHandlers(modalManager: ModalManager): AppHandlers {
   const handleSelectDirectMessage: AppHandlers["handleSelectDirectMessage"] = ({
     chatId,
     type = "dm",
+    skipNavigation = false,
   }) => {
-    if (chatId) {
-      chatStore.setActiveChat(chatId, type);
+    if (!chatId) {
+      return;
+    }
+    serverStore.setActiveServer(null);
+    void chatStore.setActiveChat(chatId, type);
+    if (!skipNavigation) {
+      const target = type === "group" ? `/groups/${chatId}` : `/dm/${chatId}`;
+      // eslint-disable-next-line svelte/no-navigation-without-resolve
+      goto(target);
     }
   };
 
