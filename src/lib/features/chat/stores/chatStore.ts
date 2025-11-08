@@ -155,6 +155,7 @@ interface ChatStore {
   messagesByChatId: Readable<Map<string, Message[]>>;
   hasMoreByChatId: Readable<Map<string, boolean>>;
   metadataByChatId: Readable<Map<string, ChatMetadata>>;
+  serverUnreadCountByServerId: Readable<Map<string, number>>;
   activeChatId: Readable<string | null>;
   activeChatType: Readable<"dm" | "server" | "group" | null>;
   activeChannelId: Readable<string | null>;
@@ -3902,6 +3903,26 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       metadataByChatIdReadable,
       ($map) => new Map($map),
     ),
+    serverUnreadCountByServerId: derived(
+      [metadataByChatIdReadable, serverStore],
+      ([$metadata, $serverState]) => {
+        const totals = new Map<string, number>();
+        for (const server of $serverState.servers ?? []) {
+          let aggregate = 0;
+          for (const channel of server.channels ?? []) {
+            if (channel.channel_type !== "text") {
+              continue;
+            }
+            const metadata = $metadata.get(channel.id);
+            if (metadata?.unreadCount) {
+              aggregate += metadata.unreadCount;
+            }
+          }
+          totals.set(server.id, aggregate);
+        }
+        return totals;
+      },
+    ),
     activeChatId: derived(activeChatId, ($id) => $id),
     activeChatType: derived(activeChatType, ($type) => $type),
     activeChannelId: derived(activeChannelId, ($id) => $id),
@@ -3977,6 +3998,7 @@ export const chatStore = createChatStore();
 export const messagesByChatId = chatStore.messagesByChatId;
 export const hasMoreByChatId = chatStore.hasMoreByChatId;
 export const chatMetadataByChatId = chatStore.metadataByChatId;
+export const serverUnreadCountByServerId = chatStore.serverUnreadCountByServerId;
 export const activeChannelId = chatStore.activeChannelId;
 export const serverChannelSelections = chatStore.serverChannelSelections;
 export const activeServerChannelId = chatStore.activeServerChannelId;

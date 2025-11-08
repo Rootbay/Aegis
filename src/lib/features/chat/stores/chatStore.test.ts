@@ -423,6 +423,109 @@ describe("chatStore attachment lifecycle", () => {
     expect(messages.every((message) => message.read)).toBe(true);
   });
 
+  it("aggregates unread counts across server text channels", () => {
+    const store = createChatStore();
+    const timestamp = new Date().toISOString();
+    const serverA: Server = {
+      id: "server-1",
+      name: "Alpha",
+      owner_id: "owner-1",
+      channels: [
+        {
+          id: "channel-1",
+          name: "general",
+          server_id: "server-1",
+          channel_type: "text",
+          private: false,
+          category_id: null,
+        },
+        {
+          id: "channel-2",
+          name: "updates",
+          server_id: "server-1",
+          channel_type: "text",
+          private: false,
+          category_id: null,
+        },
+        {
+          id: "channel-voice",
+          name: "Lounge",
+          server_id: "server-1",
+          channel_type: "voice",
+          private: false,
+          category_id: null,
+        },
+      ],
+      categories: [],
+      members: [],
+      roles: [],
+    };
+    const serverB: Server = {
+      id: "server-2",
+      name: "Bravo",
+      owner_id: "owner-2",
+      channels: [],
+      categories: [],
+      members: [],
+      roles: [],
+    };
+
+    serverStore.handleServersUpdate([serverA, serverB]);
+
+    store.handleMessagesUpdate("channel-1", [
+      {
+        id: "msg-1",
+        chatId: "channel-1",
+        senderId: "user-2",
+        content: "hello",
+        timestamp,
+        read: false,
+      },
+      {
+        id: "msg-2",
+        chatId: "channel-1",
+        senderId: "user-3",
+        content: "world",
+        timestamp,
+        read: true,
+      },
+    ]);
+
+    store.handleMessagesUpdate("channel-2", [
+      {
+        id: "msg-3",
+        chatId: "channel-2",
+        senderId: "user-4",
+        content: "updates",
+        timestamp,
+        read: false,
+      },
+      {
+        id: "msg-4",
+        chatId: "channel-2",
+        senderId: "user-5",
+        content: "more",
+        timestamp,
+        read: false,
+      },
+    ]);
+
+    store.handleMessagesUpdate("channel-voice", [
+      {
+        id: "msg-voice",
+        chatId: "channel-voice",
+        senderId: "user-6",
+        content: "voice message",
+        timestamp,
+        read: false,
+      },
+    ]);
+
+    const totals = get(store.serverUnreadCountByServerId);
+    expect(totals.get("server-1")).toBe(3);
+    expect(totals.get("server-2")).toBe(0);
+  });
+
   it("tracks loading state per chat during concurrent loads", async () => {
     const deferredByChat = new Map<string, ReturnType<typeof createDeferred>>();
     invokeMock.mockImplementation((command: string, payload: unknown) => {
