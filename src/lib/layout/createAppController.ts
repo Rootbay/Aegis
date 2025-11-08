@@ -17,6 +17,7 @@ import {
   messagesByChatId,
 } from "$lib/features/chat/stores/chatStore";
 import { directMessageRoster } from "$lib/features/chat/stores/directMessageRoster";
+import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 import { getListen } from "$services/tauri";
 import { connectivityStore } from "$lib/stores/connectivityStore";
 import { createModalManager } from "./app/modalManager";
@@ -90,9 +91,51 @@ export function createAppController(): AppController {
     connectivityStore.teardown();
   });
 
-  const allUsers = derived(friendStore, ($friendStore) => [
-    ...$friendStore.friends,
-  ]);
+  const allUsers = derived(
+    [friendStore, directMessageRoster],
+    ([$friendStore, $directMessages]) => {
+      const entries: GroupModalUser[] = [];
+      const seen = new Set<string>();
+
+      for (const friend of $friendStore.friends ?? []) {
+        if (!friend?.id || seen.has(friend.id)) {
+          continue;
+        }
+
+        seen.add(friend.id);
+        entries.push({
+          id: friend.id,
+          name: friend.name,
+          avatar: friend.avatar ?? "",
+          isFriend: true,
+          isPinned: Boolean(friend.isPinned),
+          source: "friend",
+        });
+      }
+
+      for (const entry of $directMessages) {
+        if (entry.type !== "dm") {
+          continue;
+        }
+
+        if (entry.friend || !entry.id || seen.has(entry.id)) {
+          continue;
+        }
+
+        seen.add(entry.id);
+        entries.push({
+          id: entry.id,
+          name: entry.name,
+          avatar: entry.avatar ?? "",
+          isFriend: false,
+          isPinned: false,
+          source: "recentDm",
+        });
+      }
+
+      return entries;
+    },
+  );
 
   const friendsLoading = derived(
     friendStore,

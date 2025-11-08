@@ -30,12 +30,20 @@
     return users.filter((user) => user.name.toLowerCase().includes(term));
   });
 
-  const pinnedFriends = $derived.by(() =>
-    filteredUsers.filter((user) => user.isFriend && user.isPinned),
+  const friendUsers = $derived.by(() =>
+    filteredUsers.filter((user) => user.source === "friend"),
   );
 
-  const otherUsers = $derived.by(() =>
-    filteredUsers.filter((user) => !user.isPinned),
+  const pinnedFriends = $derived.by(() =>
+    friendUsers.filter((user) => user.isPinned),
+  );
+
+  const unpinnedFriends = $derived.by(() =>
+    friendUsers.filter((user) => !user.isPinned),
+  );
+
+  const recentDms = $derived.by(() =>
+    filteredUsers.filter((user) => user.source === "recentDm"),
   );
 
   function handleToggle(userId: string) {
@@ -59,43 +67,77 @@
 
   <ScrollArea class="max-h-60 pr-1">
     <div class="space-y-4">
-      {#if pinnedFriends.length > 0}
+      {#if friendUsers.length > 0}
         <section class="space-y-2">
           <p class="text-xs font-semibold uppercase text-muted-foreground">
-            Pinned Friends
+            Friends
           </p>
-          <div class="space-y-1.5">
-            {#each pinnedFriends as user (user.id)}
-              <label
-                class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedUserIds.has(user.id)}
-                  onchange={() => handleToggle(user.id)}
-                  class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                />
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  class="h-8 w-8 rounded-full object-cover"
-                />
-                <span class="text-sm font-medium text-foreground"
-                  >{user.name}</span
-                >
-              </label>
-            {/each}
+          <div class="space-y-3">
+            {#if pinnedFriends.length > 0}
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase text-muted-foreground">
+                  Pinned Friends
+                </p>
+                <div class="space-y-1.5">
+                  {#each pinnedFriends as user (user.id)}
+                    <label
+                      class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.has(user.id)}
+                        onchange={() => handleToggle(user.id)}
+                        class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      />
+                      <img
+                        src={user.avatar}
+                        alt={user.name}
+                        class="h-8 w-8 rounded-full object-cover"
+                      />
+                      <span class="text-sm font-medium text-foreground"
+                        >{user.name}</span
+                      >
+                    </label>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            {#if unpinnedFriends.length > 0}
+              <div class="space-y-1.5">
+                {#each unpinnedFriends as user (user.id)}
+                  <label
+                    class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.has(user.id)}
+                      onchange={() => handleToggle(user.id)}
+                      class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    />
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      class="h-8 w-8 rounded-full object-cover"
+                    />
+                    <span class="text-sm font-medium text-foreground"
+                      >{user.name}</span
+                    >
+                  </label>
+                {/each}
+              </div>
+            {/if}
           </div>
         </section>
       {/if}
 
-      {#if otherUsers.length > 0}
+      {#if recentDms.length > 0}
         <section class="space-y-2">
           <p class="text-xs font-semibold uppercase text-muted-foreground">
-            Other Users
+            Recent DMs
           </p>
           <div class="space-y-1.5">
-            {#each otherUsers as user (user.id)}
+            {#each recentDms as user (user.id)}
               <label
                 class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
               >

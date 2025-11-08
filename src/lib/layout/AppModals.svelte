@@ -9,7 +9,6 @@
   import CollaborativeDocumentModal from "$lib/features/collaboration/components/CollaborativeDocumentModal.svelte";
   import CollaborativeWhiteboard from "$lib/features/collaboration/components/CollaborativeWhiteboard.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import type { Friend } from "$lib/features/friends/models/Friend";
   import type { AppModalType } from "./createAppController";
   import type {
     GroupModalUser,
@@ -26,7 +25,7 @@
   }: {
     activeModal?: AppModalType | null;
     modalProps?: ModalProps;
-    allUsers?: Friend[];
+    allUsers?: GroupModalUser[];
     closeModal?: () => void;
   } = $props();
 
@@ -60,14 +59,37 @@
 
   const reportUserModalPayload = modalProps as ReportUserModalPayload;
 
-  const groupModalUsers = $derived(
-    allUsers.map((user) => ({
-      id: user.id,
-      name: user.name,
-      avatar: user.avatar,
-      isFriend: true,
-      isPinned: Boolean(user.isPinned),
-    })),
+  function normalizeAdditionalUsers(
+    canonicalUsers: GroupModalUser[],
+    additional?: GroupModalUser[],
+  ) {
+    if (!additional?.length) {
+      return additional;
+    }
+
+    const canonicalMap = new Map(
+      canonicalUsers.map((user) => [user.id, user] as const),
+    );
+
+    return additional.map((user) => {
+      const canonical = canonicalMap.get(user.id);
+      if (canonical) {
+        return canonical;
+      }
+
+      if (user.source) {
+        return user;
+      }
+
+      return {
+        ...user,
+        source: user.isFriend ? "friend" : "recentDm",
+      };
+    });
+  }
+
+  const normalizedAdditionalUsers = $derived(
+    normalizeAdditionalUsers(allUsers, groupModalProps?.additionalUsers),
   );
 
   const collaborationDocumentProps = modalProps as Partial<{
@@ -96,9 +118,11 @@
 {#if activeModal === "createGroup"}
   <CreateGroupModal
     onclose={closeModal}
-    allUsers={groupModalUsers}
+    allUsers={allUsers}
     preselectedUserIds={groupModalProps?.preselectedUserIds}
-    additionalUsers={groupModalProps?.additionalUsers}
+    additionalUsers={
+      normalizedAdditionalUsers ?? groupModalProps?.additionalUsers
+    }
   />
 {/if}
 
