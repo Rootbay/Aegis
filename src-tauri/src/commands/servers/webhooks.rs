@@ -240,9 +240,7 @@ mod tests {
         let (network_tx, _network_rx) = mpsc::channel::<Vec<u8>>(8);
         let (file_cmd_tx, _file_cmd_rx) = mpsc::channel::<FileTransferCommand>(8);
         let temp_dir = tempdir().expect("tempdir");
-        let app_data_dir: PathBuf = temp_dir
-            .keep()
-            .expect("Failed to keep temp dir");
+        let app_data_dir: PathBuf = temp_dir.keep().expect("Failed to keep temp dir");
 
         AppState {
             identity,
