@@ -152,6 +152,10 @@
   function handleMatchSelect(matchIndex: number) {
     chatSearchStore.focusMatch(matchIndex);
   }
+
+  function loadMoreResults() {
+    chatSearchStore.requestNextPage();
+  }
 </script>
 
 <Sidebar class="hidden lg:flex" aria-label="Search results">
@@ -185,7 +189,7 @@
             <p>Use the filters to narrow results quickly.</p>
           </div>
         </div>
-      {:else if ($chatSearchStore.loading)}
+      {:else if ($chatSearchStore.loading && $chatSearchStore.pagesLoaded === 0)}
         <div
           class="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground"
         >
@@ -307,6 +311,24 @@
                     </button>
                   {/each}
                 </div>
+                {#if $chatSearchStore.hasMore}
+                  <div class="pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      class="w-full"
+                      onclick={loadMoreResults}
+                      disabled={$chatSearchStore.loading}
+                    >
+                      {#if $chatSearchStore.loading && $chatSearchStore.pagesLoaded > 0}
+                        <LoaderCircle class="mr-2 h-4 w-4 animate-spin" />
+                        Loading more…
+                      {:else}
+                        Load more results
+                      {/if}
+                    </Button>
+                  </div>
+                {/if}
               {:else}
                 <p class="text-xs text-muted-foreground">
                   Messages are still loading. Try again in a moment.

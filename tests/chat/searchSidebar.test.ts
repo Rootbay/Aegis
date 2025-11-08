@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import {
   afterAll,
   afterEach,
@@ -141,5 +141,42 @@ describe("SearchSidebar", () => {
 
     expect(screen.getByText("Friend One")).toBeInTheDocument();
     expect(screen.getByText(/highlighted search message/i)).toBeInTheDocument();
+  });
+
+  it("shows a load more button when additional pages exist", async () => {
+    const message: Message = {
+      id: "msg-1",
+      chatId: "chat-1",
+      senderId: "friend-1",
+      content: "Search pagination example",
+      timestamp: new Date().toISOString(),
+      read: true,
+    };
+    messagesStore.set(new Map([["chat-1", [message]]]));
+    chatSearchStore.setQuery("search");
+    chatSearchStore.executeSearch();
+    const { searchRequestId } = get(chatSearchStore);
+    chatSearchStore.recordSearchPage(searchRequestId, {
+      cursor: "cursor-1",
+      hasMore: true,
+      results: 1,
+    });
+    chatSearchStore.setSearchLoading(searchRequestId, false);
+    chatSearchStore.setMatches([0]);
+
+    render(SearchSidebar, { chat });
+
+    const button = await screen.findByRole("button", {
+      name: /load more results/i,
+    });
+    expect(button).toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+
+    await fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(get(chatSearchStore).loadMoreRequests).toBe(1);
+      expect(button).toBeDisabled();
+    });
   });
 });
