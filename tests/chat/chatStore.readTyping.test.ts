@@ -115,8 +115,8 @@ vi.mock("../../src/lib/stores/connectivityStore", () => ({
 
 const settingsStoreRef = vi.hoisted(() => {
   const initial = {
-    enableReadReceipts: true,
-    enableTypingIndicators: true,
+    enableReadReceipts: false,
+    enableTypingIndicators: false,
     ephemeralMessageDuration: 60,
   } as unknown as AppSettings;
   let value = { ...initial } as AppSettings;
@@ -263,7 +263,26 @@ describe("chatStore read receipts and typing indicators", () => {
     return store;
   };
 
-  it("marks messages as read and sends receipts when enabled", async () => {
+  it("marks messages as read without emitting receipts by default", async () => {
+    const store = await seedChat();
+    invokeMock.mockClear();
+
+    await store.markActiveChatViewed();
+
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "send_read_receipt",
+      expect.anything(),
+    );
+
+    const messages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(messages[0]?.read).toBe(true);
+  });
+
+  it("sends read receipts when globally enabled", async () => {
+    settingsStoreRef.store.update((current) => ({
+      ...current,
+      enableReadReceipts: true,
+    }));
     const store = await seedChat();
     invokeMock.mockClear();
 
@@ -276,25 +295,22 @@ describe("chatStore read receipts and typing indicators", () => {
       message_id: "msg-1",
       timestamp: expect.any(String),
     });
-
-    const messages = get(store.messagesByChatId).get("chat-1") ?? [];
-    expect(messages[0]?.read).toBe(true);
   });
 
-  it("does not send read receipts when disabled", async () => {
-    settingsStoreRef.store.update((current) => ({
-      ...current,
-      enableReadReceipts: false,
-    }));
+  it("sends read receipts when chat override enables them", async () => {
     const store = await seedChat();
+    store.setChatPreferenceOverride("chat-1", { readReceiptsEnabled: true });
     invokeMock.mockClear();
 
     await store.markActiveChatViewed();
 
-    expect(invokeMock).not.toHaveBeenCalledWith(
-      "send_read_receipt",
-      expect.anything(),
-    );
+    expect(invokeMock).toHaveBeenCalledWith("send_read_receipt", {
+      chatId: "chat-1",
+      chat_id: "chat-1",
+      messageId: "msg-1",
+      message_id: "msg-1",
+      timestamp: expect.any(String),
+    });
   });
 
   it("respects server overrides that disable read receipts", async () => {
@@ -310,10 +326,6 @@ describe("chatStore read receipts and typing indicators", () => {
   });
 
   it("respects server overrides that enable read receipts", async () => {
-    settingsStoreRef.store.update((current) => ({
-      ...current,
-      enableReadReceipts: false,
-    }));
     const store = await seedServerChat({ enableReadReceipts: true });
     invokeMock.mockClear();
 
@@ -326,6 +338,19 @@ describe("chatStore read receipts and typing indicators", () => {
       message_id: "msg-1",
       timestamp: expect.any(String),
     });
+  });
+
+  it("allows chat overrides to disable server-enforced read receipts", async () => {
+    const store = await seedServerChat({ enableReadReceipts: true });
+    store.setChatPreferenceOverride("channel-1", { readReceiptsEnabled: false });
+    invokeMock.mockClear();
+
+    await store.markActiveChatViewed();
+
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "send_read_receipt",
+      expect.anything(),
+    );
   });
 
   it("applies read receipt updates to messages", async () => {
@@ -352,7 +377,23 @@ describe("chatStore read receipts and typing indicators", () => {
     expect(ownMessage?.read).toBe(true);
   });
 
-  it("sends typing indicators when enabled", async () => {
+  it("does not send typing indicators by default", async () => {
+    const store = await seedChat();
+    invokeMock.mockClear();
+
+    await store.sendTypingIndicator(true);
+
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "send_typing_indicator",
+      expect.anything(),
+    );
+  });
+
+  it("sends typing indicators when globally enabled", async () => {
+    settingsStoreRef.store.update((current) => ({
+      ...current,
+      enableTypingIndicators: true,
+    }));
     const store = await seedChat();
     invokeMock.mockClear();
 
@@ -375,12 +416,37 @@ describe("chatStore read receipts and typing indicators", () => {
     });
   });
 
-  it("does not send typing indicators when disabled", async () => {
+  it("sends typing indicators when chat override enables them", async () => {
+    const store = await seedChat();
+    store.setChatPreferenceOverride("chat-1", { typingIndicatorsEnabled: true });
+    invokeMock.mockClear();
+
+    await store.sendTypingIndicator(true);
+    await store.sendTypingIndicator(false);
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "send_typing_indicator", {
+      chatId: "chat-1",
+      chat_id: "chat-1",
+      isTyping: true,
+      is_typing: true,
+      timestamp: expect.any(String),
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "send_typing_indicator", {
+      chatId: "chat-1",
+      chat_id: "chat-1",
+      isTyping: false,
+      is_typing: false,
+      timestamp: expect.any(String),
+    });
+  });
+
+  it("allows chat overrides to disable typing indicators even when globally enabled", async () => {
     settingsStoreRef.store.update((current) => ({
       ...current,
-      enableTypingIndicators: false,
+      enableTypingIndicators: true,
     }));
     const store = await seedChat();
+    store.setChatPreferenceOverride("chat-1", { typingIndicatorsEnabled: false });
     invokeMock.mockClear();
 
     await store.sendTypingIndicator(true);

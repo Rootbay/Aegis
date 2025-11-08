@@ -23,6 +23,7 @@ import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
 import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
+import { persistentStore } from "$lib/stores/persistentStore";
 import {
   decodeIncomingMessagePayload,
   encryptOutgoingMessagePayload,
@@ -130,6 +131,18 @@ export interface ChatMetadata {
   unreadCount: number;
 }
 
+export type ChatPreferenceOverrides = {
+  readReceiptsEnabled?: boolean;
+  typingIndicatorsEnabled?: boolean;
+};
+
+type ChatPreferenceState = Record<string, ChatPreferenceOverrides>;
+
+export type ResolvedChatPreferences = {
+  readReceiptsEnabled: boolean;
+  typingIndicatorsEnabled: boolean;
+};
+
 export interface SendMessageOptions {
   replyToMessageId?: string;
   replySnapshot?: ReplySnapshot;
@@ -147,6 +160,7 @@ interface ChatStore {
   loadingStateByChat: Readable<Map<string, boolean>>;
   typingByChatId: Readable<Map<string, string[]>>;
   activeChatTypingUsers: Readable<string[]>;
+  chatPreferenceOverrides: Readable<Map<string, ChatPreferenceOverrides>>;
   setActiveChat: (
     chatId: string,
     chatType: "dm" | "server" | "group",
@@ -184,6 +198,14 @@ interface ChatStore {
   handleTypingIndicator: (payload: TypingIndicatorEvent) => void;
   markActiveChatViewed: () => Promise<void>;
   sendTypingIndicator: (isTyping: boolean) => Promise<void>;
+  setChatPreferenceOverride: (
+    chatId: string,
+    overrides: Partial<
+      Record<keyof ChatPreferenceOverrides, boolean | null | undefined>
+    >,
+  ) => void;
+  clearChatPreferenceOverride: (chatId: string) => void;
+  getResolvedChatPreferences: (chatId: string) => ResolvedChatPreferences;
   clearActiveChat: () => void;
   dropChatHistory: (chatId: string) => void;
   loadMoreMessages: (targetChatId: string) => Promise<void>;
@@ -245,6 +267,7 @@ export type SearchMessagesResult = {
 
 const DEFAULT_MAX_MESSAGES_PER_CHAT = 500;
 const TYPING_INDICATOR_TIMEOUT_MS = 4_000;
+const CHAT_PREFERENCE_OVERRIDES_KEY = "chatPreferenceOverrides";
 
 const isVoiceMemoFile = (file: File) =>
   (file.type?.startsWith("audio/") ?? false) &&
@@ -262,6 +285,46 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
   const typingByChatIdStore = writable<Map<string, string[]>>(new Map());
+  const chatPreferenceOverridesRecord =
+    persistentStore<ChatPreferenceState>(
+      CHAT_PREFERENCE_OVERRIDES_KEY,
+      {},
+    );
+  const chatPreferenceOverridesReadable = derived(
+    chatPreferenceOverridesRecord,
+    ($record): Map<string, ChatPreferenceOverrides> => {
+      const map = new Map<string, ChatPreferenceOverrides>();
+      if (!$record) {
+        return map;
+      }
+      for (const [chatId, overrides] of Object.entries($record)) {
+        if (!overrides) {
+          continue;
+        }
+        const normalized: ChatPreferenceOverrides = {};
+        if (typeof overrides.readReceiptsEnabled === "boolean") {
+          normalized.readReceiptsEnabled = overrides.readReceiptsEnabled;
+        }
+        if (typeof overrides.typingIndicatorsEnabled === "boolean") {
+          normalized.typingIndicatorsEnabled = overrides.typingIndicatorsEnabled;
+        }
+        if (
+          typeof normalized.readReceiptsEnabled === "boolean" ||
+          typeof normalized.typingIndicatorsEnabled === "boolean"
+        ) {
+          map.set(chatId, normalized);
+        }
+      }
+      return map;
+    },
+  );
+
+  let chatPreferenceOverridesSnapshot =
+    new Map<string, ChatPreferenceOverrides>();
+  chatPreferenceOverridesReadable.subscribe((value) => {
+    chatPreferenceOverridesSnapshot = value;
+  });
+
   const metadataByChatIdReadable = derived(
     messagesByChatIdStore,
     ($messages): Map<string, ChatMetadata> => {
@@ -721,6 +784,110 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   serverStore.subscribe(($serverState) => {
     rebuildModerationIndexes($serverState.servers);
   });
+
+  const setChatPreferenceOverride = (
+    chatId: string,
+    overrides: Partial<
+      Record<keyof ChatPreferenceOverrides, boolean | null | undefined>
+    >,
+  ) => {
+    chatPreferenceOverridesRecord.update((current) => {
+      const currentState = current ?? {};
+      const existing = currentState[chatId];
+
+      const nextRead = (() => {
+        if ("readReceiptsEnabled" in overrides) {
+          const value = overrides.readReceiptsEnabled;
+          return typeof value === "boolean" ? value : undefined;
+        }
+        return typeof existing?.readReceiptsEnabled === "boolean"
+          ? existing.readReceiptsEnabled
+          : undefined;
+      })();
+
+      const nextTyping = (() => {
+        if ("typingIndicatorsEnabled" in overrides) {
+          const value = overrides.typingIndicatorsEnabled;
+          return typeof value === "boolean" ? value : undefined;
+        }
+        return typeof existing?.typingIndicatorsEnabled === "boolean"
+          ? existing.typingIndicatorsEnabled
+          : undefined;
+      })();
+
+      const hasNextRead = typeof nextRead === "boolean";
+      const hasNextTyping = typeof nextTyping === "boolean";
+      const hasExistingRead =
+        typeof existing?.readReceiptsEnabled === "boolean";
+      const hasExistingTyping =
+        typeof existing?.typingIndicatorsEnabled === "boolean";
+
+      if (!hasNextRead && !hasNextTyping) {
+        if (!existing) {
+          return currentState;
+        }
+        const nextState: ChatPreferenceState = { ...currentState };
+        delete nextState[chatId];
+        return nextState;
+      }
+
+      const readUnchanged =
+        hasNextRead === hasExistingRead &&
+        (!hasNextRead || existing?.readReceiptsEnabled === nextRead);
+      const typingUnchanged =
+        hasNextTyping === hasExistingTyping &&
+        (!hasNextTyping || existing?.typingIndicatorsEnabled === nextTyping);
+
+      if (readUnchanged && typingUnchanged) {
+        return currentState;
+      }
+
+      const nextState: ChatPreferenceState = { ...currentState };
+      const nextOverrides: ChatPreferenceOverrides = {};
+      if (hasNextRead) {
+        nextOverrides.readReceiptsEnabled = nextRead;
+      }
+      if (hasNextTyping) {
+        nextOverrides.typingIndicatorsEnabled = nextTyping;
+      }
+      nextState[chatId] = nextOverrides;
+      return nextState;
+    });
+  };
+
+  const clearChatPreferenceOverride = (chatId: string) => {
+    chatPreferenceOverridesRecord.update((current) => {
+      const currentState = current ?? {};
+      if (!(chatId in currentState)) {
+        return currentState;
+      }
+      const next: ChatPreferenceState = { ...currentState };
+      delete next[chatId];
+      return next;
+    });
+  };
+
+  const getResolvedChatPreferences = (
+    chatId: string,
+  ): ResolvedChatPreferences => {
+    const overrides = chatPreferenceOverridesSnapshot.get(chatId);
+    const currentSettings = get(settings);
+    const moderation = resolveModerationForChat(chatId);
+
+    const readReceiptsEnabled =
+      typeof overrides?.readReceiptsEnabled === "boolean"
+        ? overrides.readReceiptsEnabled
+        : moderation.readReceiptsEnabled === null
+          ? currentSettings.enableReadReceipts
+          : moderation.readReceiptsEnabled;
+
+    const typingIndicatorsEnabled =
+      typeof overrides?.typingIndicatorsEnabled === "boolean"
+        ? overrides.typingIndicatorsEnabled
+        : currentSettings.enableTypingIndicators;
+
+    return { readReceiptsEnabled, typingIndicatorsEnabled };
+  };
 
   const trackAttachmentUrl = (url?: string) => {
     if (url) {
@@ -2946,7 +3113,6 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const type = get(activeChatType);
     const chatIdValue = get(activeChatId);
     const channelIdValue = get(activeChannelId);
-    const currentSettings = get(settings);
     const meId = get(userStore).me?.id ?? null;
     if (!type || !chatIdValue) {
       return;
@@ -2978,12 +3144,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return mutated ? next : existing;
     });
 
-    const preferences = resolveModerationForChat(messageChatId);
-    const readReceiptsAllowed =
-      preferences.readReceiptsEnabled === null
-        ? currentSettings.enableReadReceipts
-        : preferences.readReceiptsEnabled;
-    if (!readReceiptsAllowed) {
+    const { readReceiptsEnabled } =
+      getResolvedChatPreferences(messageChatId);
+    if (!readReceiptsEnabled) {
       return;
     }
 
@@ -3017,11 +3180,6 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const sendTypingIndicator = async (isTyping: boolean) => {
-    const currentSettings = get(settings);
-    if (!currentSettings.enableTypingIndicators) {
-      return;
-    }
-
     const type = get(activeChatType);
     const chatIdValue = get(activeChatId);
     const channelIdValue = get(activeChannelId);
@@ -3031,6 +3189,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     const messageChatId = type === "server" ? channelIdValue : chatIdValue;
     if (!messageChatId) {
+      return;
+    }
+
+    const { typingIndicatorsEnabled } =
+      getResolvedChatPreferences(messageChatId);
+    if (!typingIndicatorsEnabled) {
       return;
     }
 
@@ -3531,6 +3695,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     activeChatTypingUsers: derived(activeChatTypingUsersReadable, ($users) => [
       ...$users,
     ]),
+    chatPreferenceOverrides: derived(
+      chatPreferenceOverridesReadable,
+      ($map) => new Map($map),
+    ),
     groupChats: derived(groupChatsStore, ($map) => new Map($map)),
     setActiveChat,
     handleMessagesUpdate,
@@ -3549,6 +3717,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleTypingIndicator,
     markActiveChatViewed,
     sendTypingIndicator,
+    setChatPreferenceOverride,
+    clearChatPreferenceOverride,
+    getResolvedChatPreferences,
     clearActiveChat,
     dropChatHistory,
     loadMoreMessages,
@@ -3581,5 +3752,6 @@ export const activeChatType = chatStore.activeChatType;
 export const loadingStateByChat = chatStore.loadingStateByChat;
 export const typingByChatId = chatStore.typingByChatId;
 export const activeChatTypingUsers = chatStore.activeChatTypingUsers;
+export const chatPreferenceOverrides = chatStore.chatPreferenceOverrides;
 export const groupChats = chatStore.groupChats;
 export { createChatStore };
