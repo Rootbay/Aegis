@@ -87,6 +87,12 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
+  import {
+    aggregateChannelPermissions,
+    allowAllChannelPermissions,
+    buildRolePermissionMap,
+    collectMemberRoleIds,
+  } from "$lib/features/chat/utils/permissions";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -237,6 +243,110 @@
   }
 
   let { chat } = $props<{ chat: Chat | null }>();
+
+  const channelPermissions = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return allowAllChannelPermissions();
+    }
+
+    const server = $serverStore.servers.find(
+      (entry) => entry.id === chat.serverId,
+    );
+    const me = $userStore.me;
+
+    if (!server || !me) {
+      return allowAllChannelPermissions();
+    }
+
+    if (me.id === server.owner_id) {
+      return allowAllChannelPermissions();
+    }
+
+    const rolePermissionMap = buildRolePermissionMap(server.roles);
+    if (rolePermissionMap.size === 0) {
+      return allowAllChannelPermissions();
+    }
+
+    const memberRoleIds = collectMemberRoleIds({
+      me,
+      server,
+      chat,
+    });
+
+    if (memberRoleIds.length === 0) {
+      return allowAllChannelPermissions();
+    }
+
+    return aggregateChannelPermissions({
+      memberRoleIds,
+      rolePermissionMap,
+    });
+  });
+
+  const canSendMessages = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    return channelPermissions().send_messages === true;
+  });
+
+  const canAttachFiles = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    return channelPermissions().attach_files === true;
+  });
+
+  const canUseComposerEmoji = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    return channelPermissions().use_external_emojis === true;
+  });
+
+  const canMentionEveryone = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    return channelPermissions().mention_everyone === true;
+  });
+
+  const canAddMessageReactions = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    return channelPermissions().add_reactions === true;
+  });
+
+  const canManageMessages = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    return channelPermissions().manage_messages === true;
+  });
+
+  const canSendVoiceMessages = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    const permissions = channelPermissions();
+    if (typeof permissions.send_voice_messages === "boolean") {
+      return permissions.send_voice_messages;
+    }
+    return permissions.attach_files === true;
+  });
+
+  const voiceMemoControlEnabled = $derived(
+    () => voiceMemosEnabled && canSendVoiceMessages(),
+  );
+
+  const voiceMemoRestrictionMessage = $derived(() =>
+    voiceMemoControlEnabled()
+      ? null
+      : voiceMemosEnabled
+        ? "You do not have permission to send voice memos."
+        : "Voice memos are disabled in settings.",
+  );
 
   const createGroupContext = getContext<CreateGroupContext | undefined>(
     CREATE_GROUP_CONTEXT_KEY,
@@ -455,7 +565,7 @@
   });
 
   $effect(() => {
-    if (!voiceMemosEnabled && isRecording) {
+    if (!voiceMemoControlEnabled() && isRecording) {
       void stopRecording({ save: false, silent: true });
     }
   });
@@ -543,21 +653,23 @@
           }
         }
 
-        candidates.push({
-          id: "@everyone",
-          name: "@everyone",
-          kind: "special",
-          specialKey: "everyone",
-          searchText: "everyone",
-        });
+        if (canMentionEveryone()) {
+          candidates.push({
+            id: "@everyone",
+            name: "@everyone",
+            kind: "special",
+            specialKey: "everyone",
+            searchText: "everyone",
+          });
 
-        candidates.push({
-          id: "@here",
-          name: "@here",
-          kind: "special",
-          specialKey: "here",
-          searchText: "here",
-        });
+          candidates.push({
+            id: "@here",
+            name: "@here",
+            kind: "special",
+            specialKey: "here",
+            searchText: "here",
+          });
+        }
       }
     }
 
@@ -605,6 +717,9 @@
   };
 
   const toggleComposerEmojiPicker = () => {
+    if (!canUseComposerEmoji()) {
+      return;
+    }
     if (showComposerEmojiPicker) {
       closeComposerEmojiPicker();
       return;
@@ -642,6 +757,9 @@
   };
 
   const handleComposerEmojiSelect = (emoji: string) => {
+    if (!canUseComposerEmoji()) {
+      return;
+    }
     insertEmojiIntoComposer(emoji);
     closeComposerEmojiPicker();
   };
@@ -679,6 +797,10 @@
   );
 
   const updateMentionSuggestions = (cursorPosition?: number) => {
+    if (!canSendMessages()) {
+      mentionSuggestions.close();
+      return;
+    }
     const candidates = mentionableMembers();
     if (!candidates.length) {
       mentionSuggestions.close();
@@ -700,6 +822,9 @@
   };
 
   const handleComposerFocus = () => {
+    if (!canSendMessages()) {
+      return;
+    }
     if (!typingActive) {
       typingActive = true;
       void chatStore.sendTypingIndicator(true);
@@ -709,6 +834,9 @@
   };
 
   const handleComposerInput = (event?: Event) => {
+    if (!canSendMessages()) {
+      return;
+    }
     if (!typingActive) {
       typingActive = true;
       void chatStore.sendTypingIndicator(true);
@@ -844,6 +972,9 @@
   };
 
   const handleComposerKeydown = (event: KeyboardEvent) => {
+    if (!canSendMessages()) {
+      return;
+    }
     const state = get(mentionSuggestions);
     if (state.active) {
       if (event.key === "ArrowDown") {
@@ -1740,8 +1871,13 @@
   }
 
   async function handleMicClick() {
-    if (!voiceMemosEnabled) {
-      toasts.addToast("Voice memos are disabled in settings.", "info");
+    if (!voiceMemoControlEnabled() && !isRecording) {
+      const message =
+        voiceMemoRestrictionMessage() ??
+        (voiceMemosEnabled
+          ? "You do not have permission to send voice memos."
+          : "Voice memos are disabled in settings.");
+      toasts.addToast(message, "info");
       return;
     }
 
@@ -1826,14 +1962,27 @@
   }
 
   function addAttachments(newFiles: File[]) {
+    if (!canAttachFiles()) {
+      toasts.addToast(
+        "You do not have permission to attach files in this channel.",
+        "warning",
+      );
+      return;
+    }
+
     if (!newFiles.length) return;
 
     let filesToProcess = newFiles;
 
-    if (!voiceMemosEnabled) {
+    if (!voiceMemoControlEnabled()) {
       const allowed = newFiles.filter((file) => !isVoiceMemoFile(file));
       if (allowed.length !== newFiles.length) {
-        toasts.addToast("Voice memos are disabled in settings.", "info");
+        const message =
+          voiceMemoRestrictionMessage() ??
+          (voiceMemosEnabled
+            ? "You do not have permission to send voice memos."
+            : "Voice memos are disabled in settings.");
+        toasts.addToast(message, "info");
       }
       filesToProcess = allowed;
     }
@@ -1860,6 +2009,13 @@
   async function sendMessage(event: Event) {
     event.preventDefault();
     mentionSuggestions.close();
+    if (!canSendMessages()) {
+      toasts.addToast(
+        "You do not have permission to send messages in this channel.",
+        "warning",
+      );
+      return;
+    }
     if (
       (messageInput.trim() === "" && attachedFiles.length === 0) ||
       !chat ||
@@ -2465,10 +2621,14 @@
     emoji,
     action: `react_${emoji}` as const,
   }));
-  const reactionMenuItems = reactionOptions.map(({ emoji, action }) => ({
-    label: `React ${emoji}`,
-    action,
-  }));
+  const reactionMenuItems = $derived(() =>
+    canAddMessageReactions()
+      ? reactionOptions.map(({ emoji, action }) => ({
+          label: `React ${emoji}`,
+          action,
+        }))
+      : [],
+  );
   const reactionActionMap = new Map(
     reactionOptions.map(({ action, emoji }) => [action, emoji] as const),
   );
@@ -2478,16 +2638,27 @@
   let reactionPickerMessageId = $state<string | null>(null);
   let reactionPickerActivator: HTMLButtonElement | null = null;
 
-  const baseMessageMenuItems = [
-    { label: "Copy Message", action: "copy_message" },
-    { label: "Reply", action: "reply_message" },
-  ];
+  const baseMessageMenuItems = $derived(() => {
+    const items = [{ label: "Copy Message", action: "copy_message" }];
+    if (canSendMessages()) {
+      items.push({ label: "Reply", action: "reply_message" });
+    }
+    return items;
+  });
 
   function handleMessageMenuAction({ action }: { action: string }) {
     if (!selectedMsg) return;
 
     const reactionEmoji = reactionActionMap.get(action as ReactionAction);
     if (reactionEmoji) {
+      if (!canAddMessageReactions()) {
+        toasts.addToast(
+          "You do not have permission to add reactions in this channel.",
+          "warning",
+        );
+        showMsgMenu = false;
+        return;
+      }
       chatStore.addReaction(selectedMsg.chatId, selectedMsg.id, reactionEmoji);
       showMsgMenu = false;
       return;
@@ -2500,6 +2671,13 @@
         });
         break;
       case "reply_message":
+        if (!canSendMessages()) {
+          toasts.addToast(
+            "You do not have permission to send messages in this channel.",
+            "warning",
+          );
+          break;
+        }
         enterReplyMode(selectedMsg);
         break;
       case "edit_message":
@@ -2517,6 +2695,13 @@
         }
         break;
       case "pin_message":
+        if (!canManageMessages()) {
+          toasts.addToast(
+            "You do not have permission to manage messages in this channel.",
+            "warning",
+          );
+          break;
+        }
         void chatStore
           .pinMessage(selectedMsg.chatId, selectedMsg.id)
           .catch((error) => {
@@ -2525,6 +2710,13 @@
           });
         break;
       case "unpin_message":
+        if (!canManageMessages()) {
+          toasts.addToast(
+            "You do not have permission to manage messages in this channel.",
+            "warning",
+          );
+          break;
+        }
         void chatStore
           .unpinMessage(selectedMsg.chatId, selectedMsg.id)
           .catch((error) => {
@@ -2539,6 +2731,9 @@
   }
 
   function openReactionPicker(event: MouseEvent, msg: Message) {
+    if (!canAddMessageReactions()) {
+      return;
+    }
     const button = event.currentTarget as HTMLButtonElement | null;
     if (!button) return;
 
@@ -2562,6 +2757,10 @@
 
   function handleReactionSelect(emoji: string) {
     if (!reactionPickerChatId || !reactionPickerMessageId) return;
+    if (!canAddMessageReactions()) {
+      closeReactionPicker();
+      return;
+    }
     chatStore.addReaction(reactionPickerChatId, reactionPickerMessageId, emoji);
     closeReactionPicker();
   }
@@ -3102,9 +3301,15 @@
                       {#each Object.entries(msg.reactions) as [emoji, users] (emoji)}
                         <button
                           type="button"
-                          class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
+                          class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500"
+                          class:cursor-pointer={canAddMessageReactions()}
+                          class:cursor-not-allowed={!canAddMessageReactions()}
+                          class:opacity-50={!canAddMessageReactions()}
                           aria-pressed={users.includes(myId || "")}
                           onclick={() => {
+                            if (!canAddMessageReactions()) {
+                              return;
+                            }
                             if (users.includes(myId || "")) {
                               chatStore.removeReaction(
                                 msg.chatId,
@@ -3115,39 +3320,43 @@
                               chatStore.addReaction(msg.chatId, msg.id, emoji);
                             }
                           }}
+                          disabled={!canAddMessageReactions()}
+                          aria-disabled={!canAddMessageReactions()}
                         >
                           {emoji}
                           {users.length}
                         </button>
                       {/each}
-                      <div class="relative inline-block">
-                        <button
-                          type="button"
-                          class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
-                          onclick={(event) => openReactionPicker(event, msg)}
-                          aria-label="Add reaction"
-                          aria-haspopup="dialog"
-                          aria-expanded={reactionPickerMessageId === msg.id}
-                        >
-                          + React
-                        </button>
-                        {#if reactionPickerMessageId === msg.id}
-                          <div
-                            class="absolute left-0 z-30 mt-2"
-                            role="presentation"
-                            onclick={(event) => event.stopPropagation()}
-                            onkeydown={(event) => event.stopPropagation()}
+                      {#if canAddMessageReactions()}
+                        <div class="relative inline-block">
+                          <button
+                            type="button"
+                            class="px-2 py-0.5 text-sm rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-pointer"
+                            onclick={(event) => openReactionPicker(event, msg)}
+                            aria-label="Add reaction"
+                            aria-haspopup="dialog"
+                            aria-expanded={reactionPickerMessageId === msg.id}
                           >
-                            <EmojiPicker
-                              on:select={(event) =>
-                                handleReactionSelect(event.detail.emoji)}
-                              on:close={closeReactionPicker}
-                            />
-                          </div>
-                        {/if}
-                      </div>
+                            + React
+                          </button>
+                          {#if reactionPickerMessageId === msg.id}
+                            <div
+                              class="absolute left-0 z-30 mt-2"
+                              role="presentation"
+                              onclick={(event) => event.stopPropagation()}
+                              onkeydown={(event) => event.stopPropagation()}
+                            >
+                              <EmojiPicker
+                                on:select={(event) =>
+                                  handleReactionSelect(event.detail.emoji)}
+                                on:close={closeReactionPicker}
+                              />
+                            </div>
+                          {/if}
+                        </div>
+                      {/if}
                     </div>
-                  {:else}
+                  {:else if canAddMessageReactions()}
                     <div class="mt-1">
                       <div class="relative inline-block">
                         <button
@@ -3322,7 +3531,7 @@
             <span class="flex-1">{notice.message}</span>
           </div>
         {/if}
-        {#if attachedFiles.length > 0}
+        {#if canSendMessages() && attachedFiles.length > 0}
           <div class="p-2 mb-2 border-b border-zinc-700/50">
             <p class="text-sm font-semibold mb-2 text-zinc-300">Attachments</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
@@ -3332,184 +3541,225 @@
             </div>
           </div>
         {/if}
-        <form
-          onsubmit={sendMessage}
-          class="flex items-center bg-muted/50 rounded-lg pr-2 py-1 border border-transparent focus-within:border-zinc-600 transition-all"
-          onpaste={handlePaste}
-          ondrop={handleDrop}
-          ondragover={handleDragOver}
-        >
-          <input
-            type="file"
-            multiple
-            bind:this={fileInput}
-            onchange={handleFileSelect}
-            class="hidden"
-          />
-          <button
-            type="button"
-            onclick={() => fileInput?.click()}
-            class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
-            aria-label="Attach files"
+        {#if canSendMessages()}
+          <form
+            onsubmit={sendMessage}
+            class="flex items-center bg-muted/50 rounded-lg pr-2 py-1 border border-transparent focus-within:border-zinc-600 transition-all"
+            onpaste={handlePaste}
+            ondrop={handleDrop}
+            ondragover={handleDragOver}
           >
-            <Link size={12} />
-          </button>
-          <div class="relative ml-1">
+            <input
+              type="file"
+              multiple
+              bind:this={fileInput}
+              onchange={handleFileSelect}
+              class="hidden"
+              aria-disabled={!canAttachFiles()}
+            />
             <button
               type="button"
-              class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
-              aria-label="Insert emoji"
-              aria-haspopup="dialog"
-              aria-expanded={showComposerEmojiPicker}
-              aria-controls={composerEmojiPickerId}
-              onclick={toggleComposerEmojiPicker}
-              bind:this={composerEmojiButton}
-              title="Insert emoji"
+              onclick={() => {
+                if (!canAttachFiles()) {
+                  return;
+                }
+                fileInput?.click();
+              }}
+              class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
+              class:hover:text-white={canAttachFiles()}
+              class:cursor-pointer={canAttachFiles()}
+              class:cursor-not-allowed={!canAttachFiles()}
+              class:opacity-50={!canAttachFiles()}
+              aria-disabled={!canAttachFiles()}
+              disabled={!canAttachFiles()}
+              aria-label={canAttachFiles()
+                ? "Attach files"
+                : "File attachments are disabled in this channel"}
+              title={canAttachFiles()
+                ? "Attach files"
+                : "You do not have permission to attach files in this channel."}
             >
-              <Smile size={12} />
+              <Link size={12} />
             </button>
-            {#if showComposerEmojiPicker}
-              <div
-                class="absolute bottom-full left-0 z-30 mb-2"
-                id={composerEmojiPickerId}
-                bind:this={composerEmojiPickerEl}
-                role="presentation"
+            <div class="relative ml-1">
+              <button
+                type="button"
+                class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
+                class:hover:text-white={canUseComposerEmoji()}
+                class:cursor-pointer={canUseComposerEmoji()}
+                class:cursor-not-allowed={!canUseComposerEmoji()}
+                class:opacity-50={!canUseComposerEmoji()}
+                aria-label={canUseComposerEmoji()
+                  ? "Insert emoji"
+                  : "Emoji insertion is disabled in this channel"}
+                aria-haspopup="dialog"
+                aria-expanded={showComposerEmojiPicker}
+                aria-controls={composerEmojiPickerId}
+                onclick={toggleComposerEmojiPicker}
+                bind:this={composerEmojiButton}
+                disabled={!canUseComposerEmoji()}
+                aria-disabled={!canUseComposerEmoji()}
+                title={canUseComposerEmoji()
+                  ? "Insert emoji"
+                  : "You do not have permission to use emojis in this channel."}
               >
-                <EmojiPicker
-                  on:select={(event) =>
-                    handleComposerEmojiSelect(event.detail.emoji)}
-                  on:close={() =>
-                    closeComposerEmojiPicker({ focusComposer: true })}
-                />
-              </div>
-            {/if}
-          </div>
-          <div class="relative mx-2 flex-1">
-            <textarea
-              rows="1"
-              placeholder={`Message ${
-                chat.type === "dm"
-                  ? `@${chat.friend.name}`
-                  : chat.type === "group"
-                    ? chat.name
-                    : `#${chat.name}`
-              }`}
-              class="w-full bg-transparent resize-none focus:outline-none text-white placeholder-zinc-400"
-              bind:value={messageInput}
-              bind:this={textareaRef}
-              oninput={(event) => {
-                adjustTextareaHeight();
-                handleComposerInput(event);
-              }}
-              onfocus={(event) => {
-                adjustTextareaHeight();
-                handleComposerFocus();
-              }}
-              onblur={handleComposerBlur}
-              onkeyup={handleComposerKeyup}
-              onpointerup={handleComposerPointerUp}
-              title="Press Enter to send. Use Shift+Enter for a newline."
-              onkeydown={handleComposerKeydown}
-            ></textarea>
-            {#if $mentionSuggestions.active}
-              <div
-                class="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-hidden rounded-md border border-zinc-700/70 bg-zinc-900/95 shadow-lg backdrop-blur"
-              >
-                <ul class="max-h-48 overflow-auto py-1">
-                  {#each $mentionSuggestions.suggestions as suggestion, index (suggestion.id)}
-                    <li>
-                      <button
-                        type="button"
-                        class={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white/90 hover:bg-zinc-700/60 ${
-                          index === $mentionSuggestions.activeIndex
-                            ? "bg-zinc-700/80"
-                            : ""
-                        }`}
-                        onpointerdown={() => handleMentionSelection(index)}
-                        onclick={() => handleMentionSelection(index)}
-                      >
-                        {#if suggestion.avatar}
-                          <img
-                            src={suggestion.avatar}
-                            alt={suggestion.name}
-                            class="h-6 w-6 rounded-full object-cover"
-                          />
-                        {:else}
-                          <div
-                            class={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${getMentionCandidateBadgeClasses(suggestion)}`}
-                          >
-                            {getMentionCandidateBadge(suggestion)}
-                          </div>
-                        {/if}
-                        <div class="min-w-0">
-                          <p class="truncate text-sm font-medium text-white">
-                            {formatMentionCandidateLabel(suggestion)}
-                          </p>
-                          {#if suggestion.kind === "user" && suggestion.tag}
-                            <p class="text-xs text-zinc-400">
-                              @{suggestion.tag}
-                            </p>
-                          {/if}
-                        </div>
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-          </div>
-          {#if isRecording}
-            <div
-              class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400"
-            >
-              <span
-                class="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
-                aria-hidden="true"
-              ></span>
-              <span>{formatRecordingDuration(recordingDuration)}</span>
+                <Smile size={12} />
+              </button>
+              {#if showComposerEmojiPicker}
+                <div
+                  class="absolute bottom-full left-0 z-30 mb-2"
+                  id={composerEmojiPickerId}
+                  bind:this={composerEmojiPickerEl}
+                  role="presentation"
+                >
+                  <EmojiPicker
+                    on:select={(event) =>
+                      handleComposerEmojiSelect(event.detail.emoji)}
+                    on:close={() =>
+                      closeComposerEmojiPicker({ focusComposer: true })}
+                  />
+                </div>
+              {/if}
             </div>
-          {/if}
-          <button
-            type="button"
-            class="flex items-center justify-center p-2 text-muted-foreground hover:text-white cursor-pointer rounded-full transition-colors"
-            class:text-red-400={isRecording}
-            aria-pressed={isRecording}
-            onclick={handleMicClick}
-            class:opacity-50={!voiceMemosEnabled}
-            class:cursor-not-allowed={!voiceMemosEnabled}
-            aria-disabled={!voiceMemosEnabled}
-            aria-label={voiceMemosEnabled
-              ? isRecording
-                ? "Stop recording voice message"
-                : "Record voice message"
-              : "Voice memos are disabled in settings"}
-            title={voiceMemosEnabled
-              ? isRecording
-                ? "Stop recording voice message"
-                : "Record voice message"
-              : "Voice memos are disabled in settings"}
-          >
+            <div class="relative mx-2 flex-1">
+              <textarea
+                rows="1"
+                placeholder={`Message ${
+                  chat.type === "dm"
+                    ? `@${chat.friend.name}`
+                    : chat.type === "group"
+                      ? chat.name
+                      : `#${chat.name}`
+                }`}
+                class="w-full bg-transparent resize-none focus:outline-none text-white placeholder-zinc-400"
+                bind:value={messageInput}
+                bind:this={textareaRef}
+                oninput={(event) => {
+                  adjustTextareaHeight();
+                  handleComposerInput(event);
+                }}
+                onfocus={(event) => {
+                  adjustTextareaHeight();
+                  handleComposerFocus();
+                }}
+                onblur={handleComposerBlur}
+                onkeyup={handleComposerKeyup}
+                onpointerup={handleComposerPointerUp}
+                title="Press Enter to send. Use Shift+Enter for a newline."
+                onkeydown={handleComposerKeydown}
+              ></textarea>
+              {#if $mentionSuggestions.active}
+                <div
+                  class="absolute bottom-full left-0 right-0 z-30 mb-2 overflow-hidden rounded-md border border-zinc-700/70 bg-zinc-900/95 shadow-lg backdrop-blur"
+                >
+                  <ul class="max-h-48 overflow-auto py-1">
+                    {#each $mentionSuggestions.suggestions as suggestion, index (suggestion.id)}
+                      <li>
+                        <button
+                          type="button"
+                          class={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-white/90 hover:bg-zinc-700/60 ${
+                            index === $mentionSuggestions.activeIndex
+                              ? "bg-zinc-700/80"
+                              : ""
+                          }`}
+                          onpointerdown={() => handleMentionSelection(index)}
+                          onclick={() => handleMentionSelection(index)}
+                        >
+                          {#if suggestion.avatar}
+                            <img
+                              src={suggestion.avatar}
+                              alt={suggestion.name}
+                              class="h-6 w-6 rounded-full object-cover"
+                            />
+                          {:else}
+                            <div
+                              class={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${getMentionCandidateBadgeClasses(suggestion)}`}
+                            >
+                              {getMentionCandidateBadge(suggestion)}
+                            </div>
+                          {/if}
+                          <div class="min-w-0">
+                            <p class="truncate text-sm font-medium text-white">
+                              {formatMentionCandidateLabel(suggestion)}
+                            </p>
+                            {#if suggestion.kind === "user" && suggestion.tag}
+                              <p class="text-xs text-zinc-400">
+                                @{suggestion.tag}
+                              </p>
+                            {/if}
+                          </div>
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+            </div>
             {#if isRecording}
-              <Square size={12} />
-            {:else}
-              <Mic size={12} />
+              <div
+                class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400"
+              >
+                <span
+                  class="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
+                  aria-hidden="true"
+                ></span>
+                <span>{formatRecordingDuration(recordingDuration)}</span>
+              </div>
             {/if}
-          </button>
-          <button
-            type="submit"
-            class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
-            disabled={sending || connectivitySendBlocked()}
-            aria-busy={sending}
-            aria-label={connectivitySendBlocked() || connectivityQueueing()
-              ? (connectivitySendBlockedMessage() ?? "Send message")
-              : "Send message"}
-            title={connectivitySendBlocked() || connectivityQueueing()
-              ? (connectivitySendBlockedMessage() ?? "Connectivity unavailable")
-              : "Send message"}
+            <button
+              type="button"
+              class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
+              class:hover:text-white={voiceMemoControlEnabled()}
+              class:cursor-pointer={voiceMemoControlEnabled()}
+              class:cursor-not-allowed={!voiceMemoControlEnabled()}
+              class:opacity-50={!voiceMemoControlEnabled()}
+              class:text-red-400={isRecording}
+              aria-pressed={isRecording}
+              onclick={handleMicClick}
+              aria-disabled={!voiceMemoControlEnabled()}
+              disabled={!voiceMemoControlEnabled()}
+              aria-label={voiceMemoControlEnabled()
+                ? isRecording
+                  ? "Stop recording voice message"
+                  : "Record voice message"
+                : voiceMemoRestrictionMessage() ?? "Voice memos are unavailable"}
+              title={voiceMemoControlEnabled()
+                ? isRecording
+                  ? "Stop recording voice message"
+                  : "Record voice message"
+                : voiceMemoRestrictionMessage() ?? "Voice memos are unavailable"}
+            >
+              {#if isRecording}
+                <Square size={12} />
+              {:else}
+                <Mic size={12} />
+              {/if}
+            </button>
+            <button
+              type="submit"
+              class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
+              disabled={sending || connectivitySendBlocked()}
+              aria-busy={sending}
+              aria-label={connectivitySendBlocked() || connectivityQueueing()
+                ? (connectivitySendBlockedMessage() ?? "Send message")
+                : "Send message"}
+              title={connectivitySendBlocked() || connectivityQueueing()
+                ? (connectivitySendBlockedMessage() ?? "Connectivity unavailable")
+                : "Send message"}
+            >
+              <SendHorizontal size={12} />
+            </button>
+          </form>
+        {:else}
+          <div
+            class="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100"
+            role="status"
+            aria-live="polite"
           >
-            <SendHorizontal size={12} />
-          </button>
-        </form>
+            <CircleAlert class="h-4 w-4" aria-hidden="true" />
+            <span>You do not have permission to send messages in this channel.</span>
+          </div>
+        {/if}
       </footer>
     </div>
   {:else}
@@ -3552,23 +3802,25 @@
     y={msgMenuY}
     show={showMsgMenu}
     menuItems={[
-      ...baseMessageMenuItems,
-      ...(selectedMsg.pinned
-        ? [
-            {
-              label: "Unpin Message",
-              action: "unpin_message",
-              disabled: selectedMsg.pending === true,
-            },
-          ]
-        : [
-            {
-              label: "Pin Message",
-              action: "pin_message",
-              disabled: selectedMsg.pending === true,
-            },
-          ]),
-      ...reactionMenuItems,
+      ...baseMessageMenuItems(),
+      ...(canManageMessages()
+        ? selectedMsg.pinned
+          ? [
+              {
+                label: "Unpin Message",
+                action: "unpin_message",
+                disabled: selectedMsg.pending === true,
+              },
+            ]
+          : [
+              {
+                label: "Pin Message",
+                action: "pin_message",
+                disabled: selectedMsg.pending === true,
+              },
+            ]
+        : []),
+      ...reactionMenuItems(),
       ...(selectedMsg.senderId === $userStore.me?.id
         ? [
             {
