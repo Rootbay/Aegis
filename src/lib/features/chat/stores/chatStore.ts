@@ -129,6 +129,9 @@ export interface ChatMetadata {
   lastMessage: Message | null;
   lastActivityAt: string | null;
   unreadCount: number;
+  fallbackUserId?: string | null;
+  fallbackName?: string | null;
+  fallbackAvatar?: string | null;
 }
 
 export type ChatPreferenceOverrides = {
@@ -244,7 +247,9 @@ interface ChatStore {
   handleGroupMemberLeft: (groupId: string, memberId: string) => void;
   handleGroupMembersAdded: (groupId: string, memberIds: string[]) => void;
   groupChats: Readable<Map<string, GroupChatSummary>>;
-  searchMessages: (options: SearchMessagesOptions) => Promise<SearchMessagesResult>;
+  searchMessages: (
+    options: SearchMessagesOptions,
+  ) => Promise<SearchMessagesResult>;
 }
 
 type ChatStoreOptions = {
@@ -285,11 +290,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
   const typingByChatIdStore = writable<Map<string, string[]>>(new Map());
-  const chatPreferenceOverridesRecord =
-    persistentStore<ChatPreferenceState>(
-      CHAT_PREFERENCE_OVERRIDES_KEY,
-      {},
-    );
+  const chatPreferenceOverridesRecord = persistentStore<ChatPreferenceState>(
+    CHAT_PREFERENCE_OVERRIDES_KEY,
+    {},
+  );
   const chatPreferenceOverridesReadable = derived(
     chatPreferenceOverridesRecord,
     ($record): Map<string, ChatPreferenceOverrides> => {
@@ -306,7 +310,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           normalized.readReceiptsEnabled = overrides.readReceiptsEnabled;
         }
         if (typeof overrides.typingIndicatorsEnabled === "boolean") {
-          normalized.typingIndicatorsEnabled = overrides.typingIndicatorsEnabled;
+          normalized.typingIndicatorsEnabled =
+            overrides.typingIndicatorsEnabled;
         }
         if (
           typeof normalized.readReceiptsEnabled === "boolean" ||
@@ -319,23 +324,163 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     },
   );
 
-  let chatPreferenceOverridesSnapshot =
-    new Map<string, ChatPreferenceOverrides>();
+  let chatPreferenceOverridesSnapshot = new Map<
+    string,
+    ChatPreferenceOverrides
+  >();
   chatPreferenceOverridesReadable.subscribe((value) => {
     chatPreferenceOverridesSnapshot = value;
   });
 
+  const FALLBACK_PARTICIPANT_AVATAR = (id: string) =>
+    "https://api.dicebear.com/8.x/bottts-neutral/svg?seed=" + id;
+  const fallbackParticipantName = (id: string) =>
+    id && id.length > 0 ? `User-${id.slice(0, 4)}` : "Unknown user";
+
+  type ParticipantProfile = {
+    id: string;
+    name: string;
+    avatar: string;
+  };
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+  const participantProfilesStore = writable<Map<string, ParticipantProfile>>(
+    new Map(),
+  );
+
+  const normalizeParticipantProfile = (
+    userId: string,
+    profile: unknown,
+    fallback: unknown,
+  ): ParticipantProfile => {
+    const profileRecord = isRecord(profile) ? profile : undefined;
+    const fallbackRecord = isRecord(fallback) ? fallback : undefined;
+
+    const nameCandidates = [
+      profileRecord?.username,
+      profileRecord?.name,
+      profileRecord?.displayName,
+      profileRecord?.display_name,
+      profileRecord?.nickname,
+      fallbackRecord?.sender_name,
+      fallbackRecord?.senderName,
+      fallbackRecord?.sender_username,
+      fallbackRecord?.senderUsername,
+    ].filter((value): value is string => typeof value === "string");
+
+    const resolvedName =
+      nameCandidates
+        .map((value) => value.trim())
+        .find((value) => value.length > 0) ?? null;
+
+    const avatarCandidates = [
+      profileRecord?.avatar,
+      profileRecord?.avatarUrl,
+      profileRecord?.avatar_url,
+      profileRecord?.pfpUrl,
+      profileRecord?.pfp_url,
+      profileRecord?.image,
+      profileRecord?.imageUrl,
+      profileRecord?.image_url,
+      fallbackRecord?.sender_avatar,
+      fallbackRecord?.senderAvatar,
+      fallbackRecord?.sender_avatar_url,
+      fallbackRecord?.senderAvatarUrl,
+    ].filter((value): value is string => typeof value === "string");
+
+    const resolvedAvatar =
+      avatarCandidates
+        .map((value) => value.trim())
+        .find((value) => value.length > 0) ?? null;
+
+    return {
+      id: userId,
+      name: resolvedName ?? fallbackParticipantName(userId),
+      avatar: resolvedAvatar ?? FALLBACK_PARTICIPANT_AVATAR(userId),
+    };
+  };
+
+  const updateParticipantProfileForChat = (
+    chatId: string,
+    userId: string | null | undefined,
+    profile: unknown,
+    fallback: unknown,
+  ) => {
+    const normalizedId =
+      typeof userId === "string" && userId.trim().length > 0
+        ? userId.trim()
+        : null;
+
+    if (!normalizedId) {
+      return;
+    }
+
+    const normalized = normalizeParticipantProfile(
+      normalizedId,
+      profile,
+      fallback,
+    );
+
+    participantProfilesStore.update((map) => {
+      const existing = map.get(chatId);
+      if (!existing) {
+        const next = new Map(map);
+        next.set(chatId, normalized);
+        return next;
+      }
+
+      if (existing.id !== normalized.id) {
+        const existingIsFallback =
+          existing.name === fallbackParticipantName(existing.id) &&
+          existing.avatar === FALLBACK_PARTICIPANT_AVATAR(existing.id);
+
+        if (!existingIsFallback) {
+          return map;
+        }
+
+        const next = new Map(map);
+        next.set(chatId, normalized);
+        return next;
+      }
+
+      const shouldUpdateName =
+        existing.name === fallbackParticipantName(existing.id) &&
+        normalized.name !== existing.name;
+      const shouldUpdateAvatar =
+        existing.avatar === FALLBACK_PARTICIPANT_AVATAR(existing.id) &&
+        normalized.avatar !== existing.avatar;
+
+      if (!shouldUpdateName && !shouldUpdateAvatar) {
+        return map;
+      }
+
+      const next = new Map(map);
+      next.set(chatId, {
+        ...existing,
+        name: shouldUpdateName ? normalized.name : existing.name,
+        avatar: shouldUpdateAvatar ? normalized.avatar : existing.avatar,
+      });
+      return next;
+    });
+  };
+
   const metadataByChatIdReadable = derived(
-    messagesByChatIdStore,
-    ($messages): Map<string, ChatMetadata> => {
+    [messagesByChatIdStore, participantProfilesStore],
+    ([$messages, $participants]): Map<string, ChatMetadata> => {
       const metadata = new Map<string, ChatMetadata>();
       for (const [chatId, messages] of $messages.entries()) {
+        const participant = $participants.get(chatId);
         if (!messages || messages.length === 0) {
           metadata.set(chatId, {
             chatId,
             lastMessage: null,
             lastActivityAt: null,
             unreadCount: 0,
+            fallbackUserId: participant?.id ?? null,
+            fallbackName: participant?.name ?? null,
+            fallbackAvatar: participant?.avatar ?? null,
           });
           continue;
         }
@@ -380,6 +525,25 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           lastMessage,
           lastActivityAt: normalizedActivity ?? null,
           unreadCount,
+          fallbackUserId: participant?.id ?? null,
+          fallbackName: participant?.name ?? null,
+          fallbackAvatar: participant?.avatar ?? null,
+        });
+      }
+
+      for (const [chatId, participant] of $participants.entries()) {
+        if (metadata.has(chatId)) {
+          continue;
+        }
+
+        metadata.set(chatId, {
+          chatId,
+          lastMessage: null,
+          lastActivityAt: null,
+          unreadCount: 0,
+          fallbackUserId: participant.id,
+          fallbackName: participant.name,
+          fallbackAvatar: participant.avatar,
         });
       }
 
@@ -1348,6 +1512,21 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       replySnapshot,
       authorType,
     };
+    const serverIdentifier = message.server_id ?? message.serverId ?? null;
+    if (!serverIdentifier) {
+      const currentUserId = get(userStore).me?.id ?? null;
+      if (normalized.senderId && normalized.senderId !== currentUserId) {
+        const payloadRecord = message as Record<string, unknown>;
+        const senderProfile =
+          payloadRecord["sender_profile"] ?? payloadRecord["senderProfile"];
+        updateParticipantProfileForChat(
+          normalized.chatId,
+          normalized.senderId,
+          senderProfile,
+          payloadRecord,
+        );
+      }
+    }
     return ensureMessageExpiry(normalized);
   };
 
@@ -1628,10 +1807,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
               !matchedPendingIds.has(msg.id) &&
               isOptimisticMatch(msg, incoming, selfId),
           );
-      const normalized = mergeOptimisticDetails(incoming, optimisticMatch);
-      if (optimisticMatch) {
-        matchedPendingIds.add(optimisticMatch.id);
-      }
+          const normalized = mergeOptimisticDetails(incoming, optimisticMatch);
+          if (optimisticMatch) {
+            matchedPendingIds.add(optimisticMatch.id);
+          }
           seen.add(normalized.id);
           deduped.push(normalized);
         }
@@ -2093,7 +2272,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
         const messagesMap = get(messagesByChatIdStore);
         const chatMessages = messagesMap.get(payload.messageChatId) ?? [];
-        const optimistic = chatMessages.find((message) => message.id === messageId);
+        const optimistic = chatMessages.find(
+          (message) => message.id === messageId,
+        );
 
         if (!optimistic) {
           retryableMessagePayloads.delete(messageId);
@@ -2874,6 +3055,18 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       insertRealtimeMessage(existing, newMessage, me?.id),
     );
 
+    if (!serverIdFromPayload && !channelIdFromPayload && !isSelfAuthored) {
+      const payloadRecord = message as Record<string, unknown>;
+      const senderProfile =
+        payloadRecord["sender_profile"] ?? payloadRecord["senderProfile"];
+      updateParticipantProfileForChat(
+        targetChatId,
+        sender,
+        senderProfile,
+        payloadRecord,
+      );
+    }
+
     if (!isSelfAuthored) {
       const currentSettings = get(settings);
       const { label, type } = formatChatLabel(
@@ -3007,7 +3200,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const searchMessages = async (
     options: SearchMessagesOptions,
   ): Promise<SearchMessagesResult> => {
-    const { chatId, query, filters, cursor = null, limit = PAGE_LIMIT } = options;
+    const {
+      chatId,
+      query,
+      filters,
+      cursor = null,
+      limit = PAGE_LIMIT,
+    } = options;
     const payload: Record<string, unknown> = {
       chatId,
       chat_id: chatId,
@@ -3037,7 +3236,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     const backendMessages = Array.isArray(response)
       ? response
-      : response?.messages ?? response?.results ?? [];
+      : (response?.messages ?? response?.results ?? []);
 
     const mapped = (
       await Promise.all(
@@ -3071,11 +3270,16 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     });
 
     const hasMore = Boolean(
-      Array.isArray(response) ? false : response?.has_more ?? response?.hasMore,
+      Array.isArray(response)
+        ? false
+        : (response?.has_more ?? response?.hasMore),
     );
     const nextCursorRaw = Array.isArray(response)
       ? null
-      : response?.next_cursor ?? response?.nextCursor ?? response?.cursor ?? null;
+      : (response?.next_cursor ??
+        response?.nextCursor ??
+        response?.cursor ??
+        null);
 
     return {
       received: mapped.length,
@@ -3144,8 +3348,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return mutated ? next : existing;
     });
 
-    const { readReceiptsEnabled } =
-      getResolvedChatPreferences(messageChatId);
+    const { readReceiptsEnabled } = getResolvedChatPreferences(messageChatId);
     if (!readReceiptsEnabled) {
       return;
     }
@@ -3366,6 +3569,14 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return next;
     });
     loadingStateByChatStore.update((map) => {
+      if (!map.has(chatId)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.delete(chatId);
+      return next;
+    });
+    participantProfilesStore.update((map) => {
       if (!map.has(chatId)) {
         return map;
       }

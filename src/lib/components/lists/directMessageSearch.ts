@@ -5,8 +5,7 @@ export interface SearchResults {
   groups: DirectMessageListEntry[];
 }
 
-const isDirectMessage = (entry: DirectMessageListEntry) =>
-  entry.type === "dm" && entry.friend;
+const isDirectMessage = (entry: DirectMessageListEntry) => entry.type === "dm";
 
 const isGroupChat = (entry: DirectMessageListEntry) => entry.type === "group";
 
