@@ -58,6 +58,11 @@
   import LinkPreview from "$lib/features/chat/components/LinkPreview.svelte";
   import { extractFirstLink } from "$lib/features/chat/utils/linkPreviews";
   import {
+    renderMessageContent,
+    type FormattedMessageSegment,
+    mapFriendsById,
+  } from "$lib/features/chat/utils/renderMessageContent";
+  import {
     clearChatDraft,
     loadChatDraft,
     saveChatDraft,
@@ -429,6 +434,7 @@
   let msgMenuY = $state(0);
   let selectedMsg: Message | null = $state(null);
   let memberById = $state<Map<string, User>>(new Map());
+  let friendById = $state<Map<string, Friend>>(new Map());
   let editingMessageId = $state<string | null>(null);
   let editingDraft = $state("");
   let editingSaving = $state(false);
@@ -942,6 +948,14 @@
     })();
   });
 
+  const unsubscribeFriends = friendStore.subscribe((state) => {
+    friendById = mapFriendsById(state.friends ?? []);
+  });
+
+  onDestroy(() => {
+    unsubscribeFriends();
+  });
+
   $effect(() => {
     if ((chat?.type === "channel" || chat?.type === "group") && chat.members) {
       memberById = new Map(
@@ -995,6 +1009,40 @@
 
   const myId = $userStore.me?.id;
   const chatSearchQueryStore = derived(chatSearchStore, (state) => state.query);
+
+  function resolveMentionName(userId: string): string {
+    if (!userId) {
+      return "";
+    }
+
+    if (userId === myId) {
+      return $userStore.me?.name ?? "You";
+    }
+
+    const member = memberById.get(userId);
+    if (member?.name) {
+      return member.name;
+    }
+
+    if (chat?.type === "dm") {
+      if (chat.friend.id === userId) {
+        return chat.friend.name;
+      }
+    }
+
+    const friend = friendById.get(userId);
+    if (friend?.name) {
+      return friend.name;
+    }
+
+    return userId;
+  }
+
+  function formatMessageSegments(
+    content: string | null | undefined,
+  ): FormattedMessageSegment[] {
+    return renderMessageContent(content ?? "", { resolveMentionName });
+  }
 
   function focusMatch(index: number) {
     const { matches } = get(chatSearchStore);
@@ -2617,20 +2665,85 @@
                           </div>
                         </form>
                       {:else if $chatSearchStore.query}
-                        {#each highlightText(msg.content, $chatSearchStore.query) as part, i (i)}
-                          {#if part.match}
-                            <mark class="bg-yellow-500/60 text-white"
-                              >{part.text}</mark
-                            >
-                          {:else}
-                            {part.text}
-                          {/if}
-                        {/each}
+                        <p class="text-base whitespace-pre-wrap wrap-break-word">
+                          {#each highlightText(
+                            msg.content,
+                            $chatSearchStore.query,
+                          ) as part, i (i)}
+                            {@const segments = formatMessageSegments(part.text)}
+                            {#if part.match}
+                              <mark class="bg-yellow-500/60 text-white">
+                                {#each segments as segment, segIndex (segIndex)}
+                                  {#if segment.type === "text"}
+                                    {segment.text}
+                                  {:else if segment.type === "mention"}
+                                    <span
+                                      class="font-semibold text-white"
+                                      data-mention-id={segment.id}
+                                    >
+                                      @{segment.name}
+                                    </span>
+                                  {:else if segment.type === "link"}
+                                    <a
+                                      href={segment.url}
+                                      rel="noreferrer noopener"
+                                      target="_blank"
+                                      class="underline break-words text-cyan-200 hover:text-white"
+                                    >
+                                      {segment.label}
+                                    </a>
+                                  {/if}
+                                {/each}
+                              </mark>
+                            {:else}
+                              {#each segments as segment, segIndex (segIndex)}
+                                {#if segment.type === "text"}
+                                  {segment.text}
+                                {:else if segment.type === "mention"}
+                                  <span
+                                    class="font-semibold text-white"
+                                    data-mention-id={segment.id}
+                                  >
+                                    @{segment.name}
+                                  </span>
+                                {:else if segment.type === "link"}
+                                  <a
+                                    href={segment.url}
+                                    rel="noreferrer noopener"
+                                    target="_blank"
+                                    class="underline break-words text-cyan-200 hover:text-white"
+                                  >
+                                    {segment.label}
+                                  </a>
+                                {/if}
+                              {/each}
+                            {/if}
+                          {/each}
+                        </p>
                       {:else}
-                        <p
-                          class="text-base whitespace-pre-wrap wrap-break-word"
-                        >
-                          {msg.content}
+                        {@const segments = formatMessageSegments(msg.content)}
+                        <p class="text-base whitespace-pre-wrap wrap-break-word">
+                          {#each segments as segment, segIndex (segIndex)}
+                            {#if segment.type === "text"}
+                              {segment.text}
+                            {:else if segment.type === "mention"}
+                              <span
+                                class="font-semibold text-white"
+                                data-mention-id={segment.id}
+                              >
+                                @{segment.name}
+                              </span>
+                            {:else if segment.type === "link"}
+                              <a
+                                href={segment.url}
+                                rel="noreferrer noopener"
+                                target="_blank"
+                                class="underline break-words text-cyan-200 hover:text-white"
+                              >
+                                {segment.label}
+                              </a>
+                            {/if}
+                          {/each}
                         </p>
                         {#if $settings.enableLinkPreviews}
                           {@const previewUrl = extractFirstLink(
