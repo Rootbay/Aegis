@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import {
+    Bot,
     CircleAlert,
     Link,
     LoaderCircle,
@@ -12,6 +13,7 @@
     Square,
     Timer,
     Users,
+    Webhook,
     Wifi,
   } from "@lucide/svelte";
   import { invoke } from "@tauri-apps/api/core";
@@ -34,7 +36,13 @@
     hasMoreByChatId,
     loadingStateByChat,
   } from "$lib/features/chat/stores/chatStore";
-  import { getContext, onDestroy, onMount, tick } from "svelte";
+  import {
+    getContext,
+    onDestroy,
+    onMount,
+    tick,
+    type ComponentType,
+  } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { generateCollaborationDocumentId } from "$lib/features/collaboration/collabDocumentStore";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
@@ -73,6 +81,12 @@
     type MentionCandidate,
   } from "$lib/features/chat/stores/mentionSuggestions";
   import { connectivityStore } from "$lib/stores/connectivityStore";
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
 
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
@@ -112,6 +126,28 @@
     sendError?: string;
     errorMessage?: string;
     error_message?: string;
+  };
+
+  type AutomatedAuthorType = Exclude<MessageAuthorType, "user">;
+
+  const AUTHOR_TYPE_META: Record<
+    AutomatedAuthorType,
+    {
+      label: string;
+      tooltip: string;
+      icon: ComponentType;
+    }
+  > = {
+    bot: {
+      label: "BOT",
+      tooltip: "Automated bot message",
+      icon: Bot,
+    },
+    webhook: {
+      label: "WEBHOOK",
+      tooltip: "Message sent via webhook",
+      icon: Webhook,
+    },
   };
 
   const resolveMessageDeliveryState = (
@@ -2680,6 +2716,33 @@
                         displayableUser &&
                         handleContextMenu(e, displayableUser)}
                     />
+                    {#if typeof msg.authorType === "string"}
+                      {@const normalizedAuthorType =
+                        msg.authorType.toLowerCase() as MessageAuthorType}
+                      {#if normalizedAuthorType !== "user"}
+                        {@const badgeMeta =
+                          AUTHOR_TYPE_META[normalizedAuthorType as AutomatedAuthorType]}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                class="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-secondary-foreground"
+                                aria-label={badgeMeta.tooltip}
+                              >
+                                <badgeMeta.icon
+                                  class="size-3"
+                                  aria-hidden="true"
+                                />
+                                <span>{badgeMeta.label}</span>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              {badgeMeta.tooltip}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      {/if}
+                    {/if}
                     {#if showMessageTimestamps}
                       <p class="text-xs text-muted-foreground">
                         {new Date(msg.timestamp).toLocaleTimeString([], {

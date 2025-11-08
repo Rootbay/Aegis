@@ -748,6 +748,7 @@ const mockExtractFirstLink = linkPreviewMocks.extractFirstLink;
 const mockGetLinkPreviewMetadata = linkPreviewMocks.getLinkPreviewMetadata;
 
 vi.mock("@lucide/svelte", () => ({
+  Bot: Passthrough,
   CircleAlert: Passthrough,
   Link: Passthrough,
   LoaderCircle: Passthrough,
@@ -758,12 +759,14 @@ vi.mock("@lucide/svelte", () => ({
   Square: Passthrough,
   Timer: Passthrough,
   Users: Passthrough,
+  Webhook: Passthrough,
   Wifi: Passthrough,
 }));
 
 vi.mock("@humanspeak/svelte-virtual-list", () => ({
   default: VirtualListStub,
 }));
+
 
 vi.mock("$lib/services/tauri", () => ({
   getInvoke: async () => null,
@@ -1849,6 +1852,134 @@ describe("ChatView history loading", () => {
       Element.prototype.scrollIntoView = originalScrollIntoView;
       loadMoreSpy.mockRestore();
     }
+  });
+});
+
+describe("ChatView author type badges", () => {
+  beforeEach(async () => {
+    await resetChatViewState();
+  });
+
+  it("renders a badge for bot messages", async () => {
+    const chatId = "chat-author-bot";
+    const friend: Friend = {
+      id: "friend-author-bot",
+      name: "Automation Agent",
+      avatar: "https://example.com/bot.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-author-bot",
+      chatId,
+      senderId: friend.id,
+      content: "Automated response",
+      timestamp: "2024-01-02T00:00:00.000Z",
+      read: true,
+      authorType: "bot",
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    await screen.findByText(message.content);
+    const container = getMessageContainer(message.content);
+    const badge = within(container).getByLabelText("Automated bot message");
+    expect(badge).toBeTruthy();
+    expect(badge.textContent?.trim()).toContain("BOT");
+  });
+
+  it("renders a badge for webhook messages", async () => {
+    const chatId = "chat-author-webhook";
+    const friend: Friend = {
+      id: "friend-author-webhook",
+      name: "Webhook Sender",
+      avatar: "https://example.com/webhook.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-author-webhook",
+      chatId,
+      senderId: friend.id,
+      content: "Notification from webhook",
+      timestamp: "2024-01-02T01:00:00.000Z",
+      read: true,
+      authorType: "webhook",
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    await screen.findByText(message.content);
+    const container = getMessageContainer(message.content);
+    const badge = within(container).getByLabelText("Message sent via webhook");
+    expect(badge).toBeTruthy();
+    expect(badge.textContent?.trim()).toContain("WEBHOOK");
+  });
+
+  it("does not render a badge for user messages", async () => {
+    const chatId = "chat-author-user";
+    const friend: Friend = {
+      id: "friend-author-user",
+      name: "Regular User",
+      avatar: "https://example.com/user.png",
+      online: true,
+      status: "Online",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-author-user",
+      chatId,
+      senderId: friend.id,
+      content: "Hello from a human",
+      timestamp: "2024-01-02T02:00:00.000Z",
+      read: true,
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    render(ChatView, { props: { chat } });
+
+    await screen.findByText(message.content);
+    const container = getMessageContainer(message.content);
+    expect(
+      within(container).queryByLabelText("Automated bot message"),
+    ).toBeNull();
+    expect(
+      within(container).queryByLabelText("Message sent via webhook"),
+    ).toBeNull();
   });
 });
 
