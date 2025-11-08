@@ -6,6 +6,9 @@ export const SidebarContent = SidebarWrapperStub;
 export const SidebarGroup = SidebarWrapperStub;
 export const SidebarGroupLabel = SidebarWrapperStub;
 export const SidebarGroupContent = SidebarWrapperStub;
+export const SidebarMenu = SidebarWrapperStub;
+export const SidebarMenuItem = SidebarWrapperStub;
+export const SidebarMenuButton = SidebarWrapperStub;
 export default {
   Sidebar,
   SidebarHeader,
@@ -13,4 +16,7 @@ export default {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
 };

@@ -39,12 +39,16 @@
     return entry !== false;
   });
 
+  const canShowMembers = $derived(() => chat.type !== "dm");
   const showSearchSidebar = $derived(() => $chatSearchStore.searching);
 
   const LG_BREAKPOINT = 1024;
 
   let isLgViewport = $state(true);
   let mobileDialogOpen = $state(false);
+  let mobileMemberPanelOpen = $state(false);
+  let mobileMembersInitialized = $state(false);
+  let lastChatId = $state<string | null>(null);
 
   function updateViewportMatch() {
     if (typeof window === "undefined") {
@@ -63,6 +67,15 @@
   });
 
   $effect(() => {
+    const chatId = chat.id;
+    if (lastChatId !== chatId) {
+      lastChatId = chatId;
+      mobileMemberPanelOpen = false;
+      mobileMembersInitialized = false;
+    }
+  });
+
+  $effect(() => {
     if (isLgViewport) {
       if (mobileDialogOpen) {
         mobileDialogOpen = false;
@@ -70,10 +83,43 @@
       if ($chatSearchStore.mobileResultsOpen) {
         chatSearchStore.setMobileResultsOpen(false);
       }
+      if (mobileMemberPanelOpen) {
+        mobileMemberPanelOpen = false;
+      }
+      if (mobileMembersInitialized) {
+        mobileMembersInitialized = false;
+      }
       return;
     }
 
     mobileDialogOpen = $chatSearchStore.mobileResultsOpen;
+  });
+
+  $effect(() => {
+    if (!canShowMembers()) {
+      if (mobileMemberPanelOpen) {
+        mobileMemberPanelOpen = false;
+      }
+      if (mobileMembersInitialized) {
+        mobileMembersInitialized = false;
+      }
+      return;
+    }
+
+    if (isLgViewport) {
+      return;
+    }
+
+    if (!mobileMembersInitialized) {
+      mobileMembersInitialized = true;
+      mobileMemberPanelOpen = false;
+      return;
+    }
+
+    const visible = shouldShowMemberSidebar();
+    if (mobileMemberPanelOpen !== visible) {
+      mobileMemberPanelOpen = visible;
+    }
   });
 
   function handleMobileDialogOpenChange(open: boolean) {
@@ -83,10 +129,35 @@
       chatSearchStore.setMobileResultsOpen(false);
     }
   }
+
+  function handleToggleMemberPanel() {
+    if (!canShowMembers()) {
+      return;
+    }
+    if (isLgViewport) {
+      memberSidebarVisibilityStore.toggleVisibility(chat.id);
+      return;
+    }
+    const next = !mobileMemberPanelOpen;
+    memberSidebarVisibilityStore.setVisibility(chat.id, next);
+  }
+
+  function handleMobileMemberPanelOpenChange(open: boolean) {
+    if (!canShowMembers()) {
+      return;
+    }
+    memberSidebarVisibilityStore.setVisibility(chat.id, open);
+  }
 </script>
 
 <div class="flex flex-1 min-h-0 flex-col">
-  <NavigationHeader chat={chat} onOpenDetailedProfile={openDetailedProfileModal} />
+  <NavigationHeader
+    {chat}
+    onOpenDetailedProfile={openDetailedProfileModal}
+    showMemberPanelToggle={!isLgViewport && canShowMembers()}
+    mobileMemberPanelOpen={mobileMemberPanelOpen}
+    onToggleMemberPanel={handleToggleMemberPanel}
+  />
 
   <div class="flex flex-1 min-h-0">
     <div class="flex flex-1 flex-col min-w-0">
@@ -95,7 +166,7 @@
 
     {#if showSearchSidebar()}
       <SearchSidebar {chat} />
-    {:else if shouldShowMemberSidebar() && chat.type !== "dm"}
+    {:else if shouldShowMemberSidebar() && canShowMembers()}
       <MemberSidebar
         members={members()}
         {openDetailedProfileModal}
@@ -106,6 +177,19 @@
     {/if}
   </div>
 </div>
+
+{#if canShowMembers()}
+  <MemberSidebar
+    members={members()}
+    {openDetailedProfileModal}
+    context={sidebarContext()}
+    groupId={isGroupChat() ? chat.id : undefined}
+    groupOwnerId={groupOwnerId() ?? undefined}
+    variant="mobile"
+    mobileOpen={mobileMemberPanelOpen}
+    onMobileOpenChange={handleMobileMemberPanelOpenChange}
+  />
+{/if}
 
 <Dialog open={mobileDialogOpen} onOpenChange={handleMobileDialogOpenChange}>
   <DialogContent

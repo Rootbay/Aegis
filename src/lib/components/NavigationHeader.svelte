@@ -19,6 +19,9 @@
     friendsActiveTab = FRIENDS_NAVIGATION_TABS[0],
     onFriendsTabSelect = () => {},
     onFriendsAddClick = () => {},
+    showMemberPanelToggle = false,
+    mobileMemberPanelOpen = false,
+    onToggleMemberPanel = () => {},
   } = $props<{
     chat: Chat | null;
     onOpenDetailedProfile: (user: User) => void;
@@ -26,6 +29,9 @@
     friendsActiveTab?: string;
     onFriendsTabSelect?: (tab: string) => void;
     onFriendsAddClick?: () => void;
+    showMemberPanelToggle?: boolean;
+    mobileMemberPanelOpen?: boolean;
+    onToggleMemberPanel?: () => void;
   }>();
 
   const context = getContext<CreateGroupContext | undefined>(
@@ -41,7 +47,14 @@
     onAddFriend={onFriendsAddClick}
   />
 {:else if chat}
-  <ChatNavigationHeader {chat} {onOpenDetailedProfile} {openUserCardModal} />
+  <ChatNavigationHeader
+    {chat}
+    {onOpenDetailedProfile}
+    {openUserCardModal}
+    {showMemberPanelToggle}
+    {mobileMemberPanelOpen}
+    {onToggleMemberPanel}
+  />
 {:else}
   <EmptyHeader />
 {/if}
