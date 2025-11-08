@@ -733,6 +733,106 @@ describe("ChatView mentions", () => {
   });
 });
 
+describe("ChatView channel permissions", () => {
+  beforeEach(async () => {
+    await resetChatViewState();
+    mockExtractFirstLink.mockReset();
+    mockExtractFirstLink.mockImplementation(() => null);
+    mockGetLinkPreviewMetadata.mockReset();
+    mockGetLinkPreviewMetadata.mockResolvedValue(null);
+  });
+
+  it("blocks the composer when the member lacks send_messages", async () => {
+    const serverId = "server-permissions";
+    const channel: Channel = {
+      id: "channel-restricted",
+      name: "restricted",
+      server_id: serverId,
+      channel_type: "text",
+      private: false,
+    };
+
+    const restrictedRole: Role = {
+      id: "role-read-only",
+      name: "Read Only",
+      color: "#555555",
+      hoist: false,
+      mentionable: false,
+      permissions: {
+        send_messages: false,
+        attach_files: false,
+        use_external_emojis: false,
+        add_reactions: false,
+        manage_messages: false,
+      },
+      member_ids: ["user-current"],
+    };
+
+    const serverModule = getServerStoreModule();
+    serverModule.__setServerState?.({
+      servers: [
+        {
+          id: serverId,
+          name: "Permission Test Server",
+          owner_id: "server-owner",
+          channels: [channel],
+          roles: [restrictedRole],
+          members: [
+            {
+              id: "user-current",
+              name: "Current User",
+              avatar: "https://example.com/me.png",
+              online: true,
+              roles: [restrictedRole.id],
+            },
+          ],
+        },
+      ],
+      activeServerId: serverId,
+    });
+
+    __setUser({
+      id: "user-current",
+      name: "Current User",
+      avatar: "https://example.com/me.png",
+      online: true,
+      roles: [restrictedRole.id],
+    });
+
+    const chat: Chat = {
+      type: "channel",
+      id: channel.id,
+      name: channel.name,
+      serverId,
+      members: [
+        {
+          id: "user-current",
+          name: "Current User",
+          avatar: "https://example.com/me.png",
+          online: true,
+          roles: [restrictedRole.id],
+        },
+      ],
+      messages: [],
+    };
+
+    messagesByChatId.set(new Map([[chat.id, []]]));
+
+    render(ChatView, { props: { chat } });
+
+    expect(
+      await screen.findByText(
+        "You do not have permission to send messages in this channel.",
+      ),
+    ).toBeInTheDocument();
+
+    expect(screen.queryByPlaceholderText(`Message #${channel.name}`)).toBeNull();
+    expect(screen.queryByLabelText(/Attach files/i)).toBeNull();
+    expect(screen.queryByLabelText(/Insert emoji/i)).toBeNull();
+    expect(screen.queryByLabelText(/voice message/i)).toBeNull();
+  });
+});
+
 const linkPreviewMocks = vi.hoisted(() => ({
   extractFirstLink: vi.fn<
     (content: string | null | undefined) => string | null
