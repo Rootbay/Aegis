@@ -205,6 +205,10 @@ interface ChatStore {
     options?: { serverId?: string },
   ) => Promise<void>;
   markActiveChatViewed: () => Promise<void>;
+  copyMessageLink: (
+    messageId: string,
+    messageChatId?: string | null,
+  ) => Promise<string>;
   sendTypingIndicator: (isTyping: boolean) => Promise<void>;
   setChatPreferenceOverride: (
     chatId: string,
@@ -3404,6 +3408,53 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     });
   };
 
+  const copyMessageLink = async (
+    messageId: string,
+    messageChatId?: string | null,
+  ) => {
+    const type = get(activeChatType);
+    const chatIdValue = get(activeChatId);
+    const channelIdValue = get(activeChannelId);
+
+    if (!type || !chatIdValue) {
+      throw new Error("No active chat selected.");
+    }
+
+    let path: string;
+    switch (type) {
+      case "dm":
+        path = `/dm/${chatIdValue}`;
+        break;
+      case "group":
+        path = `/groups/${chatIdValue}`;
+        break;
+      case "server": {
+        const resolvedChannelId = messageChatId ?? channelIdValue ?? null;
+        if (!resolvedChannelId) {
+          throw new Error("No active channel available for message link.");
+        }
+        path = `/channels/${chatIdValue}/${resolvedChannelId}`;
+        break;
+      }
+      default:
+        throw new Error(`Unsupported chat type: ${type}`);
+    }
+
+    const origin =
+      typeof window !== "undefined" && window.location?.origin
+        ? window.location.origin
+        : "";
+    const clipboard =
+      typeof navigator === "undefined" ? null : navigator.clipboard;
+    if (!clipboard || typeof clipboard.writeText !== "function") {
+      throw new Error("Clipboard API is not available.");
+    }
+
+    const url = `${origin}${path}#message-${messageId}`;
+    await clipboard.writeText(url);
+    return url;
+  };
+
   const sendTypingIndicator = async (isTyping: boolean) => {
     const type = get(activeChatType);
     const chatIdValue = get(activeChatId);
@@ -3970,6 +4021,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleTypingIndicator,
     markChatRead,
     markActiveChatViewed,
+    copyMessageLink,
     sendTypingIndicator,
     setChatPreferenceOverride,
     clearChatPreferenceOverride,

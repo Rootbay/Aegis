@@ -848,3 +848,76 @@ describe("chatStore attachment lifecycle", () => {
     expect(showNativeNotificationMock).not.toHaveBeenCalled();
   });
 });
+
+describe("chatStore message link composition", () => {
+  let clipboardWriteMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue([]);
+    clipboardWriteMock = vi.fn().mockResolvedValue(undefined);
+    localStorage.clear();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+    friendStore.handleFriendsUpdate([]);
+    settings.update((current) => ({
+      ...current,
+    }));
+    vi.stubGlobal(
+      "navigator",
+      {
+        clipboard: {
+          writeText: clipboardWriteMock,
+        },
+      } as unknown as Navigator,
+    );
+    vi.stubGlobal(
+      "window",
+      {
+        location: {
+          origin: "https://app.local",
+        },
+      } as unknown as Window & typeof globalThis,
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+    friendStore.handleFriendsUpdate([]);
+  });
+
+  it("copies a direct message link to the clipboard", async () => {
+    const store = createChatStore();
+    await store.setActiveChat("dm-chat-1", "dm");
+
+    const link = await store.copyMessageLink("msg-123");
+
+    expect(link).toBe("https://app.local/dm/dm-chat-1#message-msg-123");
+    expect(clipboardWriteMock).toHaveBeenCalledWith(link);
+  });
+
+  it("copies a group chat message link to the clipboard", async () => {
+    const store = createChatStore();
+    await store.setActiveChat("group-chat-2", "group");
+
+    const link = await store.copyMessageLink("msg-456");
+
+    expect(link).toBe("https://app.local/groups/group-chat-2#message-msg-456");
+    expect(clipboardWriteMock).toHaveBeenCalledWith(link);
+  });
+
+  it("copies a server channel message link to the clipboard", async () => {
+    const store = createChatStore();
+    await store.setActiveChat("server-9", "server", "channel-3");
+
+    const link = await store.copyMessageLink("msg-789", "channel-3");
+
+    expect(link).toBe(
+      "https://app.local/channels/server-9/channel-3#message-msg-789",
+    );
+    expect(clipboardWriteMock).toHaveBeenCalledWith(link);
+  });
+});
