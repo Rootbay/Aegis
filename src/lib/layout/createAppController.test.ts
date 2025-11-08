@@ -183,6 +183,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import AppControllerTestHost from "./__tests__/AppControllerTestHost.svelte";
+import AppMainContentTestHost from "./__tests__/AppMainContentTestHost.svelte";
 import {
   chatStore,
   activeChannelId,
@@ -192,6 +193,11 @@ import {
 } from "$lib/features/chat/stores/chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import type { Server } from "$lib/features/servers/models/Server";
+import type { Message } from "$lib/features/chat/models/Message";
+import type { AppController } from "./app/types";
+import { userCache } from "$lib/utils/cache";
+import { page } from "$app/stores";
+import type { Writable } from "svelte/store";
 
 describe("createAppController server channel behavior", () => {
   let cleanup: (() => void) | undefined;
@@ -397,5 +403,97 @@ describe("createAppController server channel behavior", () => {
         ["server-b", "channel-beta-chill"],
       ]),
     );
+  });
+});
+
+describe("AppMainContent DM fallback rendering", () => {
+  let cleanup: (() => void) | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    chatStore.clearActiveChat();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+    userCache.clear();
+    localStorage.clear();
+    (page as Writable<{ url: URL }>).set({
+      url: new URL("https://app.local/"),
+    });
+  });
+
+  afterEach(() => {
+    cleanup?.();
+    cleanup = undefined;
+    chatStore.clearActiveChat();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+    userCache.clear();
+    localStorage.clear();
+    (page as Writable<{ url: URL }>).set({
+      url: new URL("https://app.local/"),
+    });
+  });
+
+  it("renders a DM using a synthesized friend when the roster is empty", async () => {
+    const dmId = "fallback-user-42";
+    const message: Message = {
+      id: "msg-1",
+      chatId: dmId,
+      senderId: dmId,
+      content: "Hello from cache-less friend",
+      timestamp: new Date().toISOString(),
+      read: true,
+    };
+
+    chatStore.handleMessagesUpdate(dmId, [message]);
+    (page as Writable<{ url: URL }>).set({
+      url: new URL(`https://app.local/dm/${dmId}`),
+    });
+
+    let controllerReady: (() => void) | undefined;
+    let controllerInstance: AppController | null = null;
+    const ready = new Promise<void>((resolve) => {
+      controllerReady = resolve;
+    });
+
+    const rendered = render(AppMainContentTestHost, {
+      props: {
+        onReady: (controller) => {
+          controllerInstance = controller;
+          controllerReady?.();
+        },
+      },
+    });
+    cleanup = rendered.unmount;
+
+    await ready;
+    await chatStore.setActiveChat(dmId, "dm");
+
+    await waitFor(() => {
+      const currentChat = controllerInstance
+        ? get(controllerInstance.currentChat)
+        : null;
+      expect(currentChat?.type).toBe("dm");
+      expect(currentChat?.friend.id).toBe(dmId);
+    });
+
+    const expectedName = `User-${dmId.slice(0, 4)}`;
+
+    await waitFor(() => {
+      const currentChat = controllerInstance
+        ? get(controllerInstance.currentChat)
+        : null;
+      expect(currentChat?.friend.name).toBe(expectedName);
+    });
+
+    await waitFor(() => {
+      expect(rendered.getByText(expectedName)).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(
+        rendered.getByLabelText("View profile picture"),
+      ).toBeInTheDocument();
+    });
   });
 });

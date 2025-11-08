@@ -20,6 +20,33 @@
       onNameClick: (event: MouseEvent, user: User) => void;
       onNameDoubleClick: (user: User) => void;
     }>();
+
+  const fallbackAvatar = (id: string) =>
+    `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${id}`;
+
+  const resolveFriendName = $derived(() => {
+    if (chat.type !== "dm") {
+      return "";
+    }
+    const nameValue = chat.friend.name ?? "";
+    const trimmed = typeof nameValue === "string" ? nameValue.trim() : "";
+    return trimmed.length > 0
+      ? trimmed
+      : `User-${chat.friend.id.slice(0, 4) || "anon"}`;
+  });
+
+  const resolveFriendAvatar = $derived(() => {
+    if (chat.type !== "dm") {
+      return "";
+    }
+    const avatarValue = chat.friend.avatar ?? "";
+    const trimmed = typeof avatarValue === "string" ? avatarValue.trim() : "";
+    return trimmed.length > 0 ? trimmed : fallbackAvatar(chat.friend.id);
+  });
+
+  const resolveFriendOnline = $derived(() =>
+    chat.type === "dm" ? Boolean(chat.friend.online) : false,
+  );
 </script>
 
 <div class="flex items-center gap-3 min-w-0">
@@ -32,13 +59,13 @@
       aria-label="View profile picture"
     >
       <Avatar class="w-10 h-10">
-        <AvatarImage src={chat.friend.avatar} alt={chat.friend.name} />
-        <AvatarFallback>{chat.friend.name?.[0] ?? "?"}</AvatarFallback>
+        <AvatarImage src={resolveFriendAvatar()} alt={resolveFriendName()} />
+        <AvatarFallback>{resolveFriendName()?.[0] ?? "?"}</AvatarFallback>
       </Avatar>
       <span
         class={cn(
           "absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background",
-          chat.friend.online ? "bg-green-500" : "bg-red-500",
+          resolveFriendOnline() ? "bg-green-500" : "bg-red-500",
         )}
       ></span>
     </Button>
@@ -48,10 +75,10 @@
         onclick={(event) => onNameClick(event, chat.friend)}
         ondblclick={() => onNameDoubleClick(chat.friend)}
       >
-        {chat.friend.name}
+        {resolveFriendName()}
       </button>
       <p class="text-xs text-muted-foreground whitespace-nowrap">
-        {chat.friend.online ? "Online" : "Offline"}
+        {resolveFriendOnline() ? "Online" : "Offline"}
       </p>
       {#if chat.friend.statusMessage}
         <p
