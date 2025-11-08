@@ -1068,6 +1068,129 @@ function createCallStore() {
     return Array.from(invitees.values());
   }
 
+  async function joinVoiceChannel({
+    chatId,
+    chatName,
+  }: {
+    chatId: string;
+    chatName: string;
+  }) {
+    if (!isBrowser) {
+      toasts.addToast(
+        "Calls are only available in the desktop app.",
+        "warning",
+      );
+      return false;
+    }
+
+    await initialize();
+    await ensureSignalListener();
+
+    if (!(await ensureInvokeFn())) {
+      toasts.showErrorToast("Call signaling is unavailable.");
+      return false;
+    }
+
+    clearDismissalTimer();
+
+    const state = get(store);
+
+    if (
+      state.activeCall &&
+      state.activeCall.chatId === chatId &&
+      state.activeCall.chatType === "channel" &&
+      state.activeCall.status !== "ended" &&
+      state.activeCall.status !== "error"
+    ) {
+      update((next) => ({ ...next, showCallModal: true }));
+      return true;
+    }
+
+    const callId =
+      typeof window !== "undefined" && window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`;
+
+    participantStates = new Map();
+
+    update((next) => ({
+      ...next,
+      showCallModal: true,
+      activeCall: {
+        chatId,
+        chatName,
+        chatType: "channel",
+        type: "voice",
+        status: "initializing",
+        startedAt: Date.now(),
+        connectedAt: null,
+        endedAt: null,
+        endReason: undefined,
+        error: undefined,
+        localStream: null,
+        callId,
+        direction: "outgoing",
+        participants: new Map(),
+      },
+    }));
+
+    activeCallId = callId;
+
+    try {
+      const stream = await requestUserMedia("voice");
+      activeStream = stream;
+      syncLocalMediaState(activeStream);
+
+      const connectedAt = Date.now();
+
+      update((next) => {
+        if (!next.activeCall || next.activeCall.callId !== callId) {
+          stopStream(stream);
+          return next;
+        }
+        return {
+          ...next,
+          activeCall: {
+            ...next.activeCall,
+            status: "in-call",
+            connectedAt,
+            localStream: stream,
+          },
+        };
+      });
+
+      return true;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to join the voice channel.";
+      cleanupMedia();
+
+      update((next) => {
+        if (!next.activeCall || next.activeCall.callId !== callId) {
+          return next;
+        }
+        return {
+          ...next,
+          activeCall: {
+            ...next.activeCall,
+            status: "error",
+            error: message,
+            endReason: message,
+            endedAt: Date.now(),
+            localStream: null,
+            participants: new Map(),
+          },
+        };
+      });
+
+      toasts.showErrorToast(message);
+      scheduleDismissal();
+      return false;
+    }
+  }
+
   async function startCall({
     chatId,
     chatName,
@@ -1357,11 +1480,18 @@ function createCallStore() {
     const state = get(store);
     const active = state.activeCall;
 
+    const isActiveChannelMatch =
+      Boolean(active) &&
+      active?.chatType === "channel" &&
+      chatType === "channel" &&
+      active.chatId === chatId;
+
     if (
       active &&
       active.callId !== callId &&
       active.status !== "ended" &&
-      active.status !== "error"
+      active.status !== "error" &&
+      !isActiveChannelMatch
     ) {
       try {
         await sendSignal(senderId, callId, {
@@ -1373,6 +1503,28 @@ function createCallStore() {
       }
       toasts.addToast("Incoming call received while busy.", "warning");
       return;
+    }
+
+    if (isActiveChannelMatch && active?.callId !== callId) {
+      activeCallId = callId;
+      update((next) => {
+        if (!next.activeCall) {
+          return next;
+        }
+        if (
+          next.activeCall.chatType === "channel" &&
+          next.activeCall.chatId === chatId
+        ) {
+          return {
+            ...next,
+            activeCall: {
+              ...next.activeCall,
+              callId,
+            },
+          };
+        }
+        return next;
+      });
     }
 
     if (!(await ensureInvokeFn())) {
@@ -2039,6 +2191,7 @@ function createCallStore() {
     refreshDevices,
     refreshPermissions,
     canStartCall,
+    joinVoiceChannel,
     startCall,
     endCall,
     acceptCall,
