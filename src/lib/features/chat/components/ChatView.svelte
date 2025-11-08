@@ -3153,7 +3153,7 @@
                               <mark class="bg-yellow-500/60 text-white">
                                 {#each segments as segment, segIndex (segIndex)}
                                   {#if segment.type === "text"}
-                                    {segment.text}
+                                    {@html segment.html}
                                   {:else if segment.type === "mention"}
                                     <span
                                       class="font-semibold text-white"
@@ -3197,7 +3197,7 @@
                             {:else}
                               {#each segments as segment, segIndex (segIndex)}
                                 {#if segment.type === "text"}
-                                  {segment.text}
+                                  {@html segment.html}
                                 {:else if segment.type === "mention"}
                                   <span
                                     class="font-semibold text-white"
@@ -3245,7 +3245,7 @@
                         <p class="text-base whitespace-pre-wrap wrap-break-word">
                           {#each segments as segment, segIndex (segIndex)}
                             {#if segment.type === "text"}
-                              {segment.text}
+                              {@html segment.html}
                             {:else if segment.type === "mention"}
                               <span
                                 class="font-semibold text-white"

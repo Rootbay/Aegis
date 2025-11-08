@@ -1,11 +1,16 @@
 import type { Friend } from "$lib/features/friends/models/Friend";
 
+import { formatMarkdownToSafeHtml } from "$lib/features/chat/utils/markdown";
+
 const TOKEN_PATTERN =
   /<@&([^>\s]+)>|<@([^>\s]+)>|<#([^>\s]+)>|@(everyone|here)\b|https?:\/\/[^\s<>"']+/gi;
 const TRAILING_PUNCTUATION = /[),.;!?:]+$/;
 
+const PLACEHOLDER_PREFIX = "\u0000";
+const PLACEHOLDER_SUFFIX = "\u0001";
+
 export type FormattedMessageSegment =
-  | { type: "text"; text: string }
+  | { type: "text"; text: string; html: string }
   | { type: "mention"; id: string; name: string }
   | { type: "channel"; id: string; name: string }
   | { type: "role"; id: string; name: string }
@@ -16,7 +21,9 @@ export interface RenderMessageContentOptions {
   resolveMentionName?: (id: string) => string | null | undefined;
   resolveChannelName?: (id: string) => string | null | undefined;
   resolveRoleName?: (id: string) => string | null | undefined;
-  resolveSpecialMentionName?: (key: "everyone" | "here") => string | null | undefined;
+  resolveSpecialMentionName?: (
+    key: "everyone" | "here",
+  ) => string | null | undefined;
 }
 
 function normalizeUrl(raw: string): string | null {
@@ -35,6 +42,46 @@ function normalizeUrl(raw: string): string | null {
   }
 }
 
+type RawSegment =
+  | { kind: "text"; text: string }
+  | Exclude<
+      FormattedMessageSegment,
+      { type: "text"; html: string; text: string }
+    >;
+
+function createPlaceholder(index: number): string {
+  return `${PLACEHOLDER_PREFIX}${index}${PLACEHOLDER_SUFFIX}`;
+}
+
+function stripHtmlTags(value: string): string {
+  if (!value) {
+    return "";
+  }
+
+  const withNewlines = value.replace(/<br\s*\/>/gi, "\n");
+  const withoutTags = withNewlines.replace(/<[^>]+>/g, "");
+
+  return withoutTags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function createTextSegment(html: string): FormattedMessageSegment | null {
+  if (!html) {
+    return null;
+  }
+
+  return {
+    type: "text",
+    html,
+    text: stripHtmlTags(html),
+  } as const;
+}
+
 export function renderMessageContent(
   content: string | null | undefined,
   options: RenderMessageContentOptions = {},
@@ -45,43 +92,56 @@ export function renderMessageContent(
     return [];
   }
 
-  const segments: FormattedMessageSegment[] = [];
+  const rawSegments: RawSegment[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
+
+  function pushText(value: string) {
+    if (!value) {
+      return;
+    }
+
+    const last = rawSegments[rawSegments.length - 1];
+    if (last?.kind === "text") {
+      last.text += value;
+    } else {
+      rawSegments.push({ kind: "text", text: value });
+    }
+  }
 
   while ((match = TOKEN_PATTERN.exec(text)) !== null) {
     const [token, roleId, mentionId, channelId, specialKey] = match;
     const index = match.index;
 
     if (index > lastIndex) {
-      segments.push({ type: "text", text: text.slice(lastIndex, index) });
+      pushText(text.slice(lastIndex, index));
     }
 
     if (roleId) {
       const id = roleId.trim();
       const resolved = options.resolveRoleName?.(id) ?? "";
       const name = resolved.trim().length > 0 ? resolved.trim() : id;
-      segments.push({ type: "role", id, name });
+      rawSegments.push({ type: "role", id, name });
     } else if (mentionId) {
       const id = mentionId.trim();
       const resolved = options.resolveMentionName?.(id) ?? "";
       const name = resolved.trim().length > 0 ? resolved.trim() : id;
-      segments.push({ type: "mention", id, name });
+      rawSegments.push({ type: "mention", id, name });
     } else if (channelId) {
       const id = channelId.trim();
       const resolved = options.resolveChannelName?.(id) ?? "";
       const name = resolved.trim().length > 0 ? resolved.trim() : id;
-      segments.push({ type: "channel", id, name });
+      rawSegments.push({ type: "channel", id, name });
     } else if (specialKey) {
-      const normalizedKey = (specialKey.trim().toLowerCase() === "here"
-        ? "here"
-        : "everyone") as "everyone" | "here";
+      const normalizedKey = (
+        specialKey.trim().toLowerCase() === "here" ? "here" : "everyone"
+      ) as "everyone" | "here";
       const resolved = options.resolveSpecialMentionName?.(normalizedKey) ?? "";
       const name =
         resolved.trim().length > 0
           ? resolved.trim()
           : `@${normalizedKey === "here" ? "here" : "everyone"}`;
-      segments.push({ type: "special", key: normalizedKey, name });
+      rawSegments.push({ type: "special", key: normalizedKey, name });
     } else {
       let rawUrl = token;
       const trailingMatch = rawUrl.match(TRAILING_PUNCTUATION);
@@ -93,12 +153,12 @@ export function renderMessageContent(
 
       const normalized = normalizeUrl(rawUrl);
       if (normalized) {
-        segments.push({ type: "link", url: normalized, label: rawUrl });
+        rawSegments.push({ type: "link", url: normalized, label: rawUrl });
         if (trailing) {
-          segments.push({ type: "text", text: trailing });
+          pushText(trailing);
         }
       } else {
-        segments.push({ type: "text", text: token });
+        pushText(token);
       }
     }
 
@@ -106,7 +166,53 @@ export function renderMessageContent(
   }
 
   if (lastIndex < text.length) {
-    segments.push({ type: "text", text: text.slice(lastIndex) });
+    pushText(text.slice(lastIndex));
+  }
+
+  const placeholderSegments: Exclude<RawSegment, { kind: "text" }>[] = [];
+  const markdownSource = rawSegments
+    .map((segment) => {
+      if (segment.kind === "text") {
+        return segment.text;
+      }
+
+      const index = placeholderSegments.push(segment) - 1;
+      return createPlaceholder(index);
+    })
+    .join("");
+
+  const formattedHtml = formatMarkdownToSafeHtml(markdownSource);
+  const placeholderPattern = new RegExp(
+    `${PLACEHOLDER_PREFIX}(\\d+)${PLACEHOLDER_SUFFIX}`,
+    "g",
+  );
+
+  const segments: FormattedMessageSegment[] = [];
+  let htmlIndex = 0;
+  let placeholderMatch: RegExpExecArray | null;
+
+  while ((placeholderMatch = placeholderPattern.exec(formattedHtml)) !== null) {
+    const index = placeholderMatch.index;
+    const htmlChunk = formattedHtml.slice(htmlIndex, index);
+    const textSegment = createTextSegment(htmlChunk);
+    if (textSegment) {
+      segments.push(textSegment);
+    }
+
+    const placeholderIndex = Number(placeholderMatch[1]);
+    const segment = placeholderSegments[placeholderIndex];
+    if (segment) {
+      segments.push(segment);
+    }
+
+    htmlIndex = index + placeholderMatch[0].length;
+  }
+
+  if (htmlIndex < formattedHtml.length) {
+    const trailingSegment = createTextSegment(formattedHtml.slice(htmlIndex));
+    if (trailingSegment) {
+      segments.push(trailingSegment);
+    }
   }
 
   return segments;
