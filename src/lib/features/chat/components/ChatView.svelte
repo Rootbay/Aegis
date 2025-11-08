@@ -10,6 +10,7 @@
     SendHorizontal,
     Smile,
     Square,
+    Timer,
     Users,
     Wifi,
   } from "@lucide/svelte";
@@ -225,11 +226,77 @@
   let activeDraftLoadToken: symbol | null = null;
   let isAtBottom = $state(true);
   let unseenCount = $state(0);
+  let expiryNow = $state(Date.now());
   let typingActive = $state(false);
   let typingResetTimer: ReturnType<typeof setTimeout> | null = null;
   const TYPING_IDLE_TIMEOUT_MS = 2_500;
   const MAX_REPLY_SNIPPET_LENGTH = 120;
   const CONNECTIVITY_WARNING_THROTTLE_MS = 4_000;
+
+  type ExpiryIndicatorTone = "default" | "warning" | "critical" | "expired";
+
+  const expiryIndicatorToneClasses: Record<ExpiryIndicatorTone, string> = {
+    default: "bg-zinc-700/80 text-white",
+    warning: "bg-amber-500/80 text-zinc-900",
+    critical: "bg-red-600/80 text-white",
+    expired: "bg-red-900/80 text-white",
+  };
+
+  function formatExpiryLabel(remainingMs: number): string {
+    if (remainingMs <= 0) {
+      return "Expired";
+    }
+
+    if (remainingMs < 60_000) {
+      const seconds = Math.max(1, Math.ceil(remainingMs / 1_000));
+      return `Expires in ${seconds}s`;
+    }
+
+    if (remainingMs < 5 * 60_000) {
+      const minutes = Math.floor(remainingMs / 60_000);
+      const seconds = Math.floor((remainingMs % 60_000) / 1_000);
+      const minuteLabel = minutes > 0 ? `${minutes}m ` : "";
+      const secondLabel =
+        minutes > 0 ? seconds.toString().padStart(2, "0") : seconds.toString();
+      return `Expires in ${minuteLabel}${secondLabel}s`;
+    }
+
+    if (remainingMs < 60 * 60_000) {
+      const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+      return `Expires in ${minutes}m`;
+    }
+
+    if (remainingMs < 24 * 60 * 60_000) {
+      const hours = Math.max(1, Math.ceil(remainingMs / 3_600_000));
+      return `Expires in ${hours}h`;
+    }
+
+    const days = Math.max(1, Math.ceil(remainingMs / 86_400_000));
+    return `Expires in ${days}d`;
+  }
+
+  function resolveExpiryTone(remainingMs: number): ExpiryIndicatorTone {
+    if (remainingMs <= 0) {
+      return "expired";
+    }
+    if (remainingMs <= 60_000) {
+      return "critical";
+    }
+    if (remainingMs <= 5 * 60_000) {
+      return "warning";
+    }
+    return "default";
+  }
+
+  function formatExpiryTooltip(
+    expiresAtMs: number,
+    remainingMs: number,
+  ): string {
+    const formatted = new Date(expiresAtMs).toLocaleString();
+    return remainingMs <= 0
+      ? `Message expired on ${formatted}`
+      : `Message expires on ${formatted}`;
+  }
 
   const supportsVoiceRecording =
     typeof window !== "undefined" && "MediaRecorder" in window;
@@ -1744,6 +1811,29 @@
     chat ? $messagesByChatId.get(chat.id) || [] : [],
   );
 
+  $effect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const hasExpiringMessages =
+      currentChatMessages?.some((message) => Boolean(message.expiresAt)) ??
+      false;
+
+    if (!hasExpiringMessages) {
+      return;
+    }
+
+    expiryNow = Date.now();
+    const interval = setInterval(() => {
+      expiryNow = Date.now();
+    }, 1_000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  });
+
   let hasMoreHistory = $derived(
     chat?.id ? ($hasMoreByChatId.get(chat.id) ?? true) : false,
   );
@@ -2289,6 +2379,30 @@
                       >
                         (edited)
                       </span>
+                    {/if}
+                    {#if msg.expiresAt}
+                      {@const expiryTimestamp = Date.parse(msg.expiresAt)}
+                      {#if !Number.isNaN(expiryTimestamp)}
+                        {@const remainingMs = expiryTimestamp - expiryNow}
+                        {@const expiryLabel = formatExpiryLabel(remainingMs)}
+                        {@const expiryTone = resolveExpiryTone(remainingMs)}
+                        {@const expiryAriaLabel =
+                          expiryLabel === "Expired"
+                            ? "Message expired"
+                            : `Message ${expiryLabel.toLowerCase()}`}
+                        <span
+                          class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide ${expiryIndicatorToneClasses[expiryTone]}`}
+                          title={formatExpiryTooltip(
+                            expiryTimestamp,
+                            remainingMs,
+                          )}
+                          aria-live="polite"
+                          aria-label={expiryAriaLabel}
+                        >
+                          <Timer class="h-3 w-3" aria-hidden="true" />
+                          {expiryLabel}
+                        </span>
+                      {/if}
                     {/if}
                   </div>
                   {#if msg.isSpamFlagged && msg.spamDecision !== "allowed"}
