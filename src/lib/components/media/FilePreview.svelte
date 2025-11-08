@@ -6,6 +6,7 @@
     File as FileIcon,
     Download as DownloadIcon,
     LoaderCircle,
+    AudioLines,
   } from "@lucide/svelte";
   import { onDestroy } from "svelte";
 
@@ -48,6 +49,13 @@
     return attachment?.type?.startsWith("image/") ?? false;
   });
 
+  const isAudio = $derived(() => {
+    if (isComposer) {
+      return file?.type?.startsWith("audio/") ?? false;
+    }
+    return attachment?.type?.startsWith("audio/") ?? false;
+  });
+
   const displayUrl = $derived(() => {
     if (isComposer) {
       return localPreviewUrl;
@@ -55,13 +63,16 @@
     return attachment?.objectUrl ?? null;
   });
 
+  let resolvedAudioUrl = $state<string | null>(null);
+  let audioLoadToken = 0;
+
   function updatePreview(source: File | null) {
     if (previousPreviewUrl) {
       URL.revokeObjectURL(previousPreviewUrl);
       previousPreviewUrl = null;
     }
 
-    if (source && source.type.startsWith("image/")) {
+    if (source && (source.type.startsWith("image/") || source.type.startsWith("audio/"))) {
       const url = URL.createObjectURL(source);
       localPreviewUrl = url;
       previousPreviewUrl = url;
@@ -99,19 +110,40 @@
 
   async function ensureAttachmentLoaded(): Promise<string | null> {
     if (!isMessage || !attachment) return null;
+    if (attachment.objectUrl) {
+      return attachment.objectUrl;
+    }
     if (!chatId || !messageId) {
       toasts.showErrorToast("Attachment cannot be loaded right now.");
       return null;
     }
     try {
+      attachment = {
+        ...attachment,
+        isLoading: true,
+        loadError: undefined,
+      };
       const url = await chatStore.loadAttachmentForMessage(
         chatId,
         messageId,
         attachment.id,
       );
+      attachment = {
+        ...attachment,
+        objectUrl: url,
+        isLoaded: true,
+        isLoading: false,
+        loadError: undefined,
+      };
       return url;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      attachment = {
+        ...attachment,
+        isLoading: false,
+        isLoaded: false,
+        loadError: message,
+      };
       toasts.showErrorToast(`Failed to load ${attachment.name}: ${message}`);
       return null;
     }
@@ -150,6 +182,37 @@
       triggerDownload(url);
     }
   }
+
+  $effect(() => {
+    if (!isAudio()) {
+      resolvedAudioUrl = null;
+      return;
+    }
+
+    if (isComposer) {
+      resolvedAudioUrl = displayUrl();
+      return;
+    }
+
+    if (!attachment) {
+      resolvedAudioUrl = null;
+      return;
+    }
+
+    if (attachment.objectUrl) {
+      resolvedAudioUrl = attachment.objectUrl;
+      return;
+    }
+
+    const currentToken = ++audioLoadToken;
+    resolvedAudioUrl = null;
+    void (async () => {
+      const url = await ensureAttachmentLoaded();
+      if (url && currentToken === audioLoadToken) {
+        resolvedAudioUrl = url;
+      }
+    })();
+  });
 </script>
 
 {#if isComposer && file}
@@ -162,6 +225,14 @@
         alt={file.name}
         class="w-12 h-12 object-cover rounded-md"
       />
+    {:else if isAudio() && displayUrl()}
+      <audio
+        class="w-32"
+        src={displayUrl() ?? undefined}
+        controls
+      >
+        Your browser does not support audio playback.
+      </audio>
     {:else}
       <div
         class="w-12 h-12 flex items-center justify-center bg-zinc-600 rounded-md"
@@ -184,7 +255,58 @@
     </button>
   </div>
 {:else if isMessage && attachment}
-  {#if isImage() && displayUrl()}
+  {#if isAudio() && resolvedAudioUrl}
+    <div class="bg-muted/60 border border-muted/40 rounded-md p-3 space-y-3">
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 flex items-center justify-center bg-base-500 rounded-md shrink-0"
+        >
+          <AudioLines size={14} class="text-muted-foreground" />
+        </div>
+        <div class="grow overflow-hidden">
+          <p class="text-sm text-white truncate">{attachment.name}</p>
+          {#if attachment.size}
+            <p class="text-xs text-muted-foreground">
+              {formatBytes(attachment.size)}
+            </p>
+          {/if}
+          <p class="text-xs text-muted-foreground">Ready to play.</p>
+        </div>
+        <button
+          class="inline-flex items-center justify-center rounded-md bg-zinc-700 hover:bg-zinc-600 text-white p-2"
+          onclick={() => triggerDownload(resolvedAudioUrl)}
+          aria-label={`Download attachment ${attachment.name}`}
+        >
+          <DownloadIcon size={12} />
+        </button>
+      </div>
+      <audio
+        class="w-full"
+        src={resolvedAudioUrl ?? undefined}
+        controls
+      >
+        Your browser does not support audio playback.
+      </audio>
+    </div>
+  {:else if isAudio()}
+    <div class="bg-muted/60 border border-muted/40 rounded-md p-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-sm text-white truncate">{attachment.name}</p>
+          {#if attachment.loadError}
+            <p class="text-xs text-destructive">
+              Failed to load audio. {attachment.loadError}
+            </p>
+          {:else if attachment.isLoading}
+            <p class="text-xs text-muted-foreground">Fetching audio...</p>
+          {:else}
+            <p class="text-xs text-muted-foreground">Loading audio preview...</p>
+          {/if}
+        </div>
+        <LoaderCircle size={14} class="animate-spin text-muted-foreground" />
+      </div>
+    </div>
+  {:else if isImage() && displayUrl()}
     <button
       class="max-w-xs rounded-lg overflow-hidden cursor-pointer block border border-zinc-700/60"
       onclick={handleOpen}
