@@ -72,6 +72,7 @@ describe("context menu payload builders", () => {
         avatar: channelUser.avatar,
         isFriend: false,
         isPinned: false,
+        source: "recentDm",
       },
     ]);
   });

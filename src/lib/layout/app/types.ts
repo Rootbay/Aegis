@@ -7,6 +7,7 @@ import type {
 } from "$lib/features/chat/stores/chatStore";
 import type { DirectMessageListEntry } from "$lib/features/chat/stores/directMessageRoster";
 import type { Friend } from "$lib/features/friends/models/Friend";
+import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 import type {
   GroupModalOptions,
   ReportUserModalPayload,
@@ -39,7 +40,7 @@ export type ModalState = {
 
 export type PageState = {
   readonly friends: Friend[];
-  readonly allUsers: Friend[];
+  readonly allUsers: GroupModalUser[];
   readonly groupChats: GroupChatSummary[];
   readonly directMessages: DirectMessageListEntry[];
   readonly currentChat: Chat | null;
@@ -100,7 +101,7 @@ export type AppController = {
   authState: Readable<AuthState>;
   currentUser: Readable<User | null>;
   currentChat: Readable<Chat | null>;
-  allUsers: Readable<Friend[]>;
+  allUsers: Readable<GroupModalUser[]>;
   friendsLoading: Readable<boolean>;
   groupChats: Readable<GroupChatSummary[]>;
   directMessages: Readable<DirectMessageListEntry[]>;

@@ -37,6 +37,7 @@ export function buildInviteCandidates({
       avatar: friend.avatar,
       isFriend: true,
       isPinned: Boolean(friend.isPinned),
+      source: "friend",
     });
   }
 

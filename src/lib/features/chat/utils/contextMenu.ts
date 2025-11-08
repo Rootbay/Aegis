@@ -10,6 +10,7 @@ export type GroupModalUser = {
   avatar: string;
   isFriend: boolean;
   isPinned: boolean;
+  source: "friend" | "recentDm";
 };
 
 export type GroupModalOptions = {
@@ -41,12 +42,16 @@ function normalizeUser(user: User | Friend): User {
 
 function toGroupModalUser(user: User | Friend): GroupModalUser {
   const friend = user as Friend;
+  const inferredIsFriend = Boolean(
+    (friend?.isFriend ?? true) || "status" in friend,
+  );
   return {
     id: user.id,
     name: user.name,
     avatar: user.avatar,
-    isFriend: Boolean((friend?.isFriend ?? true) || "status" in friend),
+    isFriend: inferredIsFriend,
     isPinned: Boolean(friend?.isPinned),
+    source: inferredIsFriend ? "friend" : "recentDm",
   };
 }
 
@@ -59,6 +64,7 @@ export function buildGroupModalOptions(user: User | Friend): GroupModalOptions {
       ...toGroupModalUser(user),
       isFriend: false,
       isPinned: false,
+      source: "recentDm",
     });
   }
 

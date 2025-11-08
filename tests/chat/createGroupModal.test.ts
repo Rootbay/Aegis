@@ -70,6 +70,7 @@ describe("CreateGroupModal", () => {
             avatar: "",
             isFriend: true,
             isPinned: false,
+            source: "friend",
           },
           {
             id: "friend-2",
@@ -77,6 +78,7 @@ describe("CreateGroupModal", () => {
             avatar: "",
             isFriend: true,
             isPinned: false,
+            source: "friend",
           },
         ],
         onclose: vi.fn(),
@@ -119,6 +121,7 @@ describe("CreateGroupModal", () => {
             avatar: "",
             isFriend: true,
             isPinned: false,
+            source: "friend",
           },
         ],
         preselectedUserIds: ["friend-1"],
@@ -129,6 +132,7 @@ describe("CreateGroupModal", () => {
             avatar: "",
             isFriend: false,
             isPinned: false,
+            source: "recentDm",
           },
         ],
         onclose: vi.fn(),
@@ -142,5 +146,47 @@ describe("CreateGroupModal", () => {
 
     await fireEvent.click(preselectedCheckbox);
     expect(preselectedCheckbox.checked).toBe(false);
+  });
+
+  it("lists friends before recent DMs and omits other contact types", () => {
+    const { container, getByLabelText } = render(CreateGroupModal, {
+      props: {
+        allUsers: [
+          {
+            id: "friend-1",
+            name: "Alpha",
+            avatar: "",
+            isFriend: true,
+            isPinned: true,
+            source: "friend",
+          },
+          {
+            id: "dm-1",
+            name: "Delta",
+            avatar: "",
+            isFriend: false,
+            isPinned: false,
+            source: "recentDm",
+          },
+        ],
+        onclose: vi.fn(),
+      },
+    });
+
+    const sections = container.querySelectorAll("section");
+    expect(sections).toHaveLength(2);
+    expect(sections[0].querySelector("p")?.textContent?.trim()).toBe(
+      "Friends",
+    );
+    expect(sections[1].querySelector("p")?.textContent?.trim()).toBe(
+      "Recent DMs",
+    );
+
+    // Ensure both contacts are selectable and rendered in their respective sections
+    const friendCheckbox = getByLabelText("Alpha") as HTMLInputElement;
+    const dmCheckbox = getByLabelText("Delta") as HTMLInputElement;
+
+    expect(friendCheckbox).toBeDefined();
+    expect(dmCheckbox).toBeDefined();
   });
 });

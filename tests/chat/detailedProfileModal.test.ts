@@ -394,6 +394,7 @@ describe("Detailed profile modal integration", () => {
             avatar: profileUser.avatar,
             isFriend: false,
             isPinned: false,
+            source: "recentDm",
           },
         ],
       });
