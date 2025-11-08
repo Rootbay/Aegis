@@ -10,6 +10,7 @@ function getState(store: ReturnType<typeof createMentionSuggestionsStore>) {
   let snapshot: MentionSuggestionsState = {
     active: false,
     query: "",
+    trigger: null,
     triggerIndex: -1,
     cursorIndex: -1,
     suggestions: [],
@@ -23,9 +24,9 @@ function getState(store: ReturnType<typeof createMentionSuggestionsStore>) {
 
 describe("mentionSuggestions store", () => {
   const members: MentionCandidate[] = [
-    { id: "user-naomi", name: "Naomi Naylor" },
-    { id: "user-nate", name: "Nate North" },
-    { id: "user-olivia", name: "Olivia Ost" },
+    { id: "user-naomi", name: "Naomi Naylor", kind: "user" },
+    { id: "user-nate", name: "Nate North", kind: "user" },
+    { id: "user-olivia", name: "Olivia Ost", kind: "user" },
   ];
 
   it("activates suggestions for partial mention query", () => {
@@ -35,6 +36,7 @@ describe("mentionSuggestions store", () => {
     expect(state.active).toBe(true);
     expect(state.suggestions.map((entry) => entry.id)).toContain("user-naomi");
     expect(state.triggerIndex).toBe("Hello ".length);
+    expect(state.trigger).toBe("@");
     expect(state.cursorIndex).toBe("Hello @na".length);
   });
 
@@ -43,6 +45,72 @@ describe("mentionSuggestions store", () => {
     store.updateInput("@na", "@na".length, members);
     const selected = store.select();
     expect(selected?.id).toBe("user-naomi");
+  });
+
+  it("filters channel candidates when using the # trigger", () => {
+    const store = createMentionSuggestionsStore();
+    const candidates: MentionCandidate[] = [
+      ...members,
+      { id: "channel-general", name: "general", kind: "channel" },
+      { id: "channel-random", name: "random", kind: "channel" },
+    ];
+
+    store.updateInput("Discuss in #gen", "Discuss in #gen".length, candidates);
+    const state = getState(store);
+
+    expect(state.active).toBe(true);
+    expect(state.trigger).toBe("#");
+    expect(state.suggestions.map((candidate) => candidate.id)).toEqual([
+      "channel-general",
+    ]);
+  });
+
+  it("surfaces special mentions when typing @everyone", () => {
+    const store = createMentionSuggestionsStore();
+    const candidates: MentionCandidate[] = [
+      ...members,
+      {
+        id: "@everyone",
+        name: "@everyone",
+        kind: "special",
+        specialKey: "everyone",
+      },
+      {
+        id: "@here",
+        name: "@here",
+        kind: "special",
+        specialKey: "here",
+      },
+    ];
+
+    store.updateInput("Ping @every", "Ping @every".length, candidates);
+    const state = getState(store);
+
+    expect(state.active).toBe(true);
+    expect(state.trigger).toBe("@");
+    expect(state.suggestions.some((entry) => entry.id === "@everyone")).toBe(
+      true,
+    );
+  });
+
+  it("filters role candidates when using the @& trigger", () => {
+    const store = createMentionSuggestionsStore();
+    const candidates: MentionCandidate[] = [
+      ...members,
+      { id: "role-mods", name: "Moderators", kind: "role" },
+      { id: "role-admin", name: "Admins", kind: "role" },
+    ];
+
+    store.updateInput(
+      "Alert @&Adm",
+      "Alert @&Adm".length,
+      candidates,
+    );
+    const state = getState(store);
+
+    expect(state.active).toBe(true);
+    expect(state.trigger).toBe("@&");
+    expect(state.suggestions.map((entry) => entry.id)).toEqual(["role-admin"]);
   });
 
   it("resets when no candidates match", () => {
