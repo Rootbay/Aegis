@@ -106,18 +106,21 @@
   function getCallMembers() {
     if (!chat) return [] as { id: string; name?: string }[];
     if (chat.type === "dm") {
+      const name = resolveUserName(chat.friend);
       return [
         {
           id: chat.friend.id,
-          name: chat.friend.name,
+          name,
         },
       ];
     }
     if (chat.type === "group" || chat.type === "channel") {
-      return chat.members.map((member: { id: string; name: string }) => ({
-        id: member.id,
-        name: member.name,
-      }));
+      return chat.members.map(
+        (member: { id: string; name?: string | null }) => ({
+          id: member.id,
+          name: resolveUserName(member),
+        }),
+      );
     }
     return [];
   }
@@ -125,9 +128,18 @@
   function getChatDisplayName() {
     if (!chat) return "";
     if (chat.type === "dm") {
-      return chat.friend.name;
+      return resolveUserName(chat.friend);
     }
     return chat.name;
+  }
+
+  function resolveUserName(user: { id: string; name?: string | null }) {
+    const nameValue = user.name ?? "";
+    const trimmed = typeof nameValue === "string" ? nameValue.trim() : "";
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+    return `User-${user.id.slice(0, 4) || "anon"}`;
   }
 
   async function startVoiceCall() {

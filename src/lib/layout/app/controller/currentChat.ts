@@ -3,6 +3,7 @@ import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Message } from "$lib/features/chat/models/Message";
 import type { Friend } from "$lib/features/friends/models/Friend";
+import { userCache } from "$lib/utils/cache";
 import type {
   ActiveChannelIdReadable,
   ActiveChatIdReadable,
@@ -104,13 +105,23 @@ function deriveCurrentChat({
   messagesByChatId,
 }: DeriveCurrentChatParams): Chat | null {
   if (activeChatType === "dm" && activeChatId) {
-    const friend = friendStore.friends.find((f) => f.id === activeChatId);
+    const existingFriend = friendStore.friends.find(
+      (f) => f.id === activeChatId,
+    );
+    const messages = deriveMessagesForChat(messagesByChatId, activeChatId);
+    const friend =
+      existingFriend ??
+      synthesizeFriendFromMessages({
+        chatId: activeChatId,
+        messages,
+        currentUser,
+      });
     if (friend) {
       return {
         type: "dm",
-        id: friend.id,
+        id: activeChatId,
         friend,
-        messages: deriveMessagesForChat(messagesByChatId, friend.id),
+        messages,
       } satisfies Chat;
     }
   }
@@ -204,4 +215,52 @@ function collectGroupMembers({
   }
 
   return members;
+}
+
+const FALLBACK_AVATAR = (id: string) =>
+  `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${id}`;
+
+function synthesizeFriendFromMessages({
+  chatId,
+  messages,
+  currentUser,
+}: {
+  chatId: string;
+  messages: Message[];
+  currentUser: User | null;
+}): Friend {
+  const participantId =
+    messages.find((message) =>
+      currentUser
+        ? message.senderId !== currentUser.id
+        : Boolean(message.senderId),
+    )?.senderId || chatId;
+
+  const cachedUser =
+    userCache.get(participantId) ?? userCache.get(chatId) ?? null;
+  const resolvedId = participantId ?? chatId;
+  const baseName = cachedUser?.name?.trim?.() ?? "";
+  const name =
+    baseName.length > 0 ? baseName : `User-${resolvedId.slice(0, 4) || "anon"}`;
+  const avatarSource = cachedUser?.avatar?.trim?.() ?? "";
+  const avatar =
+    avatarSource.length > 0
+      ? avatarSource
+      : FALLBACK_AVATAR(resolvedId || "fallback");
+  const online = cachedUser?.online ?? false;
+  const lastMessage = messages[messages.length - 1] ?? null;
+
+  return {
+    id: resolvedId,
+    name,
+    avatar,
+    online,
+    status: online ? "Online" : "Offline",
+    statusMessage: cachedUser?.statusMessage ?? null,
+    location: cachedUser?.location ?? null,
+    messages,
+    lastMessage: lastMessage?.content,
+    timestamp: lastMessage?.timestamp ?? new Date().toISOString(),
+    isFriend: false,
+  } satisfies Friend;
 }
