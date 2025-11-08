@@ -1,0 +1,30 @@
+<svelte:options runes={true} />
+
+<script lang="ts">
+  import { getContext } from "svelte";
+  import { dialogContextKey } from "./ui-dialog-context";
+
+  let {
+    asChild = false,
+    children,
+  }: {
+    asChild?: boolean;
+    children?: (args: { close: (value?: boolean) => void }) => unknown;
+  } = $props();
+
+  const dialog = getContext<{ close: (value?: boolean) => void } | undefined>(
+    dialogContextKey,
+  );
+
+  function close(value?: boolean) {
+    dialog?.close(value);
+  }
+</script>
+
+{#if asChild}
+  {@render children?.({ close })}
+{:else}
+  <button type="button" onclick={() => close(false)}>
+    {@render children?.({ close })}
+  </button>
+{/if}

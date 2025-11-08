@@ -5,6 +5,8 @@
   import CallControls from "$lib/components/navigation/CallControls.svelte";
   import ChatActionMenu from "$lib/components/navigation/ChatActionMenu.svelte";
   import ChatSearch from "$lib/components/navigation/ChatSearch.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Users } from "@lucide/svelte";
   import { userStore } from "$lib/stores/userStore";
   import { activeChatTypingUsers } from "$lib/features/chat/stores/chatStore";
   import { getTypingStatusLabel } from "$lib/features/chat/utils/typingStatus";
@@ -20,10 +22,20 @@
     isServerMemberContext: boolean,
   ) => void;
 
-  let { chat, openUserCardModal, onOpenDetailedProfile } = $props<{
+  let {
+    chat,
+    openUserCardModal,
+    onOpenDetailedProfile,
+    showMemberPanelToggle = false,
+    mobileMemberPanelOpen = false,
+    onToggleMemberPanel = () => {},
+  } = $props<{
     chat: Chat;
     openUserCardModal?: OpenUserCardModal;
     onOpenDetailedProfile: (user: User) => void;
+    showMemberPanelToggle?: boolean;
+    mobileMemberPanelOpen?: boolean;
+    onToggleMemberPanel?: () => void;
   }>();
 
   type ComponentExports<T> = T extends Component<any, infer Exports> ? Exports : never;
@@ -64,6 +76,19 @@
   />
 
   <div class="flex items-center gap-2">
+    {#if showMemberPanelToggle}
+      <Button
+        variant="ghost"
+        size="icon"
+        class="lg:hidden h-9 w-9 text-muted-foreground"
+        aria-label={mobileMemberPanelOpen ? "Hide members" : "Show members"}
+        aria-pressed={mobileMemberPanelOpen}
+        data-testid="mobile-members-toggle"
+        onclick={onToggleMemberPanel}
+      >
+        <Users class="h-4 w-4" aria-hidden="true" />
+      </Button>
+    {/if}
     <CallControls {chat} />
     <ChatActionMenu {chat} {applyPinnedFilter} />
     <ChatSearch bind:this={chatSearchRef} {chat} />
