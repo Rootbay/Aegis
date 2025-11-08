@@ -6,3 +6,25 @@ vi.mock("@tauri-apps/api/notification", () => ({
   requestPermission: async () => "granted" as const,
   sendNotification: vi.fn(),
 }));
+
+class ResizeObserverMock {
+  private readonly callback: (...args: unknown[]) => void;
+
+  constructor(callback: (...args: unknown[]) => void) {
+    this.callback = callback;
+  }
+
+  observe() {
+    // Immediately invoke the callback once to simulate an initial measurement.
+    this.callback([], this);
+  }
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+if (typeof globalThis.ResizeObserver === "undefined") {
+  // @ts-expect-error - jsdom does not provide ResizeObserver by default.
+  globalThis.ResizeObserver = ResizeObserverMock;
+}

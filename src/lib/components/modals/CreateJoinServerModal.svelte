@@ -65,18 +65,79 @@
     },
   } as const;
 
-  const templates = [
-    { id: "template-1", name: "Gaming Community" },
-    { id: "template-2", name: "Study Group" },
-    { id: "template-3", name: "Local Meetup" },
-    { id: "template-4", name: "Development Team" },
-    { id: "template-5", name: "Family & Friends" },
-    { id: "template-6", name: "Project Collaboration" },
-    { id: "template-7", name: "Book Club" },
-    { id: "template-8", name: "Fitness Group" },
-    { id: "template-9", name: "Travel Buddies" },
-    { id: "template-10", name: "Art & Design" },
+  type ServerTemplate = {
+    id: string;
+    name: string;
+    description?: string;
+    icon?: string;
+    defaultIconUrl?: string;
+  };
+
+  const templates: ServerTemplate[] = [
+    {
+      id: "template-1",
+      name: "Gaming Community",
+      description: "Organize raids, strategies, and voice channels for your squad.",
+      icon: "🎮",
+    },
+    {
+      id: "template-2",
+      name: "Study Group",
+      description: "Share resources, schedule study sessions, and stay accountable.",
+      icon: "📚",
+    },
+    {
+      id: "template-3",
+      name: "Local Meetup",
+      description: "Coordinate meetups, announce events, and welcome newcomers.",
+      icon: "📍",
+    },
+    {
+      id: "template-4",
+      name: "Development Team",
+      description: "Plan sprints, track tasks, and collaborate on releases.",
+      icon: "💻",
+    },
+    {
+      id: "template-5",
+      name: "Family & Friends",
+      description: "Stay in touch, plan gatherings, and share life's moments.",
+      icon: "👪",
+    },
+    {
+      id: "template-6",
+      name: "Project Collaboration",
+      description: "Create dedicated spaces for files, updates, and feedback.",
+      icon: "🛠️",
+    },
+    {
+      id: "template-7",
+      name: "Book Club",
+      description: "Discuss chapters, vote on reads, and schedule meetings.",
+      icon: "📖",
+    },
+    {
+      id: "template-8",
+      name: "Fitness Group",
+      description: "Share workout plans, progress photos, and motivation.",
+      icon: "💪",
+    },
+    {
+      id: "template-9",
+      name: "Travel Buddies",
+      description: "Coordinate itineraries, tips, and travel photo dumps.",
+      icon: "🧳",
+    },
+    {
+      id: "template-10",
+      name: "Art & Design",
+      description: "Showcase creations, gather feedback, and host critiques.",
+      icon: "🎨",
+    },
   ];
+
+  let selectedTemplate = $state<ServerTemplate | null>(null);
+  let selectedTemplateId = $derived(selectedTemplate?.id ?? null);
 
   function extractInviteCode(value: string): string | null {
     const trimmed = value.trim();
@@ -208,12 +269,30 @@
     }
   }
 
+  function handleTemplateSelection(template: ServerTemplate) {
+    selectedTemplate = template;
+    serverName = template.name;
+    serverIcon = null;
+    serverIconPreview = template.defaultIconUrl ?? null;
+
+    joinError = null;
+    modalView = "createServer";
+  }
+
+  function clearSelectedTemplate() {
+    selectedTemplate = null;
+    if (!serverIcon) {
+      serverIconPreview = null;
+    }
+  }
+
   function handleIconUpload(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
       serverIcon = target.files[0];
       revokeIconPreview();
       serverIconPreview = URL.createObjectURL(serverIcon);
+      clearSelectedTemplate();
     }
   }
 
@@ -262,11 +341,34 @@
               {#each templates as template (template.id)}
                 <button
                   type="button"
-                  class="w-full rounded-md border border-border bg-card/40 px-4 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  class={`w-full rounded-md border ${
+                    selectedTemplate?.id === template.id
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-card/40"
+                  } px-4 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`}
+                  aria-pressed={selectedTemplate?.id === template.id}
+                  onclick={() => handleTemplateSelection(template)}
                 >
-                  <span class="text-sm font-medium text-foreground"
-                    >{template.name}</span
-                  >
+                  <div class="flex items-start gap-3">
+                    {#if template.icon}
+                      <span
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg"
+                      >
+                        {template.icon}
+                      </span>
+                    {/if}
+
+                    <div class="space-y-1">
+                      <p class="text-sm font-medium text-foreground">
+                        {template.name}
+                      </p>
+                      {#if template.description}
+                        <p class="text-xs text-muted-foreground">
+                          {template.description}
+                        </p>
+                      {/if}
+                    </div>
+                  </div>
                 </button>
               {/each}
             </div>
@@ -336,6 +438,32 @@
       </form>
     {:else}
       <div class="space-y-6">
+        {#if selectedTemplate}
+          <div class="rounded-md border border-primary/40 bg-primary/5 p-4 text-sm">
+            <div class="flex items-start justify-between gap-4">
+              <div class="space-y-1">
+                <p class="font-medium text-foreground">
+                  Using template: {selectedTemplate.name}
+                </p>
+                {#if selectedTemplate.description}
+                  <p class="text-xs text-muted-foreground">
+                    {selectedTemplate.description}
+                  </p>
+                {/if}
+              </div>
+              <Button
+                variant="ghost"
+                type="button"
+                size="sm"
+                class="h-7"
+                onclick={clearSelectedTemplate}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        {/if}
+
         <div class="flex flex-col items-center gap-3">
           <label
             for="serverIcon"
@@ -388,6 +516,7 @@
           type="button"
           onclick={createNewServer}
           disabled={!trimmedServerName}
+          data-template-id={selectedTemplateId ?? undefined}
         >
           Create
         </Button>

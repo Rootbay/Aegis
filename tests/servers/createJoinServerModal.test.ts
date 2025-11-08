@@ -100,6 +100,29 @@ describe("CreateJoinServerModal - invite redemption", () => {
 
     await findByText("Invite expired");
   });
+
+  it("prefills the create form when a template is selected", async () => {
+    const { getByRole, getByLabelText, getByText } = render(
+      CreateJoinServerModal,
+      {
+        props: { onclose: vi.fn() },
+      },
+    );
+
+    const templateButton = getByRole("button", {
+      name: /Gaming Community/i,
+    });
+
+    await fireEvent.click(templateButton);
+
+    const nameInput = getByLabelText("Server Name") as HTMLInputElement;
+    await waitFor(() => {
+      expect(nameInput.value).toBe("Gaming Community");
+    });
+
+    const createButton = getByText("Create") as HTMLButtonElement;
+    expect(createButton.dataset.templateId).toBe("template-1");
+  });
 });
 
 describe("CreateJoinServerModal - server creation", () => {
