@@ -90,7 +90,10 @@ async fn unban_command_removes_ban_and_emits_event() {
         voice_memos_enabled: Arc::new(AtomicBool::new(false)),
         relays: Arc::new(AsyncMutex::new(Vec::new())),
         trusted_devices: Arc::new(AsyncMutex::new(Vec::new())),
-        pending_device_bundles: Arc::new(AsyncMutex::new(HashMap::<String, aegis_shared_types::PendingDeviceProvisioning>::new())),
+        pending_device_bundles: Arc::new(AsyncMutex::new(HashMap::<
+            String,
+            aegis_shared_types::PendingDeviceProvisioning,
+        >::new())),
     };
 
     let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));

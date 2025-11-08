@@ -628,6 +628,57 @@ pub async fn insert_server(pool: &Pool<Sqlite>, server: &Server) -> Result<(), s
     )
     .execute(pool)
     .await?;
+
+    let mut metadata_update = ServerMetadataUpdate::default();
+    let mut has_metadata_updates = false;
+    if server.icon_url.is_some() {
+        metadata_update.icon_url = Some(server.icon_url.clone());
+        has_metadata_updates = true;
+    }
+    if let Some(description) = server.description.clone() {
+        metadata_update.description = Some(Some(description));
+        has_metadata_updates = true;
+    }
+    if let Some(default_channel_id) = server.default_channel_id.clone() {
+        metadata_update.default_channel_id = Some(Some(default_channel_id));
+        has_metadata_updates = true;
+    }
+    if let Some(allow_invites) = server.allow_invites {
+        metadata_update.allow_invites = Some(allow_invites);
+        has_metadata_updates = true;
+    }
+
+    if has_metadata_updates {
+        update_server_metadata(pool, &server.id, &metadata_update).await?;
+    }
+
+    let mut moderation_update = ServerModerationUpdate::default();
+    let mut has_moderation_updates = false;
+    if let Some(level) = server.moderation_level.clone() {
+        moderation_update.moderation_level = Some(Some(level));
+        has_moderation_updates = true;
+    }
+    if let Some(explicit_content_filter) = server.explicit_content_filter {
+        moderation_update.explicit_content_filter = Some(explicit_content_filter);
+        has_moderation_updates = true;
+    }
+    if let Some(transparent_edits) = server.transparent_edits {
+        moderation_update.transparent_edits = Some(transparent_edits);
+        has_moderation_updates = true;
+    }
+    if let Some(deleted_message_display) = server.deleted_message_display.clone() {
+        moderation_update.deleted_message_display = Some(deleted_message_display);
+        has_moderation_updates = true;
+    }
+    if let Some(read_receipts_enabled) = server.read_receipts_enabled {
+        moderation_update.read_receipts_enabled = Some(read_receipts_enabled);
+        has_moderation_updates = true;
+    }
+
+    if has_moderation_updates {
+        update_server_moderation(pool, &server.id, &moderation_update).await?;
+    }
+
     Ok(())
 }
 

@@ -2,6 +2,7 @@ use super::{broadcast_join_event, ensure_server_owner, get_initialized_state};
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::{self, AepMessage};
 use aep::{database, user_service};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
@@ -12,15 +13,58 @@ pub struct ServerBanUpdate {
     pub user_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateServerIconPayload {
+    pub bytes: Vec<u8>,
+    pub mime_type: Option<String>,
+    pub name: Option<String>,
+}
+
+fn infer_mime_type(payload: &CreateServerIconPayload) -> String {
+    if let Some(explicit) = payload
+        .mime_type
+        .as_ref()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
+        return explicit.to_string();
+    }
+
+    if let Some(name) = &payload.name {
+        if let Some(ext) = name.rsplit('.').next() {
+            let normalized = ext.trim().to_lowercase();
+            match normalized.as_str() {
+                "jpg" | "jpeg" => return "image/jpeg".to_string(),
+                "png" => return "image/png".to_string(),
+                "gif" => return "image/gif".to_string(),
+                "webp" => return "image/webp".to_string(),
+                "svg" => return "image/svg+xml".to_string(),
+                _ => {}
+            }
+        }
+    }
+
+    "image/png".to_string()
+}
+
 #[tauri::command]
 pub async fn create_server(
     mut server: database::Server,
+    icon: Option<CreateServerIconPayload>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
     let state = get_initialized_state(&state_container).await?;
     let owner_id = state.identity.peer_id().to_base58();
     server.owner_id = owner_id.clone();
     server.invites = Vec::new();
+
+    if let Some(icon_payload) = icon.filter(|payload| !payload.bytes.is_empty()) {
+        let mime_type = infer_mime_type(&icon_payload);
+        let encoded = BASE64.encode(icon_payload.bytes);
+        let data_url = format!("data:{};base64,{}", mime_type, encoded);
+        server.icon_url = Some(data_url);
+    }
 
     database::insert_server(&state.db_pool, &server)
         .await

@@ -17,6 +17,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
+  import { onDestroy } from "svelte";
 
   type Props = {
     onclose: () => void;
@@ -141,6 +142,19 @@
     }
   }
 
+  type IconUploadPayload = {
+    bytes: number[];
+    mimeType?: string;
+    name?: string;
+  };
+
+  function revokeIconPreview() {
+    if (serverIconPreview) {
+      URL.revokeObjectURL(serverIconPreview);
+      serverIconPreview = null;
+    }
+  }
+
   async function createNewServer() {
     if (!trimmedServerName || !$userStore.me) {
       console.error("Cannot create server: missing name or user context.");
@@ -161,20 +175,33 @@
         roles: [],
       };
 
+      let iconPayload: IconUploadPayload | undefined;
+      if (serverIcon) {
+        const buffer = await serverIcon.arrayBuffer();
+        iconPayload = {
+          bytes: Array.from(new Uint8Array(buffer)),
+          mimeType: serverIcon.type || undefined,
+          name: serverIcon.name || undefined,
+        } satisfies IconUploadPayload;
+      }
+
       const createdServer: Server = await invoke("create_server", {
         server: serverForBackend,
+        icon: iconPayload,
       });
 
       const newServerForStore: Server = {
         ...createdServer,
         iconUrl:
-          serverIconPreview ||
+          createdServer.iconUrl ||
           "https://api.dicebear.com/8.x/bottts-neutral/svg?seed=" +
             encodeURIComponent(createdServer.name),
       };
 
       serverStore.addServer(newServerForStore);
       serverStore.setActiveServer(newServerForStore.id);
+      serverIcon = null;
+      revokeIconPreview();
       closeModal();
     } catch (error) {
       console.error("Failed to create server:", error);
@@ -185,18 +212,31 @@
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
       serverIcon = target.files[0];
+      revokeIconPreview();
       serverIconPreview = URL.createObjectURL(serverIcon);
     }
   }
 
   function closeModal() {
     open = false;
+    revokeIconPreview();
   }
 
   $effect(() => {
     if (!open) {
       onclose();
     }
+  });
+
+  $effect(() => {
+    if (modalView !== "createServer") {
+      serverIcon = null;
+      revokeIconPreview();
+    }
+  });
+
+  onDestroy(() => {
+    revokeIconPreview();
   });
 </script>
 
