@@ -14,6 +14,7 @@ export interface ChatSearchState {
   searchRequestId: number;
   pagesLoaded: number;
   resultsReceived: number;
+  loadMoreRequests: number;
 }
 
 interface ChatSearchHandlers {
@@ -35,6 +36,7 @@ const BASE_STATE = {
   searchRequestId: 0,
   pagesLoaded: 0,
   resultsReceived: 0,
+  loadMoreRequests: 0,
 } satisfies Omit<ChatSearchState, "history">;
 
 const initialState: ChatSearchState = {
@@ -87,6 +89,7 @@ function createChatSearchStore() {
           nextCursor: trimmed.length > 0 ? state.nextCursor : null,
           pagesLoaded: trimmed.length > 0 ? state.pagesLoaded : 0,
           resultsReceived: trimmed.length > 0 ? state.resultsReceived : 0,
+          loadMoreRequests: trimmed.length > 0 ? state.loadMoreRequests : 0,
         };
       });
     },
@@ -177,6 +180,7 @@ function createChatSearchStore() {
           searchRequestId: nextRequestId,
           pagesLoaded: 0,
           resultsReceived: 0,
+          loadMoreRequests: 0,
         };
       });
     },
@@ -191,6 +195,19 @@ function createChatSearchStore() {
           return state;
         }
         return state.loading === loading ? state : { ...state, loading };
+      });
+    },
+    requestNextPage() {
+      update((state) => {
+        if (!state.searching || !state.hasMore || state.loading) {
+          return state;
+        }
+
+        return {
+          ...state,
+          loadMoreRequests: state.loadMoreRequests + 1,
+          loading: true,
+        };
       });
     },
     recordSearchPage(

@@ -19,6 +19,7 @@ describe("chatSearchStore", () => {
     expect(state.searchRequestId).toBeGreaterThan(0);
     expect(state.pagesLoaded).toBe(0);
     expect(state.resultsReceived).toBe(0);
+    expect(state.loadMoreRequests).toBe(0);
   });
 
   it("executeSearch with empty query clears searching state", () => {
@@ -41,6 +42,25 @@ describe("chatSearchStore", () => {
 
     chatSearchStore.setSearchLoading(searchRequestId + 1, true);
     expect(get(chatSearchStore).loading).toBe(false);
+  });
+
+  it("requestNextPage increments the pending page counter when idle", () => {
+    chatSearchStore.setQuery("more");
+    chatSearchStore.executeSearch();
+    const { searchRequestId } = get(chatSearchStore);
+
+    chatSearchStore.setSearchLoading(searchRequestId, false);
+    chatSearchStore.recordSearchPage(searchRequestId, {
+      cursor: "cursor-1",
+      hasMore: true,
+      results: 2,
+    });
+
+    chatSearchStore.requestNextPage();
+
+    const state = get(chatSearchStore);
+    expect(state.loadMoreRequests).toBe(1);
+    expect(state.loading).toBe(true);
   });
 
   it("recordSearchPage updates pagination counters for the active request", () => {

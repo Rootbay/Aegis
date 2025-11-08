@@ -130,6 +130,7 @@ type ChatSearchState = {
   searchRequestId: number;
   pagesLoaded: number;
   resultsReceived: number;
+  loadMoreRequests: number;
 };
 
 type ChatSearchModule = {
@@ -753,6 +754,7 @@ function getChatSearchModule(): ChatSearchModule {
       searchRequestId: 0,
       pagesLoaded: 0,
       resultsReceived: 0,
+      loadMoreRequests: 0,
     });
 
     globals.__chatSearchModule = {
@@ -776,11 +778,12 @@ function getChatSearchModule(): ChatSearchModule {
             searching: false,
             loading: false,
             hasMore: false,
-            nextCursor: null,
-            searchRequestId: 0,
-            pagesLoaded: 0,
-            resultsReceived: 0,
-          });
+          nextCursor: null,
+          searchRequestId: 0,
+          pagesLoaded: 0,
+          resultsReceived: 0,
+          loadMoreRequests: 0,
+        });
         },
         setSearchLoading: () => {},
         recordSearchPage: () => {},

@@ -1947,15 +1947,125 @@
   let normalizedQuery = $derived(parsedSearchQuery.normalizedText);
   let activeSearchFilters = $derived(parsedSearchQuery.filters);
 
-  const REMOTE_SEARCH_MAX_PAGES = 3;
-  let activeSearchController: { id: number; cancelled: boolean } | null = null;
+  const REMOTE_SEARCH_INITIAL_PAGES = 3;
+  type RemoteSearchController = {
+    id: number;
+    cancelled: boolean;
+    cursor: string | null;
+    hasMore: boolean;
+    running: boolean;
+    autoRemaining: number;
+    manualHandled: number;
+  };
+  let activeSearchController: RemoteSearchController | null = null;
 
   const cancelActiveSearch = () => {
     if (activeSearchController) {
+      chatSearchStore.setSearchLoading(activeSearchController.id, false);
       activeSearchController.cancelled = true;
       activeSearchController = null;
     }
   };
+
+  async function fetchSearchPages(
+    controller: RemoteSearchController,
+    context: { chatId: string; query: string; filters: typeof activeSearchFilters },
+  ) {
+    if (controller.running) {
+      return;
+    }
+
+    if (!controller.hasMore) {
+      chatSearchStore.setSearchLoading(controller.id, false);
+      return;
+    }
+
+    const initialManualTarget = get(chatSearchStore).loadMoreRequests;
+    const hasPendingAuto = controller.autoRemaining > 0;
+    const hasPendingManual = initialManualTarget - controller.manualHandled > 0;
+    if (!hasPendingAuto && !hasPendingManual) {
+      return;
+    }
+
+    controller.running = true;
+    chatSearchStore.setSearchLoading(controller.id, true);
+
+    try {
+      while (!controller.cancelled && controller.hasMore) {
+        const latestManualTarget = get(chatSearchStore).loadMoreRequests;
+        const pendingAutoPages = controller.autoRemaining;
+        const pendingManualPages =
+          latestManualTarget - controller.manualHandled;
+
+        if (pendingAutoPages <= 0 && pendingManualPages <= 0) {
+          break;
+        }
+
+        const useAutoPage = pendingAutoPages > 0;
+        if (useAutoPage) {
+          controller.autoRemaining -= 1;
+        } else {
+          controller.manualHandled += 1;
+        }
+
+        try {
+          const result = await chatStore.searchMessages({
+            chatId: context.chatId,
+            query: context.query,
+            filters: context.filters,
+            cursor: controller.cursor,
+          });
+
+          if (controller.cancelled) {
+            return;
+          }
+
+          const nextHasMore = result.hasMore && result.received > 0;
+          const nextCursor = nextHasMore ? result.nextCursor : null;
+          controller.cursor = nextCursor;
+          controller.hasMore = nextHasMore;
+
+          chatSearchStore.recordSearchPage(controller.id, {
+            cursor: nextCursor,
+            hasMore: nextHasMore,
+            results: result.received,
+          });
+
+          if (!nextHasMore) {
+            break;
+          }
+        } catch (error) {
+          if (!controller.cancelled) {
+            console.error("Failed to search messages", error);
+            controller.hasMore = false;
+            chatSearchStore.recordSearchPage(controller.id, {
+              cursor: null,
+              hasMore: false,
+              results: 0,
+            });
+          }
+          break;
+        }
+      }
+    } finally {
+      controller.running = false;
+      if (!controller.cancelled) {
+        const latestManualTarget = get(chatSearchStore).loadMoreRequests;
+        const pendingAutoPages = controller.autoRemaining;
+        const pendingManualPages =
+          latestManualTarget - controller.manualHandled;
+
+        const shouldRemainLoading =
+          controller.hasMore &&
+          (pendingAutoPages > 0 || pendingManualPages > 0);
+
+        chatSearchStore.setSearchLoading(
+          controller.id,
+          shouldRemainLoading,
+        );
+      }
+    }
+  }
 
   let chatSearchMatches = $derived(() => {
     if (!chat?.id) {
@@ -1994,71 +2104,33 @@
       activeSearchController &&
       activeSearchController.id === searchState.searchRequestId
     ) {
+      if (!activeSearchController.cancelled) {
+        void fetchSearchPages(activeSearchController, {
+          chatId,
+          query: trimmed,
+          filters: activeSearchFilters,
+        });
+      }
       return;
     }
 
     cancelActiveSearch();
 
-    const controller = { id: searchState.searchRequestId, cancelled: false };
+    const controller: RemoteSearchController = {
+      id: searchState.searchRequestId,
+      cancelled: false,
+      cursor: null,
+      hasMore: true,
+      running: false,
+      autoRemaining: REMOTE_SEARCH_INITIAL_PAGES,
+      manualHandled: searchState.loadMoreRequests,
+    };
     activeSearchController = controller;
-    const filters = activeSearchFilters;
-
-    void (async () => {
-      chatSearchStore.setSearchLoading(controller.id, true);
-      let cursor: string | null = null;
-      let hasMore = true;
-      let pagesFetched = 0;
-
-      while (
-        !controller.cancelled &&
-        hasMore &&
-        pagesFetched < REMOTE_SEARCH_MAX_PAGES
-      ) {
-        try {
-          const result = await chatStore.searchMessages({
-            chatId,
-            query: trimmed,
-            filters,
-            cursor,
-          });
-
-          if (controller.cancelled) {
-            return;
-          }
-
-          const nextHasMore = result.hasMore && result.received > 0;
-          const nextCursor = nextHasMore ? result.nextCursor : null;
-          cursor = nextCursor;
-          hasMore = nextHasMore;
-
-          chatSearchStore.recordSearchPage(controller.id, {
-            cursor: nextCursor,
-            hasMore: nextHasMore,
-            results: result.received,
-          });
-
-          pagesFetched += 1;
-
-          if (!hasMore) {
-            break;
-          }
-        } catch (error) {
-          if (!controller.cancelled) {
-            console.error("Failed to search messages", error);
-            chatSearchStore.recordSearchPage(controller.id, {
-              cursor: null,
-              hasMore: false,
-              results: 0,
-            });
-          }
-          break;
-        }
-      }
-
-      if (!controller.cancelled) {
-        chatSearchStore.setSearchLoading(controller.id, false);
-      }
-    })();
+    void fetchSearchPages(controller, {
+      chatId,
+      query: trimmed,
+      filters: activeSearchFilters,
+    });
   });
 
   onDestroy(() => {
