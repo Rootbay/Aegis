@@ -9,32 +9,63 @@ import {
   it,
   vi,
 } from "vitest";
-import { writable, get } from "svelte/store";
+import { get } from "svelte/store";
 
 import type { Message } from "../../src/lib/features/chat/models/Message";
 import type { Friend } from "../../src/lib/features/friends/models/Friend";
 import SearchSidebar from "../../src/lib/components/sidebars/SearchSidebar.svelte";
 import { chatSearchStore } from "../../src/lib/features/chat/stores/chatSearchStore";
 
-const messagesStore = writable(new Map<string, Message[]>());
+type WritableStore<T> = {
+  subscribe: (run: (value: T) => void) => () => void;
+  set: (value: T) => void;
+};
+
+const storeMocks = vi.hoisted(() => {
+  function createWritableStore<T>(initial: T): WritableStore<T> {
+    let value = initial;
+    const subscribers = new Set<(current: T) => void>();
+    return {
+      subscribe(run) {
+        run(value);
+        subscribers.add(run);
+        return () => {
+          subscribers.delete(run);
+        };
+      },
+      set(nextValue) {
+        value = nextValue;
+        subscribers.forEach((run) => run(value));
+      },
+    };
+  }
+
+  return {
+    messagesStore: createWritableStore(new Map<string, Message[]>()),
+    userState: createWritableStore({
+      me: { id: "user-1", name: "Tester", avatar: "", online: true },
+    }),
+    serverState: createWritableStore({ activeServerId: null, servers: [] as never[] }),
+  };
+}) as {
+  messagesStore: WritableStore<Map<string, Message[]>>;
+  userState: WritableStore<{ me: { id: string; name: string; avatar: string; online: boolean } }>;
+  serverState: WritableStore<{ activeServerId: string | null; servers: never[] }>;
+};
 
 vi.mock("$lib/features/chat/stores/chatStore", () => ({
-  messagesByChatId: { subscribe: messagesStore.subscribe },
+  messagesByChatId: { subscribe: storeMocks.messagesStore.subscribe },
 }));
-
-const userState = writable({
-  me: { id: "user-1", name: "Tester", avatar: "", online: true },
-});
 
 vi.mock("$lib/stores/userStore", () => ({
-  userStore: { subscribe: userState.subscribe },
+  userStore: { subscribe: storeMocks.userState.subscribe },
 }));
-
-const serverState = writable({ activeServerId: null, servers: [] as never[] });
 
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
-  serverStore: { subscribe: serverState.subscribe },
+  serverStore: { subscribe: storeMocks.serverState.subscribe },
 }));
+
+const { messagesStore, userState, serverState } = storeMocks;
 
 const friend: Friend = {
   id: "friend-1",
@@ -140,7 +171,10 @@ describe("SearchSidebar", () => {
     render(SearchSidebar, { chat });
 
     expect(screen.getByText("Friend One")).toBeInTheDocument();
-    expect(screen.getByText(/highlighted search message/i)).toBeInTheDocument();
+    const highlightedMatches = screen.getAllByText((_, element) =>
+      element?.textContent?.includes("highlighted search message") ?? false,
+    );
+    expect(highlightedMatches.length).toBeGreaterThan(0);
   });
 
   it("shows a load more button when additional pages exist", async () => {

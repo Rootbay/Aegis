@@ -6,6 +6,7 @@ export interface ChatSearchState {
   matches: number[];
   activeMatchIndex: number;
   dropdownOpen: boolean;
+  mobileResultsOpen: boolean;
   history: string[];
   searching: boolean;
   loading: boolean;
@@ -29,6 +30,7 @@ const BASE_STATE = {
   matches: [],
   activeMatchIndex: 0,
   dropdownOpen: false,
+  mobileResultsOpen: false,
   searching: false,
   loading: false,
   hasMore: false,
@@ -132,6 +134,13 @@ function createChatSearchStore() {
     setDropdownOpen(open: boolean) {
       update((state) =>
         state.dropdownOpen === open ? state : { ...state, dropdownOpen: open },
+      );
+    },
+    setMobileResultsOpen(open: boolean) {
+      update((state) =>
+        state.mobileResultsOpen === open
+          ? state
+          : { ...state, mobileResultsOpen: open },
       );
     },
     registerHandlers(nextHandlers: ChatSearchHandlers) {
