@@ -7,7 +7,10 @@
   import { userStore } from "$lib/stores/userStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import {
+    chatStore,
+    serverUnreadCountByServerId,
+  } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
   import ServerContextMenu from "$lib/components/context-menus/ServerContextMenu.svelte";
   import type { Server } from "$lib/features/servers/models/Server";
@@ -54,6 +57,11 @@
   const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
   let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
   let eventModalServer = $state<Server | null>(null);
+
+  const formatUnreadCount = (value: number) => {
+    if (value <= 0) return "0";
+    return value > 99 ? "99+" : `${value}`;
+  };
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
 
@@ -362,6 +370,9 @@
             <SidebarMenuItem
               class="group relative flex w-full justify-center pl-2"
             >
+              {@const unreadCount =
+                $serverUnreadCountByServerId.get(server.id) ?? 0}
+              {@const isMuted = mutedServerIds.has(server.id)}
               <span
                 aria-hidden="true"
                 class={cn(
@@ -373,7 +384,7 @@
               ></span>
               <ServerContextMenu
                 {server}
-                muted={mutedServerIds.has(server.id)}
+                muted={isMuted}
                 onaction={handleServerAction}
               >
                 <Button
@@ -381,15 +392,30 @@
                   size="icon"
                   variant="outline"
                   class={cn(
-                    "size-10 p-0 rounded-full overflow-hidden border-2 cursor-pointer",
+                    "size-10 p-0 rounded-full border-2 cursor-pointer relative",
                     $serverStore.activeServerId === server.id
                       ? "border-primary"
                       : "border-border",
-                    mutedServerIds.has(server.id) && "opacity-60 grayscale",
+                    isMuted && "opacity-60 grayscale",
                   )}
                   onclick={() => handleServerClick(server)}
-                  aria-label={server.name}
+                  aria-label={
+                    unreadCount > 0
+                      ? `${server.name} (${unreadCount} unread messages)`
+                      : server.name
+                  }
                 >
+                  {#if unreadCount > 0}
+                    {@const unreadBadgeClasses =
+                      cn(
+                        "pointer-events-none absolute -top-1 -right-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold leading-tight text-destructive-foreground shadow-sm",
+                        unreadCount > 9 ? "px-1.5" : "px-1",
+                        isMuted && "opacity-70",
+                      )}
+                    <span class={unreadBadgeClasses} aria-hidden="true">
+                      {formatUnreadCount(unreadCount)}
+                    </span>
+                  {/if}
                   {#if server.iconUrl}
                     <Avatar class="size-10">
                       <AvatarImage
