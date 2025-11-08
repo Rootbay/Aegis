@@ -84,6 +84,8 @@
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { Message } from "$lib/features/chat/models/Message";
+  import type { Channel } from "$lib/features/channels/models/Channel";
+  import type { Role } from "$lib/features/servers/models/Role";
 
   type SendServerInviteResult = {
     server_id: string;
@@ -434,6 +436,8 @@
   let msgMenuY = $state(0);
   let selectedMsg: Message | null = $state(null);
   let memberById = $state<Map<string, User>>(new Map());
+  let channelById = $state<Map<string, Channel>>(new Map());
+  let roleById = $state<Map<string, Role>>(new Map());
   let friendById = $state<Map<string, Friend>>(new Map());
   let editingMessageId = $state<string | null>(null);
   let editingDraft = $state("");
@@ -449,27 +453,79 @@
 
   const mentionableMembers = $derived(() => {
     if (!chat) return [] as MentionCandidate[];
+
+    const candidates: MentionCandidate[] = [];
+
     if (chat.type === "dm") {
-      return chat.friend
-        ? [
-            {
-              id: chat.friend.id,
-              name: chat.friend.name,
-              avatar: chat.friend.avatar,
-              tag: chat.friend.tag,
-            },
-          ]
-        : [];
+      if (chat.friend) {
+        candidates.push({
+          id: chat.friend.id,
+          name: chat.friend.name,
+          avatar: chat.friend.avatar,
+          tag: chat.friend.tag,
+          kind: "user",
+          searchText: chat.friend.tag ? `@${chat.friend.tag}` : undefined,
+        });
+      }
+      return candidates;
     }
-    if (chat.type === "group" || chat.type === "channel") {
-      return (chat.members ?? []).map((member: User) => ({
+
+    const members = chat.members ?? [];
+    for (const member of members) {
+      candidates.push({
         id: member.id,
         name: member.name,
         avatar: member.avatar,
         tag: member.tag,
-      }));
+        kind: "user",
+        searchText: member.tag ? `@${member.tag}` : undefined,
+      });
     }
-    return [];
+
+    if (chat.type === "channel") {
+      const server = $serverStore.servers.find(
+        (entry) => entry.id === chat.serverId,
+      );
+      if (server) {
+        for (const channel of server.channels ?? []) {
+          candidates.push({
+            id: channel.id,
+            name: channel.name,
+            kind: "channel",
+            searchText: `#${channel.name}`,
+          });
+        }
+
+        for (const role of server.roles ?? []) {
+          if (role.mentionable) {
+            candidates.push({
+              id: role.id,
+              name: role.name,
+              kind: "role",
+              searchText: `@${role.name}`,
+            });
+          }
+        }
+
+        candidates.push({
+          id: "@everyone",
+          name: "@everyone",
+          kind: "special",
+          specialKey: "everyone",
+          searchText: "everyone",
+        });
+
+        candidates.push({
+          id: "@here",
+          name: "@here",
+          kind: "special",
+          specialKey: "here",
+          searchText: "here",
+        });
+      }
+    }
+
+    return candidates;
   });
 
   $effect(() => {
@@ -587,8 +643,8 @@
   );
 
   const updateMentionSuggestions = (cursorPosition?: number) => {
-    const members = mentionableMembers();
-    if (!members.length) {
+    const candidates = mentionableMembers();
+    if (!candidates.length) {
       mentionSuggestions.close();
       return;
     }
@@ -596,7 +652,7 @@
       mentionSuggestions.updateInput(
         messageInput,
         cursorPosition ?? messageInput.length,
-        members,
+        candidates,
       );
       return;
     }
@@ -604,7 +660,7 @@
       typeof cursorPosition === "number"
         ? cursorPosition
         : (textareaRef.selectionStart ?? messageInput.length);
-    mentionSuggestions.updateInput(messageInput, cursor, members);
+    mentionSuggestions.updateInput(messageInput, cursor, candidates);
   };
 
   const handleComposerFocus = () => {
@@ -657,6 +713,66 @@
     }
   };
 
+  function formatMentionCandidateLabel(candidate: MentionCandidate): string {
+    switch (candidate.kind) {
+      case "channel":
+        return `#${candidate.name}`;
+      case "role":
+        return `@${candidate.name}`;
+      case "special":
+        return candidate.name.startsWith("@") ? candidate.name : `@${candidate.name}`;
+      case "user":
+      default:
+        return candidate.name;
+    }
+  }
+
+  function getMentionCandidateBadge(candidate: MentionCandidate): string {
+    switch (candidate.kind) {
+      case "channel":
+        return "#";
+      case "role":
+        return "@";
+      case "special":
+        return "@";
+      case "user":
+      default:
+        return candidate.name?.charAt(0)?.toUpperCase?.() ?? "@";
+    }
+  }
+
+  function getMentionCandidateBadgeClasses(candidate: MentionCandidate): string {
+    switch (candidate.kind) {
+      case "channel":
+        return "bg-cyan-600/70 text-cyan-100";
+      case "role":
+        return "bg-emerald-600/70 text-emerald-100";
+      case "special":
+        return "bg-amber-600/70 text-amber-100";
+      case "user":
+      default:
+        return "bg-zinc-600/70 text-zinc-100";
+    }
+  }
+
+  function buildMentionToken(candidate: MentionCandidate): string {
+    switch (candidate.kind) {
+      case "channel":
+        return `<#${candidate.id}>`;
+      case "role":
+        return `<@&${candidate.id}>`;
+      case "special": {
+        if (candidate.specialKey === "here") {
+          return "@here";
+        }
+        return "@everyone";
+      }
+      case "user":
+      default:
+        return `<@${candidate.id}>`;
+    }
+  }
+
   const handleMentionSelection = (index?: number) => {
     const candidate = mentionSuggestions.select(index);
     const state = get(mentionSuggestions);
@@ -669,7 +785,7 @@
       mentionSuggestions.close();
       return;
     }
-    const mentionToken = `<@${candidate.id}>`;
+    const mentionToken = buildMentionToken(candidate);
     const before = messageInput.slice(0, start);
     const after = messageInput.slice(end);
     const needsTrailingSpace = after.length === 0 || !/^\s/.test(after);
@@ -682,8 +798,7 @@
     }
     queueMicrotask(() => {
       if (textareaRef) {
-        const caret =
-          start + mentionToken.length + (needsTrailingSpace ? 1 : 0);
+        const caret = start + mentionToken.length + (needsTrailingSpace ? 1 : 0);
         textareaRef.focus();
         textareaRef.setSelectionRange(caret, caret);
       }
@@ -967,6 +1082,25 @@
   });
 
   $effect(() => {
+    if (chat?.type === "channel") {
+      const server = $serverStore.servers.find(
+        (entry) => entry.id === chat.serverId,
+      );
+      if (server) {
+        channelById = new Map(
+          (server.channels ?? []).map((channel: Channel) => [channel.id, channel]),
+        );
+        roleById = new Map(
+          (server.roles ?? []).map((role: Role) => [role.id, role]),
+        );
+        return;
+      }
+    }
+    channelById = new Map();
+    roleById = new Map();
+  });
+
+  $effect(() => {
     if (!replyTargetMessageId) {
       return;
     }
@@ -1038,10 +1172,71 @@
     return userId;
   }
 
+  function resolveChannelName(channelId: string): string {
+    if (!channelId) {
+      return "";
+    }
+
+    const channel = channelById.get(channelId);
+    if (channel?.name) {
+      return channel.name;
+    }
+
+    if (chat?.type === "channel") {
+      const server = $serverStore.servers.find(
+        (entry) => entry.id === chat.serverId,
+      );
+      const fallback = server?.channels?.find((entry) => entry.id === channelId);
+      if (fallback?.name) {
+        return fallback.name;
+      }
+    }
+
+    return channelId;
+  }
+
+  function resolveRoleName(roleId: string): string {
+    if (!roleId) {
+      return "";
+    }
+
+    const role = roleById.get(roleId);
+    if (role?.name) {
+      return role.name;
+    }
+
+    if (chat?.type === "channel") {
+      const server = $serverStore.servers.find(
+        (entry) => entry.id === chat.serverId,
+      );
+      const fallback = server?.roles?.find((entry) => entry.id === roleId);
+      if (fallback?.name) {
+        return fallback.name;
+      }
+    }
+
+    return roleId;
+  }
+
+  function resolveSpecialMentionName(key: "everyone" | "here"): string {
+    switch (key) {
+      case "here":
+        return "@here";
+      case "everyone":
+      default:
+        return "@everyone";
+    }
+  }
+
   function formatMessageSegments(
     content: string | null | undefined,
   ): FormattedMessageSegment[] {
-    return renderMessageContent(content ?? "", { resolveMentionName });
+    return renderMessageContent(content ?? "", {
+      resolveMentionName,
+      resolveChannelName,
+      resolveRoleName,
+      resolveSpecialMentionName,
+    });
   }
 
   function focusMatch(index: number) {
@@ -2683,6 +2878,27 @@
                                     >
                                       @{segment.name}
                                     </span>
+                                  {:else if segment.type === "channel"}
+                                    <span
+                                      class="font-semibold text-cyan-300"
+                                      data-channel-id={segment.id}
+                                    >
+                                      #{segment.name}
+                                    </span>
+                                  {:else if segment.type === "role"}
+                                    <span
+                                      class="font-semibold text-emerald-300"
+                                      data-role-id={segment.id}
+                                    >
+                                      @{segment.name}
+                                    </span>
+                                  {:else if segment.type === "special"}
+                                    <span
+                                      class="font-semibold text-amber-300"
+                                      data-special-mention={segment.key}
+                                    >
+                                      {segment.name}
+                                    </span>
                                   {:else if segment.type === "link"}
                                     <a
                                       href={segment.url}
@@ -2705,6 +2921,27 @@
                                     data-mention-id={segment.id}
                                   >
                                     @{segment.name}
+                                  </span>
+                                {:else if segment.type === "channel"}
+                                  <span
+                                    class="font-semibold text-cyan-300"
+                                    data-channel-id={segment.id}
+                                  >
+                                    #{segment.name}
+                                  </span>
+                                {:else if segment.type === "role"}
+                                  <span
+                                    class="font-semibold text-emerald-300"
+                                    data-role-id={segment.id}
+                                  >
+                                    @{segment.name}
+                                  </span>
+                                {:else if segment.type === "special"}
+                                  <span
+                                    class="font-semibold text-amber-300"
+                                    data-special-mention={segment.key}
+                                  >
+                                    {segment.name}
                                   </span>
                                 {:else if segment.type === "link"}
                                   <a
@@ -2732,6 +2969,27 @@
                                 data-mention-id={segment.id}
                               >
                                 @{segment.name}
+                              </span>
+                            {:else if segment.type === "channel"}
+                              <span
+                                class="font-semibold text-cyan-300"
+                                data-channel-id={segment.id}
+                              >
+                                #{segment.name}
+                              </span>
+                            {:else if segment.type === "role"}
+                              <span
+                                class="font-semibold text-emerald-300"
+                                data-role-id={segment.id}
+                              >
+                                @{segment.name}
+                              </span>
+                            {:else if segment.type === "special"}
+                              <span
+                                class="font-semibold text-amber-300"
+                                data-special-mention={segment.key}
+                              >
+                                {segment.name}
                               </span>
                             {:else if segment.type === "link"}
                               <a
@@ -3113,12 +3371,18 @@
                             alt={suggestion.name}
                             class="h-6 w-6 rounded-full object-cover"
                           />
+                        {:else}
+                          <div
+                            class={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${getMentionCandidateBadgeClasses(suggestion)}`}
+                          >
+                            {getMentionCandidateBadge(suggestion)}
+                          </div>
                         {/if}
                         <div class="min-w-0">
                           <p class="truncate text-sm font-medium text-white">
-                            {suggestion.name}
+                            {formatMentionCandidateLabel(suggestion)}
                           </p>
-                          {#if suggestion.tag}
+                          {#if suggestion.kind === "user" && suggestion.tag}
                             <p class="text-xs text-zinc-400">
                               @{suggestion.tag}
                             </p>

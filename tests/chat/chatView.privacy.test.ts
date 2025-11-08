@@ -31,6 +31,8 @@ import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Friend } from "$lib/features/friends/models/Friend";
 import type { Message } from "$lib/features/chat/models/Message";
 import type { User } from "$lib/features/auth/models/User";
+import type { Channel } from "$lib/features/channels/models/Channel";
+import type { Role } from "$lib/features/servers/models/Role";
 
 vi.mock("$app/environment", () => ({
   browser: false,
@@ -171,6 +173,7 @@ type FriendStoreModule = {
       (friendshipId: string, friendId: string) => Promise<void>
     >;
     initialize: Mock<() => Promise<void>>;
+    subscribe: WritableStore<{ friends: Friend[] }>['subscribe'];
   };
   __resetFriendStore?: () => void;
 };
@@ -188,6 +191,7 @@ type ServerStoreModule = {
   serverStore: {
     subscribe: WritableStore<{ servers: unknown[] }>["subscribe"];
   };
+  __setServerState?: (state: { servers: unknown[]; [key: string]: unknown }) => void;
 };
 
 const messagesByChatId = messagesByChatIdReadable as unknown as WritableStore<
@@ -616,6 +620,117 @@ describe("ChatView mentions", () => {
     expect(composer.selectionStart).toBe(`Ping <@${members[0].id}>`.length);
     expect(screen.queryByRole("button", { name: /Naomi Naylor/i })).toBeNull();
   });
+
+  it("inserts channel and role mentions from the suggestion list", async () => {
+    const serverId = "server-mention-suggestions";
+    const channels: Channel[] = [
+      {
+        id: "channel-general",
+        name: "general",
+        server_id: serverId,
+        channel_type: "text",
+        private: false,
+      },
+      {
+        id: "channel-random",
+        name: "random",
+        server_id: serverId,
+        channel_type: "text",
+        private: false,
+      },
+    ];
+    const roles: Role[] = [
+      {
+        id: "role-mods",
+        name: "Moderators",
+        color: "#7289da",
+        hoist: false,
+        mentionable: true,
+        permissions: {},
+        member_ids: [],
+      },
+    ];
+
+    const serverModule = getServerStoreModule();
+    serverModule.__setServerState?.({
+      servers: [
+        {
+          id: serverId,
+          name: "Mention Test Server",
+          channels,
+          roles,
+          members: [],
+        },
+      ],
+      activeServerId: serverId,
+    });
+
+    const members: User[] = [
+      {
+        id: "user-alex",
+        name: "Alex Example",
+        avatar: "https://example.com/alex.png",
+        online: true,
+      },
+    ];
+
+    const chat: Chat = {
+      type: "channel",
+      id: channels[0].id,
+      name: channels[0].name,
+      serverId,
+      members,
+      messages: [],
+    };
+
+    messagesByChatId.set(new Map([[chat.id, []]]));
+
+    render(ChatView, { props: { chat } });
+
+    const composer = (await screen.findByPlaceholderText(
+      `Message #${chat.name}`,
+    )) as HTMLTextAreaElement;
+
+    const draft = "Discuss #gen";
+    composer.value = draft;
+    composer.setSelectionRange(draft.length, draft.length);
+
+    await fireEvent.input(composer, {
+      target: {
+        value: draft,
+        selectionStart: draft.length,
+        selectionEnd: draft.length,
+      },
+    });
+
+    const channelSuggestion = await screen.findByRole("button", {
+      name: /#general/i,
+    });
+
+    await fireEvent.click(channelSuggestion);
+
+    expect(composer.value).toBe("Discuss <#channel-general> ");
+
+    const roleDraft = "Alert @&Mod";
+    composer.value = roleDraft;
+    composer.setSelectionRange(roleDraft.length, roleDraft.length);
+
+    await fireEvent.input(composer, {
+      target: {
+        value: roleDraft,
+        selectionStart: roleDraft.length,
+        selectionEnd: roleDraft.length,
+      },
+    });
+
+    const roleSuggestion = await screen.findByRole("button", {
+      name: /@Moderators/i,
+    });
+
+    await fireEvent.click(roleSuggestion);
+
+    expect(composer.value).toBe("Alert <@&role-mods> ");
+  });
 });
 
 const linkPreviewMocks = vi.hoisted(() => ({
@@ -875,15 +990,18 @@ function getFriendStoreModule(): FriendStoreModule {
       async (_friendshipId: string, _friendId: string) => {},
     );
     const initialize = vi.fn(async () => Promise.resolve());
+    const state = createWritable<{ friends: Friend[] }>({ friends: [] });
 
     globals.__friendStoreModule = {
       friendStore: {
         removeFriend,
         initialize,
+        subscribe: state.subscribe,
       },
       __resetFriendStore: () => {
         removeFriend.mockClear();
         initialize.mockClear();
+        state.set({ friends: [] });
       },
     };
   }
@@ -934,6 +1052,7 @@ function getServerStoreModule(): ServerStoreModule {
       serverStore: {
         subscribe: state.subscribe,
       },
+      __setServerState: (next) => state.set(next),
     };
   }
   return globals.__serverStoreModule;
@@ -1049,6 +1168,8 @@ async function resetChatViewState() {
   __resetMutedFriends();
   const friendModule = getFriendStoreModule();
   friendModule.__resetFriendStore?.();
+  const serverModule = getServerStoreModule();
+  serverModule.__setServerState?.({ servers: [] });
   const toastModule = getToastModule();
   toastModule.__resetToasts?.();
   vi.mocked(invoke).mockReset();

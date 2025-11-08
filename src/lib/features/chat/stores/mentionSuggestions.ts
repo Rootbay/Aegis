@@ -1,15 +1,23 @@
 import { get, writable } from "svelte/store";
 
+export type MentionCandidateKind = "user" | "channel" | "role" | "special";
+
 export interface MentionCandidate {
   id: string;
   name: string;
+  kind: MentionCandidateKind;
   avatar?: string;
   tag?: string;
+  specialKey?: "everyone" | "here";
+  searchText?: string;
 }
+
+export type MentionTrigger = "@" | "@&" | "#";
 
 export interface MentionSuggestionsState {
   active: boolean;
   query: string;
+  trigger: MentionTrigger | null;
   triggerIndex: number;
   cursorIndex: number;
   suggestions: MentionCandidate[];
@@ -19,13 +27,14 @@ export interface MentionSuggestionsState {
 const initialState: MentionSuggestionsState = {
   active: false,
   query: "",
+  trigger: null,
   triggerIndex: -1,
   cursorIndex: -1,
   suggestions: [],
   activeIndex: 0,
 };
 
-const MENTION_MATCH = /(^|[\s([{])@([^\s@]*)$/u;
+const MENTION_MATCH = /(^|[\s([{])(@&|@|#)([^\s@#]*)$/u;
 
 function normalizeQuery(query: string) {
   return query.trim().toLowerCase();
@@ -35,12 +44,30 @@ function uniqueCandidates(candidates: MentionCandidate[]): MentionCandidate[] {
   const seen = new Set<string>();
   const unique: MentionCandidate[] = [];
   for (const candidate of candidates) {
-    if (candidate && !seen.has(candidate.id)) {
-      seen.add(candidate.id);
+    const key = candidate ? `${candidate.kind}:${candidate.id}` : null;
+    if (candidate && key && !seen.has(key)) {
+      seen.add(key);
       unique.push(candidate);
     }
   }
   return unique;
+}
+
+function candidateSupportsTrigger(
+  candidate: MentionCandidate,
+  trigger: MentionTrigger,
+): boolean {
+  switch (candidate.kind) {
+    case "channel":
+      return trigger === "#";
+    case "role":
+      return trigger === "@&";
+    case "special":
+      return trigger === "@";
+    case "user":
+    default:
+      return trigger === "@";
+  }
 }
 
 export function createMentionSuggestionsStore() {
@@ -52,9 +79,9 @@ export function createMentionSuggestionsStore() {
     updateInput(
       value: string,
       cursorPosition: number,
-      members: MentionCandidate[],
+      candidates: MentionCandidate[],
     ) {
-      if (!members.length) {
+      if (!candidates.length) {
         set(initialState);
         return;
       }
@@ -66,18 +93,27 @@ export function createMentionSuggestionsStore() {
         return;
       }
 
-      const query = match[2] ?? "";
-      const triggerIndex = cursorPosition - query.length - 1;
+      const trigger = (match[2] ?? "@") as MentionTrigger;
+      const query = match[3] ?? "";
+      const triggerOffset = trigger === "@&" ? 2 : 1;
+      const triggerIndex = cursorPosition - query.length - triggerOffset;
       const normalizedQuery = normalizeQuery(query);
-      const uniqueMembers = uniqueCandidates(members);
+      const filteredCandidates = uniqueCandidates(
+        candidates.filter((candidate) => candidateSupportsTrigger(candidate, trigger)),
+      );
 
-      const suggestions = uniqueMembers.filter((member) => {
+      const suggestions = filteredCandidates.filter((candidate) => {
         if (!normalizedQuery) {
           return true;
         }
-        const name = member.name?.toLowerCase?.() ?? "";
-        const tag = member.tag?.toLowerCase?.() ?? "";
-        return name.includes(normalizedQuery) || tag.includes(normalizedQuery);
+        const name = candidate.name?.toLowerCase?.() ?? "";
+        const searchText = candidate.searchText?.toLowerCase?.() ?? "";
+        const tag = candidate.tag?.toLowerCase?.() ?? "";
+        return (
+          name.includes(normalizedQuery) ||
+          tag.includes(normalizedQuery) ||
+          (searchText && searchText.includes(normalizedQuery))
+        );
       });
 
       if (!suggestions.length) {
@@ -88,6 +124,7 @@ export function createMentionSuggestionsStore() {
       set({
         active: true,
         query,
+        trigger,
         triggerIndex,
         cursorIndex: cursorPosition,
         suggestions,
