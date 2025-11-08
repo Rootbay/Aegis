@@ -80,6 +80,11 @@
     createMentionSuggestionsStore,
     type MentionCandidate,
   } from "$lib/features/chat/stores/mentionSuggestions";
+  import {
+    buildSpecialMentionCandidates,
+    canMemberMentionEveryone,
+    extractSpecialMentionKeys,
+  } from "$lib/features/chat/utils/mentionPermissions";
   import { connectivityStore } from "$lib/stores/connectivityStore";
   import {
     Tooltip,
@@ -306,9 +311,17 @@
 
   const canMentionEveryone = $derived(() => {
     if (!chat || chat.type !== "channel") {
-      return true;
+      return false;
     }
-    return channelPermissions().mention_everyone === true;
+    const server = $serverStore.servers.find(
+      (entry) => entry.id === chat.serverId,
+    );
+    const me = $userStore.me;
+    return canMemberMentionEveryone({
+      chat,
+      server,
+      me,
+    });
   });
 
   const canAddMessageReactions = $derived(() => {
@@ -385,6 +398,8 @@
   const TYPING_IDLE_TIMEOUT_MS = 2_500;
   const MAX_REPLY_SNIPPET_LENGTH = 120;
   const CONNECTIVITY_WARNING_THROTTLE_MS = 4_000;
+  const SPECIAL_MENTION_PERMISSION_WARNING =
+    "You do not have permission to mention @everyone or @here in this channel.";
 
   type ExpiryIndicatorTone = "default" | "warning" | "critical" | "expired";
 
@@ -629,6 +644,7 @@
     }
 
     if (chat.type === "channel") {
+      const allowSpecialMentions = canMentionEveryone();
       const server = $serverStore.servers.find(
         (entry) => entry.id === chat.serverId,
       );
@@ -653,22 +669,11 @@
           }
         }
 
-        if (canMentionEveryone()) {
-          candidates.push({
-            id: "@everyone",
-            name: "@everyone",
-            kind: "special",
-            specialKey: "everyone",
-            searchText: "everyone",
-          });
-
-          candidates.push({
-            id: "@here",
-            name: "@here",
-            kind: "special",
-            specialKey: "here",
-            searchText: "here",
-          });
+        const specialCandidates = buildSpecialMentionCandidates(
+          allowSpecialMentions,
+        );
+        if (specialCandidates.length > 0) {
+          candidates.push(...specialCandidates);
         }
       }
     }
@@ -2022,6 +2027,14 @@
       sending
     )
       return;
+    if (
+      chat.type === "channel" &&
+      !canMentionEveryone() &&
+      extractSpecialMentionKeys(messageInput).size > 0
+    ) {
+      toasts.addToast(SPECIAL_MENTION_PERMISSION_WARNING, "warning");
+      return;
+    }
     const blocked = connectivitySendBlocked();
     const queueing = connectivityQueueing();
     if (blocked || queueing) {
@@ -2790,6 +2803,14 @@
     const trimmed = editingDraft.trim();
     if (!trimmed) {
       toasts.addToast("Message content cannot be empty.", "warning");
+      return;
+    }
+    if (
+      chat?.type === "channel" &&
+      !canMentionEveryone() &&
+      extractSpecialMentionKeys(trimmed).size > 0
+    ) {
+      toasts.addToast(SPECIAL_MENTION_PERMISSION_WARNING, "warning");
       return;
     }
     editingSaving = true;
