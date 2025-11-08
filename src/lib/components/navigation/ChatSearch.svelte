@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { tick } from "svelte";
+  import { get } from "svelte/store";
   import { SvelteMap } from "svelte/reactivity";
   import { Button } from "$lib/components/ui/button";
   import {
@@ -287,6 +288,8 @@
       event.preventDefault();
       chatSearchStore.executeSearch();
       chatSearchStore.setDropdownOpen(false);
+      const { searching } = get(chatSearchStore);
+      chatSearchStore.setMobileResultsOpen(searching);
       return;
     }
     if (event.key === "Escape") {
@@ -347,6 +350,8 @@
     chatSearchStore.setQuery(entry);
     chatSearchStore.executeSearch();
     chatSearchStore.setDropdownOpen(false);
+    const { searching } = get(chatSearchStore);
+    chatSearchStore.setMobileResultsOpen(searching);
     await tick();
     void focusSearchInput();
   }
@@ -355,6 +360,7 @@
     resetLocalState();
     chatSearchStore.clearSearch();
     chatSearchStore.setDropdownOpen(false);
+    chatSearchStore.setMobileResultsOpen(false);
   }
 
   function clearSearchHistory() {
@@ -370,6 +376,8 @@
     chatSearchStore.open();
     chatSearchStore.executeSearch();
     chatSearchStore.setDropdownOpen(false);
+    const { searching } = get(chatSearchStore);
+    chatSearchStore.setMobileResultsOpen(searching);
     await tick();
     void focusSearchInput();
   }

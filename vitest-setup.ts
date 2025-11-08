@@ -7,6 +7,8 @@ vi.mock("@tauri-apps/api/notification", () => ({
   sendNotification: vi.fn(),
 }));
 
+import "@testing-library/jest-dom/vitest";
+
 class ResizeObserverMock {
   private readonly callback: (...args: unknown[]) => void;
 

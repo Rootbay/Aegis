@@ -15,38 +15,98 @@ export default defineConfig({
     tsconfig: "tsconfig.vitest.json",
   },
   resolve: {
-    alias: {
-      $lib: resolve(projectRootDir, "src/lib"),
-      $features: resolve(projectRootDir, "src/lib/features"),
-      $services: resolve(projectRootDir, "src/lib/services"),
-      "$app/environment": resolve(
-        projectRootDir,
-        "tests/mocks/app-environment",
-      ),
-      "$app/navigation": resolve(projectRootDir, "tests/shims/app-navigation"),
-      "$app/stores": resolve(projectRootDir, "tests/shims/app-stores"),
-      "$app/paths": resolve(projectRootDir, "tests/shims/app-paths"),
-      "@tauri-apps/api/notification": resolve(
-        projectRootDir,
-        "tests/shims/tauri-notification.ts",
-      ),
-      "@tauri-apps/api/core": resolve(
-        projectRootDir,
-        "tests/shims/tauri-core.ts",
-      ),
-      "@tauri-apps/plugin-store": resolve(
-        projectRootDir,
-        "tests/shims/tauri-store.ts",
-      ),
-      "onnxruntime-web": resolve(
-        projectRootDir,
-        "tests/shims/onnxruntime-web.ts",
-      ),
-      "onnxruntime-web/wasm": resolve(
-        projectRootDir,
-        "tests/shims/onnxruntime-web-wasm.ts",
-      ),
-    },
-    conditions: ["browser"],
+    alias: [
+      {
+        find: "$lib/components/NavigationHeader.svelte",
+        replacement: resolve(
+          projectRootDir,
+          "tests/mocks/NavigationHeaderStub.svelte",
+        ),
+      },
+      {
+        find: "$lib/components/sidebars/MemberSidebar.svelte",
+        replacement: resolve(
+          projectRootDir,
+          "tests/mocks/MemberSidebarStub.svelte",
+        ),
+      },
+      {
+        find: "$lib/components/ui/dialog",
+        replacement: resolve(projectRootDir, "tests/mocks/ui-dialog.ts"),
+      },
+      {
+        find: "$lib/components/ui/scroll-area",
+        replacement: resolve(projectRootDir, "tests/mocks/scroll-area.ts"),
+      },
+      {
+        find: "$lib/components/ui/sidebar",
+        replacement: resolve(projectRootDir, "tests/mocks/sidebar.ts"),
+      },
+      {
+        find: "$features/chat",
+        replacement: resolve(projectRootDir, "tests/mocks/features-chat.ts"),
+      },
+      {
+        find: "$app/environment",
+        replacement: resolve(
+          projectRootDir,
+          "tests/mocks/app-environment",
+        ),
+      },
+      {
+        find: "$app/navigation",
+        replacement: resolve(
+          projectRootDir,
+          "tests/shims/app-navigation",
+        ),
+      },
+      {
+        find: "$app/stores",
+        replacement: resolve(projectRootDir, "tests/shims/app-stores"),
+      },
+      {
+        find: "$app/paths",
+        replacement: resolve(projectRootDir, "tests/shims/app-paths"),
+      },
+      {
+        find: "@tauri-apps/api/notification",
+        replacement: resolve(
+          projectRootDir,
+          "tests/shims/tauri-notification.ts",
+        ),
+      },
+      {
+        find: "@tauri-apps/api/core",
+        replacement: resolve(projectRootDir, "tests/shims/tauri-core.ts"),
+      },
+      {
+        find: "@tauri-apps/plugin-store",
+        replacement: resolve(projectRootDir, "tests/shims/tauri-store.ts"),
+      },
+      {
+        find: "onnxruntime-web/wasm",
+        replacement: resolve(
+          projectRootDir,
+          "tests/shims/onnxruntime-web-wasm.ts",
+        ),
+      },
+      {
+        find: "onnxruntime-web",
+        replacement: resolve(projectRootDir, "tests/shims/onnxruntime-web.ts"),
+      },
+      {
+        find: "$lib",
+        replacement: resolve(projectRootDir, "src/lib"),
+      },
+      {
+        find: "$features",
+        replacement: resolve(projectRootDir, "src/lib/features"),
+      },
+      {
+        find: "$services",
+        replacement: resolve(projectRootDir, "src/lib/services"),
+      },
+    ],
+    conditions: ["browser", "default"],
   },
 });

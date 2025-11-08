@@ -10,7 +10,9 @@
     "baseUrl": ".",
     "paths": {
       "$lib/*": ["src/lib/*"],
-      "$services/*": ["src/lib/services/*"]
+      "$services/*": ["src/lib/services/*"],
+      "onnxruntime-web/wasm": ["tests/shims/onnxruntime-web-wasm.ts"],
+      "onnxruntime-web": ["tests/shims/onnxruntime-web.ts"]
     }
   },
   "include": ["src", "tests", "vitest-setup.ts"]
