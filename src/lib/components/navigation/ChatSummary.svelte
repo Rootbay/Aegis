@@ -11,6 +11,7 @@
   import { Hash, MapPin, Users } from "@lucide/svelte";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
+  import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   let { chat, typingStatus, onAvatarClick, onNameClick, onNameDoubleClick } =
     $props<{
@@ -47,6 +48,13 @@
   const resolveFriendOnline = $derived(() =>
     chat.type === "dm" ? Boolean(chat.friend.online) : false,
   );
+
+  const resolveFriendStatus = $derived(() => {
+    if (chat.type !== "dm") {
+      return null;
+    }
+    return resolvePresenceStatusLabel(chat.friend.statusMessage);
+  });
 </script>
 
 <div class="flex items-center gap-3 min-w-0">
@@ -80,12 +88,12 @@
       <p class="text-xs text-muted-foreground whitespace-nowrap">
         {resolveFriendOnline() ? "Online" : "Offline"}
       </p>
-      {#if chat.friend.statusMessage}
+      {#if resolveFriendStatus()}
         <p
           class="text-xs text-muted-foreground truncate"
-          title={chat.friend.statusMessage}
+          title={resolveFriendStatus() ?? undefined}
         >
-          {chat.friend.statusMessage}
+          {resolveFriendStatus()}
         </p>
       {/if}
       {#if chat.friend.location}

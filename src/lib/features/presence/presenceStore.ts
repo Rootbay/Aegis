@@ -1,54 +1,46 @@
 import { invoke } from "@tauri-apps/api/core";
 import { writable, get, type Readable } from "svelte/store";
 import type { User } from "$lib/features/auth/models/User";
+import {
+  DEFAULT_PRESENCE_STATUS_KEY,
+  isPresenceStatusKey,
+  type PresenceStatusKey,
+} from "./statusPresets";
 
 interface PresenceState {
-  statusMessage: string;
-  locationInput: string;
-  sharedLocation: string | null;
-  locationConsent: boolean;
+  statusKey: PresenceStatusKey;
   isOnline: boolean;
   updating: boolean;
   lastError: string | null;
 }
 
 interface PresenceBroadcastResult {
-  statusMessage: string | null;
-  location: string | null;
+  statusKey: PresenceStatusKey;
   isOnline: boolean;
 }
 
 interface PresenceStore extends Readable<PresenceState> {
   syncFromUser: (user: User | null) => void;
-  setStatusMessage: (message: string) => void;
-  setLocationInput: (value: string) => void;
-  setLocationConsent: (enabled: boolean) => void;
+  setStatusKey: (statusKey: PresenceStatusKey) => void;
   clearError: () => void;
   broadcastPresence: (update?: {
-    statusMessage?: string;
-    locationInput?: string;
-    locationConsent?: boolean;
+    statusKey?: PresenceStatusKey;
     isOnline?: boolean;
   }) => Promise<PresenceBroadcastResult>;
 }
 
 const initialState: PresenceState = {
-  statusMessage: "",
-  locationInput: "",
-  sharedLocation: null,
-  locationConsent: false,
+  statusKey: DEFAULT_PRESENCE_STATUS_KEY,
   isOnline: false,
   updating: false,
   lastError: null,
 };
 
-function normalizeStatusMessage(value?: string | null): string {
-  return value?.trim() ?? "";
-}
-
-function normalizeLocation(value?: string | null): string | null {
-  const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
+function coerceStatusKey(value?: string | null): PresenceStatusKey {
+  if (isPresenceStatusKey(value)) {
+    return value;
+  }
+  return DEFAULT_PRESENCE_STATUS_KEY;
 }
 
 function createPresenceStore(): PresenceStore {
@@ -62,40 +54,19 @@ function createPresenceStore(): PresenceStore {
       return;
     }
 
-    const statusMessage = normalizeStatusMessage(user.statusMessage);
-    const normalizedLocation = normalizeLocation(user.location);
-
     update((state) => ({
       ...state,
-      statusMessage,
-      locationInput:
-        normalizedLocation !== null ? normalizedLocation : state.locationInput,
-      sharedLocation: normalizedLocation,
-      locationConsent: normalizedLocation !== null,
+      statusKey: coerceStatusKey(user.statusMessage),
       isOnline: user.online ?? state.isOnline,
       updating: false,
       lastError: null,
     }));
   };
 
-  const setStatusMessage = (message: string) => {
+  const setStatusKey = (statusKey: PresenceStatusKey) => {
     update((state) => ({
       ...state,
-      statusMessage: normalizeStatusMessage(message),
-    }));
-  };
-
-  const setLocationInput = (value: string) => {
-    update((state) => ({
-      ...state,
-      locationInput: value,
-    }));
-  };
-
-  const setLocationConsent = (enabled: boolean) => {
-    update((state) => ({
-      ...state,
-      locationConsent: enabled,
+      statusKey,
     }));
   };
 
@@ -104,32 +75,19 @@ function createPresenceStore(): PresenceStore {
   };
 
   const broadcastPresence = async (updateOverrides?: {
-    statusMessage?: string;
-    locationInput?: string;
-    locationConsent?: boolean;
+    statusKey?: PresenceStatusKey;
     isOnline?: boolean;
   }): Promise<PresenceBroadcastResult> => {
     const current = get({ subscribe });
-    const nextStatusMessage = normalizeStatusMessage(
-      updateOverrides?.statusMessage ?? current.statusMessage,
-    );
-    const nextLocationInput =
-      updateOverrides?.locationInput ?? current.locationInput;
-    const normalizedInput = nextLocationInput.trim();
-    const nextLocationConsent =
-      updateOverrides?.locationConsent ?? current.locationConsent;
+    const nextStatusKey = updateOverrides?.statusKey ?? current.statusKey;
+    if (!isPresenceStatusKey(nextStatusKey)) {
+      throw new Error("Invalid presence status");
+    }
     const nextIsOnline = updateOverrides?.isOnline ?? current.isOnline;
-
-    const locationCandidate = normalizeLocation(normalizedInput);
-    const locationToShare = nextLocationConsent ? locationCandidate : null;
-    const statusMessageToShare =
-      nextStatusMessage.length > 0 ? nextStatusMessage : null;
 
     update((state) => ({
       ...state,
-      statusMessage: nextStatusMessage,
-      locationInput: normalizedInput,
-      locationConsent: nextLocationConsent,
+      statusKey: nextStatusKey,
       isOnline: nextIsOnline,
       updating: true,
       lastError: null,
@@ -138,19 +96,17 @@ function createPresenceStore(): PresenceStore {
     try {
       await invoke("send_presence_update", {
         is_online: nextIsOnline,
-        status_message: statusMessageToShare ?? null,
-        location: locationToShare ?? null,
+        status_message: nextStatusKey,
+        location: null,
       });
 
       update((state) => ({
         ...state,
         updating: false,
-        sharedLocation: locationToShare,
       }));
 
       return {
-        statusMessage: statusMessageToShare,
-        location: locationToShare,
+        statusKey: nextStatusKey,
         isOnline: nextIsOnline,
       };
     } catch (error) {
@@ -170,9 +126,7 @@ function createPresenceStore(): PresenceStore {
   return {
     subscribe,
     syncFromUser,
-    setStatusMessage,
-    setLocationInput,
-    setLocationConsent,
+    setStatusKey,
     clearError,
     broadcastPresence,
   };

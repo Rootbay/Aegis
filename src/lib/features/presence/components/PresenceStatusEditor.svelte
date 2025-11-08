@@ -10,10 +10,12 @@
     PopoverContent,
   } from "$lib/components/ui/popover";
   import { Label } from "$lib/components/ui/label";
-  import { Textarea } from "$lib/components/ui/textarea";
-  import { Input } from "$lib/components/ui/input";
-  import { Switch } from "$lib/components/ui/switch/index.js";
-  import { MessageSquareText, MapPin } from "@lucide/svelte";
+  import { MessageSquareText } from "@lucide/svelte";
+  import {
+    PRESENCE_STATUS_OPTIONS,
+    type PresenceStatusKey,
+  } from "$lib/features/presence/statusPresets";
+  import { cn } from "$lib/utils";
 
   type Props = {
     label?: string;
@@ -33,16 +35,12 @@
   const resolvedSize = $derived(size ?? (label ? "default" : "icon"));
 
   let presenceEditorOpen = $state(false);
-  let statusDraft = $state("");
-  let locationDraft = $state("");
-  let locationConsentDraft = $state(false);
+  let statusDraft = $state<PresenceStatusKey>(PRESENCE_STATUS_OPTIONS[0].key);
   let presenceSaving = $state(false);
   let presenceError = $state<string | null>(null);
 
   function resetDrafts() {
-    statusDraft = $presenceStore.statusMessage;
-    locationDraft = $presenceStore.locationInput;
-    locationConsentDraft = $presenceStore.locationConsent;
+    statusDraft = $presenceStore.statusKey;
     presenceError = null;
   }
 
@@ -51,13 +49,10 @@
     presenceError = null;
     try {
       const result = await presenceStore.broadcastPresence({
-        statusMessage: statusDraft,
-        locationInput: locationDraft,
-        locationConsent: locationConsentDraft,
+        statusKey: statusDraft,
       });
       userStore.applyPresence({
-        statusMessage: result.statusMessage,
-        location: result.location,
+        statusMessage: result.statusKey,
       });
       presenceEditorOpen = false;
     } catch (error) {
@@ -103,39 +98,25 @@
   <PopoverContent class="w-80 space-y-4 p-4">
     <div class="space-y-3">
       <div class="space-y-2">
-        <Label for="presence-status-message">Status message</Label>
-        <Textarea
-          id="presence-status-message"
-          rows={3}
-          bind:value={statusDraft}
-          placeholder="Share what you're up to"
-        />
-      </div>
-      <div class="flex items-center justify-between gap-4">
-        <div class="space-y-1">
-          <Label for="presence-location-toggle">Share location</Label>
-          <p class="text-xs text-muted-foreground">
-            Broadcast an approximate location to friends and servers.
-          </p>
+        <Label for="presence-status-message">Status</Label>
+        <div class="grid gap-2" id="presence-status-message">
+          {#each PRESENCE_STATUS_OPTIONS as option}
+            <Button
+              type="button"
+              variant={statusDraft === option.key ? "default" : "outline"}
+              class={cn(
+                "justify-start w-full cursor-pointer",
+                statusDraft === option.key ? "ring-2 ring-ring" : "",
+              )}
+              aria-pressed={statusDraft === option.key}
+              onclick={() => {
+                statusDraft = option.key;
+              }}
+            >
+              {option.label}
+            </Button>
+          {/each}
         </div>
-        <Switch
-          id="presence-location-toggle"
-          aria-label="Toggle location sharing"
-          bind:checked={locationConsentDraft}
-        />
-      </div>
-      <div class="space-y-2">
-        <Label for="presence-location">Location</Label>
-        <Input
-          id="presence-location"
-          bind:value={locationDraft}
-          placeholder="City, Region"
-          disabled={!locationConsentDraft}
-        />
-        <p class="flex items-center gap-1 text-xs text-muted-foreground">
-          <MapPin class="h-3 w-3" />
-          <span>Only shared when location sharing is enabled.</span>
-        </p>
       </div>
       {#if presenceError}
         <p class="text-sm text-destructive">{presenceError}</p>

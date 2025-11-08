@@ -42,6 +42,7 @@ interface UserStore extends Readable<UserStoreState> {
     statusMessage?: string | null;
     location?: string | null;
   }) => void;
+  __setStateForTesting?: (state: UserStoreState) => void;
 }
 
 const DEFAULT_IDENTITY_PASSWORD = "aegis-default-password";
@@ -195,8 +196,7 @@ function createUserStore(): UserStore {
       const updatedUser = {
         ...currentUser,
         online: presenceResult.isOnline,
-        statusMessage: presenceResult.statusMessage,
-        location: presenceResult.location,
+        statusMessage: presenceResult.statusKey,
       } as User;
       update((state) => ({ ...state, me: updatedUser }));
       userCache.set(updatedUser.id, updatedUser);
@@ -270,7 +270,7 @@ function createUserStore(): UserStore {
     presenceStore.syncFromUser(null);
   };
 
-  return {
+  const store: UserStore = {
     subscribe,
     initialize,
     toggleOnlineStatus,
@@ -279,6 +279,10 @@ function createUserStore(): UserStore {
     reset,
     applyPresence,
   };
+
+  store.__setStateForTesting = (state: UserStoreState) => set(state);
+
+  return store;
 }
 
 export const userStore = createUserStore();

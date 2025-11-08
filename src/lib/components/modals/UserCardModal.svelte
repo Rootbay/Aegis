@@ -19,6 +19,7 @@
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Pencil, MapPin } from "@lucide/svelte";
   import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
+  import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -167,9 +168,11 @@
       {profileUser.bio || ""}
     </p>
 
-    {#if profileUser.statusMessage}
+    {@const profileStatusLabel =
+      resolvePresenceStatusLabel(profileUser.statusMessage)}
+    {#if profileStatusLabel}
       <p class="text-sm text-muted-foreground mb-2">
-        {profileUser.statusMessage}
+        {profileStatusLabel}
       </p>
     {/if}
 

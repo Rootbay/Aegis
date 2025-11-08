@@ -45,6 +45,7 @@
     type MemberWithRoles,
   } from "$lib/components/sidebars/memberSidebar/groupMembers";
   import { buildInviteCandidates } from "$lib/components/sidebars/memberSidebar/inviteCandidates";
+  import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type OpenUserCardModalHandler = (
     ...args: [User, number, number, boolean]
@@ -366,12 +367,16 @@
                                     >
                                       {member.name}
                                     </p>
-                                    {#if member.statusMessage}
+                                    {@const memberStatusLabel =
+                                      resolvePresenceStatusLabel(
+                                        member.statusMessage,
+                                      )}
+                                    {#if memberStatusLabel}
                                       <p
                                         class="text-xs text-muted-foreground truncate"
-                                        title={member.statusMessage}
+                                        title={memberStatusLabel}
                                       >
-                                        {member.statusMessage}
+                                        {memberStatusLabel}
                                       </p>
                                     {/if}
                                     {#if member.location}
