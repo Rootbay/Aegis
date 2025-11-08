@@ -199,6 +199,10 @@ interface ChatStore {
   handleReactionUpdate: (payload: MessageReaction) => void;
   handleReadReceipt: (payload: MessageReadReceiptEvent) => void;
   handleTypingIndicator: (payload: TypingIndicatorEvent) => void;
+  markChatRead: (
+    chatId: string,
+    options?: { serverId?: string },
+  ) => Promise<void>;
   markActiveChatViewed: () => Promise<void>;
   sendTypingIndicator: (isTyping: boolean) => Promise<void>;
   setChatPreferenceOverride: (
@@ -3313,20 +3317,19 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
-  const markActiveChatViewed = async () => {
-    const type = get(activeChatType);
-    const chatIdValue = get(activeChatId);
-    const channelIdValue = get(activeChannelId);
-    const meId = get(userStore).me?.id ?? null;
-    if (!type || !chatIdValue) {
-      return;
-    }
-
-    const messageChatId = type === "server" ? channelIdValue : chatIdValue;
+  const markChatRead = async (
+    messageChatId: string,
+    options?: { serverId?: string },
+  ) => {
     if (!messageChatId) {
       return;
     }
 
+    if (options?.serverId) {
+      channelServerIndex.set(messageChatId, options.serverId);
+    }
+
+    const meId = get(userStore).me?.id ?? null;
     const existingMessages =
       get(messagesByChatIdStore).get(messageChatId) ?? [];
     if (existingMessages.length === 0) {
@@ -3380,6 +3383,24 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       lastDispatchedReceiptByChatId.delete(messageChatId);
       console.debug("Failed to send read receipt", error);
     }
+  };
+
+  const markActiveChatViewed = async () => {
+    const type = get(activeChatType);
+    const chatIdValue = get(activeChatId);
+    const channelIdValue = get(activeChannelId);
+    if (!type || !chatIdValue) {
+      return;
+    }
+
+    const messageChatId = type === "server" ? channelIdValue : chatIdValue;
+    if (!messageChatId) {
+      return;
+    }
+
+    await markChatRead(messageChatId, {
+      serverId: type === "server" ? chatIdValue : undefined,
+    });
   };
 
   const sendTypingIndicator = async (isTyping: boolean) => {
@@ -3926,6 +3947,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     handleReactionUpdate,
     handleReadReceipt,
     handleTypingIndicator,
+    markChatRead,
     markActiveChatViewed,
     sendTypingIndicator,
     setChatPreferenceOverride,

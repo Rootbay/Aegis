@@ -7,6 +7,7 @@
   import { userStore } from "$lib/stores/userStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore";
   import { toasts } from "$lib/stores/ToastStore";
   import ServerContextMenu from "$lib/components/context-menus/ServerContextMenu.svelte";
   import type { Server } from "$lib/features/servers/models/Server";
@@ -174,9 +175,18 @@
     server: Server;
   }) {
     switch (action) {
-      case "mark_as_read":
-        toasts.addToast("All channels marked as read (local).", "info");
+      case "mark_as_read": {
+        const snapshot = get(serverStore);
+        const liveServer =
+          snapshot.servers.find((entry) => entry.id === server.id) ?? server;
+        for (const channel of liveServer.channels ?? []) {
+          await chatStore.markChatRead(channel.id, {
+            serverId: liveServer.id,
+          });
+        }
+        toasts.addToast("All channels marked as read.", "success");
         break;
+      }
       case "mute_unmute_server": {
         const next = new SvelteSet(mutedServerIds);
         if (next.has(server.id)) {
