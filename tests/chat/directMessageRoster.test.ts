@@ -11,7 +11,6 @@ vi.mock("onnxruntime-web/wasm", () =>
   import("../shims/onnxruntime-web-wasm").then((module) => module),
 );
 
-
 const createFriend = (
   id: string,
   name: string,
@@ -155,5 +154,82 @@ describe("mergeDirectMessageRoster", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0]?.id).toBe("friend-1");
+  });
+
+  it("creates synthetic entries for metadata-only conversations", () => {
+    const lastMessage = createMessage(
+      "msg-unknown",
+      "conversation-42",
+      "user-42",
+      "Sent a ping",
+      "2024-01-03T12:00:00.000Z",
+      false,
+    );
+
+    const metadata = new Map<string, ChatMetadata>([
+      [
+        "conversation-42",
+        {
+          chatId: "conversation-42",
+          lastMessage,
+          lastActivityAt: lastMessage.timestamp,
+          unreadCount: 4,
+          fallbackUserId: "user-42",
+          fallbackName: "Mystery Contact",
+          fallbackAvatar: "https://example.com/user-42.png",
+        },
+      ],
+    ]);
+
+    const entries = mergeDirectMessageRoster([], [], metadata, "current-user");
+
+    expect(entries).toHaveLength(1);
+    const [entry] = entries;
+    expect(entry.type).toBe("dm");
+    expect(entry.synthetic?.userId).toBe("user-42");
+    expect(entry.friend).toBeUndefined();
+    expect(entry.name).toBe("Mystery Contact");
+    expect(entry.avatar).toBe("https://example.com/user-42.png");
+    expect(entry.lastMessageText).toBe("Sent a ping");
+    expect(entry.unreadCount).toBe(4);
+  });
+
+  it("falls back to generated display data when metadata lacks explicit name", () => {
+    const lastMessage = createMessage(
+      "msg-fallback",
+      "conversation-77",
+      "user-77",
+      "Hello there",
+      "2024-01-04T09:30:00.000Z",
+      true,
+    );
+
+    const metadata = new Map<string, ChatMetadata>([
+      [
+        "conversation-77",
+        {
+          chatId: "conversation-77",
+          lastMessage,
+          lastActivityAt: lastMessage.timestamp,
+          unreadCount: 0,
+          fallbackUserId: "user-77",
+        },
+      ],
+    ]);
+
+    const entries = mergeDirectMessageRoster(
+      [createFriend("user-99", "Existing", "2024-01-02T10:00:00.000Z")],
+      [],
+      metadata,
+      "user-99",
+    );
+
+    expect(
+      entries.find((entry) => entry.id === "conversation-77"),
+    ).toMatchObject({
+      name: expect.stringContaining("User-"),
+      avatar: expect.stringContaining("https://api.dicebear.com/"),
+      synthetic: { userId: "user-77" },
+    });
   });
 });

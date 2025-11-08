@@ -1,7 +1,10 @@
 import type { Friend } from "$lib/features/friends/models/Friend";
 import { isActionableFriend } from "$lib/features/friends/utils/isActionableFriend";
 import type { Message } from "$lib/features/chat/models/Message";
-import type { ChatMetadata, GroupChatSummary } from "$lib/features/chat/stores/chatStore";
+import type {
+  ChatMetadata,
+  GroupChatSummary,
+} from "$lib/features/chat/stores/chatStore";
 
 export interface DirectMessageListEntry {
   id: string;
@@ -16,7 +19,16 @@ export interface DirectMessageListEntry {
   lastMessageText: string | null;
   friend?: Friend;
   group?: GroupChatSummary;
+  synthetic?: {
+    userId: string;
+  };
 }
+
+const FALLBACK_AVATAR = (id: string) =>
+  "https://api.dicebear.com/8.x/bottts-neutral/svg?seed=" + id;
+
+const fallbackDisplayName = (id: string) =>
+  id && id.length > 0 ? `User-${id.slice(0, 4)}` : "Unknown user";
 
 const computePreviewText = (
   message: Message | null | undefined,
@@ -60,10 +72,13 @@ export function mergeDirectMessageRoster(
 ): DirectMessageListEntry[] {
   const entries: DirectMessageListEntry[] = [];
 
-  for (const friend of friends) {
-    if (!isActionableFriend(friend)) {
-      continue;
-    }
+  const actionableFriends = friends.filter((friend) =>
+    isActionableFriend(friend),
+  );
+  const friendIds = new Set(actionableFriends.map((friend) => friend.id));
+  const groupIds = new Set(groupSummaries.map((summary) => summary.id));
+
+  for (const friend of actionableFriends) {
     const meta = metadata.get(friend.id);
     const lastMessage = meta?.lastMessage ?? null;
     const lastActivityAt =
@@ -112,6 +127,68 @@ export function mergeDirectMessageRoster(
       lastMessageText: computePreviewText(lastMessage, currentUserId),
       friend: undefined,
       group: summary,
+    });
+  }
+
+  for (const [chatId, meta] of metadata.entries()) {
+    if (groupIds.has(chatId) || friendIds.has(chatId)) {
+      continue;
+    }
+
+    if (entries.some((entry) => entry.id === chatId && entry.type === "dm")) {
+      continue;
+    }
+
+    const fallbackUserId =
+      typeof meta.fallbackUserId === "string" && meta.fallbackUserId.length > 0
+        ? meta.fallbackUserId
+        : null;
+
+    if (!fallbackUserId) {
+      continue;
+    }
+
+    if (friendIds.has(fallbackUserId)) {
+      continue;
+    }
+
+    if (currentUserId && fallbackUserId === currentUserId) {
+      continue;
+    }
+
+    const lastMessage = meta.lastMessage;
+    if (!lastMessage) {
+      continue;
+    }
+
+    const nameSource = meta.fallbackName ?? null;
+    const name =
+      typeof nameSource === "string" && nameSource.trim().length > 0
+        ? nameSource.trim()
+        : fallbackDisplayName(fallbackUserId);
+
+    const avatarSource = meta.fallbackAvatar ?? null;
+    const avatar =
+      typeof avatarSource === "string" && avatarSource.trim().length > 0
+        ? avatarSource.trim()
+        : FALLBACK_AVATAR(fallbackUserId);
+
+    entries.push({
+      id: chatId,
+      type: "dm",
+      name,
+      avatar,
+      online: undefined,
+      memberCount: undefined,
+      memberIds: undefined,
+      lastActivityAt: meta.lastActivityAt,
+      unreadCount: meta.unreadCount ?? 0,
+      lastMessageText: computePreviewText(lastMessage, currentUserId),
+      friend: undefined,
+      group: undefined,
+      synthetic: {
+        userId: fallbackUserId,
+      },
     });
   }
 

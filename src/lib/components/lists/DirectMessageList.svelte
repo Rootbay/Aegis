@@ -83,8 +83,12 @@
     return list;
   });
 
-  let dmEntries = $derived.by(() =>
+  let friendDmEntries = $derived.by(() =>
     sortedEntries.filter((entry) => entry.type === "dm" && entry.friend),
+  );
+
+  let syntheticDmEntries = $derived.by(() =>
+    sortedEntries.filter((entry) => entry.type === "dm" && entry.synthetic),
   );
 
   let searchResults = $derived.by(() =>
@@ -111,17 +115,61 @@
     goto(target);
   }
 
-  function handleContextItem(
+  function handleFriendContextItem(
     action: "open" | "mute" | "remove",
     entryId: string,
   ) {
-    const item = dmEntries.find((entry) => entry.id === entryId)?.friend;
+    const item = friendDmEntries.find((entry) => entry.id === entryId)?.friend;
     if (!item) return;
     if (action === "open") navigateToChat(entryId, "dm");
     if (action === "mute") {
       toggleMute(item);
     }
     if (action === "remove") removeFriend(item);
+  }
+
+  async function sendFriendRequest(targetUserId: string) {
+    const meId = $userStore.me?.id;
+    if (!meId) {
+      toasts.addToast("You must be signed in to add friends.", "error");
+      return;
+    }
+
+    try {
+      await invoke("send_friend_request", {
+        current_user_id: meId,
+        target_user_id: targetUserId,
+      });
+      toasts.addToast("Friend request sent!", "success");
+    } catch (error: any) {
+      console.error("Failed to send friend request:", error);
+      toasts.addToast(
+        error?.message ?? "Failed to send friend request.",
+        "error",
+      );
+    }
+  }
+
+  function handleSyntheticContextItem(
+    action: "open" | "add-friend",
+    entryId: string,
+  ) {
+    const entry = syntheticDmEntries.find((item) => item.id === entryId);
+    if (!entry) return;
+
+    if (action === "open") {
+      navigateToChat(entry.id, "dm");
+      return;
+    }
+
+    if (action === "add-friend") {
+      const targetUserId = entry.synthetic?.userId ?? entry.id;
+      if (!targetUserId) {
+        toasts.addToast("Unable to determine contact identifier.", "error");
+        return;
+      }
+      void sendFriendRequest(targetUserId);
+    }
   }
 
   async function toggleMute(friend: Friend) {
@@ -297,20 +345,79 @@
 
               <ContextMenuContent class="w-48">
                 <ContextMenuItem
-                  onselect={() => handleContextItem("open", entry.id)}
+                  onselect={() => handleFriendContextItem("open", entry.id)}
                   >Open Chat</ContextMenuItem
                 >
                 <ContextMenuSeparator />
                 <ContextMenuItem
-                  onselect={() => handleContextItem("mute", entry.id)}
+                  onselect={() => handleFriendContextItem("mute", entry.id)}
                   >Mute</ContextMenuItem
                 >
                 <ContextMenuItem
-                  onselect={() => handleContextItem("remove", entry.id)}
+                  onselect={() => handleFriendContextItem("remove", entry.id)}
                   class="text-destructive"
                 >
                   Remove
                 </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          {:else if entry.type === "dm" && entry.synthetic}
+            {@const timestampLabel = formatTimestamp(entry.lastActivityAt, {
+              fallback: null,
+            })}
+            <ContextMenu>
+              <ContextMenuTrigger>
+                <Button
+                  variant="ghost"
+                  class="w-full justify-start gap-3 py-2 pl-2 pr-4 rounded-md hover:bg-muted/50 data-[active=true]:bg-muted"
+                  data-active={activeChatId === entry.id}
+                  onclick={() => navigateToChat(entry.id, "dm")}
+                >
+                  <div class="relative">
+                    <Avatar class="h-10 w-10">
+                      <AvatarImage src={entry.avatar} alt={entry.name} />
+                      <AvatarFallback class="uppercase"
+                        >{entry.name?.[0] ?? "?"}</AvatarFallback
+                      >
+                    </Avatar>
+                  </div>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-baseline justify-between gap-2">
+                      <p class="font-semibold truncate">{entry.name}</p>
+                      {#if timestampLabel}
+                        <p class="shrink-0 text-xs text-muted-foreground">
+                          {timestampLabel}
+                        </p>
+                      {/if}
+                    </div>
+                    <div class="mt-1 flex items-center gap-2">
+                      <p class="text-xs text-muted-foreground truncate flex-1">
+                        {entry.lastMessageText ?? "No messages yet"}
+                      </p>
+                      {#if entry.unreadCount > 0}
+                        <Badge
+                          class="ml-auto shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                        >
+                          {entry.unreadCount > 99 ? "99+" : entry.unreadCount}
+                        </Badge>
+                      {/if}
+                    </div>
+                  </div>
+                </Button>
+              </ContextMenuTrigger>
+
+              <ContextMenuContent class="w-48">
+                <ContextMenuItem
+                  onselect={() => handleSyntheticContextItem("open", entry.id)}
+                  >Start Chat</ContextMenuItem
+                >
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onselect={() =>
+                    handleSyntheticContextItem("add-friend", entry.id)}
+                  >Add Friend</ContextMenuItem
+                >
               </ContextMenuContent>
             </ContextMenu>
           {:else if entry.type === "group"}
@@ -382,41 +489,57 @@
                     Direct Messages
                   </p>
                   {#each results.dms ?? [] as item (item.id)}
-                    {@const friend = item.friend}
-                    {#if friend}
-                      <Button
-                        variant="ghost"
-                        class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
-                        onclick={() => {
-                          navigateToChat(item.id, "dm");
-                          showSearch = false;
-                          searchTerm = "";
-                        }}
-                      >
-                        <div class="relative">
-                          <Avatar class="h-10 w-10">
-                            <AvatarImage
-                              src={friend.avatar}
-                              alt={friend.name}
-                            />
-                            <AvatarFallback class="uppercase"
-                              >{friend.name?.[0]}</AvatarFallback
-                            >
-                          </Avatar>
-                          {#if friend.online}
-                            <span
-                              class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background"
-                            ></span>
+                    {@const timestampLabel = formatTimestamp(
+                      item.lastActivityAt,
+                      { fallback: null },
+                    )}
+                    <Button
+                      variant="ghost"
+                      class="w-full justify-start gap-3 p-2 rounded-md hover:bg-muted/50"
+                      onclick={() => {
+                        navigateToChat(item.id, "dm");
+                        showSearch = false;
+                        searchTerm = "";
+                      }}
+                    >
+                      <div class="relative">
+                        <Avatar class="h-10 w-10">
+                          <AvatarImage src={item.avatar} alt={item.name} />
+                          <AvatarFallback class="uppercase"
+                            >{item.name?.[0] ?? "?"}</AvatarFallback
+                          >
+                        </Avatar>
+                        {#if item.friend?.online}
+                          <span
+                            class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background"
+                          ></span>
+                        {/if}
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-baseline justify-between gap-2">
+                          <p class="font-semibold truncate">{item.name}</p>
+                          {#if timestampLabel}
+                            <p class="shrink-0 text-xs text-muted-foreground">
+                              {timestampLabel}
+                            </p>
                           {/if}
                         </div>
-                        <div class="min-w-0 flex-1">
-                          <p class="font-semibold truncate">{friend.name}</p>
-                          <p class="text-xs text-muted-foreground">
-                            Direct Message
+                        <div class="mt-1 flex items-center gap-2">
+                          <p
+                            class="text-xs text-muted-foreground truncate flex-1"
+                          >
+                            {item.lastMessageText ?? "No messages yet"}
                           </p>
+                          {#if item.unreadCount > 0}
+                            <Badge
+                              class="ml-auto shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                            >
+                              {item.unreadCount > 99 ? "99+" : item.unreadCount}
+                            </Badge>
+                          {/if}
                         </div>
-                      </Button>
-                    {/if}
+                      </div>
+                    </Button>
                   {/each}
                 </div>
               {/if}
