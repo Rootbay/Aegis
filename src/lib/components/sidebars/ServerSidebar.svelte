@@ -777,7 +777,8 @@
           break;
         }
         case "mark_as_read": {
-          toasts.addToast("Marked as read (local).", "info");
+          await chatStore.markChatRead(channelId, { serverId: server.id });
+          toasts.addToast("Channel marked as read.", "success");
           break;
         }
         case "mute_channel": {

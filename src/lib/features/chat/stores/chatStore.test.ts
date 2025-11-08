@@ -337,6 +337,92 @@ describe("chatStore attachment lifecycle", () => {
     expect(get(store.activeServerChannelId)).toBe("channel-2");
   });
 
+  it("clears unread metadata counts when a direct chat is marked read", async () => {
+    const store = createChatStore();
+    const timestamp = new Date().toISOString();
+
+    store.handleMessagesUpdate("chat-1", [
+      {
+        id: "msg-1",
+        chatId: "chat-1",
+        senderId: "user-2",
+        content: "hello",
+        timestamp,
+        read: false,
+      },
+      {
+        id: "msg-2",
+        chatId: "chat-1",
+        senderId: "user-3",
+        content: "world",
+        timestamp,
+        read: false,
+      },
+    ]);
+
+    expect(get(store.metadataByChatId).get("chat-1")?.unreadCount).toBe(2);
+
+    await store.markChatRead("chat-1");
+
+    const metadata = get(store.metadataByChatId).get("chat-1");
+    expect(metadata?.unreadCount).toBe(0);
+    const messages = get(store.messagesByChatId).get("chat-1") ?? [];
+    expect(messages.every((message) => message.read)).toBe(true);
+  });
+
+  it("clears unread metadata counts when a server channel is marked read", async () => {
+    const store = createChatStore();
+    const timestamp = new Date().toISOString();
+    const server: Server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "owner-1",
+      channels: [
+        {
+          id: "channel-1",
+          name: "general",
+          server_id: "server-1",
+          channel_type: "text",
+          private: false,
+          category_id: null,
+        },
+      ],
+      categories: [],
+      members: [],
+      roles: [],
+    };
+
+    serverStore.handleServersUpdate([server]);
+
+    store.handleMessagesUpdate("channel-1", [
+      {
+        id: "msg-1",
+        chatId: "channel-1",
+        senderId: "user-2",
+        content: "hello",
+        timestamp,
+        read: false,
+      },
+      {
+        id: "msg-2",
+        chatId: "channel-1",
+        senderId: "user-3",
+        content: "world",
+        timestamp,
+        read: false,
+      },
+    ]);
+
+    expect(get(store.metadataByChatId).get("channel-1")?.unreadCount).toBe(2);
+
+    await store.markChatRead("channel-1", { serverId: server.id });
+
+    const metadata = get(store.metadataByChatId).get("channel-1");
+    expect(metadata?.unreadCount).toBe(0);
+    const messages = get(store.messagesByChatId).get("channel-1") ?? [];
+    expect(messages.every((message) => message.read)).toBe(true);
+  });
+
   it("tracks loading state per chat during concurrent loads", async () => {
     const deferredByChat = new Map<string, ReturnType<typeof createDeferred>>();
     invokeMock.mockImplementation((command: string, payload: unknown) => {
