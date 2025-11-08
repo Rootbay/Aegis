@@ -236,6 +236,57 @@ describe("callStore signaling", () => {
     });
   });
 
+  it("joins a voice channel without signaling invites", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+
+    const joined = await callStore.joinVoiceChannel({
+      chatId: "channel-1",
+      chatName: "Lounge",
+    });
+
+    expect(joined).toBe(true);
+    expect(selectSignalCalls()).toHaveLength(0);
+    expect(addToastMock).not.toHaveBeenCalledWith(
+      "Starting voice call...",
+      "info",
+    );
+    expect(showErrorToastMock).not.toHaveBeenCalled();
+
+    const state = get(callStore);
+    expect(state.activeCall?.chatType).toBe("channel");
+    expect(state.activeCall?.status).toBe("in-call");
+    expect(state.activeCall?.participants.size).toBe(0);
+    expect(state.showCallModal).toBe(true);
+
+    callStore.reset();
+  });
+
+  it("rejoining an active voice channel does not ring participants", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+
+    await callStore.joinVoiceChannel({
+      chatId: "channel-2",
+      chatName: "Raid",
+    });
+
+    invokeMock.mockClear();
+    addToastMock.mockClear();
+
+    const joinedAgain = await callStore.joinVoiceChannel({
+      chatId: "channel-2",
+      chatName: "Raid",
+    });
+
+    expect(joinedAgain).toBe(true);
+    expect(selectSignalCalls()).toHaveLength(0);
+    expect(addToastMock).not.toHaveBeenCalledWith(
+      "Starting voice call...",
+      "info",
+    );
+
+    callStore.reset();
+  });
+
   it("creates offers for every invitee in a group call", async () => {
     const { callStore } = await import("$lib/features/calls/stores/callStore");
 

@@ -155,6 +155,13 @@
       callStore.setCallModalOpen(true);
       return;
     }
+    if (chat.type === "channel") {
+      await callStore.joinVoiceChannel({
+        chatId: chat.id,
+        chatName: getChatDisplayName(),
+      });
+      return;
+    }
     await callStore.startCall({
       chatId: chat.id,
       chatName: getChatDisplayName(),

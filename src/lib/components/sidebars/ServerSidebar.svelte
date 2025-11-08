@@ -893,12 +893,9 @@
 
   function handleVoiceChannelClick(channel: Channel) {
     onSelectChannel(server.id, channel.id);
-    void callStore.startCall({
+    void callStore.joinVoiceChannel({
       chatId: channel.id,
       chatName: channel.name,
-      chatType: "channel",
-      type: "voice",
-      serverId: server.id,
     });
   }
 </script>
