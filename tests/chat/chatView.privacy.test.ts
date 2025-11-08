@@ -250,6 +250,77 @@ vi.mock("@tauri-apps/plugin-store", () => {
   return { Store };
 });
 
+describe("ChatView expiring messages", () => {
+  beforeEach(async () => {
+    await resetChatViewState();
+  });
+
+  it("renders a live expiry indicator and removes it when the message disappears", async () => {
+    vi.useFakeTimers();
+
+    const baseTime = new Date("2024-01-01T00:00:00.000Z");
+    vi.setSystemTime(baseTime);
+
+    const chatId = "chat-expiring";
+    const friend: Friend = {
+      id: "friend-expiring",
+      name: "Expiring Friend",
+      avatar: "https://example.com/expiring.png",
+      online: true,
+      status: "Online",
+      timestamp: baseTime.toISOString(),
+      messages: [],
+    };
+
+    const message: Message = {
+      id: "msg-expiring-1",
+      chatId,
+      senderId: friend.id,
+      content: "This message will disappear soon",
+      timestamp: baseTime.toISOString(),
+      read: true,
+      expiresAt: new Date(baseTime.getTime() + 30_000).toISOString(),
+    };
+
+    messagesByChatId.set(new Map([[chatId, [message]]]));
+
+    const chat: Chat = {
+      type: "dm",
+      id: chatId,
+      friend,
+      messages: [message],
+    };
+
+    try {
+      render(ChatView, { props: { chat } });
+
+      const initialIndicator = await screen.findByText("Expires in 30s");
+      expect(initialIndicator).toBeTruthy();
+
+      vi.advanceTimersByTime(5_000);
+      await tick();
+
+      await waitFor(() => {
+        expect(screen.getByText("Expires in 25s")).toBeTruthy();
+      });
+
+      messagesByChatId.set(new Map([[chatId, []]]));
+      await tick();
+
+      await waitFor(() => {
+        expect(screen.queryByText(message.content)).toBeNull();
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Expires in/)).toBeNull();
+        expect(screen.queryByText("Expired")).toBeNull();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("ChatView drafts", () => {
   beforeEach(async () => {
     await resetChatViewState();
@@ -561,13 +632,17 @@ const mockExtractFirstLink = linkPreviewMocks.extractFirstLink;
 const mockGetLinkPreviewMetadata = linkPreviewMocks.getLinkPreviewMetadata;
 
 vi.mock("@lucide/svelte", () => ({
+  CircleAlert: Passthrough,
   Link: Passthrough,
   LoaderCircle: Passthrough,
   Mic: Passthrough,
+  RadioTower: Passthrough,
   SendHorizontal: Passthrough,
   Smile: Passthrough,
   Square: Passthrough,
+  Timer: Passthrough,
   Users: Passthrough,
+  Wifi: Passthrough,
 }));
 
 vi.mock("@humanspeak/svelte-virtual-list", () => ({
