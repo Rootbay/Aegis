@@ -8,6 +8,7 @@ import {
   vi,
 } from "vitest";
 import { get, writable } from "svelte/store";
+import { createMockConnectivityStore } from "./connectivityStore.mock";
 
 type AppSettings = {
   enableReadReceipts: boolean;
@@ -103,6 +104,15 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   },
 }));
 
+const connectivityMocks = vi.hoisted(() => createMockConnectivityStore());
+
+vi.mock("$lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
+vi.mock("../../src/lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
+
 const settingsStoreRef = vi.hoisted(() => {
   const initial = {
     enableReadReceipts: true,
@@ -172,6 +182,7 @@ describe("chatStore read receipts and typing indicators", () => {
     settingsStoreRef.reset();
     serverStoreStateRef.reset();
     invokeMock.mockReset();
+    connectivityMocks.reset();
     invokeMock.mockImplementation(async (command, payload: any) => {
       if (command === "decrypt_chat_payload") {
         return {

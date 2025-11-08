@@ -268,9 +268,14 @@
     success: Wifi,
   } as const;
 
+  const connectivityQueueing = $derived(() => {
+    const status = $connectivityStore.status;
+    return status === "offline";
+  });
+
   const connectivitySendBlocked = $derived(() => {
     const status = $connectivityStore.status;
-    return status === "offline" || status === "initializing";
+    return status === "initializing";
   });
 
   const connectivitySendBlockedMessage = $derived(() => {
@@ -334,7 +339,7 @@
   );
 
   $effect(() => {
-    if (!connectivitySendBlocked()) {
+    if (!connectivitySendBlocked() && !connectivityQueueing()) {
       lastConnectivityWarningAt = 0;
     }
   });
@@ -1515,7 +1520,9 @@
       sending
     )
       return;
-    if (connectivitySendBlocked()) {
+    const blocked = connectivitySendBlocked();
+    const queueing = connectivityQueueing();
+    if (blocked || queueing) {
       const reason = connectivitySendBlockedMessage();
       const now = Date.now();
       if (
@@ -1526,6 +1533,8 @@
         toasts.addToast(reason, "warning");
         lastConnectivityWarningAt = now;
       }
+    }
+    if (blocked) {
       return;
     }
     try {
@@ -2865,10 +2874,10 @@
             class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
             disabled={sending || connectivitySendBlocked()}
             aria-busy={sending}
-            aria-label={connectivitySendBlocked()
+            aria-label={connectivitySendBlocked() || connectivityQueueing()
               ? (connectivitySendBlockedMessage() ?? "Send message")
               : "Send message"}
-            title={connectivitySendBlocked()
+            title={connectivitySendBlocked() || connectivityQueueing()
               ? (connectivitySendBlockedMessage() ?? "Connectivity unavailable")
               : "Send message"}
           >

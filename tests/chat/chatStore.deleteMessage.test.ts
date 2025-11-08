@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { get, writable } from "svelte/store";
+import { createMockConnectivityStore } from "./connectivityStore.mock";
 
 vi.mock("$lib/stores/userStore", () => {
   const state = writable({ me: { id: "user-123" } });
@@ -19,6 +20,15 @@ vi.mock("$lib/features/servers/stores/serverStore", () => {
     },
   };
 });
+
+const connectivityMocks = vi.hoisted(() => createMockConnectivityStore());
+
+vi.mock("$lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
+vi.mock("../../src/lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -67,6 +77,7 @@ describe("chatStore.handleMessageDeleted", () => {
     } as unknown as typeof URL);
     vi.stubGlobal("localStorage", createLocalStorageMock());
     invokeMock.mockReset();
+    connectivityMocks.reset();
     invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
       const args = (payload ?? {}) as {
         content?: string;

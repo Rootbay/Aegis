@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import type { SpamClassification } from "../../src/lib/features/security/spamClassifier";
 import { spamSamples } from "../fixtures/spamSamples";
+import { createMockConnectivityStore } from "./connectivityStore.mock";
 
 const spamClassifierMock = vi.hoisted(() => ({
   scoreText: vi.fn<
@@ -35,6 +36,14 @@ vi.mock(
   "../../src/lib/features/friends/stores/mutedFriendsStore",
   () => mutedFriendsModule.module,
 );
+const connectivityMocks = vi.hoisted(() => createMockConnectivityStore());
+
+vi.mock("$lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
+vi.mock("../../src/lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
 import { get, writable } from "svelte/store";
 
 vi.mock("$lib/stores/userStore", () => {
@@ -125,6 +134,7 @@ beforeEach(() => {
     reasons: [],
     context: "message",
   });
+  connectivityMocks.reset();
 });
 
 const createLocalStorageMock = () => {
@@ -662,6 +672,79 @@ describe("chatStore plaintext encryption fallbacks", () => {
     expect(fallbackAttachmentCall?.[1]).toEqual(
       expect.objectContaining({ message: "Attachment fallback" }),
     );
+  });
+});
+
+describe("chatStore offline queueing", () => {
+  beforeEach(() => {
+    vi.stubGlobal("localStorage", createLocalStorageMock());
+    invokeMock.mockReset();
+    encryptionMocks.encryptMock.mockReset();
+    encryptionMocks.encryptMock.mockImplementation(async ({ content }) => ({
+      content: `cipher:${content}`,
+      attachments: [],
+      wasEncrypted: true,
+    }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("queues messages while offline and flushes when connectivity returns", async () => {
+    const store = createChatStore();
+
+    invokeMock.mockImplementation(async (command: string, _payload?: InvokePayload) => {
+      switch (command) {
+        case "get_messages":
+          return [];
+        case "send_encrypted_dm":
+          return undefined;
+        case "send_direct_message":
+          return undefined;
+        default:
+          throw new Error(`Unexpected command: ${command}`);
+      }
+    });
+
+    await store.setActiveChat("friend-plain", "dm");
+
+    connectivityMocks.setStatus("offline");
+
+    await store.sendMessage("Queued while offline");
+
+    const pendingCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "send_encrypted_dm" || command === "send_direct_message",
+    );
+    expect(pendingCalls).toHaveLength(0);
+
+    let messages = get(store.messagesByChatId).get("friend-plain") ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.pending).toBe(true);
+    expect(messages[0]?.status).toBe("pending");
+
+    connectivityMocks.setStatus("online");
+
+    await vi.waitFor(() => {
+      const sendCall = invokeMock.mock.calls.find(
+        ([command]) => command === "send_encrypted_dm",
+      );
+      expect(sendCall).toBeTruthy();
+    });
+
+    await store.handleNewMessageEvent({
+      id: "delivered-offline",
+      sender: "user-123",
+      content: "Queued while offline",
+      timestamp: new Date().toISOString(),
+      conversation_id: "friend-plain",
+    } as ChatMessage);
+
+    messages = get(store.messagesByChatId).get("friend-plain") ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.pending).toBe(false);
+    expect(messages[0]?.content).toBe("Queued while offline");
   });
 });
 

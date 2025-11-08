@@ -15,6 +15,10 @@ import type {
   ReactionAction,
 } from "$lib/features/chat/models/AepMessage";
 import { userStore } from "$lib/stores/userStore";
+import {
+  connectivityStore,
+  type ConnectivityStatus,
+} from "$lib/stores/connectivityStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
@@ -643,6 +647,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const activeAttachmentUrls = new Set<string>();
   const retryableMessagePayloads = new Map<string, RetryableMessagePayload>();
   const pendingAttachmentFetches = new Map<string, Promise<string>>();
+
+  let connectivityStatus: ConnectivityStatus = get(connectivityStore).status;
+  let isFlushingQueuedMessages = false;
+
+  const canAttemptTransmission = () =>
+    connectivityStatus !== "offline" && connectivityStatus !== "initializing";
 
   type ModerationPreferences = {
     transparentEdits: boolean;
@@ -1900,6 +1910,69 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   };
 
+  const flushQueuedMessages = async () => {
+    if (isFlushingQueuedMessages || !canAttemptTransmission()) {
+      return;
+    }
+
+    isFlushingQueuedMessages = true;
+
+    try {
+      const entries = Array.from(retryableMessagePayloads.entries());
+      for (const [messageId, payload] of entries) {
+        if (!canAttemptTransmission()) {
+          break;
+        }
+
+        const messagesMap = get(messagesByChatIdStore);
+        const chatMessages = messagesMap.get(payload.messageChatId) ?? [];
+        const optimistic = chatMessages.find((message) => message.id === messageId);
+
+        if (!optimistic) {
+          retryableMessagePayloads.delete(messageId);
+          continue;
+        }
+
+        if (!optimistic.pending) {
+          retryableMessagePayloads.delete(messageId);
+          continue;
+        }
+
+        if (optimistic.sendFailed) {
+          continue;
+        }
+
+        try {
+          markMessageAsSending(payload.messageChatId, messageId);
+          await transmitMessagePayload(payload);
+          retryableMessagePayloads.delete(messageId);
+        } catch (error) {
+          const reason = extractErrorMessage(error);
+          markMessageAsFailed(payload.messageChatId, messageId, reason);
+        }
+      }
+    } finally {
+      isFlushingQueuedMessages = false;
+    }
+  };
+
+  const scheduleQueuedMessageFlush = () => {
+    if (canAttemptTransmission()) {
+      void flushQueuedMessages();
+    }
+  };
+
+  connectivityStore.subscribe((state) => {
+    const previousStatus = connectivityStatus;
+    connectivityStatus = state.status;
+    if (
+      (previousStatus === "offline" || previousStatus === "initializing") &&
+      canAttemptTransmission()
+    ) {
+      void flushQueuedMessages();
+    }
+  });
+
   const sendMessage = async (
     content: string,
     options: SendMessageOptions = {},
@@ -1949,6 +2022,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     };
 
     retryableMessagePayloads.set(tempId, payload);
+
+    if (!canAttemptTransmission()) {
+      scheduleQueuedMessageFlush();
+      return;
+    }
 
     try {
       await transmitMessagePayload(payload);
@@ -2080,6 +2158,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     retryableMessagePayloads.set(tempId, payload);
 
+    if (!canAttemptTransmission()) {
+      scheduleQueuedMessageFlush();
+      return;
+    }
+
     try {
       await transmitMessagePayload(payload);
       retryableMessagePayloads.delete(tempId);
@@ -2100,6 +2183,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       chatId === payload.messageChatId ? chatId : payload.messageChatId;
 
     markMessageAsSending(targetChatId, messageId);
+
+    if (!canAttemptTransmission()) {
+      scheduleQueuedMessageFlush();
+      return;
+    }
 
     try {
       await transmitMessagePayload(payload);

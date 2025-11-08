@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { createMockConnectivityStore } from "./connectivityStore.mock";
 import { get, writable } from "svelte/store";
 
 vi.mock("$lib/stores/userStore", () => {
@@ -34,6 +35,15 @@ vi.mock("../../src/lib/features/servers/stores/serverStore", () => {
     },
   };
 });
+
+const connectivityMocks = vi.hoisted(() => createMockConnectivityStore());
+
+vi.mock("$lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
+vi.mock("../../src/lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
 
 vi.mock("$lib/features/friends/stores/friendStore", () => {
   const state = writable({ friends: [], loading: false });
@@ -227,6 +237,7 @@ describe("chatStore group chat management", () => {
       revokeObjectURL: vi.fn(),
     } as unknown as typeof URL);
     invokeMock.mockReset();
+    connectivityMocks.reset();
   });
 
   afterEach(() => {

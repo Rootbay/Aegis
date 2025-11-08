@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { get, writable } from "svelte/store";
+import { createMockConnectivityStore } from "./connectivityStore.mock";
 
 vi.mock("$lib/stores/userStore", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
@@ -18,6 +19,15 @@ vi.mock("$lib/features/servers/stores/serverStore", () => {
     },
   };
 });
+
+const connectivityMocks = vi.hoisted(() => createMockConnectivityStore());
+
+vi.mock("$lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
+vi.mock("../../src/lib/stores/connectivityStore", () => ({
+  connectivityStore: connectivityMocks.store,
+}));
 
 const encryptionMocks = vi.hoisted(() => {
   const toUint8Array = (input: unknown): Uint8Array => {
@@ -120,6 +130,7 @@ describe("chatStore encrypted messaging", () => {
     invokeMock.mockReset();
     encryptionMocks.encryptMock.mockClear();
     encryptionMocks.decodeMock.mockClear();
+    connectivityMocks.reset();
   });
 
   afterEach(() => {
