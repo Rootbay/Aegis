@@ -57,6 +57,7 @@
     buildGroupModalOptions,
     buildReportUserPayload,
   } from "$lib/features/chat/utils/contextMenu";
+  import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type MutualGroup = {
     serverId: string;
@@ -786,9 +787,11 @@
             {profileUser.bio ?? ""}
           </p>
 
-          {#if profileUser.statusMessage}
+          {@const profileStatusLabel =
+            resolvePresenceStatusLabel(profileUser.statusMessage)}
+          {#if profileStatusLabel}
             <p class="text-sm text-muted-foreground mt-2">
-              {profileUser.statusMessage}
+              {profileStatusLabel}
             </p>
           {/if}
 

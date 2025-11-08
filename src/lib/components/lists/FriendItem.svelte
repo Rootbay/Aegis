@@ -18,6 +18,7 @@
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import type { Friend } from "$lib/features/friends/models/Friend";
+  import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type FriendStatus =
     | "pending"
@@ -337,12 +338,15 @@
       {/if}
     </div>
     <p class={`text-xs ${statusClass}`}>{displayStatus}</p>
-    {#if friend.statusMessage}
+    {@const friendStatusLabel = resolvePresenceStatusLabel(
+      friend.statusMessage,
+    )}
+    {#if friendStatusLabel}
       <p
         class="text-xs text-muted-foreground truncate"
-        title={friend.statusMessage}
+        title={friendStatusLabel}
       >
-        {friend.statusMessage}
+        {friendStatusLabel}
       </p>
     {/if}
     {#if friend.location}
