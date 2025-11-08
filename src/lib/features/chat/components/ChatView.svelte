@@ -2652,7 +2652,10 @@
   let reactionPickerActivator: HTMLButtonElement | null = null;
 
   const baseMessageMenuItems = $derived(() => {
-    const items = [{ label: "Copy Message", action: "copy_message" }];
+    const items = [
+      { label: "Copy Message", action: "copy_message" },
+      { label: "Copy Message Link", action: "copy_message_link" },
+    ];
     if (canSendMessages()) {
       items.push({ label: "Reply", action: "reply_message" });
     }
@@ -2682,6 +2685,17 @@
         navigator.clipboard.writeText(selectedMsg.content || "").then(() => {
           toasts.addToast("Message copied.", "success");
         });
+        break;
+      case "copy_message_link":
+        void chatStore
+          .copyMessageLink(selectedMsg.id, selectedMsg.chatId)
+          .then(() => {
+            toasts.addToast("Message link copied.", "success");
+          })
+          .catch((error) => {
+            console.error("[ChatView] Failed to copy message link", error);
+            toasts.addToast("Failed to copy message link.", "error");
+          });
         break;
       case "reply_message":
         if (!canSendMessages()) {
