@@ -224,6 +224,11 @@ interface ServerStore extends Readable<ServerStoreState> {
     serverId: string,
     roles: Role[],
   ) => Promise<ServerUpdateResult>;
+  updateMemberRoles: (
+    serverId: string,
+    memberId: string,
+    roleIds: string[],
+  ) => Promise<ServerUpdateResult>;
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   removeCategoryFromServer: (serverId: string, categoryId: string) => void;
   initialize: () => Promise<void>;
@@ -1889,6 +1894,115 @@ export function createServerStore(): ServerStore {
     }
   };
 
+  const updateMemberRoles = async (
+    serverId: string,
+    memberId: string,
+    roleIds: string[],
+  ): Promise<ServerUpdateResult> => {
+    if (!serverId || !memberId) {
+      return {
+        success: false,
+        error: "Missing server or member identifier.",
+      };
+    }
+
+    const snapshot = get({ subscribe });
+    const serverIndex = snapshot.servers.findIndex(
+      (srv) => srv.id === serverId,
+    );
+
+    if (serverIndex === -1) {
+      return {
+        success: false,
+        error: `Server ${serverId} not found`,
+      };
+    }
+
+    const currentServer = snapshot.servers[serverIndex];
+    const previousServer = cloneServer(currentServer);
+    const normalizedRoleIds = normalizeRoleIds(roleIds);
+    const desiredRoleSet = new Set(normalizedRoleIds);
+
+    const updatedRoles = (currentServer.roles ?? []).map((role) => {
+      const hasRole = desiredRoleSet.has(role.id);
+      const alreadyAssigned = role.member_ids.includes(memberId);
+      if (hasRole === alreadyAssigned) {
+        return role;
+      }
+      if (hasRole && !alreadyAssigned) {
+        return {
+          ...role,
+          member_ids: [...role.member_ids, memberId],
+        };
+      }
+      return {
+        ...role,
+        member_ids: role.member_ids.filter((id) => id !== memberId),
+      };
+    });
+
+    const updatedMembers = (currentServer.members ?? []).map((member) =>
+      member.id === memberId
+        ? {
+            ...member,
+            roles: normalizedRoleIds,
+            role_ids: normalizedRoleIds,
+            roleIds: normalizedRoleIds,
+          }
+        : member,
+    );
+
+    const optimisticServer = applyRoleAssignmentsToServer({
+      ...currentServer,
+      roles: updatedRoles,
+      members: updatedMembers,
+    });
+
+    update((state) => {
+      const servers = state.servers.map((srv, index) =>
+        index === serverIndex ? optimisticServer : srv,
+      );
+      serverCache.set(serverId, optimisticServer);
+      return { ...state, servers };
+    });
+
+    try {
+      const persistedRoles = await invoke<Role[]>("update_server_roles", {
+        serverId,
+        server_id: serverId,
+        roles: normalizeRolesArray(updatedRoles),
+      });
+
+      const finalServer = applyRoleAssignmentsToServer({
+        ...optimisticServer,
+        roles: normalizeRolesArray(persistedRoles),
+      });
+
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? finalServer : srv,
+        );
+        serverCache.set(serverId, finalServer);
+        return { ...state, servers };
+      });
+
+      return { success: true };
+    } catch (error) {
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? previousServer : srv,
+        );
+        serverCache.set(serverId, previousServer);
+        return { ...state, servers };
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
   const replaceServerRoles = async (
     serverId: string,
     roles: Role[],
@@ -2013,6 +2127,7 @@ export function createServerStore(): ServerStore {
     removeMemberFromServer,
     removeMember,
     updateServer,
+    updateMemberRoles,
     replaceServerRoles,
     removeChannelFromServer,
     removeCategoryFromServer,
