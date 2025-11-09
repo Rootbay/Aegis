@@ -95,6 +95,12 @@
   } from "$lib/components/ui/select/index.js";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
   import { mutedChannelsStore } from "$lib/features/channels/stores/mutedChannelsStore";
+  import { mutedCategoriesStore } from "$lib/features/channels/stores/mutedCategoriesStore";
+  import {
+    categoryNotificationPreferencesStore,
+    type CategoryNotificationLevel,
+    DEFAULT_CATEGORY_NOTIFICATION_LEVEL,
+  } from "$lib/features/channels/stores/categoryNotificationPreferencesStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
@@ -140,6 +146,36 @@
   let showCreateChannelModal = $state(false);
   let showCreateCategoryModal = $state(false);
   let showServerEventModal = $state(false);
+  let showRenameCategoryModal = $state(false);
+  let categoryBeingRenamed = $state<ChannelCategory | null>(null);
+  let renameCategoryName = $state("");
+  let showCategoryNotificationsModal = $state(false);
+  let notificationsCategoryId = $state<string | null>(null);
+  let notificationsCategoryName = $state("");
+  let pendingNotificationLevel = $state<CategoryNotificationLevel>(
+    DEFAULT_CATEGORY_NOTIFICATION_LEVEL,
+  );
+  const CATEGORY_NOTIFICATION_OPTIONS: Array<{
+    value: CategoryNotificationLevel;
+    label: string;
+    description: string;
+  }> = [
+    {
+      value: "all_messages",
+      label: "All Messages",
+      description: "Get notified for every message in this category.",
+    },
+    {
+      value: "mentions_only",
+      label: "Mentions Only",
+      description: "Only notify when you are mentioned or replied to.",
+    },
+    {
+      value: "nothing",
+      label: "Nothing",
+      description: "Silence notifications while keeping the category visible.",
+    },
+  ];
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
@@ -452,12 +488,16 @@
   let selectedChannelForContextMenu = $state<Channel | null>(null);
   let draggingChannelId = $state<string | null>(null);
 
+  const DEFAULT_TEXT_CATEGORY_ID = "text-channels";
+  const DEFAULT_VOICE_CATEGORY_ID = "voice-channels";
+
   let textChannelsCollapsed = $state(false);
   let voiceChannelsCollapsed = $state(false);
   let collapsedCategoryIds = new SvelteSet<string>();
   let lastCollapsedServerId = $state<string | null>(null);
   let hideMutedChannels = $state(false);
   let mutedChannelIds = new SvelteSet<string>();
+  let mutedCategoryIds = new SvelteSet<string>();
   let lastLoadedPreferencesKey = $state<string | null>(null);
 
   let isResizing = $state(false);
@@ -626,6 +666,112 @@
     persistCollapsedState(VOICE_COLLAPSED_KEY, true);
   }
 
+  function getCategoryKey(categoryId: string | null, type?: "text" | "voice") {
+    if (categoryId && categoryId.length > 0) {
+      return categoryId;
+    }
+    return type === "voice" ? DEFAULT_VOICE_CATEGORY_ID : DEFAULT_TEXT_CATEGORY_ID;
+  }
+
+  function isCategoryMuted(categoryId: string | null, type?: "text" | "voice") {
+    const key = getCategoryKey(categoryId, type);
+    return mutedCategoryIds.has(key);
+  }
+
+  function getCategoryDisplayName(categoryId: string) {
+    if (categoryId === DEFAULT_TEXT_CATEGORY_ID) {
+      return "Text Channels";
+    }
+    if (categoryId === DEFAULT_VOICE_CATEGORY_ID) {
+      return "Voice Channels";
+    }
+    const category = server?.categories?.find(
+      (entry: ChannelCategory) => entry.id === categoryId,
+    );
+    return category?.name ?? "Category";
+  }
+
+  function closeRenameCategoryModal() {
+    showRenameCategoryModal = false;
+    categoryBeingRenamed = null;
+    renameCategoryName = "";
+  }
+
+  function openRenameCategoryModal(category: ChannelCategory) {
+    categoryBeingRenamed = category;
+    renameCategoryName = category.name;
+    showRenameCategoryModal = true;
+  }
+
+  async function submitRenameCategory() {
+    if (!categoryBeingRenamed) {
+      closeRenameCategoryModal();
+      return;
+    }
+    const trimmed = renameCategoryName.trim();
+    if (!trimmed) {
+      toasts.addToast("Enter a category name.", "error");
+      return;
+    }
+    const categories = server?.categories ?? [];
+    const exists = categories.some(
+      (entry: ChannelCategory) => entry.id === categoryBeingRenamed?.id,
+    );
+    if (!exists) {
+      toasts.addToast("Category not found.", "error");
+      closeRenameCategoryModal();
+      return;
+    }
+    const updatedCategories = categories.map((entry: ChannelCategory) =>
+      entry.id === categoryBeingRenamed?.id ? { ...entry, name: trimmed } : entry,
+    );
+    try {
+      const result = await serverStore.updateServer(server.id, {
+        categories: updatedCategories,
+      });
+      if (!result?.success) {
+        toasts.addToast(
+          result?.error ?? "Failed to rename category.",
+          "error",
+        );
+        return;
+      }
+      toasts.addToast("Category renamed.", "success");
+      closeRenameCategoryModal();
+    } catch (error) {
+      console.error("Failed to rename category:", error);
+      toasts.addToast("Failed to rename category.", "error");
+    }
+  }
+
+  function closeCategoryNotificationsModal() {
+    showCategoryNotificationsModal = false;
+    notificationsCategoryId = null;
+    notificationsCategoryName = "";
+    pendingNotificationLevel = DEFAULT_CATEGORY_NOTIFICATION_LEVEL;
+  }
+
+  function openCategoryNotificationsModal(categoryId: string, label: string) {
+    notificationsCategoryId = categoryId;
+    notificationsCategoryName = label;
+    pendingNotificationLevel =
+      categoryNotificationPreferencesStore.getPreference(categoryId);
+    showCategoryNotificationsModal = true;
+  }
+
+  function saveCategoryNotificationSettings() {
+    if (!notificationsCategoryId) {
+      closeCategoryNotificationsModal();
+      return;
+    }
+    categoryNotificationPreferencesStore.setPreference(
+      notificationsCategoryId,
+      pendingNotificationLevel,
+    );
+    toasts.addToast("Notification preferences updated.", "success");
+    closeCategoryNotificationsModal();
+  }
+
   function getSortedCategories() {
     return [...(server?.categories ?? [])].sort(
       (a: ChannelCategory, b: ChannelCategory) => {
@@ -669,6 +815,9 @@
   ) {
     const normalizedCategoryId = normalizeCategoryId(categoryId);
     const base = getChannelsForCategory(normalizedCategoryId, type);
+    if (hideMutedChannels && isCategoryMuted(normalizedCategoryId, type)) {
+      return [];
+    }
     const filtered = base.filter((channel) => {
       const isVisible = !hideMutedChannels || !mutedChannelIds.has(channel.id);
       const hasAccess =
@@ -946,10 +1095,15 @@
       mutedChannelIds = new SvelteSet(ids);
     });
 
+    const unsubscribeMutedCategories = mutedCategoriesStore.subscribe((ids) => {
+      mutedCategoryIds = new SvelteSet(ids);
+    });
+
     return () => {
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("scroll", handleGlobalScroll, true);
       unsubscribeMutedChannels();
+      unsubscribeMutedCategories();
     };
   });
 
@@ -1020,6 +1174,35 @@
 
     if (changed) {
       collapsedCategoryIds = new SvelteSet(next);
+    }
+  });
+
+  $effect(() => {
+    const validIds = new SvelteSet<string>([
+      DEFAULT_TEXT_CATEGORY_ID,
+      DEFAULT_VOICE_CATEGORY_ID,
+      ...(server?.categories ?? []).map(
+        (category: ChannelCategory) => category.id,
+      ),
+    ]);
+
+    if (mutedCategoryIds.size === 0) {
+      return;
+    }
+
+    let changed = false;
+    const next = new SvelteSet<string>();
+    for (const id of mutedCategoryIds) {
+      if (validIds.has(id)) {
+        next.add(id);
+      } else {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      mutedCategoryIds = new SvelteSet(next);
+      mutedCategoriesStore.setMuted(next);
     }
   });
 
@@ -1414,6 +1597,41 @@
       case "collapse_all":
         collapseAllCategories();
         break;
+      case "mute_category": {
+        const key = getCategoryKey(categoryId);
+        if (mutedCategoriesStore.isMuted(key)) {
+          mutedCategoriesStore.unmute(key);
+          toasts.addToast("Category unmuted.", "info");
+        } else {
+          mutedCategoriesStore.mute(key);
+          toasts.addToast("Category muted.", "info");
+        }
+        break;
+      }
+      case "notification_settings": {
+        const key = getCategoryKey(categoryId);
+        const label = getCategoryDisplayName(categoryId);
+        openCategoryNotificationsModal(key, label);
+        break;
+      }
+      case "edit_category": {
+        if (
+          categoryId === DEFAULT_TEXT_CATEGORY_ID ||
+          categoryId === DEFAULT_VOICE_CATEGORY_ID
+        ) {
+          toasts.addToast("Default sections cannot be renamed.", "info");
+          break;
+        }
+        const category = server?.categories?.find(
+          (entry: ChannelCategory) => entry.id === categoryId,
+        );
+        if (!category) {
+          toasts.addToast("Select a custom category to edit.", "info");
+          break;
+        }
+        openRenameCategoryModal(category);
+        break;
+      }
       case "delete_category": {
         const exists = Array.isArray(server.categories)
           ? server.categories.some((category) => category.id === categoryId)
@@ -1840,13 +2058,19 @@
           {@const categories = getSortedCategories()}
           {#if categories.length > 0}
             {#each categories as category (category.id)}
-              {@const collapsed = isCategoryCollapsed(category.id)}
+              {@const categoryMuted = isCategoryMuted(category.id)}
+              {@const collapsed =
+                isCategoryCollapsed(category.id) ||
+                (hideMutedChannels && categoryMuted)}
               <Collapsible
                 open={!collapsed}
                 onOpenChange={(value) =>
                   setCategoryCollapsed(category.id, !value)}
               >
-                <div class="flex justify-between items-center py-1 mt-4">
+                <div
+                  class="flex justify-between items-center py-1 mt-4"
+                  class:opacity-60={categoryMuted}
+                >
                   <CollapsibleTrigger
                     class="flex items-center group cursor-pointer"
                   >
@@ -2167,14 +2391,22 @@
             {/each}
           {/if}
 
+          {@const textSectionMuted =
+            isCategoryMuted(DEFAULT_TEXT_CATEGORY_ID, "text")}
+          {@const textSectionCollapsed =
+            textChannelsCollapsed ||
+            (hideMutedChannels && textSectionMuted)}
           <Collapsible
-            open={!textChannelsCollapsed}
+            open={!textSectionCollapsed}
             onOpenChange={(value) => {
               textChannelsCollapsed = !value;
               persistCollapsedState(TEXT_COLLAPSED_KEY, textChannelsCollapsed);
             }}
           >
-            <div class="flex justify-between items-center py-1 mt-4">
+            <div
+              class="flex justify-between items-center py-1 mt-4"
+              class:opacity-60={textSectionMuted}
+            >
               <CollapsibleTrigger
                 class="flex items-center group cursor-pointer"
               >
@@ -2189,7 +2421,7 @@
                 </h3>
                 <ChevronDown
                   size={10}
-                  class="ml-1 transition-transform duration-200 {textChannelsCollapsed
+                  class="ml-1 transition-transform duration-200 {textSectionCollapsed
                     ? '-rotate-90'
                     : ''}"
                 />
@@ -2211,6 +2443,7 @@
               )}
               <div
                 class="space-y-1"
+                class:opacity-60={textSectionMuted && !hideMutedChannels}
                 ondragover={(event) =>
                   handleChannelDragOver(event, null, "text")}
                 ondrop={(event) => handleChannelDrop(event, null, "text")}
@@ -2366,8 +2599,13 @@
             </CollapsibleContent>
           </Collapsible>
 
+          {@const voiceSectionMuted =
+            isCategoryMuted(DEFAULT_VOICE_CATEGORY_ID, "voice")}
+          {@const voiceSectionCollapsed =
+            voiceChannelsCollapsed ||
+            (hideMutedChannels && voiceSectionMuted)}
           <Collapsible
-            open={!voiceChannelsCollapsed}
+            open={!voiceSectionCollapsed}
             onOpenChange={(value) => {
               voiceChannelsCollapsed = !value;
               persistCollapsedState(
@@ -2376,7 +2614,10 @@
               );
             }}
           >
-            <div class="flex justify-between items-center py-1 mt-6">
+            <div
+              class="flex justify-between items-center py-1 mt-6"
+              class:opacity-60={voiceSectionMuted}
+            >
               <CollapsibleTrigger
                 class="flex items-center group cursor-pointer"
               >
@@ -2391,7 +2632,7 @@
                 </h3>
                 <ChevronDown
                   size={10}
-                  class="ml-1 transition-transform duration-200 {voiceChannelsCollapsed
+                  class="ml-1 transition-transform duration-200 {voiceSectionCollapsed
                     ? '-rotate-90'
                     : ''}"
                 />
@@ -2413,6 +2654,7 @@
               )}
               <div
                 class="space-y-1"
+                class:opacity-60={voiceSectionMuted && !hideMutedChannels}
                 ondragover={(event) =>
                   handleChannelDragOver(event, null, "voice")}
                 ondrop={(event) => handleChannelDrop(event, null, "voice")}
@@ -3019,6 +3261,121 @@
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
+{#if showRenameCategoryModal && categoryBeingRenamed}
+  <Dialog
+    open={showRenameCategoryModal}
+    onOpenChange={(value) => {
+      if (!value) {
+        closeRenameCategoryModal();
+      }
+    }}
+  >
+    <DialogContent data-testid="rename-category-modal">
+      <DialogHeader>
+        <DialogTitle>Rename Category</DialogTitle>
+        <DialogDescription>
+          Update the name for {categoryBeingRenamed.name}.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <Label
+            for="rename-category-name"
+            class="text-xs font-semibold uppercase text-muted-foreground"
+          >
+            Category Name
+          </Label>
+          <Input
+            id="rename-category-name"
+            placeholder="Operations"
+            bind:value={renameCategoryName}
+            onkeydown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submitRenameCategory();
+              }
+            }}
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onclick={closeRenameCategoryModal}>
+          Cancel
+        </Button>
+        <Button
+          onclick={() => {
+            void submitRenameCategory();
+          }}
+          disabled={!renameCategoryName.trim()}
+        >
+          <Check size={14} class="mr-2" /> Save Changes
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+{/if}
+
+{#if showCategoryNotificationsModal && notificationsCategoryId}
+  <Dialog
+    open={showCategoryNotificationsModal}
+    onOpenChange={(value) => {
+      if (!value) {
+        closeCategoryNotificationsModal();
+      }
+    }}
+  >
+    <DialogContent data-testid="category-notifications-modal">
+      <DialogHeader>
+        <DialogTitle>Category Notifications</DialogTitle>
+        <DialogDescription>
+          Choose how you’d like to be notified about {notificationsCategoryName}.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <Label class="text-xs font-semibold uppercase text-muted-foreground">
+            Delivery Preference
+          </Label>
+          <div class="space-y-2">
+            {#each CATEGORY_NOTIFICATION_OPTIONS as option (option.value)}
+              <Button
+                type="button"
+                variant={
+                  pendingNotificationLevel === option.value
+                    ? "secondary"
+                    : "outline"
+                }
+                class="flex w-full flex-col items-start gap-1 text-left"
+                data-testid={`category-notification-option-${option.value}`}
+                onclick={() => {
+                  pendingNotificationLevel = option.value;
+                }}
+              >
+                <span class="text-sm font-medium">{option.label}</span>
+                <span class="text-xs text-muted-foreground">
+                  {option.description}
+                </span>
+              </Button>
+            {/each}
+          </div>
+        </div>
+        <div class="rounded-md border border-border/60 bg-muted/10 p-3 text-xs text-muted-foreground">
+          Muting notifications won’t hide the category, but it will silence
+          pings and sounds from its channels.
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onclick={closeCategoryNotificationsModal}>
+          Cancel
+        </Button>
+        <Button onclick={saveCategoryNotificationSettings}>
+          <Check size={14} class="mr-2" /> Save Preference
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+{/if}
 
 {#if showCreateCategoryModal}
   <CreateCategoryModal
