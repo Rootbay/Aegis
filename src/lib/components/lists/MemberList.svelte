@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { Check, LoaderCircle, Minus } from "@lucide/svelte";
+  import { Ban, Check, LoaderCircle, Minus } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import type { User } from "$lib/features/auth/models/User";
@@ -13,6 +13,8 @@
   const noopOpenUserCard: OpenUserCardModal = () => {};
   type MemberRemovedHandler = (member: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
   const noopMemberRemoved: MemberRemovedHandler = () => {};
+  type MemberBannedHandler = (member: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
+  const noopMemberBanned: MemberBannedHandler = () => {};
 
   let {
     members = [],
@@ -20,15 +22,18 @@
     openUserCardModal = noopOpenUserCard,
     serverId = undefined,
     onMemberRemoved = noopMemberRemoved,
+    onMemberBanned = noopMemberBanned,
   }: {
     members?: User[];
     roles?: Role[];
     openUserCardModal?: OpenUserCardModal;
     serverId?: string;
     onMemberRemoved?: MemberRemovedHandler;
+    onMemberBanned?: MemberBannedHandler;
   } = $props();
 
   let removalStates = $state<Record<string, boolean>>({});
+  let banStates = $state<Record<string, boolean>>({});
   let roleUpdateStates = $state<Record<string, boolean>>({});
   let resolvedServerId = $derived(
     serverId ?? $serverStore.activeServerId ?? null,
@@ -70,12 +75,67 @@
     removalStates = { ...removalStates, [memberId]: value };
   }
 
+  function setBanState(memberId: string, value: boolean) {
+    banStates = value
+      ? { ...banStates, [memberId]: true }
+      : Object.fromEntries(
+          Object.entries(banStates).filter(([key]) => key !== memberId),
+        );
+  }
+
   function setRoleUpdateState(memberId: string, value: boolean) {
     roleUpdateStates = value
       ? { ...roleUpdateStates, [memberId]: true }
       : Object.fromEntries(
           Object.entries(roleUpdateStates).filter(([key]) => key !== memberId),
         );
+  }
+
+  async function handleBanMember(member: User, event: MouseEvent) {
+    event.stopPropagation();
+
+    if (!resolvedServerId) {
+      toasts.addToast("No server selected.", "error");
+      return;
+    }
+
+    const displayName = resolveMemberDisplayName(member);
+    const confirmed = confirm(
+      `Ban ${displayName}? They will be removed and prevented from rejoining.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setBanState(member.id, true);
+
+    try {
+      const result = await serverStore.banMember(resolvedServerId, member);
+
+      if (!result.success) {
+        if (result.error) {
+          toasts.addToast(result.error, "error");
+        } else {
+          toasts.addToast("Failed to ban member.", "error");
+        }
+        return;
+      }
+
+      toasts.addToast(`${displayName} banned from server.`, "success");
+
+      await onMemberRemoved(member);
+      await onMemberBanned(member);
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Failed to ban member.";
+      toasts.addToast(message, "error");
+    } finally {
+      setBanState(member.id, false);
+    }
   }
 
   function resolveMemberDisplayName(member: User): string {
@@ -245,6 +305,20 @@
                     }}
                   >
                     View profile
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    class="h-8 px-3 text-xs"
+                    onclick={(e) => handleBanMember(member, e)}
+                    disabled={!!banStates[member.id]}
+                  >
+                    {#if banStates[member.id]}
+                      <LoaderCircle class="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      Banning…
+                    {:else}
+                      <Ban class="mr-2 h-3 w-3" aria-hidden="true" />
+                      Ban
+                    {/if}
                   </Button>
                   <Button
                     variant="destructive"

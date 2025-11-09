@@ -241,6 +241,11 @@ interface ServerStore extends Readable<ServerStoreState> {
     serverId: string,
     userId: string,
   ) => Promise<ServerUpdateResult>;
+  banMember: (
+    serverId: string,
+    member: User,
+    options?: { reason?: string },
+  ) => Promise<ServerUpdateResult>;
 }
 
 export function createServerStore(): ServerStore {
@@ -833,6 +838,47 @@ export function createServerStore(): ServerStore {
       roleIds: normalizedRoleIds,
       statusMessage: normalizedStatusMessage,
       location: normalizedLocation,
+    };
+  };
+
+  const toStoreUser = (user: User): User => {
+    const normalizedRoles =
+      normalizeRoleIds(
+        user.roles ?? user.roleIds ?? user.role_ids ?? [],
+      ) ?? [];
+    const resolvedName =
+      user.name && user.name.trim().length > 0
+        ? user.name.trim()
+        : `User-${user.id.slice(0, 4)}`;
+    const statusMessage =
+      user.statusMessage == null
+        ? null
+        : user.statusMessage?.toString().trim().length
+            ? user.statusMessage
+            : null;
+    const location =
+      user.location == null
+        ? null
+        : user.location?.toString().trim().length
+            ? user.location
+            : null;
+
+    return {
+      id: user.id,
+      name: resolvedName,
+      avatar: user.avatar,
+      online: Boolean(user.online),
+      publicKey: user.publicKey,
+      bio: user.bio,
+      tag: user.tag,
+      roles: normalizedRoles,
+      roleIds: normalizedRoles,
+      role_ids: normalizedRoles,
+      statusMessage,
+      location,
+      pfpUrl: user.pfpUrl,
+      bannerUrl: user.bannerUrl,
+      isIgnored: user.isIgnored,
     };
   };
 
@@ -1580,6 +1626,58 @@ export function createServerStore(): ServerStore {
     }
   };
 
+  const banMember = async (
+    serverId: string,
+    member: User,
+    options: { reason?: string } = {},
+  ): Promise<ServerUpdateResult> => {
+    const memberId = member?.id;
+    if (!serverId || !memberId) {
+      return {
+        success: false,
+        error: "Missing server or member identifier.",
+      };
+    }
+
+    try {
+      await invoke("ban_server_member", {
+        serverId,
+        server_id: serverId,
+        userId: memberId,
+        user_id: memberId,
+        reason: options.reason,
+      });
+
+      removeMemberFromServer(serverId, memberId);
+
+      const normalizedMember = toStoreUser(member);
+      const cached = banCache.get(serverId) ?? [];
+      const next = [...cached.filter((entry) => entry.id !== memberId), normalizedMember];
+      banCache.set(serverId, next);
+
+      update((state) => ({
+        ...state,
+        bansByServer: {
+          ...state.bansByServer,
+          [serverId]: next,
+        },
+      }));
+
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to ban member.";
+      return {
+        success: false,
+        error: message,
+      };
+    }
+  };
+
   const unbanMember = async (
     serverId: string,
     userId: string,
@@ -2134,6 +2232,7 @@ export function createServerStore(): ServerStore {
     initialize,
     getServer,
     fetchBans,
+    banMember,
     unbanMember,
   };
 }

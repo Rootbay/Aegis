@@ -108,6 +108,7 @@
   import {
     buildGroupModalOptions,
     buildReportUserPayload,
+    normalizeUser,
   } from "$lib/features/chat/utils/contextMenu";
   import type { User } from "$lib/features/auth/models/User";
   import type { Friend } from "$lib/features/friends/models/Friend";
@@ -311,6 +312,13 @@
       return true;
     }
     return channelPermissions().use_external_emojis === true;
+  });
+
+  const canBanMembers = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return false;
+    }
+    return channelPermissions().ban_members === true;
   });
 
   const canMentionEveryone = $derived(() => {
@@ -1546,6 +1554,9 @@
     if (chat?.type === "dm") {
       base.push({ label: "Remove Friend", action: "remove_friend" });
     }
+    if (canBanMembers()) {
+      base.push({ label: "Ban Member", action: "ban_member", isDestructive: true });
+    }
     base.push(
       { isSeparator: true },
       { label: "Block", action: "block_user", isDestructive: true },
@@ -1595,6 +1606,8 @@
       blockUserAction(item);
     } else if (detail.action === "mute_user") {
       toggleMuteUser(item);
+    } else if (detail.action === "ban_member") {
+      void banMemberAction(item);
     } else if (detail.action === "invite_to_server") {
       inviteUserToServer(item);
     } else if (detail.action === "add_to_group") {
@@ -1679,6 +1692,69 @@
     } catch (error: any) {
       console.error("Failed to block user:", error);
       toasts.addToast(error?.message ?? "Failed to block user.", "error");
+    }
+  }
+
+  async function banMemberAction(user: User | Friend) {
+    if (!chat || chat.type !== "channel") {
+      toasts.addToast("Bans are only available in server channels.", "error");
+      return;
+    }
+
+    if (!canBanMembers()) {
+      toasts.addToast("You do not have permission to ban members.", "error");
+      return;
+    }
+
+    const serverId = chat.serverId;
+    if (!serverId) {
+      toasts.addToast("Unable to determine server context.", "error");
+      return;
+    }
+
+    const normalized = normalizeUser(user);
+    const displayName =
+      normalized.name && normalized.name.trim().length > 0
+        ? normalized.name.trim()
+        : "this member";
+
+    const meId = $userStore.me?.id;
+    if (meId && normalized.id === meId) {
+      toasts.addToast("You cannot ban yourself.", "error");
+      return;
+    }
+
+    const server = $serverStore.servers.find((entry) => entry.id === serverId);
+    if (server && server.owner_id === normalized.id) {
+      toasts.addToast("You cannot ban the server owner.", "error");
+      return;
+    }
+
+    const confirmed = confirm(
+      `Ban ${displayName} from ${chat.name ?? "this server"}? They will be removed and prevented from rejoining.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const result = await serverStore.banMember(serverId, normalized);
+      if (!result.success) {
+        const message =
+          result.error ?? "Failed to ban member. Please try again.";
+        toasts.addToast(message, "error");
+        return;
+      }
+
+      toasts.addToast(`${displayName} banned from server.`, "success");
+    } catch (error) {
+      const message =
+        typeof error === "string"
+          ? error
+          : error instanceof Error
+            ? error.message
+            : "Failed to ban member.";
+      toasts.addToast(message, "error");
     }
   }
 

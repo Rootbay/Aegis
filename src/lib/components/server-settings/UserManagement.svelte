@@ -226,6 +226,14 @@
     await refreshMembers();
   }
 
+  async function handleMemberBanned(member: User) {
+    void member;
+    await refreshMembers();
+    if (activeServerId) {
+      await serverStore.fetchBans(activeServerId, { force: true });
+    }
+  }
+
   async function handleMemberUnbanned(user: User) {
     void user;
     await refreshMembers();
@@ -513,6 +521,7 @@
           {roles}
           serverId={activeServer.id}
           onMemberRemoved={handleMemberRemoved}
+          onMemberBanned={handleMemberBanned}
         />
       </div>
 
