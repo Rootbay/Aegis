@@ -22,19 +22,37 @@
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
   import type { MemberGroup, MemberWithRoles } from "./groupMembers";
   import type { OpenUserCardModalHandler } from "./types";
+  import type { Snippet } from "svelte";
 
-  export let members: MemberWithRoles[] = [];
-  export let groupedMembers: MemberGroup[] = [];
-  export let canInviteMembers = false;
-  export let hasInviteCandidates = false;
-  export let onInviteMembers: () => void = () => {};
-  export let canRemoveMember: (member: MemberWithRoles) => boolean = () => false;
-  export let onRemoveMember: (member: MemberWithRoles) => void = () => {};
-  export let isRemovingMember: (memberId: string) => boolean = () => false;
-  export let openUserCardModal: OpenUserCardModalHandler | undefined = undefined;
-  export let isServerContext = false;
-  export let resolvedServerId: string | null = null;
-  export let variant: "desktop" | "mobile" = "desktop";
+  let {
+    members = [],
+    groupedMembers = [],
+    canInviteMembers = false,
+    hasInviteCandidates = false,
+    onInviteMembers = () => {},
+    canRemoveMember = () => false,
+    onRemoveMember = () => {},
+    isRemovingMember = () => false,
+    openUserCardModal,
+    isServerContext = false,
+    resolvedServerId = null,
+    variant = "desktop",
+    userCard,
+  } = $props<{
+    members?: MemberWithRoles[];
+    groupedMembers?: MemberGroup[];
+    canInviteMembers?: boolean;
+    hasInviteCandidates?: boolean;
+    onInviteMembers?: () => void;
+    canRemoveMember?: (member: MemberWithRoles) => boolean;
+    onRemoveMember?: (member: MemberWithRoles) => void;
+    isRemovingMember?: (memberId: string) => boolean;
+    openUserCardModal?: OpenUserCardModalHandler;
+    isServerContext?: boolean;
+    resolvedServerId?: string | null;
+    variant?: "desktop" | "mobile";
+    userCard?: Snippet<[MemberWithRoles, boolean, string | null, () => void]>;
+  }>();
 </script>
 
 <SidebarContent
@@ -101,6 +119,8 @@
                                   true,
                                 )}
                             >
+                              {@const label = resolvePresenceStatusLabel(member.statusMessage)}
+
                               <div class="relative">
                                 <Avatar class="size-8">
                                   <AvatarImage src={member.avatar} alt={member.name} />
@@ -114,20 +134,21 @@
                                   ></span>
                                 {/if}
                               </div>
+
                               <div class="min-w-0">
                                 <p class="truncate text-sm font-medium text-foreground">
                                   {member.name}
                                 </p>
-                                {@const memberStatusLabel =
-                                  resolvePresenceStatusLabel(member.statusMessage)}
-                                {#if memberStatusLabel}
+
+                                {#if label}
                                   <p
                                     class="truncate text-xs text-muted-foreground"
-                                    title={memberStatusLabel}
+                                    title={label}
                                   >
-                                    {memberStatusLabel}
+                                    {label}
                                   </p>
                                 {/if}
+
                                 {#if member.location}
                                   <p
                                     class="flex items-center gap-1 text-xs text-muted-foreground"
@@ -140,14 +161,10 @@
                               </div>
                             </SidebarMenuButton>
                           </Popover.Trigger>
-                          <Popover.Content class="w-auto border-none p-0" let:close>
-                            <slot
-                              name="user-card"
-                              member={member}
-                              isServerContext={isServerContext}
-                              resolvedServerId={resolvedServerId}
-                              {close}
-                            />
+                          <Popover.Content class="w-auto border-none p-0">
+                            {#if userCard}
+                              {@render userCard(member, isServerContext, resolvedServerId, close)}
+                            {/if}
                           </Popover.Content>
                         </Popover.Root>
                         {#if typeof member.id === "string" && canRemoveMember(member)}

@@ -54,6 +54,7 @@
   >(null);
   let cachedFriendship = $state<FriendshipRecord | null>(null);
   let loadingFriendship = $state(false);
+  const friendStatusLabel = $derived(resolvePresenceStatusLabel(friend.statusMessage));
 
   function getTargetUserId(): string | null {
     return friend.userId ?? friend.id ?? null;
@@ -338,9 +339,6 @@
       {/if}
     </div>
     <p class={`text-xs ${statusClass}`}>{displayStatus}</p>
-    {@const friendStatusLabel = resolvePresenceStatusLabel(
-      friend.statusMessage,
-    )}
     {#if friendStatusLabel}
       <p
         class="text-xs text-muted-foreground truncate"

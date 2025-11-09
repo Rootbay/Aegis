@@ -123,6 +123,7 @@
 
   const NOTE_SAVE_THROTTLE_MS = 500;
   const SAVE_FEEDBACK_DURATION_MS = 2000;
+  const profileStatusLabel = $derived(resolvePresenceStatusLabel(profileUser.statusMessage));
 
   $effect(() => {
     if (!notesReady) {
@@ -787,12 +788,8 @@
             {profileUser.bio ?? ""}
           </p>
 
-          {@const profileStatusLabel =
-            resolvePresenceStatusLabel(profileUser.statusMessage)}
           {#if profileStatusLabel}
-            <p class="text-sm text-muted-foreground mt-2">
-              {profileStatusLabel}
-            </p>
+            <p class="text-sm text-muted-foreground mt-2">{profileStatusLabel}</p>
           {/if}
 
           {#if profileUser.location}
