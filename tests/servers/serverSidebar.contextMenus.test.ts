@@ -6,6 +6,7 @@ import type {
   CallState,
 } from "$lib/features/calls/stores/callStore";
 import type { Channel } from "$lib/features/channels/models/Channel";
+import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
 import { voicePresenceStore } from "$lib/features/calls/stores/voicePresenceStore";
 
 import ChannelContextMenuMock from "../mocks/ChannelContextMenu.svelte";
@@ -200,6 +201,142 @@ const mutedChannelsModule = vi.hoisted(() => {
   };
 });
 
+const mutedCategoriesModule = vi.hoisted(() => {
+  type Subscriber = (value: Set<string>) => void;
+  let state = new Set<string>();
+  const subscribers: Subscriber[] = [];
+
+  const emit = () => {
+    const snapshot = new Set(state);
+    for (const subscriber of subscribers) {
+      subscriber(snapshot);
+    }
+  };
+
+  const subscribe = (run: Subscriber) => {
+    run(new Set(state));
+    subscribers.push(run);
+    return () => {
+      const index = subscribers.indexOf(run);
+      if (index !== -1) {
+        subscribers.splice(index, 1);
+      }
+    };
+  };
+
+  const mutate = (updater: (next: Set<string>) => void) => {
+    const next = new Set(state);
+    updater(next);
+    if (next.size === state.size && [...next].every((id) => state.has(id))) {
+      return;
+    }
+    state = next;
+    emit();
+  };
+
+  const store = {
+    subscribe,
+    mute(categoryId: string) {
+      if (!categoryId) return;
+      mutate((next) => next.add(categoryId));
+    },
+    unmute(categoryId: string) {
+      if (!categoryId) return;
+      mutate((next) => next.delete(categoryId));
+    },
+    toggle(categoryId: string) {
+      if (!categoryId) return;
+      mutate((next) => {
+        if (next.has(categoryId)) {
+          next.delete(categoryId);
+        } else {
+          next.add(categoryId);
+        }
+      });
+    },
+    isMuted(categoryId: string) {
+      if (!categoryId) return false;
+      return state.has(categoryId);
+    },
+    setMuted(ids: Iterable<string>) {
+      state = new Set(ids);
+      emit();
+    },
+    clear() {
+      if (state.size === 0) return;
+      state = new Set();
+      emit();
+    },
+  };
+
+  return {
+    store,
+    reset() {
+      state = new Set();
+      emit();
+    },
+    getState: () => new Set(state),
+  };
+});
+
+const categoryNotificationPreferencesModule = vi.hoisted(() => {
+  type Subscriber = (value: Map<string, string>) => void;
+  const DEFAULT_LEVEL = "all_messages";
+  let state = new Map<string, string>();
+  const subscribers: Subscriber[] = [];
+
+  const emit = () => {
+    const snapshot = new Map(state);
+    for (const subscriber of subscribers) {
+      subscriber(snapshot);
+    }
+  };
+
+  const subscribe = (run: Subscriber) => {
+    run(new Map(state));
+    subscribers.push(run);
+    return () => {
+      const index = subscribers.indexOf(run);
+      if (index !== -1) {
+        subscribers.splice(index, 1);
+      }
+    };
+  };
+
+  const setPreference = (categoryId: string, level: string) => {
+    if (!categoryId) return;
+    state.set(categoryId, level);
+    emit();
+  };
+
+  const store = {
+    subscribe,
+    setPreference,
+    getPreference(categoryId: string) {
+      if (!categoryId) {
+        return DEFAULT_LEVEL;
+      }
+      return state.get(categoryId) ?? DEFAULT_LEVEL;
+    },
+    clear() {
+      if (state.size === 0) return;
+      state = new Map();
+      emit();
+    },
+  };
+
+  return {
+    store,
+    reset() {
+      state = new Map();
+      emit();
+    },
+    getState: () => new Map(state),
+    setPreference,
+    DEFAULT_LEVEL,
+  };
+});
+
 class ResizeObserverMock {
   observe() {}
   unobserve() {}
@@ -300,6 +437,20 @@ vi.mock("$lib/features/channels/stores/mutedChannelsStore", () => ({
   mutedChannelsStore: mutedChannelsModule.store,
 }));
 
+vi.mock("$lib/features/channels/stores/mutedCategoriesStore", () => ({
+  mutedCategoriesStore: mutedCategoriesModule.store,
+}));
+
+vi.mock(
+  "$lib/features/channels/stores/categoryNotificationPreferencesStore",
+  () => ({
+    categoryNotificationPreferencesStore:
+      categoryNotificationPreferencesModule.store,
+    DEFAULT_CATEGORY_NOTIFICATION_LEVEL:
+      categoryNotificationPreferencesModule.DEFAULT_LEVEL,
+  }),
+);
+
 import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
 import { tick } from "svelte";
 
@@ -359,6 +510,8 @@ describe("ServerSidebar context menus", () => {
     resetCallStoreState();
     voicePresenceStore.reset();
     mutedChannelsModule.reset();
+    mutedCategoriesModule.reset();
+    categoryNotificationPreferencesModule.reset();
   });
 
   afterEach(() => {
@@ -980,5 +1133,184 @@ describe("ServerSidebar context menus", () => {
       expect(mutedChannelsModule.getState().has("channel-1")).toBe(false);
     });
     expect(addToastMock).toHaveBeenCalledWith("Channel unmuted.", "info");
+  });
+
+  it("toggles category mute state from the context menu", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [],
+      categories: [
+        {
+          id: "category-1",
+          server_id: "server-1",
+          name: "Operations",
+          position: 1,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const renderResult = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    const heading = renderResult.getByText("Operations");
+    await fireEvent.contextMenu(heading);
+    const muteButton = await renderResult.findByTestId("category-context-mute");
+    await fireEvent.click(muteButton);
+
+    await waitFor(() => {
+      expect(mutedCategoriesModule.getState().has("category-1")).toBe(true);
+    });
+    expect(addToastMock).toHaveBeenCalledWith("Category muted.", "info");
+
+    await fireEvent.contextMenu(heading);
+    const unmuteButton = await renderResult.findByTestId(
+      "category-context-mute",
+    );
+    await fireEvent.click(unmuteButton);
+
+    await waitFor(() => {
+      expect(mutedCategoriesModule.getState().has("category-1")).toBe(false);
+    });
+    expect(addToastMock).toHaveBeenCalledWith("Category unmuted.", "info");
+  });
+
+  it("renames a category via the edit action", async () => {
+    updateServerMock.mockClear();
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [],
+      categories: [
+        {
+          id: "category-1",
+          server_id: "server-1",
+          name: "Operations",
+          position: 1,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const renderResult = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    const heading = renderResult.getByText("Operations");
+    await fireEvent.contextMenu(heading);
+    const editButton = await renderResult.findByTestId("category-context-edit");
+    await fireEvent.click(editButton);
+
+    const modal = await renderResult.findByTestId("rename-category-modal");
+    expect(modal).toBeTruthy();
+
+    const input = renderResult.getByLabelText("Category Name") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "Logistics" } });
+
+    const saveButton = renderResult.getByRole("button", {
+      name: /save changes/i,
+    });
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(updateServerMock).toHaveBeenCalled();
+    });
+
+    const call = updateServerMock.mock.calls[0];
+    expect(call?.[0]).toBe("server-1");
+    const patch = call?.[1] as { categories?: ChannelCategory[] };
+    expect(patch?.categories).toBeDefined();
+    expect(patch?.categories?.find((cat) => cat.id === "category-1")?.name).toBe(
+      "Logistics",
+    );
+    expect(addToastMock).toHaveBeenCalledWith("Category renamed.", "success");
+
+    await waitFor(() => {
+      expect(renderResult.queryByTestId("rename-category-modal")).toBeNull();
+    });
+  });
+
+  it("updates notification preferences for a category", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [],
+      categories: [
+        {
+          id: "category-1",
+          server_id: "server-1",
+          name: "Operations",
+          position: 1,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const renderResult = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    const heading = renderResult.getByText("Operations");
+    await fireEvent.contextMenu(heading);
+    const notificationButton = await renderResult.findByTestId(
+      "category-context-notifications",
+    );
+    await fireEvent.click(notificationButton);
+
+    const modal = await renderResult.findByTestId(
+      "category-notifications-modal",
+    );
+    expect(modal).toBeTruthy();
+
+    const mentionsOption = await renderResult.findByTestId(
+      "category-notification-option-mentions_only",
+    );
+    await fireEvent.click(mentionsOption);
+
+    const saveButton = renderResult.getByRole("button", {
+      name: /save preference/i,
+    });
+    await fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(
+        categoryNotificationPreferencesModule
+          .getState()
+          .get("category-1"),
+      ).toBe("mentions_only");
+    });
+    expect(addToastMock).toHaveBeenCalledWith(
+      "Notification preferences updated.",
+      "success",
+    );
+
+    await waitFor(() => {
+      expect(
+        renderResult.queryByTestId("category-notifications-modal"),
+      ).toBeNull();
+    });
   });
 });
