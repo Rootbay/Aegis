@@ -4,9 +4,16 @@
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { cn } from "$lib/utils";
-  import { Phone, Video } from "@lucide/svelte";
+  import { MicVibrate, Phone, Video } from "@lucide/svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import type { Chat } from "$lib/features/chat/models/Chat";
+  import { pushToTalkStore } from "$lib/features/calls/stores/pushToTalkStore";
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
 
   let { chat } = $props<{ chat: Chat | null }>();
 
@@ -102,6 +109,10 @@
         activeCallForChat.status !== "error",
     ),
   );
+
+  const pushToTalkEnabled = $derived($pushToTalkStore.enabled);
+  const pushToTalkPressing = $derived($pushToTalkStore.isPressing);
+  const pushToTalkShortcut = $derived($pushToTalkStore.shortcut);
 
   function getCallMembers() {
     if (!chat) return [] as { id: string; name?: string }[];
@@ -220,4 +231,38 @@
   >
     <Video class="w-4 h-4" />
   </Button>
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger>
+        <Button
+          variant={pushToTalkEnabled ? "secondary" : "ghost"}
+          class={cn(
+            "cursor-pointer",
+            pushToTalkPressing ? "text-emerald-400" : "",
+          )}
+          size="icon"
+          aria-pressed={pushToTalkEnabled}
+          aria-label={pushToTalkEnabled
+            ? "Disable push-to-talk"
+            : "Enable push-to-talk"}
+          onclick={() => pushToTalkStore.toggle()}
+        >
+          <MicVibrate class="w-4 h-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {#if pushToTalkEnabled}
+          Hold
+          {#if pushToTalkShortcut?.length}
+            {pushToTalkShortcut}
+          {:else}
+            your shortcut
+          {/if}
+          to speak
+        {:else}
+          Enable push-to-talk
+        {/if}
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
 {/if}

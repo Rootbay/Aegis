@@ -18,6 +18,7 @@
     VideoOff,
     Mic,
     MicOff,
+    MicVibrate,
     Timer,
     MonitorUp,
     MonitorStop,
@@ -28,6 +29,7 @@
     type ActiveCall,
     type CallParticipant,
   } from "$lib/features/calls/stores/callStore";
+  import { pushToTalkStore } from "$lib/features/calls/stores/pushToTalkStore";
   import {
     Tooltip,
     TooltipContent,
@@ -163,6 +165,9 @@
       $callStore.localMedia.videoAvailable &&
       $callStore.activeCall?.type === "video",
   );
+  const pushToTalkEnabled = $derived($pushToTalkStore.enabled);
+  const pushToTalkPressing = $derived($pushToTalkStore.isPressing);
+  const pushToTalkShortcut = $derived($pushToTalkStore.shortcut);
   const isScreenSharing = $derived($callStore.localMedia.screenSharing);
   const canShareScreen = $derived(
     Boolean(
@@ -409,15 +414,19 @@
                     <Button
                       type="button"
                       size="icon"
-                      variant={localMedia.audioEnabled
-                        ? "secondary"
-                        : "outline"}
+                      variant={pushToTalkEnabled
+                        ? "outline"
+                        : localMedia.audioEnabled
+                          ? "secondary"
+                          : "outline"}
                       class="cursor-pointer"
                       aria-pressed={localMedia.audioEnabled}
-                      aria-label={localMedia.audioEnabled
-                        ? "Mute microphone"
-                        : "Unmute microphone"}
-                      disabled={!canToggleAudio}
+                      aria-label={pushToTalkEnabled
+                        ? `Push-to-talk ${pushToTalkShortcut ? `(${pushToTalkShortcut})` : "enabled"}`
+                        : localMedia.audioEnabled
+                          ? "Mute microphone"
+                          : "Unmute microphone"}
+                      disabled={!canToggleAudio || pushToTalkEnabled}
                       onclick={() => callStore.toggleMute()}
                     >
                       {#if localMedia.audioEnabled}
@@ -428,9 +437,53 @@
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
-                    {localMedia.audioEnabled
-                      ? "Mute microphone"
-                      : "Unmute microphone"}
+                    {#if pushToTalkEnabled}
+                      Push-to-talk
+                      {#if pushToTalkShortcut?.length}
+                        ({pushToTalkShortcut})
+                      {/if}
+                      is active
+                    {:else if localMedia.audioEnabled}
+                      Mute microphone
+                    {:else}
+                      Unmute microphone
+                    {/if}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant={pushToTalkEnabled ? "secondary" : "outline"}
+                      class={`relative cursor-pointer${pushToTalkPressing ? " ring-2 ring-emerald-400" : ""}`}
+                      aria-pressed={pushToTalkEnabled}
+                      aria-label={pushToTalkEnabled
+                        ? "Disable push-to-talk"
+                        : "Enable push-to-talk"}
+                      onclick={() => pushToTalkStore.toggle()}
+                    >
+                      <MicVibrate class="h-4 w-4" />
+                      {#if pushToTalkEnabled && pushToTalkPressing}
+                        <span
+                          class="absolute right-1 top-1 h-2 w-2 rounded-full bg-emerald-400"
+                          aria-hidden="true"
+                        />
+                      {/if}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {#if pushToTalkEnabled}
+                      Hold
+                      {#if pushToTalkShortcut?.length}
+                        {pushToTalkShortcut}
+                      {:else}
+                        your shortcut
+                      {/if}
+                      to speak
+                    {:else}
+                      Enable push-to-talk
+                    {/if}
                   </TooltipContent>
                 </Tooltip>
                 {#if activeCall.type === "video"}

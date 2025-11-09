@@ -6,6 +6,7 @@ import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { userStore } from "$lib/stores/userStore";
 import { settings } from "$lib/features/settings/stores/settings";
 import { getIceServersFromConfig } from "$lib/features/calls/utils/iceServers";
+import { pushToTalkStore, type PushToTalkState } from "./pushToTalkStore";
 import { voicePresenceStore } from "./voicePresenceStore";
 
 const isBrowser = typeof window !== "undefined";
@@ -82,6 +83,10 @@ interface CallState {
     screenShareAvailable: boolean;
   };
   showCallModal: boolean;
+  pushToTalk: {
+    enabled: boolean;
+    isPressing: boolean;
+  };
 }
 
 type OfferSignal = {
@@ -148,6 +153,10 @@ const INITIAL_STATE: CallState = {
     screenShareAvailable: false,
   },
   showCallModal: false,
+  pushToTalk: {
+    enabled: false,
+    isPressing: false,
+  },
 };
 
 const STATUS_CLEAR_DELAY = 6000;
@@ -213,7 +222,15 @@ interface InviteeInfo {
 }
 
 function createCallStore() {
-  const store = writable<CallState>(INITIAL_STATE);
+  let pushToTalkState: PushToTalkState = pushToTalkStore.state;
+
+  const store = writable<CallState>({
+    ...INITIAL_STATE,
+    pushToTalk: {
+      enabled: pushToTalkState.enabled,
+      isPressing: pushToTalkState.isPressing,
+    },
+  });
   const { subscribe, update, set } = store;
 
   let initialized = false;
@@ -1206,6 +1223,7 @@ function createCallStore() {
       const stream = await requestUserMedia("voice");
       activeStream = stream;
       syncLocalMediaState(activeStream);
+      enforcePushToTalkState();
 
       const connectedAt = Date.now();
 
@@ -1414,6 +1432,7 @@ function createCallStore() {
       const stream = await requestUserMedia(type);
       activeStream = stream;
       syncLocalMediaState(activeStream);
+      enforcePushToTalkState();
 
       update((next) => {
         if (!next.activeCall || next.activeCall.callId !== callId) {
@@ -1717,6 +1736,7 @@ function createCallStore() {
         syncLocalMediaState(activeStream);
       }
       syncLocalMediaState(activeStream);
+      enforcePushToTalkState();
 
       mutateParticipant(senderId, (participant) => {
         if (!participant) {
@@ -2180,6 +2200,9 @@ function createCallStore() {
     if (!state.localMedia.audioAvailable) {
       return;
     }
+    if (pushToTalkState.enabled) {
+      return;
+    }
     setLocalAudioEnabled(!state.localMedia.audioEnabled);
   }
 
@@ -2190,6 +2213,42 @@ function createCallStore() {
   function unmute() {
     setLocalAudioEnabled(true);
   }
+
+  function enforcePushToTalkState() {
+    if (!pushToTalkState.enabled) {
+      return;
+    }
+    if (!activeStream) {
+      return;
+    }
+    if (pushToTalkState.isPressing) {
+      unmute();
+    } else {
+      mute();
+    }
+  }
+
+  pushToTalkStore.subscribe((next) => {
+    pushToTalkState = next;
+
+    update((state) => {
+      if (
+        state.pushToTalk.enabled === next.enabled &&
+        state.pushToTalk.isPressing === next.isPressing
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        pushToTalk: {
+          enabled: next.enabled,
+          isPressing: next.isPressing,
+        },
+      };
+    });
+
+    enforcePushToTalkState();
+  });
 
   function setLocalVideoEnabled(enabled: boolean) {
     if (!activeStream) {
@@ -2276,7 +2335,13 @@ function createCallStore() {
     screenShareStream = null;
     screenShareSenders = new Map();
     voicePresenceStore.reset();
-    set(INITIAL_STATE);
+    set({
+      ...INITIAL_STATE,
+      pushToTalk: {
+        enabled: pushToTalkState.enabled,
+        isPressing: pushToTalkState.isPressing,
+      },
+    });
     updateScreenShareAvailability();
   }
 
