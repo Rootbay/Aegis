@@ -319,8 +319,8 @@ describe("ChatView remote search pagination", () => {
     id: "chat-1",
     type: "dm",
     friend,
-    members: [friend],
-  } as Chat;
+    messages: [],
+  } satisfies Chat;
 
   beforeAll(() => {
     class ResizeObserverMock {

@@ -95,6 +95,16 @@ export interface ChatMessage {
   replySnapshotAuthor?: string;
   reply_snapshot_snippet?: string;
   replySnapshotSnippet?: string;
+  sender_profile?: unknown;
+  senderProfile?: unknown;
+  sender_name?: string;
+  senderName?: string;
+  sender_username?: string;
+  senderUsername?: string;
+  sender_avatar?: string;
+  senderAvatar?: string;
+  sender_avatar_url?: string;
+  senderAvatarUrl?: string;
   signature?: BytePayload;
 }
 

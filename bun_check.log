@@ -1,0 +1,1182 @@
+$ svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+Loading svelte-check in workspace: c:\Users\slurpjuice\Desktop\Aegis
+Getting Svelte diagnostics...
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\memberSidebar\MemberListContent.svelte[39m:197:5
+[33mWarn[39m: Unknown at rule @apply (css)
+[36m  :global([data-mobile]) {
+    [35m@apply[36m max-h-[min(70vh,30rem)];
+  }[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\MemberSidebar.svelte[39m:302:31
+[31mError[39m: '$$_tnetnoCtsiLrebmeM1.$$slot_def' is of type 'unknown'. (ts)
+[36m          let:isServerContext
+          let:resolvedServerId[35m[36m
+        >[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\MemberSidebar.svelte[39m:335:31
+[31mError[39m: '$$_tnetnoCtsiLrebmeM1.$$slot_def' is of type 'unknown'. (ts)
+[36m          let:isServerContext
+          let:resolvedServerId[35m[36m
+        >[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\MemberSidebar.svelte[39m:400:33
+[31mError[39m: '$$_tnetnoCtsiLrebmeM3.$$slot_def' is of type 'unknown'. (ts)
+[36m            let:isServerContext
+            let:resolvedServerId[35m[36m
+          >[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:425:6
+[31mError[39m: Conversion of type 'Readable<Page<{ serverId?: string | undefined; channelId?: string | undefined; chatId?: string | undefined; code?: string | undefined; }, "/settings" | "/settings/account" | "/settings/advanced" | ... 32 more ... | null>>' to type 'Writable<{ url: URL; }>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'Readable<Page<{ serverId?: string | undefined; channelId?: string | undefined; chatId?: string | undefined; code?: string | undefined; }, "/settings" | "/settings/account" | "/settings/advanced" | ... 32 more ... | null>>' is missing the following properties from type 'Writable<{ url: URL; }>': set, update 
+[36m    localStorage.clear();
+    ([35mpage as Writable<{ url: URL }>[36m).set({
+      url: new URL("https://app.local/"),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:438:6
+[31mError[39m: Conversion of type 'Readable<Page<{ serverId?: string | undefined; channelId?: string | undefined; chatId?: string | undefined; code?: string | undefined; }, "/settings" | "/settings/account" | "/settings/advanced" | ... 32 more ... | null>>' to type 'Writable<{ url: URL; }>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'Readable<Page<{ serverId?: string | undefined; channelId?: string | undefined; chatId?: string | undefined; code?: string | undefined; }, "/settings" | "/settings/account" | "/settings/advanced" | ... 32 more ... | null>>' is missing the following properties from type 'Writable<{ url: URL; }>': set, update 
+[36m    localStorage.clear();
+    ([35mpage as Writable<{ url: URL }>[36m).set({
+      url: new URL("https://app.local/"),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:455:6
+[31mError[39m: Conversion of type 'Readable<Page<{ serverId?: string | undefined; channelId?: string | undefined; chatId?: string | undefined; code?: string | undefined; }, "/settings" | "/settings/account" | "/settings/advanced" | ... 32 more ... | null>>' to type 'Writable<{ url: URL; }>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Type 'Readable<Page<{ serverId?: string | undefined; channelId?: string | undefined; chatId?: string | undefined; code?: string | undefined; }, "/settings" | "/settings/account" | "/settings/advanced" | ... 32 more ... | null>>' is missing the following properties from type 'Writable<{ url: URL; }>': set, update 
+[36m    chatStore.handleMessagesUpdate(dmId, [message]);
+    ([35mpage as Writable<{ url: URL }>[36m).set({
+      url: new URL(`https://app.local/dm/${dmId}`),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:483:27
+[31mError[39m: Property 'friend' does not exist on type 'Chat'.
+  Property 'friend' does not exist on type 'ChannelChat'. 
+[36m      expect(currentChat?.type).toBe("dm");
+      expect(currentChat?.[35mfriend[36m.id).toBe(dmId);
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:492:27
+[31mError[39m: Property 'friend' does not exist on type 'Chat'.
+  Property 'friend' does not exist on type 'ChannelChat'. 
+[36m        : null;
+      expect(currentChat?.[35mfriend[36m.name).toBe(expectedName);
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:496:48
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    await waitFor(() => {
+      expect(rendered.getByText(expectedName)).[35mtoBeInTheDocument[36m();
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\createAppController.test.ts[39m:502:9
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m        rendered.getByLabelText("View profile picture"),
+      ).[35mtoBeInTheDocument[36m();
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\lists\MemberList.svelte[39m:44:20
+[31mError[39m: Conversion of type 'User' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'User'. (ts)
+[36m    const ids = new Set<string>();
+    const record = [35mmember as Record<string, unknown>[36m;
+    const candidates = [record.roleIds, record.role_ids, record.roles];[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\features\channels\components\ChannelManagement.svelte[39m:156:9
+[31mError[39m: Mixing old (on:change) and new syntaxes for event handling is not allowed. Use only the onchange syntax
+https://svelte.dev/e/mixed_event_handler_syntaxes (svelte)
+[36m        class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        [35mon:change={(event) => {
+          const target = event.target as HTMLSelectElement;
+          newChannelSlowmode = normalizeSlowmodeValue(target.value);
+        }}[36m
+      >[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\features\channels\components\ChannelManagement.svelte[39m:87:5
+[31mError[39m: Type 'string | number' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'. (ts)
+[36m    editingChannelType = channel.channel_type;
+    [35meditingChannelSlowmode[36m = channel.rate_limit_per_user ?? 0;
+  }[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:2230:19
+[33mWarn[39m: This element is implicitly closed by the following `</CollapsibleContent>`, which can cause an unexpected DOM structure. Add an explicit `</div>` to avoid surprises.
+https://svelte.dev/e/element_implicitly_closed (svelte)
+[36m                  </div>
+                  [35m<div
+                    class="space-y-1 mt-2"
+                    ondragover={(event) =>
+                      handleChannelDragOver(event, category.id, "voice")}
+                    ondrop={(event) =>
+                      handleChannelDrop(event, category.id, "voice")}
+                  >[36m
+                    {#each voiceChannels as channel (channel.id)}[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:2112:19
+[33mWarn[39m: `<div>` with a dragover or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m                  )}
+                  [35m<div
+                    class="space-y-1"
+                    ondragover={(event) =>
+                      handleChannelDragOver(event, category.id, "text")}
+                    ondrop={(event) =>
+                      handleChannelDrop(event, category.id, "text")}
+                  >
+                    {#if textChannels.length === 0 && voiceChannels.length === 0}
+                      <p class="text-xs text-muted-foreground px-2 py-1">
+                        No channels in this category yet.
+                      </p>
+                    {/if}
+
+                    {#each textChannels as channel (channel.id)}
+                      {@const metadata = channelMetadataLookup.get(channel.id)}
+                      {@const unreadCount = metadata?.unreadCount ?? 0}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <div
+                              role="button"
+                              tabindex="0"
+                              draggable
+                              class:opacity-50={draggingChannelId === channel.id}
+                              ondragstart={(event) =>
+                                handleChannelDragStart(event, channel)}
+                              ondragend={handleChannelDragEnd}
+                              ondragover={(event) =>
+                                handleChannelDragOver(
+                                  event,
+                                  category.id,
+                                  "text",
+                                )}
+                              ondrop={(event) =>
+                                handleChannelDrop(
+                                  event,
+                                  category.id,
+                                  "text",
+                                  channel.id,
+                                )}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            $activeServerChannelId === channel.id
+                              ? "bg-primary/80 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onclick={() => handleChannelSelect(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleChannelSelect(channel);
+                            }
+                          }}
+                            oncontextmenu={(e) =>
+                              handleChannelContextMenu(e, channel)}
+                            title={channel.topic ?? undefined}
+                          >
+                          <div class="flex items-center truncate">
+                            <Hash size={10} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
+                            <div class="ml-auto flex items-center gap-2">
+                              {#if unreadCount > 0}
+                                <Badge
+                                  class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                                >
+                                  {unreadCount > 99 ? "99+" : unreadCount}
+                                </Badge>
+                              {/if}
+                              <div
+                                class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                              >
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="text-muted-foreground hover:text-foreground"
+                                  aria-label="Invite to channel"
+                                  onclick={(event) =>
+                                    handleInviteToChannelClick(channel, event)}
+                                >
+                                  <Plus size={10} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="text-muted-foreground hover:text-foreground"
+                                  aria-label="Channel settings"
+                                  onclick={(event) =>
+                                    handleChannelSettingsClick(channel, event)}
+                                >
+                                  <Settings size={10} />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {#if channel.topic}
+                          <TooltipContent
+                            side="right"
+                            align="start"
+                            class="max-w-xs text-xs leading-snug"
+                          >
+                            {channel.topic}
+                          </TooltipContent>
+                        {/if}
+                      </Tooltip>
+                    </TooltipProvider>
+                  {/each}
+
+                  </div>[36m
+                  <div[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:2230:19
+[33mWarn[39m: `<div>` with a dragover or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m                  </div>
+                  [35m<div
+                    class="space-y-1 mt-2"
+                    ondragover={(event) =>
+                      handleChannelDragOver(event, category.id, "voice")}
+                    ondrop={(event) =>
+                      handleChannelDrop(event, category.id, "voice")}
+                  >
+                    {#each voiceChannels as channel (channel.id)}
+                      {@const activeCall = $callStore.activeCall}
+                      {@const isActiveVoiceChannel =
+                        activeCall &&
+                        activeCall.chatType === "channel" &&
+                        activeCall.type === "voice" &&
+                        activeCall.status !== "ended" &&
+                        activeCall.status !== "error" &&
+                        activeCall.chatId === channel.id}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <div
+                              role="button"
+                              tabindex="0"
+                              draggable
+                              class:opacity-50={draggingChannelId === channel.id}
+                              ondragstart={(event) =>
+                                handleChannelDragStart(event, channel)}
+                              ondragend={handleChannelDragEnd}
+                              ondragover={(event) =>
+                                handleChannelDragOver(
+                                  event,
+                                  category.id,
+                                  "voice",
+                                )}
+                              ondrop={(event) =>
+                                handleChannelDrop(
+                                  event,
+                                  category.id,
+                                  "voice",
+                                  channel.id,
+                                )}
+                              class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                                isActiveVoiceChannel
+                                  ? "bg-primary/80 text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                              }`}
+                              data-active={
+                                isActiveVoiceChannel ? "true" : undefined
+                              }
+                              onclick={() => handleVoiceChannelClick(channel)}
+                              onkeydown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  handleVoiceChannelClick(channel);
+                                }
+                              }}
+                              oncontextmenu={(e) =>
+                                handleChannelContextMenu(e, channel)}
+                              title={channel.topic ?? undefined}
+                            >
+                            <div class="flex items-center truncate">
+                              <Mic size={12} class="mr-1" />
+                              <span class="truncate select-none ml-2"
+                                >{channel.name}</span
+                              >
+                              {#if channel.private}
+                                <Badge
+                                  class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                >
+                                  <Lock size={10} />
+                                  Private
+                                </Badge>
+                              {/if}
+                            </div>
+                            <div
+                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Invite to channel"
+                                onclick={(event) =>
+                                  handleInviteToChannelClick(channel, event)}
+                              >
+                                <Plus size={10} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Channel settings"
+                                onclick={(event) =>
+                                  handleChannelSettingsClick(channel, event)}
+                              >
+                                <Settings size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {#if channel.topic}
+                          <TooltipContent
+                            side="right"
+                            align="start"
+                            class="max-w-xs text-xs leading-snug"
+                          >
+                            {channel.topic}
+                          </TooltipContent>
+                        {/if}
+                      </Tooltip>
+                    </TooltipProvider>
+                    {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                    {#if presenceEntry}
+                      {@const participantEntries = Array.from(
+                        presenceEntry.participants.values(),
+                      ).sort(
+                        (a, b) =>
+                          (a.joinedAt ?? a.lastSeenAt) -
+                          (b.joinedAt ?? b.lastSeenAt),
+                      )}
+                      <div class="ml-8 mt-1 space-y-1 pb-1">
+                        <div class="text-[11px] font-medium text-muted-foreground">
+                          {participantEntries.length} connected
+                        </div>
+                        {#if participantEntries.length > 0}
+                          <div class="flex flex-wrap gap-1.5">
+                            {#each participantEntries as presence (presence.userId)}
+                              {@const member = membersById.get(presence.userId)}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                                      <Avatar class="h-5 w-5 border border-border">
+                                        <AvatarImage
+                                          src={member?.avatar}
+                                          alt={member?.name ?? presence.userId}
+                                        />
+                                        <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                          {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span class="max-w-24 truncate">
+                                        {member?.name ?? presence.userId}
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" align="start" class="text-xs">
+                                    {member?.name ?? presence.userId}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            {/each}
+                          </div>
+                        {:else}
+                          <p class="text-[11px] text-muted-foreground">
+                            No one connected.
+                          </p>
+                        {/if}
+                      </div>
+                    {/if}
+                  {/each}
+                [36m</CollapsibleContent>
+              </Collapsible>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:2444:15
+[33mWarn[39m: `<div>` with a dragover or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m              )}
+              [35m<div
+                class="space-y-1"
+                class:opacity-60={textSectionMuted && !hideMutedChannels}
+                ondragover={(event) =>
+                  handleChannelDragOver(event, null, "text")}
+                ondrop={(event) => handleChannelDrop(event, null, "text")}
+              >
+                {#if uncategorizedTextChannels.length === 0}
+                  <p class="text-xs text-muted-foreground px-2 py-1">
+                    No text channels yet.
+                  </p>
+                {/if}
+                {#each uncategorizedTextChannels as channel (channel.id)}
+                  {@const metadata = channelMetadataLookup.get(channel.id)}
+                  {@const unreadCount = metadata?.unreadCount ?? 0}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <div
+                          role="button"
+                          tabindex="0"
+                          draggable
+                          class:opacity-50={draggingChannelId === channel.id}
+                          ondragstart={(event) =>
+                            handleChannelDragStart(event, channel)}
+                          ondragend={handleChannelDragEnd}
+                          ondragover={(event) =>
+                            handleChannelDragOver(event, null, "text")}
+                          ondrop={(event) =>
+                            handleChannelDrop(event, null, "text", channel.id)}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            $activeServerChannelId === channel.id
+                              ? "bg-primary/80 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onclick={() => handleChannelSelect(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleChannelSelect(channel);
+                            }
+                          }}
+                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                          title={channel.topic ?? undefined}
+                        >
+                          <div class="flex items-center truncate">
+                            <Hash size={10} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
+                          <div class="ml-auto flex items-center gap-2">
+                            {#if unreadCount > 0}
+                              <Badge
+                                class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                              >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </Badge>
+                            {/if}
+                            <div
+                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Invite to channel"
+                                onclick={(event) =>
+                                  handleInviteToChannelClick(channel, event)}
+                              >
+                                <Plus size={10} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Channel settings"
+                                onclick={(event) =>
+                                  handleChannelSettingsClick(channel, event)}
+                              >
+                                <Settings size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      {#if channel.topic}
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          class="max-w-xs text-xs leading-snug"
+                        >
+                          {channel.topic}
+                        </TooltipContent>
+                      {/if}
+                    </Tooltip>
+                  </TooltipProvider>
+                  {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                  {#if presenceEntry}
+                    {@const participantEntries = Array.from(
+                      presenceEntry.participants.values(),
+                    ).sort(
+                      (a, b) =>
+                        (a.joinedAt ?? a.lastSeenAt) -
+                        (b.joinedAt ?? b.lastSeenAt),
+                    )}
+                    <div class="ml-8 mt-1 space-y-1 pb-1">
+                      <div class="text-[11px] font-medium text-muted-foreground">
+                        {participantEntries.length} connected
+                      </div>
+                      {#if participantEntries.length > 0}
+                        <div class="flex flex-wrap gap-1.5">
+                          {#each participantEntries as presence (presence.userId)}
+                            {@const member = membersById.get(presence.userId)}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                                    <Avatar class="h-5 w-5 border border-border">
+                                      <AvatarImage
+                                        src={member?.avatar}
+                                        alt={member?.name ?? presence.userId}
+                                      />
+                                      <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                        {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span class="max-w-24 truncate">
+                                      {member?.name ?? presence.userId}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" align="start" class="text-xs">
+                                  {member?.name ?? presence.userId}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          {/each}
+                        </div>
+                      {:else}
+                        <p class="text-[11px] text-muted-foreground">
+                          No one connected.
+                        </p>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+              </div>[36m
+            </CollapsibleContent>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:2655:15
+[33mWarn[39m: `<div>` with a dragover or drop handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+[36m              )}
+              [35m<div
+                class="space-y-1"
+                class:opacity-60={voiceSectionMuted && !hideMutedChannels}
+                ondragover={(event) =>
+                  handleChannelDragOver(event, null, "voice")}
+                ondrop={(event) => handleChannelDrop(event, null, "voice")}
+              >
+                {#if uncategorizedVoiceChannels.length === 0}
+                  <p class="text-xs text-muted-foreground px-2 py-1">
+                    No voice channels yet.
+                  </p>
+                {/if}
+                {#each uncategorizedVoiceChannels as channel (channel.id)}
+                  {@const activeCall = $callStore.activeCall}
+                  {@const isActiveVoiceChannel =
+                    activeCall &&
+                    activeCall.chatType === "channel" &&
+                    activeCall.type === "voice" &&
+                    activeCall.status !== "ended" &&
+                    activeCall.status !== "error" &&
+                    activeCall.chatId === channel.id}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <div
+                          role="button"
+                          tabindex="0"
+                          draggable
+                          class:opacity-50={draggingChannelId === channel.id}
+                          ondragstart={(event) =>
+                            handleChannelDragStart(event, channel)}
+                          ondragend={handleChannelDragEnd}
+                          ondragover={(event) =>
+                            handleChannelDragOver(event, null, "voice")}
+                          ondrop={(event) =>
+                            handleChannelDrop(event, null, "voice", channel.id)}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            isActiveVoiceChannel
+                              ? "bg-primary/80 text-foreground shadow-sm"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          data-active={isActiveVoiceChannel ? "true" : undefined}
+                          onclick={() => handleVoiceChannelClick(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleVoiceChannelClick(channel);
+                            }
+                          }}
+                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                          title={channel.topic ?? undefined}
+                        >
+                          <div class="flex items-center truncate">
+                            <Mic size={12} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
+                          <div
+                            class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Invite to channel"
+                              onclick={(event) =>
+                                handleInviteToChannelClick(channel, event)}
+                            >
+                              <Plus size={10} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Channel settings"
+                              onclick={(event) =>
+                                handleChannelSettingsClick(channel, event)}
+                            >
+                              <Settings size={10} />
+                            </Button>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      {#if channel.topic}
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          class="max-w-xs text-xs leading-snug"
+                        >
+                          {channel.topic}
+                        </TooltipContent>
+                      {/if}
+                    </Tooltip>
+                  </TooltipProvider>
+                {/each}
+              </div>[36m
+            </CollapsibleContent>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:521:33
+[31mError[39m: Cannot find name 'Role'. (ts)
+[36m  const rolesById = $derived.by(() => {
+    const map = new Map<string, [35mRole[36m>();
+    for (const role of server?.roles ?? []) {[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:1441:17
+[31mError[39m: Conversion of type 'Channel' to type 'Record<string, unknown>' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Index signature for type 'string' is missing in type 'Channel'. (ts)
+[36m      if (!permissionOverridesPayload) {
+        delete ([35mupdatedChannel as Record<string, unknown>[36m).permission_overrides;
+      }[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\components\sidebars\ServerSidebar.svelte[39m:2005:31
+[31mError[39m: Type '(type?: "text" | "voice", categoryId?: string | null) => void' is not assignable to type 'EventHandler<Event, HTMLDivElement>'.
+  Types of parameters 'type' and 'event' are incompatible.
+    Type 'Event & { currentTarget: EventTarget & HTMLDivElement; }' is not assignable to type '"text" | "voice" | undefined'. (ts)
+[36m            </DropdownMenuItem>
+            <DropdownMenuItem [35monselect[36m={handleCreateChannelClick}>
+              <Plus size={12} class="mr-2" /> Create Channel[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\lib\layout\AppModals.svelte[39m:126:5
+[31mError[39m: Type '{ source: string; id: string; name: string; avatar: string; isFriend: boolean; isPinned: boolean; }[] | undefined' is not assignable to type 'GroupModalUser[] | undefined'.
+  Type '{ source: string; id: string; name: string; avatar: string; isFriend: boolean; isPinned: boolean; }[]' is not assignable to type 'GroupModalUser[]'.
+    Type '{ source: string; id: string; name: string; avatar: string; isFriend: boolean; isPinned: boolean; }' is not assignable to type 'GroupModalUser'.
+      Types of property 'source' are incompatible.
+        Type 'string' is not assignable to type '"friend" | "recentDm"'. (ts)
+[36m    preselectedUserIds={groupModalProps?.preselectedUserIds}
+    [35madditionalUsers[36m={
+      normalizedAdditionalUsers ?? groupModalProps?.additionalUsers[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32msrc\routes\channels\[serverId]\+page.svelte[39m:103:11
+[31mError[39m: This comparison appears to be unintentional because the types '() => boolean | null' and 'boolean' have no overlap. (ts)
+[36m  </div>
+{:else if [35mhasTextChannels === false[36m}
+  <div class="flex flex-col h-full w-full items-center justify-center bg-card">[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\attachments.test.ts[39m:41:5
+[31mError[39m: Type '"dom"' is not assignable to type 'false | "server" | "client" | undefined'. 
+[36m    filename: filePreviewPath,
+    [35mgenerate[36m: "dom",
+    hydratable: true,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatActionMenu.preferences.test.ts[39m:124:16
+[31mError[39m: Type '{ type: "dm"; id: string; friend: { id: string; displayName: string; }; messages: never[]; }' is not assignable to type 'Chat | null'.
+  Type '{ type: "dm"; id: string; friend: { id: string; displayName: string; }; messages: never[]; }' is not assignable to type 'DMChat'.
+    Types of property 'friend' are incompatible.
+      Type '{ id: string; displayName: string; }' is missing the following properties from type 'Friend': status, timestamp, messages, name, and 2 more. 
+[36m    const { getByLabelText, getAllByRole } = render(ChatActionMenu, {
+      props: { [35mchat[36m: dmChat, applyPinnedFilter: vi.fn() },
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatActionMenu.preferences.test.ts[39m:152:16
+[31mError[39m: Type '{ type: "dm"; id: string; friend: { id: string; displayName: string; }; messages: never[]; }' is not assignable to type 'Chat | null'.
+  Type '{ type: "dm"; id: string; friend: { id: string; displayName: string; }; messages: never[]; }' is not assignable to type 'DMChat'.
+    Types of property 'friend' are incompatible.
+      Type '{ id: string; displayName: string; }' is missing the following properties from type 'Friend': status, timestamp, messages, name, and 2 more. 
+[36m    const { getByLabelText, getByRole } = render(ChatActionMenu, {
+      props: { [35mchat[36m: dmChat, applyPinnedFilter: vi.fn() },
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatSearchPagination.test.ts[39m:318:22
+[31mError[39m: Conversion of type '{ id: string; type: "dm"; friend: Friend; members: Friend[]; }' to type 'Chat' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'messages' is missing in type '{ id: string; type: "dm"; friend: Friend; members: Friend[]; }' but required in type 'DMChat'. 
+[36m
+  const chat: Chat = [35m{
+    id: "chat-1",
+    type: "dm",
+    friend,
+    members: [friend],
+  } as Chat[36m;[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatSearchPagination.test.ts[39m:359:3
+[31mError[39m: Cannot find name 'afterAll'. 
+[36m
+  [35mafterAll[36m(() => {
+    vi.unstubAllGlobals();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatSearchPagination.test.ts[39m:375:49
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    await waitFor(() => {
+      expect(screen.getByText("Page 1 result")).[35mtoBeInTheDocument[36m();
+      expect(screen.getByText("Page 2 result")).toBeInTheDocument();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatSearchPagination.test.ts[39m:376:49
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      expect(screen.getByText("Page 1 result")).toBeInTheDocument();
+      expect(screen.getByText("Page 2 result")).[35mtoBeInTheDocument[36m();
+      expect(screen.getByText("Page 3 result")).toBeInTheDocument();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatSearchPagination.test.ts[39m:377:49
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      expect(screen.getByText("Page 2 result")).toBeInTheDocument();
+      expect(screen.getByText("Page 3 result")).[35mtoBeInTheDocument[36m();
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatSearchPagination.test.ts[39m:388:49
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      expect(searchMessagesMock).toHaveBeenCalledTimes(4);
+      expect(screen.getByText("Page 4 result")).[35mtoBeInTheDocument[36m();
+      expect(get(chatSearchStore).hasMore).toBe(false);[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\connectivityStore.mock.ts[39m:24:3
+[31mError[39m: Property 'localPeerId' is missing in type '{ bluetoothEnabled: false; wifiDirectEnabled: false; bluetoothPeers: never[]; wifiDirectPeers: never[]; }' but required in type 'TransportStatus'. 
+[36m  },
+  [35mtransportStatus[36m: {
+    bluetoothEnabled: false,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatView.privacy.test.ts[39m:675:7
+[31mError[39m: Property 'position' is missing in type '{ id: string; name: string; color: string; hoist: false; mentionable: true; permissions: {}; member_ids: never[]; }' but required in type 'Role'. 
+[36m    const roles: Role[] = [
+      [35m{
+        id: "role-mods",
+        name: "Moderators",
+        color: "#7289da",
+        hoist: false,
+        mentionable: true,
+        permissions: {},
+        member_ids: [],
+      }[36m,
+    ];[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatView.privacy.test.ts[39m:862:7
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      ),
+    ).[35mtoBeInTheDocument[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatView.privacy.test.ts[39m:2294:26
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLButtonElement>'. 
+[36m      }) as HTMLButtonElement;
+      expect(sendButton).[35mtoBeDisabled[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatView.privacy.test.ts[39m:2300:32
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLButtonElement>'. 
+[36m      await waitFor(() => {
+        expect(sendButton).not.[35mtoBeDisabled[36m();
+      });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatView.privacy.test.ts[39m:2422:30
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLButtonElement>'. 
+[36m      }) as HTMLButtonElement;
+      expect(disabledButton).[35mtoBeDisabled[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\chatView.privacy.test.ts[39m:2430:15
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLElement>'. 
+[36m          screen.getByRole("button", { name: "Send message" }),
+        ).not.[35mtoBeDisabled[36m();
+      });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\searchSidebar.test.ts[39m:137:57
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m
+    expect(screen.getByText("Searching conversationÔÇª")).[35mtoBeInTheDocument[36m();
+  });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\searchSidebar.test.ts[39m:153:50
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m
+    expect(screen.getByText("No results found")).[35mtoBeInTheDocument[36m();
+  });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\searchSidebar.test.ts[39m:179:44
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m
+    expect(screen.getByText("Friend One")).[35mtoBeInTheDocument[36m();
+    const highlightedMatches = screen.getAllByText((_, element) =>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\searchSidebar.test.ts[39m:212:20
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    });
+    expect(button).[35mtoBeInTheDocument[36m();
+    expect(button).not.toBeDisabled();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\searchSidebar.test.ts[39m:213:24
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    expect(button).toBeInTheDocument();
+    expect(button).not.[35mtoBeDisabled[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\searchSidebar.test.ts[39m:219:22
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      expect(get(chatSearchStore).loadMoreRequests).toBe(1);
+      expect(button).[35mtoBeDisabled[36m();
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:129:5
+[31mError[39m: Property '$$prop_def' has no initializer and is not definitely assigned in the constructor. 
+[36m  default: class ChatSearchStub {
+    [35m$$prop_def[36m: Record<string, unknown>;
+    constructor(options: { target: HTMLElement }) {[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:241:7
+[31mError[39m: Type '{ type: "group"; id: string; ownerId: string; members: ({ id: string; name: string; avatar: string; online: boolean; statusMessage: string; } | { id: string; name: string; avatar: string; online: boolean; statusMessage?: undefined; })[]; messages: never[]; }' is not assignable to type 'Chat'.
+  Type '{ type: "group"; id: string; ownerId: string; members: ({ id: string; name: string; avatar: string; online: boolean; statusMessage: string; } | { id: string; name: string; avatar: string; online: boolean; statusMessage?: undefined; })[]; messages: never[]; }' is missing the following properties from type 'GroupChat': name, memberIds 
+[36m    return render(ActiveChatContent, {
+      [35mchat[36m: { ...groupChat, ...overrides },
+      openDetailedProfileModal: vi.fn(),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:255:25
+[31mError[39m: Property 'toHaveAttribute' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    );
+    expect(mobilePanel).[35mtoHaveAttribute[36m("data-open", "false");[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:260:66
+[31mError[39m: Property 'toHaveAttribute' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    await waitFor(() =>
+      expect(screen.getByTestId("mobile-member-panel-stub")).not.[35mtoHaveAttribute[36m(
+        "data-open",[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:274:62
+[31mError[39m: Property 'toHaveAttribute' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    await waitFor(() =>
+      expect(screen.getByTestId("mobile-member-panel-stub")).[35mtoHaveAttribute[36m(
+        "data-open",[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:295:65
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement | null>'. 
+[36m    await waitFor(() =>
+      expect(screen.queryByTestId("mobile-members-toggle")).not.[35mtoBeInTheDocument[36m(),
+    );[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:297:63
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    );
+    expect(screen.getByTestId("desktop-member-sidebar-stub")).[35mtoBeInTheDocument[36m();
+    expect(toggleMemberSidebarVisibilityMock).not.toHaveBeenCalled();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:352:19
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    );
+    expect(panel).[35mtoBeInTheDocument[36m();
+    expect(screen.getByText("Member Two")).toBeInTheDocument();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:353:44
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    expect(panel).toBeInTheDocument();
+    expect(screen.getByText("Member Two")).[35mtoBeInTheDocument[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\members\memberPanelResponsive.test.ts[39m:356:26
+[31mError[39m: Property 'toBeEnabled' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    const inviteButton = screen.getByRole("button", { name: "Invite members" });
+    expect(inviteButton).[35mtoBeEnabled[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\search\mobileSearchResponsive.test.ts[39m:163:19
+[31mError[39m: Property 'toBeVisible' does not exist on type 'Assertion<HTMLElement>'. 
+[36m
+    expect(panel).[35mtoBeVisible[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\search\mobileSearchResponsive.test.ts[39m:166:49
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    const withinPanel = within(panel);
+    expect(withinPanel.getByText("Friend One")).[35mtoBeInTheDocument[36m();
+    expect([39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\search\mobileSearchResponsive.test.ts[39m:169:7
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      withinPanel.getByText(/should appear in the mobile results list/i),
+    ).[35mtoBeInTheDocument[36m();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\chat\search\mobileSearchResponsive.test.ts[39m:172:24
+[31mError[39m: Property 'toBeEnabled' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    const nextButton = withinPanel.getByRole("button", { name: /next/i });
+    expect(nextButton).[35mtoBeEnabled[36m();
+  });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\emoji\emojiPicker.customAssets.test.ts[39m:34:15
+[31mError[39m: This expression is not callable.
+  Type 'never' has no call signatures. 
+[36m    const selectHandler = vi.fn();
+    component.[35m$on[36m("select", selectHandler);[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\emoji\emojiPicker.customAssets.test.ts[39m:39:19
+[31mError[39m: Property 'toHaveAttribute' does not exist on type 'Assertion<HTMLElement>'. 
+[36m
+    expect(image).[35mtoHaveAttribute[36m("src", "https://cdn.example.com/wave.png");[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\mocks\DialogStub.svelte[39m:32:12
+[31mError[39m: Argument of type 'unknown' is not assignable to parameter of type '({ '{@render ...} must be called with a Snippet': "import type { Snippet } from 'svelte'"; } & unique symbol) | null | undefined'. (ts)
+[36m<div data-testid="dialog-root-stub">
+  {@render [35mchildren?.()[36m}
+</div>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\mocks\DialogSectionStub.svelte[39m:16:12
+[31mError[39m: Argument of type 'unknown' is not assignable to parameter of type '({ '{@render ...} must be called with a Snippet': "import type { Snippet } from 'svelte'"; } & unique symbol) | null | undefined'. (ts)
+[36m<svelte:element this={tag} class={className} data-testid={`dialog-${tag}-stub`}>
+  {@render [35mchildren?.()[36m}
+</svelte:element>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\mocks\DialogCloseStub.svelte[39m:25:12
+[31mError[39m: Argument of type 'unknown' is not assignable to parameter of type '({ '{@render ...} must be called with a Snippet': "import type { Snippet } from 'svelte'"; } & unique symbol) | null | undefined'. (ts)
+[36m{#if asChild}
+  {@render [35mchildren?.({ close })[36m}
+{:else}[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\mocks\DialogCloseStub.svelte[39m:28:14
+[31mError[39m: Argument of type 'unknown' is not assignable to parameter of type '({ '{@render ...} must be called with a Snippet': "import type { Snippet } from 'svelte'"; } & unique symbol) | null | undefined'. (ts)
+[36m  <button type="button" onclick={() => close(false)}>
+    {@render [35mchildren?.({ close })[36m}
+  </button>[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:231:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:240:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:249:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:304:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:313:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:345:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:377:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\navigation\channelNavigation.test.ts[39m:386:17
+[31mError[39m: Object literal may only specify known properties, and 'position' does not exist in type '{ id: string; server_id: string; name: string; channel_type: "text" | "voice"; private: boolean; }'. 
+[36m                private: false,
+                [35mposition[36m: 0,
+                category_id: null,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\presence\presenceStore.test.ts[39m:11:46
+[31mError[39m: A spread argument must either have a tuple type or be passed to a rest parameter. 
+[36mvi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => invokeMock([35m...args[36m),
+}));[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:58:51
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m
+    expect(screen.getByText("Open user reports")).[35mtoBeInTheDocument[36m();
+    expect(screen.getByText("Open message reports")).toBeInTheDocument();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:59:54
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    expect(screen.getByText("Open user reports")).toBeInTheDocument();
+    expect(screen.getByText("Open message reports")).[35mtoBeInTheDocument[36m();
+    expect(screen.getByText("Target User")).toBeInTheDocument();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:60:45
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    expect(screen.getByText("Open message reports")).toBeInTheDocument();
+    expect(screen.getByText("Target User")).[35mtoBeInTheDocument[36m();
+    expect(screen.getByText("announcements")).toBeInTheDocument();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:61:47
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    expect(screen.getByText("Target User")).toBeInTheDocument();
+    expect(screen.getByText("announcements")).[35mtoBeInTheDocument[36m();
+    expect([39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:64:7
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      screen.getByText("Target User sent threats"),
+    ).[35mtoBeInTheDocument[36m();
+    expect([39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:67:7
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      screen.getByText("Check out this scam link"),
+    ).[35mtoBeInTheDocument[36m();
+  });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:88:7
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      screen.getByText("No user reports have been submitted yet."),
+    ).[35mtoBeInTheDocument[36m();
+    expect([39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\server-settings\moderation.test.ts[39m:91:7
+[31mError[39m: Property 'toBeInTheDocument' does not exist on type 'Assertion<HTMLElement>'. 
+[36m      screen.getByText("No message reports have been submitted yet."),
+    ).[35mtoBeInTheDocument[36m();
+  });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\memberList.roles.test.ts[39m:122:32
+[31mError[39m: Property 'toBeDisabled' does not exist on type 'Assertion<HTMLElement>'. 
+[36m    await waitFor(() => {
+      expect(removeButton).not.[35mtoBeDisabled[36m();
+    });[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:3:10
+[31mError[39m: Duplicate identifier 'tick'. 
+[36mimport { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { [35mtick[36m } from "svelte";
+import type {[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:63:52
+[31mError[39m: Property 'pushToTalk' is missing in type '{ activeCall: null; deviceAvailability: { audioInput: true; videoInput: true; }; permissions: { audio: "granted"; video: "granted"; checking: false; }; localMedia: { audioEnabled: true; videoEnabled: true; audioAvailable: true; videoAvailable: true; screenSharing: false; screenShareAvailable: true; }; showCallModal:...' but required in type 'CallState'. 
+[36m
+  const createInitialCallState = (): CallState => ([35m{
+    activeCall: null,
+    deviceAvailability: { audioInput: true, videoInput: true },
+    permissions: {
+      audio: "granted",
+      video: "granted",
+      checking: false,
+    },
+    localMedia: {
+      audioEnabled: true,
+      videoEnabled: true,
+      audioAvailable: true,
+      videoAvailable: true,
+      screenSharing: false,
+      screenShareAvailable: true,
+    },
+    showCallModal: false,
+  }[36m);[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:103:70
+[31mError[39m: A spread argument must either have a tuple type or be passed to a rest parameter. 
+[36m      startCall: (...args: unknown[]) => startCallMock(...args),
+      joinVoiceChannel: (...args: unknown[]) => joinVoiceChannelMock([35m...args[36m),
+      setCallModalOpen: setCallModalOpenMock,[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:461:10
+[31mError[39m: Duplicate identifier 'tick'. 
+[36mimport ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
+import { [35mtick[36m } from "svelte";[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:972:9
+[31mError[39m: Type '{ id: string; name: string; owner_id: string; channels: { id: string; server_id: string; name: string; channel_type: "voice"; private: boolean; position: number; }[]; categories: never[]; members: { id: string; name: string; avatar: string; }[]; roles: never[]; invites: never[]; }' is not assignable to type 'Server'.
+  Types of property 'members' are incompatible.
+    Type '{ id: string; name: string; avatar: string; }[]' is not assignable to type 'User[]'.
+      Property 'online' is missing in type '{ id: string; name: string; avatar: string; }' but required in type 'User'. 
+[36m      props: {
+        [35mserver[36m,
+        onSelectChannel: vi.fn(),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1061:24
+[31mError[39m: Conversion of type 'undefined' to type '{ channels: Channel[]; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first. 
+[36m
+    const updateCall = [35mupdateServerMock.mock.calls[0]?.[1] as {
+      channels: Channel[];
+    }[36m;
+    expect(updateCall).toBeDefined();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1061:57
+[31mError[39m: Tuple type '[]' of length '0' has no element at index '1'. 
+[36m
+    const updateCall = updateServerMock.mock.calls[0]?.[[35m1[36m] as {
+      channels: Channel[];[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1101:9
+[31mError[39m: Type '{ id: string; name: string; owner_id: string; channels: { id: string; server_id: string; name: string; channel_type: "text"; private: boolean; }[]; categories: never[]; members: never[]; roles: never[]; invites: never[]; }' is not assignable to type 'Server'.
+  Types of property 'channels' are incompatible.
+    Type '{ id: string; server_id: string; name: string; channel_type: "text"; private: boolean; }[]' is not assignable to type 'Channel[]'.
+      Property 'position' is missing in type '{ id: string; server_id: string; name: string; channel_type: "text"; private: boolean; }' but required in type 'Channel'. 
+[36m      props: {
+        [35mserver[36m,
+        onSelectChannel: vi.fn(),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1120:7
+[31mError[39m: Type '{ id: string; name: string; owner_id: string; channels: { id: string; server_id: string; name: string; channel_type: "text"; private: boolean; }[]; categories: never[]; members: never[]; roles: never[]; invites: never[]; }' is not assignable to type 'Server'.
+  Types of property 'channels' are incompatible.
+    Type '{ id: string; server_id: string; name: string; channel_type: "text"; private: boolean; }[]' is not assignable to type 'Channel[]'.
+      Property 'position' is missing in type '{ id: string; server_id: string; name: string; channel_type: "text"; private: boolean; }' but required in type 'Channel'. 
+[36m    await renderResult.rerender({
+      [35mserver[36m,
+      onSelectChannel: vi.fn(),[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1242:19
+[31mError[39m: Tuple type '[]' of length '0' has no element at index '0'. 
+[36m    const call = updateServerMock.mock.calls[0];
+    expect(call?.[[35m0[36m]).toBe("server-1");
+    const patch = call?.[1] as { categories?: ChannelCategory[] };[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1243:19
+[31mError[39m: Conversion of type 'undefined' to type '{ categories?: ChannelCategory[] | undefined; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first. 
+[36m    expect(call?.[0]).toBe("server-1");
+    const patch = [35mcall?.[1] as { categories?: ChannelCategory[] }[36m;
+    expect(patch?.categories).toBeDefined();[39m
+
+c:\Users\slurpjuice\Desktop\Aegis\[32mtests\servers\serverSidebar.contextMenus.test.ts[39m:1243:26
+[31mError[39m: Tuple type '[]' of length '0' has no element at index '1'. 
+[36m    expect(call?.[0]).toBe("server-1");
+    const patch = call?.[[35m1[36m] as { categories?: ChannelCategory[] };
+    expect(patch?.categories).toBeDefined();[39m
+
+====================================
+[31msvelte-check found 90 errors and 6 warnings in 25 files
+error: script "check" exited with code 1
+[39m

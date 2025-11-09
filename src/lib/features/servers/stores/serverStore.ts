@@ -1381,10 +1381,9 @@ export function createServerStore(): ServerStore {
       }
     };
 
-    const record = user as Record<string, unknown>;
-    append(record.roles as string[] | undefined);
-    append(record.role_ids as string[] | undefined);
-    append(record.roleIds as string[] | undefined);
+    append(user.roles ?? null);
+    append(user.role_ids ?? null);
+    append(user.roleIds ?? null);
 
     return Array.from(collected);
   };
@@ -2718,7 +2717,7 @@ export const activeServerEmojiCategories = derived(
     return buildServerEmojiCategoriesForPicker(activeServer ?? null);
   },
 );
-export const voiceChannelPresence = derived<
-  VoicePresenceState,
-  Map<string, VoiceChannelPresenceEntry>
->(voicePresenceStore, ($presence) => new Map($presence));
+export const voiceChannelPresence = derived(
+  voicePresenceStore,
+  ($presence) => new Map($presence),
+);

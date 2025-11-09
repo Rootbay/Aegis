@@ -26,6 +26,7 @@ const createInitialState = (): ConnectivityState => ({
     wifiDirectEnabled: false,
     bluetoothPeers: [],
     wifiDirectPeers: [],
+    localPeerId: null,
   },
   fallbackActive: false,
   fallbackReason: null,

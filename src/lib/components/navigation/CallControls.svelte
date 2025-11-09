@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { cn } from "$lib/utils";
-  import { MicVibrate, Phone, Video } from "@lucide/svelte";
+  import { Phone, Video, Vibrate } from "@lucide/svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import { pushToTalkStore } from "$lib/features/calls/stores/pushToTalkStore";
@@ -247,7 +247,7 @@
             : "Enable push-to-talk"}
           onclick={() => pushToTalkStore.toggle()}
         >
-          <MicVibrate class="w-4 h-4" />
+          <Vibrate class="w-4 h-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">

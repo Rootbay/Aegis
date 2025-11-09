@@ -1,6 +1,9 @@
 import { render, fireEvent } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get, writable } from "svelte/store";
+import type { Chat } from "$lib/features/chat/models/Chat";
+import type { Message } from "$lib/features/chat/models/Message";
+import type { Friend } from "$lib/features/friends/models/Friend";
 
 const overridesStore = writable(
   new Map<string, { readReceiptsEnabled?: boolean; typingIndicatorsEnabled?: boolean }>(),
@@ -103,11 +106,21 @@ vi.mock("$lib/features/settings/stores/settings", () => ({
 
 import ChatActionMenu from "$lib/components/navigation/ChatActionMenu.svelte";
 
-const dmChat = {
-  type: "dm" as const,
-  id: "chat-1",
-  friend: { id: "friend-1", displayName: "Test Friend" },
+const friend: Friend = {
+  id: "friend-1",
+  name: "Test Friend",
+  avatar: "https://example.com/avatar.png",
+  online: false,
+  status: "Offline",
+  timestamp: new Date().toISOString(),
   messages: [],
+};
+
+const dmChat: Chat = {
+  type: "dm",
+  id: "chat-1",
+  friend,
+  messages: [] as Message[],
 };
 
 describe("ChatActionMenu chat preferences", () => {

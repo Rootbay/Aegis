@@ -49,7 +49,6 @@
     onDestroy,
     onMount,
     tick,
-    type ComponentType,
   } from "svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { generateCollaborationDocumentId } from "$lib/features/collaboration/collabDocumentStore";
@@ -122,7 +121,10 @@
   import type { User } from "$lib/features/auth/models/User";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { Chat } from "$lib/features/chat/models/Chat";
-  import type { Message } from "$lib/features/chat/models/Message";
+  import type {
+    Message,
+    MessageAuthorType,
+  } from "$lib/features/chat/models/Message";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { Role } from "$lib/features/servers/models/Role";
   import { Button } from "$lib/components/ui/button";
@@ -155,13 +157,14 @@
   };
 
   type AutomatedAuthorType = Exclude<MessageAuthorType, "user">;
+  type IconComponent = typeof Bot | typeof Webhook;
 
   const AUTHOR_TYPE_META: Record<
     AutomatedAuthorType,
     {
       label: string;
       tooltip: string;
-      icon: ComponentType;
+      icon: IconComponent;
     }
   > = {
     bot: {
@@ -630,8 +633,7 @@
     message: string;
   } | null;
 
-  const composerConnectivityNotice = $derived<ComposerConnectivityNotice>(
-    () => {
+  const composerConnectivityNotice = $derived((): ComposerConnectivityNotice => {
       const state = $connectivityStore;
       const { status, bridgeSuggested, gatewayStatus } = state;
 
@@ -3080,13 +3082,19 @@
     reactionOptions.map(({ action, emoji }) => [action, emoji] as const),
   );
   type ReactionAction = (typeof reactionOptions)[number]["action"];
+  type MessageMenuItem = {
+    label: string;
+    action: string;
+    disabled?: boolean;
+    isDestructive?: boolean;
+  };
 
   let reactionPickerChatId = $state<string | null>(null);
   let reactionPickerMessageId = $state<string | null>(null);
   let reactionPickerActivator: HTMLButtonElement | null = null;
 
   const baseMessageMenuItems = $derived(() => {
-    const items = [
+    const items: MessageMenuItem[] = [
       { label: "Copy Message", action: "copy_message" },
       { label: "Copy Message Link", action: "copy_message_link" },
     ];

@@ -367,10 +367,10 @@
 
     <SidebarContent class="w-full px-0">
       <ScrollArea class="h-full w-full">
-        <SidebarMenu class="items-center gap-2 px-2">
+          <SidebarMenu class="items-center gap-2">
           {#each $serverStore.servers as server (server.id)}
             <SidebarMenuItem
-              class="group relative flex w-full justify-center pl-2"
+              class="group relative flex w-full items-center justify-center"
             >
               {@const unreadCount =
                 $serverUnreadCountByServerId.get(server.id) ?? 0}
@@ -378,9 +378,9 @@
               <span
                 aria-hidden="true"
                 class={cn(
-                  "pointer-events-none absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-full bg-primary transition-all duration-200 ease-out",
+                  "pointer-events-none absolute top-1/2 h-6 -translate-y-1/2 rounded-r bg-primary transition-all duration-200 ease-out",
                   $serverStore.activeServerId === server.id
-                    ? "w-1.5 opacity-100"
+                    ? "w-1 opacity-100"
                     : "w-0 opacity-0 group-hover:w-1 group-hover:opacity-100",
                 )}
               ></span>

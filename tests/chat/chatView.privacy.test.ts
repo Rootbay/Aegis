@@ -678,6 +678,7 @@ describe("ChatView mentions", () => {
         color: "#7289da",
         hoist: false,
         mentionable: true,
+        position: 0,
         permissions: {},
         member_ids: [],
       },

@@ -245,6 +245,7 @@ describe("createAppController server channel behavior", () => {
           server_id: "server-1",
           channel_type: "text",
           private: false,
+          position: 0,
         },
         {
           id: "channel-random",
@@ -252,6 +253,7 @@ describe("createAppController server channel behavior", () => {
           server_id: "server-1",
           channel_type: "text",
           private: false,
+          position: 1,
         },
       ],
       categories: [],
@@ -321,6 +323,7 @@ describe("createAppController server channel behavior", () => {
           server_id: "server-a",
           channel_type: "text",
           private: false,
+          position: 0,
         },
         {
           id: "channel-alpha-random",
@@ -328,6 +331,7 @@ describe("createAppController server channel behavior", () => {
           server_id: "server-a",
           channel_type: "text",
           private: false,
+          position: 1,
         },
       ],
       categories: [],
@@ -346,6 +350,7 @@ describe("createAppController server channel behavior", () => {
           server_id: "server-b",
           channel_type: "text",
           private: false,
+          position: 0,
         },
         {
           id: "channel-beta-chill",
@@ -353,6 +358,7 @@ describe("createAppController server channel behavior", () => {
           server_id: "server-b",
           channel_type: "text",
           private: false,
+          position: 1,
         },
       ],
       categories: [],
@@ -473,8 +479,10 @@ describe("AppMainContent DM fallback rendering", () => {
       const currentChat = controllerInstance
         ? get(controllerInstance.currentChat)
         : null;
-      expect(currentChat?.type).toBe("dm");
-      expect(currentChat?.friend.id).toBe(dmId);
+      if (!currentChat || currentChat.type !== "dm") {
+        throw new Error("expected the current chat to be the fallback DM");
+      }
+      expect(currentChat.friend.id).toBe(dmId);
     });
 
     const expectedName = `User-${dmId.slice(0, 4)}`;
@@ -483,7 +491,10 @@ describe("AppMainContent DM fallback rendering", () => {
       const currentChat = controllerInstance
         ? get(controllerInstance.currentChat)
         : null;
-      expect(currentChat?.friend.name).toBe(expectedName);
+      if (!currentChat || currentChat.type !== "dm") {
+        throw new Error("expected the current chat to be the fallback DM");
+      }
+      expect(currentChat.friend.name).toBe(expectedName);
     });
 
     await waitFor(() => {

@@ -44,6 +44,7 @@ type BackendFriendInvite = {
     location?: string | null;
     bio?: string | null;
     tag?: string | null;
+    public_key?: string | null;
   } | null;
   message?: string | null;
   mutual_friends?: number | null;
@@ -55,6 +56,7 @@ type BackendFriendSearchResult = {
   username?: string | null;
   avatar?: string | null;
   is_online?: boolean | null;
+  public_key?: string | null;
   status?: string | null;
   status_message?: string | null;
   location?: string | null;
@@ -66,92 +68,42 @@ type BackendFriendSearchResult = {
   note?: string | null;
 };
 
-const fallbackUsers: User[] = [
-  {
-    id: "mesh-1001",
-    name: "Kai Nakamura",
-    avatar: "https://api.dicebear.com/8.x/bottts/svg?seed=Kai",
-    online: true,
-    statusMessage: "Deploying new mesh relays",
-    location: "Tokyo",
-    tag: "kai.n",
-  },
-  {
-    id: "mesh-1002",
-    name: "Lena Ortiz",
-    avatar: "https://api.dicebear.com/8.x/bottts/svg?seed=Lena",
-    online: false,
-    statusMessage: "On-call for the latency guild",
-    location: "Chicago",
-    tag: "lena.o",
-  },
-  {
-    id: "mesh-1003",
-    name: "Malik Okoye",
-    avatar: "https://api.dicebear.com/8.x/bottts/svg?seed=Malik",
-    online: true,
-    statusMessage: "Optimising path scoring",
-    location: "Lagos",
-    tag: "malik.o",
-  },
-  {
-    id: "mesh-1004",
-    name: "Nova Chen",
-    avatar: "https://api.dicebear.com/8.x/bottts/svg?seed=Nova",
-    online: false,
-    statusMessage: "Mesh observability updates",
-    location: "Vancouver",
-    tag: "nova.c",
-  },
-  {
-    id: "mesh-1005",
-    name: "Artemis Reed",
-    avatar: "https://api.dicebear.com/8.x/bottts/svg?seed=Artemis",
-    online: true,
-    statusMessage: "Documenting trust scores",
-    location: "Lisbon",
-    tag: "artemis",
-  },
-];
+type BackendUserProfile = {
+  id: string;
+  username?: string | null;
+  avatar: string;
+  is_online?: boolean | null;
+  public_key?: string | null;
+  bio?: string | null;
+  tag?: string | null;
+  status_message?: string | null;
+  location?: string | null;
+};
 
-const fallbackInvites: FriendInvite[] = [
-  {
-    id: "invite-malik",
-    from: { ...fallbackUsers[2] },
-    message: "Saw your post about adaptive routing—let's connect!",
-    mutualFriends: 6,
-    receivedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-  },
-  {
-    id: "invite-lena",
-    from: { ...fallbackUsers[1] },
-    message: "Coordinating the latency guild sync this week.",
-    mutualFriends: 2,
-    receivedAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-  },
-];
+type BackendFriendPeer = {
+  id: string;
+  user: BackendUserProfile;
+  last_interaction_at: string;
+  context?: string | null;
+  interaction_count?: number | null;
+};
 
-const fallbackPeers: FriendPeer[] = [
-  {
-    id: "peer-kai",
-    user: { ...fallbackUsers[0] },
-    lastInteractionAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    context: "Shared diagnostics in #mesh-health",
-    interactionCount: 12,
-  },
-  {
-    id: "peer-nova",
-    user: { ...fallbackUsers[3] },
-    lastInteractionAt: new Date(Date.now() - 1000 * 60 * 60 * 13).toISOString(),
-    context: "Reviewed incident postmortem together",
-    interactionCount: 5,
-  },
-];
-
-const fallbackFriendIds = new Set(["mesh-1005"]);
+type BackendFriendshipWithProfile = {
+  friendship: {
+    id: string;
+    user_a_id: string;
+    user_b_id: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  };
+  counterpart?: BackendUserProfile | null;
+};
 
 function normalizeUser(partial: Partial<User> & { id: string }): User {
   const record = partial as Record<string, unknown>;
+  const usernameRaw =
+    typeof record.username === "string" ? (record.username as string) : undefined;
   const statusMessageRaw =
     partial.statusMessage ??
     (typeof record.status_message === "string" || record.status_message === null
@@ -165,7 +117,10 @@ function normalizeUser(partial: Partial<User> & { id: string }): User {
 
   return {
     id: partial.id,
-    name: partial.name ?? `User-${partial.id.slice(0, 4)}`,
+    name:
+      partial.name ??
+      usernameRaw ??
+      `User-${partial.id.slice(0, 4)}`,
     avatar:
       partial.avatar && partial.avatar.trim().length > 0
         ? partial.avatar
@@ -198,6 +153,7 @@ function mapBackendInvite(invite: BackendFriendInvite): FriendInvite | null {
     location: invite.from_user.location ?? undefined,
     bio: invite.from_user.bio ?? undefined,
     tag: invite.from_user.tag ?? undefined,
+    publicKey: invite.from_user.public_key ?? undefined,
   });
 
   return {
@@ -230,6 +186,7 @@ function mapBackendSearch(result: BackendFriendSearchResult): FriendSearchResult
       name: result.username ?? undefined,
       avatar: result.avatar ?? undefined,
       online: result.is_online ?? undefined,
+      publicKey: result.public_key ?? undefined,
       statusMessage: result.status_message ?? undefined,
       location: result.location ?? undefined,
       bio: result.bio ?? undefined,
@@ -256,43 +213,6 @@ function createFriendFromUser(user: User): Friend {
   };
 }
 
-function buildFallbackSearchResults(query: string): FriendSearchResult[] {
-  const normalizedQuery = query.toLowerCase();
-  const pendingIds = new Set(fallbackInvites.map((invite) => invite.from.id));
-  const results = fallbackUsers
-    .filter((user) =>
-      user.name.toLowerCase().includes(normalizedQuery) ||
-      user.id.toLowerCase().includes(normalizedQuery) ||
-      (user.tag ?? "").toLowerCase().includes(normalizedQuery),
-    )
-    .map((user) => {
-      let relationship: FriendInviteRelationship = "none";
-      if (pendingIds.has(user.id)) {
-        relationship = "incoming";
-      } else if (fallbackFriendIds.has(user.id)) {
-        relationship = "friend";
-      } else if (fallbackPeers.some((peer) => peer.user.id === user.id)) {
-        relationship = "recent";
-      }
-
-      return {
-        user: { ...user },
-        relationship,
-        note:
-          relationship === "recent"
-            ? "Recently collaborated"
-            : relationship === "incoming"
-              ? "Sent you an invite"
-              : undefined,
-        mutualFriends: Math.max(0, Math.round(Math.random() * 5)),
-        lastInteractionAt:
-          fallbackPeers.find((peer) => peer.user.id === user.id)?.lastInteractionAt,
-      } satisfies FriendSearchResult;
-    });
-
-  return results;
-}
-
 async function invokeOptional<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
     const invoke = await getInvoke();
@@ -311,29 +231,38 @@ export async function listPendingFriendInvites(): Promise<FriendInvite[]> {
     "list_pending_friend_invites",
   );
   if (!response) {
-    return fallbackInvites.map((invite) => ({ ...invite, from: { ...invite.from } }));
+    return [];
   }
 
-  const mapped = response
+  return response
     .map(mapBackendInvite)
     .filter((invite): invite is FriendInvite => invite !== null);
-
-  if (mapped.length === 0) {
-    return fallbackInvites.map((invite) => ({ ...invite, from: { ...invite.from } }));
-  }
-
-  return mapped;
 }
 
 export async function listRecentFriendPeers(): Promise<FriendPeer[]> {
-  const response = await invokeOptional<FriendPeer[]>("list_recent_friend_peers");
-  if (!response || response.length === 0) {
-    return fallbackPeers.map((peer) => ({ ...peer, user: { ...peer.user } }));
+  const response = await invokeOptional<BackendFriendPeer[]>(
+    "list_recent_friend_peers",
+  );
+  if (!response) {
+    return [];
   }
 
   return response.map((peer) => ({
-    ...peer,
-    user: normalizeUser(peer.user),
+    id: peer.id,
+    user: normalizeUser({
+      id: peer.user.id,
+      name: peer.user.username ?? undefined,
+      avatar: peer.user.avatar,
+      online: peer.user.is_online ?? undefined,
+      statusMessage: peer.user.status_message ?? undefined,
+      location: peer.user.location ?? undefined,
+      bio: peer.user.bio ?? undefined,
+      tag: peer.user.tag ?? undefined,
+      publicKey: peer.user.public_key ?? undefined,
+    }),
+    lastInteractionAt: peer.last_interaction_at,
+    context: peer.context ?? undefined,
+    interactionCount: peer.interaction_count ?? undefined,
   }));
 }
 
@@ -349,43 +278,44 @@ export async function searchForUsers(query: string): Promise<FriendSearchResult[
   );
 
   if (!response) {
-    return buildFallbackSearchResults(trimmed);
+    return [];
   }
 
-  const mapped = response.map(mapBackendSearch);
-  if (mapped.length === 0) {
-    return buildFallbackSearchResults(trimmed);
-  }
-  return mapped;
+  return response.map(mapBackendSearch);
 }
 
 export async function acceptFriendInvite(invite: FriendInvite): Promise<Friend | null> {
-  const response = await invokeOptional<Friend>("accept_friend_invite", {
-    inviteId: invite.id,
-    invite_id: invite.id,
-  });
+  const response = await invokeOptional<BackendFriendshipWithProfile>(
+    "accept_friend_invite",
+    { inviteId: invite.id },
+  );
 
-  if (!response) {
-    return createFriendFromUser(invite.from);
+  if (!response?.friendship || !response.counterpart) {
+    return null;
   }
 
+  const normalizedUser = normalizeUser({
+    id: response.counterpart.id,
+    name: response.counterpart.username ?? undefined,
+    avatar: response.counterpart.avatar ?? undefined,
+    online: response.counterpart.is_online ?? undefined,
+    statusMessage: response.counterpart.status_message ?? undefined,
+    location: response.counterpart.location ?? undefined,
+    bio: response.counterpart.bio ?? undefined,
+    tag: response.counterpart.tag ?? undefined,
+    publicKey: response.counterpart.public_key ?? undefined,
+  });
+
   return {
-    ...createFriendFromUser(response),
-    ...response,
+    ...createFriendFromUser(normalizedUser),
+    friendshipId: response.friendship.id,
+    relationshipStatus: response.friendship.status,
   };
 }
 
 export async function declineFriendInvite(inviteId: string): Promise<boolean> {
-  const response = await invokeOptional<{ success: boolean }>("decline_friend_invite", {
-    inviteId,
-    invite_id: inviteId,
-  });
-
-  if (!response) {
-    return true;
-  }
-
-  return response.success !== false;
+  await invokeOptional<void>("decline_friend_invite", { inviteId });
+  return true;
 }
 
 export async function sendFriendRequest(
@@ -405,24 +335,8 @@ export async function sendFriendRequest(
   });
 
   if (!response) {
-    const alreadyInvited = fallbackInvites.some((invite) => invite.from.id === trimmed);
-    if (alreadyInvited) {
-      return false;
-    }
     return true;
   }
 
   return response.success !== false;
-}
-
-export function __setFriendDiscoveryFallbackStateForTests(options: {
-  invites?: FriendInvite[];
-  peers?: FriendPeer[];
-} = {}) {
-  if (options.invites) {
-    fallbackInvites.splice(0, fallbackInvites.length, ...options.invites);
-  }
-  if (options.peers) {
-    fallbackPeers.splice(0, fallbackPeers.length, ...options.peers);
-  }
 }

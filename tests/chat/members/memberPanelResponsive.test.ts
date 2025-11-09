@@ -125,8 +125,8 @@ vi.mock("$lib/components/navigation/ChatActionMenu.svelte", async () => ({
 }));
 
 vi.mock("$lib/components/navigation/ChatSearch.svelte", () => ({
-  default: class ChatSearchStub {
-    $$prop_def: Record<string, unknown>;
+    default: class ChatSearchStub {
+    $$prop_def: Record<string, unknown> = {};
     constructor(options: { target: HTMLElement }) {
       options.target.innerHTML = '<div data-testid="chat-search-stub"></div>';
     }
@@ -217,6 +217,7 @@ describe("ActiveChatContent member panel integration", () => {
   const groupChat = {
     type: "group" as const,
     id: "group-1",
+    name: "Responsive Group",
     ownerId: "user-1",
     members: [
       {
@@ -233,6 +234,7 @@ describe("ActiveChatContent member panel integration", () => {
         online: false,
       },
     ],
+    memberIds: ["user-1", "user-2"],
     messages: [],
   };
 

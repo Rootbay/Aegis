@@ -65,6 +65,8 @@ const { serverStoreMock, setServerState } = vi.hoisted(() => {
         name: string;
         channel_type: "text" | "voice";
         private: boolean;
+        position?: number;
+        category_id?: string | null;
       }>;
       members?: unknown[];
     }>;

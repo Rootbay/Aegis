@@ -54,6 +54,18 @@ type BackendMessage = {
   senderType?: string;
   author_type?: string;
   authorType?: string;
+  server_id?: string;
+  serverId?: string;
+  sender_profile?: unknown;
+  senderProfile?: unknown;
+  sender_name?: string;
+  senderName?: string;
+  sender_username?: string;
+  senderUsername?: string;
+  sender_avatar?: string;
+  senderAvatar?: string;
+  sender_avatar_url?: string;
+  senderAvatarUrl?: string;
   content: string;
   timestamp: string | number | Date;
   read?: boolean;
@@ -227,6 +239,7 @@ interface ChatStore {
   messagesByChatId: Readable<Map<string, Message[]>>;
   hasMoreByChatId: Readable<Map<string, boolean>>;
   metadataByChatId: Readable<Map<string, ChatMetadata>>;
+  slowmodeByChannelId: Readable<Map<string, SlowmodeTracker>>;
   serverUnreadCountByServerId: Readable<Map<string, number>>;
   activeChatId: Readable<string | null>;
   activeChatType: Readable<"dm" | "server" | "group" | null>;
@@ -428,8 +441,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (!channel || channel.channel_type !== "text") {
       return 0;
     }
-    const value = (channel as Record<string, unknown>).rate_limit_per_user ??
-      channel.rate_limit_per_user;
+    const value = channel.rate_limit_per_user;
     if (typeof channel.rate_limit_per_user === "number") {
       if (Number.isFinite(channel.rate_limit_per_user)) {
         return Math.max(0, Math.floor(channel.rate_limit_per_user));
@@ -1913,15 +1925,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     if (!serverIdentifier) {
       const currentUserId = get(userStore).me?.id ?? null;
       if (normalized.senderId && normalized.senderId !== currentUserId) {
-        const payloadRecord = message as Record<string, unknown>;
-        const senderProfile =
-          payloadRecord["sender_profile"] ?? payloadRecord["senderProfile"];
-        updateParticipantProfileForChat(
-          normalized.chatId,
-          normalized.senderId,
-          senderProfile,
-          payloadRecord,
-        );
+      const senderProfile = message.sender_profile ?? message.senderProfile;
+      updateParticipantProfileForChat(
+        normalized.chatId,
+        normalized.senderId,
+        senderProfile,
+        message,
+      );
       }
     }
     return ensureMessageExpiry(normalized);
@@ -3476,14 +3486,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     );
 
     if (!serverIdFromPayload && !channelIdFromPayload && !isSelfAuthored) {
-      const payloadRecord = message as Record<string, unknown>;
-      const senderProfile =
-        payloadRecord["sender_profile"] ?? payloadRecord["senderProfile"];
+      const senderProfile = message.sender_profile ?? message.senderProfile;
       updateParticipantProfileForChat(
         targetChatId,
         sender,
         senderProfile,
-        payloadRecord,
+        message,
       );
     }
 

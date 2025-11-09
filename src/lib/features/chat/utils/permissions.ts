@@ -219,8 +219,8 @@ function collectRoleIdsFromUser(user: User | null | undefined): string[] {
   };
 
   append(user.roles ?? null);
-  append((user as Record<string, unknown>).roleIds as string[] | undefined);
-  append((user as Record<string, unknown>).role_ids as string[] | undefined);
+  append(user.roleIds ?? null);
+  append(user.role_ids ?? null);
 
   return Array.from(collected);
 }

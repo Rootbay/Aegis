@@ -1975,7 +1975,7 @@
 <Sidebar
     side="left"
     variant="muted"
-    class="relative flex h-full flex-col bg-card/50 overflow-hidden"
+    class="relative flex h-full flex-col bg-background overflow-hidden border-border border-l"
     style={`width: ${sidebarWidth}px`}
     aria-label="Server sidebar"
   >

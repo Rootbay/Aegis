@@ -18,8 +18,8 @@
     VideoOff,
     Mic,
     MicOff,
-    MicVibrate,
     Timer,
+    Vibrate,
     MonitorUp,
     MonitorStop,
   } from "@lucide/svelte";
@@ -463,12 +463,12 @@
                         : "Enable push-to-talk"}
                       onclick={() => pushToTalkStore.toggle()}
                     >
-                      <MicVibrate class="h-4 w-4" />
+                      <Vibrate class="h-4 w-4" />
                       {#if pushToTalkEnabled && pushToTalkPressing}
                         <span
                           class="absolute right-1 top-1 h-2 w-2 rounded-full bg-emerald-400"
                           aria-hidden="true"
-                        />
+                        ></span>
                       {/if}
                     </Button>
                   </TooltipTrigger>

@@ -171,6 +171,11 @@
     document.body.removeChild(link);
   }
 
+  function handleAudioDownload() {
+    if (!resolvedAudioUrl) return;
+    triggerDownload(resolvedAudioUrl);
+  }
+
   async function handleDownload() {
     if (!attachment) return;
     if (attachment.objectUrl) {
@@ -274,7 +279,7 @@
         </div>
         <button
           class="inline-flex items-center justify-center rounded-md bg-zinc-700 hover:bg-zinc-600 text-white p-2"
-          onclick={() => triggerDownload(resolvedAudioUrl)}
+          onclick={handleAudioDownload}
           aria-label={`Download attachment ${attachment.name}`}
         >
           <DownloadIcon size={12} />

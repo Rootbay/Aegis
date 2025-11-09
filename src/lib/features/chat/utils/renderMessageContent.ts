@@ -102,7 +102,7 @@ export function renderMessageContent(
     }
 
     const last = rawSegments[rawSegments.length - 1];
-    if (last?.kind === "text") {
+    if (last && "kind" in last && last.kind === "text") {
       last.text += value;
     } else {
       rawSegments.push({ kind: "text", text: value });
@@ -172,11 +172,13 @@ export function renderMessageContent(
   const placeholderSegments: Exclude<RawSegment, { kind: "text" }>[] = [];
   const markdownSource = rawSegments
     .map((segment) => {
-      if (segment.kind === "text") {
+      if ("kind" in segment && segment.kind === "text") {
         return segment.text;
       }
 
-      const index = placeholderSegments.push(segment) - 1;
+      const nonTextSegment =
+        segment as Exclude<RawSegment, { kind: "text" }>;
+      const index = placeholderSegments.push(nonTextSegment) - 1;
       return createPlaceholder(index);
     })
     .join("");

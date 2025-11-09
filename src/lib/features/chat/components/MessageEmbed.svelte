@@ -24,7 +24,7 @@
 {#if embed}
   <div
     class="message-embed overflow-hidden rounded-lg border border-border bg-muted/40"
-    style={accentStyle}
+    style={accentStyle() ?? undefined}
   >
     <div class="flex flex-col gap-2">
       <div class="flex items-start gap-3 p-3">
