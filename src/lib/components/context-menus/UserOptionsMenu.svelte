@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BaseContextMenu from "./BaseContextMenu.svelte";
+  import FloatingContextMenu from "./FloatingContextMenu.svelte";
 
   let {
     x = 0,
@@ -24,4 +24,4 @@
   ]);
 </script>
 
-<BaseContextMenu {x} {y} {show} {menuItems} {onclose} {onaction} />
+<FloatingContextMenu {x} {y} {show} {menuItems} {onclose} {onaction} />

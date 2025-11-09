@@ -80,7 +80,7 @@ vi.mock("$lib/components/emoji/EmojiPicker.svelte", () => ({
   default: Passthrough,
 }));
 
-vi.mock("$lib/components/context-menus/BaseContextMenu.svelte", () => ({
+vi.mock("$lib/components/context-menus/FloatingContextMenu.svelte", () => ({
   default: Passthrough,
 }));
 
