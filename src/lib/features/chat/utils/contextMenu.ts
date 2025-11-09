@@ -25,7 +25,7 @@ export type ReportUserModalPayload = {
   sourceChatName?: string;
 };
 
-function normalizeUser(user: User | Friend): User {
+export function normalizeUser(user: User | Friend): User {
   const baseUser = user as User;
   return {
     id: baseUser.id,
