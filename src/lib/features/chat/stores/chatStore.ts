@@ -438,6 +438,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const permissions = aggregateChannelPermissions({
       memberRoleIds,
       rolePermissionMap: buildRolePermissionMap(server.roles),
+      overrides: channel.permission_overrides,
+      userId: me.id,
     });
     return (
       permissions.manage_messages === true ||

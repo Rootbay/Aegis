@@ -272,10 +272,12 @@
       return allowAllChannelPermissions();
     }
 
-    const rolePermissionMap = buildRolePermissionMap(server.roles);
-    if (rolePermissionMap.size === 0) {
+    const channel = server.channels?.find((entry) => entry.id === chat.id);
+    if (!channel) {
       return allowAllChannelPermissions();
     }
+
+    const rolePermissionMap = buildRolePermissionMap(server.roles);
 
     const memberRoleIds = collectMemberRoleIds({
       me,
@@ -283,13 +285,20 @@
       chat,
     });
 
-    if (memberRoleIds.length === 0) {
+    const noRoleData =
+      rolePermissionMap.size === 0 || memberRoleIds.length === 0;
+    const hasOverrides = Boolean(channel.permission_overrides);
+
+    if (!hasOverrides && noRoleData) {
       return allowAllChannelPermissions();
     }
 
     return aggregateChannelPermissions({
       memberRoleIds,
       rolePermissionMap,
+      basePermissions: noRoleData ? allowAllChannelPermissions() : undefined,
+      overrides: channel.permission_overrides,
+      userId: me.id,
     });
   });
 
