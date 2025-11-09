@@ -5,7 +5,6 @@
     Bot,
     CircleAlert,
     Link,
-    Hash,
     LoaderCircle,
     Mic,
     RadioTower,
@@ -3157,23 +3156,6 @@
 <div class="grow min-h-0 flex flex-col bg-card/50">
   {#if chat}
     <div class="flex min-h-0 grow flex-col">
-      {#if chat.type === "channel"}
-        <header class="border-b border-border/60 px-4 py-3">
-          <div class="flex flex-col gap-1">
-            <div class="flex items-center gap-2 text-foreground">
-              <Hash class="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-              <h1 class="text-base font-semibold leading-5">#{chat.name}</h1>
-            </div>
-            {#if chat.topic}
-              <p
-                class="text-sm text-muted-foreground leading-snug whitespace-pre-wrap wrap-break-word"
-              >
-                {chat.topic}
-              </p>
-            {/if}
-          </div>
-        </header>
-      {/if}
       {#if callForChat}
         <div class="px-4 pt-4">
           <CallStatusBanner
