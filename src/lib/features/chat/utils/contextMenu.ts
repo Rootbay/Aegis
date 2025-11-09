@@ -25,6 +25,19 @@ export type ReportUserModalPayload = {
   sourceChatName?: string;
 };
 
+export type ReportMessageModalPayload = {
+  messageId: string;
+  chatId?: string;
+  chatType?: ChatType;
+  chatName?: string;
+  authorId?: string;
+  authorName?: string;
+  authorAvatar?: string | null;
+  messageExcerpt?: string;
+  messageTimestamp?: string;
+  surroundingMessageIds?: string[];
+};
+
 export function normalizeUser(user: User | Friend): User {
   const baseUser = user as User;
   return {

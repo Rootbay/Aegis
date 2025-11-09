@@ -59,6 +59,7 @@ const mocks = vi.hoisted(() => {
 
   const openCreateGroupModal = vi.fn();
   const openReportUserModal = vi.fn();
+  const openReportMessageModal = vi.fn();
   const openProfileReviewsModal = vi.fn();
 
   const currentChat = {
@@ -80,6 +81,7 @@ const mocks = vi.hoisted(() => {
     currentChat,
     openCreateGroupModal,
     openReportUserModal,
+    openReportMessageModal,
     openUserCardModal: vi.fn(),
     openDetailedProfileModal: vi.fn(),
     openProfileReviewsModal,

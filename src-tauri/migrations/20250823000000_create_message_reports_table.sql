@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS message_reports (
+    id TEXT PRIMARY KEY NOT NULL,
+    reporter_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    description TEXT NOT NULL,
+    chat_id TEXT,
+    chat_type TEXT,
+    chat_name TEXT,
+    message_author_id TEXT,
+    message_author_name TEXT,
+    message_excerpt TEXT,
+    message_timestamp TEXT,
+    context_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (message_author_id) REFERENCES users(id) ON DELETE SET NULL
+);

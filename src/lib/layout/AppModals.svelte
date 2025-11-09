@@ -2,6 +2,7 @@
   import { get } from "svelte/store";
   import CreateGroupModal from "$lib/components/modals/CreateGroupModal.svelte";
   import ReportUserModal from "$lib/components/modals/ReportUserModal.svelte";
+  import ReportMessageModal from "$lib/components/modals/ReportMessageModal.svelte";
   import ServerManagementModal from "$lib/components/modals/ServerManagementModal.svelte";
   import DetailedProfileModal from "$lib/components/modals/DetailedProfileModal.svelte";
   import ProfileReviewsModal from "$lib/components/modals/ProfileReviewsModal.svelte";
@@ -12,6 +13,7 @@
   import type { AppModalType } from "./createAppController";
   import type {
     GroupModalUser,
+    ReportMessageModalPayload,
     ReportUserModalPayload,
   } from "$lib/features/chat/utils/contextMenu";
 
@@ -58,6 +60,7 @@
   }>;
 
   const reportUserModalPayload = modalProps as ReportUserModalPayload;
+  const reportMessageModalPayload = modalProps as ReportMessageModalPayload;
 
   function normalizeAdditionalUsers(
     canonicalUsers: GroupModalUser[],
@@ -197,6 +200,13 @@
 
 {#if activeModal === "reportUser"}
   <ReportUserModal onclose={closeModal} payload={reportUserModalPayload} />
+{/if}
+
+{#if activeModal === "reportMessage"}
+  <ReportMessageModal
+    onclose={closeModal}
+    payload={reportMessageModalPayload}
+  />
 {/if}
 
 {#if activeModal === "collaborationDocument"}

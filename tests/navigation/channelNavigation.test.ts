@@ -160,6 +160,7 @@ const modalManagerStub: ModalManager = {
   openProfileReviewsModal: vi.fn(),
   openCreateGroupModal: vi.fn(),
   openReportUserModal: vi.fn(),
+  openReportMessageModal: vi.fn(),
   openCollaborativeDocument: vi.fn(),
   openCollaborativeWhiteboard: vi.fn(),
 };

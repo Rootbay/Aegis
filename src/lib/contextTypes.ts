@@ -6,6 +6,7 @@ import type { Channel } from "$lib/features/channels/models/Channel";
 import type { ServerMember } from "$lib/features/servers/services/serverDataService";
 import type {
   GroupModalOptions,
+  ReportMessageModalPayload,
   ReportUserModalPayload,
 } from "$lib/features/chat/utils/contextMenu";
 import type { CollaborationSessionKind } from "$lib/features/collaboration/collabDocumentStore";
@@ -27,6 +28,7 @@ export interface CreateGroupContext {
   }) => void;
   openCreateGroupModal: (options?: GroupModalOptions) => void;
   openReportUserModal: (payload: ReportUserModalPayload) => void;
+  openReportMessageModal: (payload: ReportMessageModalPayload) => void;
   openCollaborativeDocumentModal: (options?: {
     documentId?: string;
     initialContent?: string;
