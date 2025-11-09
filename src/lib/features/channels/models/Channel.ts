@@ -5,4 +5,5 @@ export interface Channel {
   channel_type: "text" | "voice";
   private: boolean;
   category_id?: string | null;
+  topic?: string | null;
 }

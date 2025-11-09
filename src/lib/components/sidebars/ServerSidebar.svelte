@@ -114,6 +114,7 @@
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
+  let newChannelTopic = $state("");
 
   let showCategoryContextMenu = $state(false);
   let contextMenuX = $state(0);
@@ -404,7 +405,11 @@
     }
   }
 
-  function handleCreateChannelClick() {
+  function handleCreateChannelClick(type: "text" | "voice" = "text") {
+    newChannelType = type;
+    newChannelName = "";
+    newChannelPrivate = false;
+    newChannelTopic = "";
     showCreateChannelModal = true;
   }
 
@@ -456,6 +461,15 @@
   async function createChannel() {
     if (!newChannelName.trim()) return;
 
+    const normalizedTopic =
+      newChannelType === "text" ? newChannelTopic.trim() : "";
+    const topicValue =
+      newChannelType === "text"
+        ? normalizedTopic.length > 0
+          ? normalizedTopic
+          : null
+        : null;
+
     const newChannel: Channel = {
       id: uuidv4(),
       server_id: server.id,
@@ -463,6 +477,7 @@
       channel_type: newChannelType,
       private: newChannelPrivate,
       category_id: null,
+      topic: topicValue,
     };
 
     try {
@@ -475,6 +490,7 @@
       newChannelName = "";
       newChannelType = "text";
       newChannelPrivate = false;
+      newChannelTopic = "";
       showCreateChannelModal = false;
     } catch (error) {
       console.error("Failed to create channel:", error);
@@ -689,32 +705,57 @@
           break;
         }
         case "create_text_channel": {
-          newChannelType = "text";
-          showCreateChannelModal = true;
+          handleCreateChannelClick("text");
           break;
         }
         case "create_voice_channel": {
-          newChannelType = "voice";
-          showCreateChannelModal = true;
+          handleCreateChannelClick("voice");
           break;
         }
         case "edit_channel": {
           const ch = getChannelById(channelId);
           if (!ch) break;
-          const newName = prompt("Rename channel", ch.name)?.trim();
-          if (newName && newName !== ch.name) {
-            const updatedName = slugifyChannelName(newName);
-            const updatedChannels = (server.channels || []).map((c: Channel) =>
-              c.id === ch.id ? { ...c, name: updatedName } : c,
-            );
-            const result = await serverStore.updateServer(server.id, {
-              channels: updatedChannels,
-            });
-            if (!result?.success) {
-              toasts.addToast("Failed to rename channel.", "error");
-            } else {
-              toasts.addToast("Channel renamed.", "success");
-            }
+          const nameInput = prompt("Rename channel", ch.name);
+          if (nameInput === null) break;
+
+          const trimmedName = nameInput.trim();
+          if (!trimmedName) {
+            toasts.addToast("Channel name cannot be empty.", "error");
+            break;
+          }
+
+          const topicInput = prompt(
+            "Update channel topic (leave blank for none)",
+            ch.topic ?? "",
+          );
+
+          const normalizedTopic =
+            topicInput === null
+              ? ch.topic ?? null
+              : topicInput.trim().length > 0
+                ? topicInput.trim()
+                : null;
+
+          const updatedName = slugifyChannelName(trimmedName);
+          const nameChanged = updatedName !== ch.name;
+          const topicChanged = normalizedTopic !== (ch.topic ?? null);
+
+          if (!nameChanged && !topicChanged) {
+            break;
+          }
+
+          const updatedChannels = (server.channels || []).map((c: Channel) =>
+            c.id === ch.id
+              ? { ...c, name: updatedName, topic: normalizedTopic }
+              : c,
+          );
+          const result = await serverStore.updateServer(server.id, {
+            channels: updatedChannels,
+          });
+          if (!result?.success) {
+            toasts.addToast("Failed to update channel.", "error");
+          } else {
+            toasts.addToast("Channel updated.", "success");
           }
           break;
         }
@@ -728,6 +769,7 @@
             channel_type: orig.channel_type,
             private: orig.private,
             category_id: orig.category_id ?? null,
+            topic: orig.topic ?? null,
           };
           try {
             await invoke("create_channel", { channel: dup });
@@ -811,7 +853,7 @@
   function handleServerBackgroundAction({ action }: { action: string }) {
     switch (action) {
       case "create_channel":
-        showCreateChannelModal = true;
+        handleCreateChannelClick();
         break;
       case "create_category":
         gotoServerSettings(server.id, "channels");
@@ -1017,63 +1059,79 @@
                   {#each textChannels as channel (channel.id)}
                     {@const metadata = channelMetadataLookup.get(channel.id)}
                     {@const unreadCount = metadata?.unreadCount ?? 0}
-                    <div
-                      role="button"
-                      tabindex="0"
-                      class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                        $activeServerChannelId === channel.id
-                          ? "bg-primary/80 text-foreground"
-                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      }`}
-                      onclick={() => onSelectChannel(server.id, channel.id)}
-                      onkeydown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          onSelectChannel(server.id, channel.id);
-                        }
-                      }}
-                      oncontextmenu={(e) =>
-                        handleChannelContextMenu(e, channel)}
-                    >
-                      <div class="flex items-center truncate">
-                        <Hash size={10} class="mr-1" />
-                        <span class="truncate select-none ml-2"
-                          >{channel.name}</span
-                        >
-                      </div>
-                      <div class="ml-auto flex items-center gap-2">
-                        {#if unreadCount > 0}
-                          <Badge
-                            class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            role="button"
+                            tabindex="0"
+                            class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                              $activeServerChannelId === channel.id
+                                ? "bg-primary/80 text-foreground"
+                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            }`}
+                            onclick={() => onSelectChannel(server.id, channel.id)}
+                            onkeydown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                onSelectChannel(server.id, channel.id);
+                              }
+                            }}
+                            oncontextmenu={(e) =>
+                              handleChannelContextMenu(e, channel)}
+                            title={channel.topic ?? undefined}
                           >
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                          </Badge>
+                            <div class="flex items-center truncate">
+                              <Hash size={10} class="mr-1" />
+                              <span class="truncate select-none ml-2"
+                                >{channel.name}</span
+                              >
+                            </div>
+                            <div class="ml-auto flex items-center gap-2">
+                              {#if unreadCount > 0}
+                                <Badge
+                                  class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                                >
+                                  {unreadCount > 99 ? "99+" : unreadCount}
+                                </Badge>
+                              {/if}
+                              <div
+                                class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                              >
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="text-muted-foreground hover:text-foreground"
+                                  aria-label="Invite to channel"
+                                  onclick={(event) =>
+                                    handleInviteToChannelClick(channel, event)}
+                                >
+                                  <Plus size={10} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="text-muted-foreground hover:text-foreground"
+                                  aria-label="Channel settings"
+                                  onclick={(event) =>
+                                    handleChannelSettingsClick(channel, event)}
+                                >
+                                  <Settings size={10} />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {#if channel.topic}
+                          <TooltipContent
+                            side="right"
+                            align="start"
+                            class="max-w-xs text-xs leading-snug"
+                          >
+                            {channel.topic}
+                          </TooltipContent>
                         {/if}
-                        <div
-                          class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="text-muted-foreground hover:text-foreground"
-                            aria-label="Invite to channel"
-                            onclick={(event) =>
-                              handleInviteToChannelClick(channel, event)}
-                          >
-                            <Plus size={10} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="text-muted-foreground hover:text-foreground"
-                            aria-label="Channel settings"
-                            onclick={(event) =>
-                              handleChannelSettingsClick(channel, event)}
-                          >
-                            <Settings size={10} />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
+                      </Tooltip>
+                    </TooltipProvider>
                   {/each}
 
                   {#each voiceChannels as channel (channel.id)}
@@ -1085,55 +1143,71 @@
                       activeCall.status !== "ended" &&
                       activeCall.status !== "error" &&
                       activeCall.chatId === channel.id}
-                    <div
-                      role="button"
-                      tabindex="0"
-                      class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                        isActiveVoiceChannel
-                          ? "bg-primary/80 text-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      }`}
-                      data-active={isActiveVoiceChannel ? "true" : undefined}
-                      onclick={() => handleVoiceChannelClick(channel)}
-                      onkeydown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          handleVoiceChannelClick(channel);
-                        }
-                      }}
-                      oncontextmenu={(e) =>
-                        handleChannelContextMenu(e, channel)}
-                    >
-                      <div class="flex items-center truncate">
-                        <Mic size={12} class="mr-1" />
-                        <span class="truncate select-none ml-2"
-                          >{channel.name}</span
-                        >
-                      </div>
-                      <div
-                        class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Invite to channel"
-                          onclick={(event) =>
-                            handleInviteToChannelClick(channel, event)}
-                        >
-                          <Plus size={10} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Channel settings"
-                          onclick={(event) =>
-                            handleChannelSettingsClick(channel, event)}
-                        >
-                          <Settings size={10} />
-                        </Button>
-                      </div>
-                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            role="button"
+                            tabindex="0"
+                            class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                              isActiveVoiceChannel
+                                ? "bg-primary/80 text-foreground shadow-sm"
+                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            }`}
+                            data-active={isActiveVoiceChannel ? "true" : undefined}
+                            onclick={() => handleVoiceChannelClick(channel)}
+                            onkeydown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                handleVoiceChannelClick(channel);
+                              }
+                            }}
+                            oncontextmenu={(e) =>
+                              handleChannelContextMenu(e, channel)}
+                            title={channel.topic ?? undefined}
+                          >
+                            <div class="flex items-center truncate">
+                              <Mic size={12} class="mr-1" />
+                              <span class="truncate select-none ml-2"
+                                >{channel.name}</span
+                              >
+                            </div>
+                            <div
+                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Invite to channel"
+                                onclick={(event) =>
+                                  handleInviteToChannelClick(channel, event)}
+                              >
+                                <Plus size={10} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Channel settings"
+                                onclick={(event) =>
+                                  handleChannelSettingsClick(channel, event)}
+                              >
+                                <Settings size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {#if channel.topic}
+                          <TooltipContent
+                            side="right"
+                            align="start"
+                            class="max-w-xs text-xs leading-snug"
+                          >
+                            {channel.topic}
+                          </TooltipContent>
+                        {/if}
+                      </Tooltip>
+                    </TooltipProvider>
                   {/each}
                 </CollapsibleContent>
               </Collapsible>
@@ -1182,61 +1256,78 @@
                 {#each server.channels.filter((c: Channel) => c.channel_type === "text" && (c.category_id ?? null) === null && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
                   {@const metadata = channelMetadataLookup.get(channel.id)}
                   {@const unreadCount = metadata?.unreadCount ?? 0}
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
-                    {$activeServerChannelId === channel.id
-                      ? 'bg-primary/80 text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                    onclick={() => onSelectChannel(server.id, channel.id)}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        onSelectChannel(server.id, channel.id);
-                      }
-                    }}
-                    oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-                  >
-                    <div class="flex items-center truncate">
-                      <Hash size={10} class="mr-1" />
-                      <span class="truncate select-none ml-2"
-                        >{channel.name}</span
-                      >
-                    </div>
-                    <div class="ml-auto flex items-center gap-2">
-                      {#if unreadCount > 0}
-                        <Badge
-                          class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          role="button"
+                          tabindex="0"
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            $activeServerChannelId === channel.id
+                              ? "bg-primary/80 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onclick={() => onSelectChannel(server.id, channel.id)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              onSelectChannel(server.id, channel.id);
+                            }
+                          }}
+                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                          title={channel.topic ?? undefined}
                         >
-                          {unreadCount > 99 ? "99+" : unreadCount}
-                        </Badge>
+                          <div class="flex items-center truncate">
+                            <Hash size={10} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                          </div>
+                          <div class="ml-auto flex items-center gap-2">
+                            {#if unreadCount > 0}
+                              <Badge
+                                class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                              >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </Badge>
+                            {/if}
+                            <div
+                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Invite to channel"
+                                onclick={(event) =>
+                                  handleInviteToChannelClick(channel, event)}
+                              >
+                                <Plus size={10} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Channel settings"
+                                onclick={(event) =>
+                                  handleChannelSettingsClick(channel, event)}
+                              >
+                                <Settings size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      {#if channel.topic}
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          class="max-w-xs text-xs leading-snug"
+                        >
+                          {channel.topic}
+                        </TooltipContent>
                       {/if}
-                      <div
-                        class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Invite to channel"
-                          onclick={(event) =>
-                            handleInviteToChannelClick(channel, event)}
-                        >
-                          <Plus size={10} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Channel settings"
-                          onclick={(event) =>
-                            handleChannelSettingsClick(channel, event)}
-                        >
-                          <Settings size={10} />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+                    </Tooltip>
+                  </TooltipProvider>
                 {/each}
               {:else}
                 <p class="text-xs text-muted-foreground px-2 py-1">
@@ -1280,10 +1371,7 @@
                 variant="ghost"
                 size="icon"
                 aria-label="Create Voice Channel"
-                onclick={() => {
-                  newChannelType = "voice";
-                  handleCreateChannelClick();
-                }}
+                onclick={() => handleCreateChannelClick("voice")}
               >
                 <Plus size={12} />
               </Button>
@@ -1300,52 +1388,68 @@
                     activeCall.status !== "ended" &&
                     activeCall.status !== "error" &&
                     activeCall.chatId === channel.id}
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md {isActiveVoiceChannel
-                      ? 'bg-primary/80 text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                    data-active={isActiveVoiceChannel ? "true" : undefined}
-                    onclick={() => handleVoiceChannelClick(channel)}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        handleVoiceChannelClick(channel);
-                      }
-                    }}
-                    oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-                  >
-                    <div class="flex items-center truncate">
-                      <Mic size={12} class="mr-1" />
-                      <span class="truncate select-none ml-2"
-                        >{channel.name}</span
-                      >
-                    </div>
-                    <div
-                      class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-muted-foreground hover:text-foreground"
-                        aria-label="Invite to channel"
-                        onclick={(event) =>
-                          handleInviteToChannelClick(channel, event)}
-                      >
-                        <Plus size={10} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-muted-foreground hover:text-foreground"
-                        aria-label="Channel settings"
-                        onclick={(event) =>
-                          handleChannelSettingsClick(channel, event)}
-                      >
-                        <Settings size={10} />
-                      </Button>
-                    </div>
-                  </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          role="button"
+                          tabindex="0"
+                          class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md {isActiveVoiceChannel
+                            ? 'bg-primary/80 text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
+                          data-active={isActiveVoiceChannel ? "true" : undefined}
+                          onclick={() => handleVoiceChannelClick(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleVoiceChannelClick(channel);
+                            }
+                          }}
+                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                          title={channel.topic ?? undefined}
+                        >
+                          <div class="flex items-center truncate">
+                            <Mic size={12} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                          </div>
+                          <div
+                            class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Invite to channel"
+                              onclick={(event) =>
+                                handleInviteToChannelClick(channel, event)}
+                            >
+                              <Plus size={10} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Channel settings"
+                              onclick={(event) =>
+                                handleChannelSettingsClick(channel, event)}
+                            >
+                              <Settings size={10} />
+                            </Button>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      {#if channel.topic}
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          class="max-w-xs text-xs leading-snug"
+                        >
+                          {channel.topic}
+                        </TooltipContent>
+                      {/if}
+                    </Tooltip>
+                  </TooltipProvider>
                 {/each}
               {:else}
                 <p class="text-xs text-muted-foreground px-2 py-1">
@@ -1520,6 +1624,7 @@
             id="channel-topic"
             placeholder="What’s this channel about?"
             class="w-full"
+            bind:value={newChannelTopic}
           />
         </div>
       {/if}
