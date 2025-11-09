@@ -32,6 +32,7 @@
     Shield,
     Square,
     Calendar,
+    Lock,
   } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import { getContext, onDestroy, onMount } from "svelte";
@@ -48,6 +49,11 @@
   } from "$lib/components/ui/dropdown-menu/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar/index.js";
   import { SvelteSet } from "svelte/reactivity";
   import {
     Collapsible,
@@ -82,6 +88,7 @@
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
+  import { userStore } from "$lib/stores/userStore";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -115,6 +122,10 @@
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
   let newChannelTopic = $state("");
+  let selectedRoleIds = new SvelteSet<string>();
+  let selectedMemberIds = new SvelteSet<string>();
+  let roleSearchTerm = $state("");
+  let memberSearchTerm = $state("");
 
   let showCategoryContextMenu = $state(false);
   let contextMenuX = $state(0);
@@ -145,6 +156,95 @@
 
   const TEXT_COLLAPSED_KEY = "serverSidebar.textCollapsed";
   const VOICE_COLLAPSED_KEY = "serverSidebar.voiceCollapsed";
+
+  const sortedRoles = $derived.by(() => {
+    if (!server?.roles) return [];
+    return [...server.roles].sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  const filteredRoles = $derived.by(() => {
+    const term = roleSearchTerm.trim().toLowerCase();
+    if (!term) return sortedRoles;
+    return sortedRoles.filter((role) => role.name.toLowerCase().includes(term));
+  });
+
+  const sortedMembers = $derived.by(() => {
+    if (!server?.members) return [];
+    return [...server.members].sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  const filteredMembers = $derived.by(() => {
+    const term = memberSearchTerm.trim().toLowerCase();
+    if (!term) return sortedMembers;
+    return sortedMembers.filter((member) =>
+      member.name.toLowerCase().includes(term),
+    );
+  });
+
+  function clearAccessSelections() {
+    selectedRoleIds = new SvelteSet<string>();
+    selectedMemberIds = new SvelteSet<string>();
+    roleSearchTerm = "";
+    memberSearchTerm = "";
+  }
+
+  function toggleRoleSelection(roleId: string | null | undefined) {
+    if (!roleId) return;
+    const trimmed = roleId.trim();
+    if (!trimmed) return;
+    const next = new SvelteSet(selectedRoleIds);
+    if (next.has(trimmed)) {
+      next.delete(trimmed);
+    } else {
+      next.add(trimmed);
+    }
+    selectedRoleIds = next;
+  }
+
+  function toggleMemberSelection(memberId: string | null | undefined) {
+    if (!memberId) return;
+    const trimmed = memberId.trim();
+    if (!trimmed) return;
+    const next = new SvelteSet(selectedMemberIds);
+    if (next.has(trimmed)) {
+      next.delete(trimmed);
+    } else {
+      next.add(trimmed);
+    }
+    selectedMemberIds = next;
+  }
+
+  function toUniqueIdList(ids: Iterable<string>): string[] {
+    const seen = new Set<string>();
+    for (const id of ids) {
+      const trimmed = id.trim();
+      if (trimmed.length > 0) {
+        seen.add(trimmed);
+      }
+    }
+    return Array.from(seen);
+  }
+
+  function ensureDefaultPrivateMembers() {
+    if (!newChannelPrivate) {
+      return;
+    }
+    const defaults = [server?.owner_id ?? null, $userStore.me?.id ?? null];
+    const next = new SvelteSet(selectedMemberIds);
+    let changed = false;
+    for (const candidate of defaults) {
+      if (!candidate) continue;
+      const trimmed = candidate.trim();
+      if (!trimmed) continue;
+      if (!next.has(trimmed)) {
+        next.add(trimmed);
+        changed = true;
+      }
+    }
+    if (changed) {
+      selectedMemberIds = next;
+    }
+  }
 
   function persistCollapsedState(key: string, collapsed: boolean) {
     if (!browser) return;
@@ -197,7 +297,14 @@
       const matchesType = channel.channel_type === type;
       const matchesCategory = (channel.category_id ?? null) === categoryId;
       const isVisible = !hideMutedChannels || !mutedChannelIds.has(channel.id);
-      return matchesType && matchesCategory && isVisible;
+      const hasAccess =
+        !server?.id || !channel.private
+          ? true
+          : serverStore.canAccessChannel({
+              serverId: server.id,
+              channel,
+            });
+      return matchesType && matchesCategory && isVisible && hasAccess;
     });
   }
 
@@ -298,6 +405,13 @@
           error,
         );
       });
+  });
+
+  $effect(() => {
+    if (!showCreateChannelModal || !newChannelPrivate) {
+      return;
+    }
+    ensureDefaultPrivateMembers();
   });
 
   $effect(() => {
@@ -410,6 +524,7 @@
     newChannelName = "";
     newChannelPrivate = false;
     newChannelTopic = "";
+    clearAccessSelections();
     showCreateChannelModal = true;
   }
 
@@ -470,6 +585,34 @@
           : null
         : null;
 
+    const allowedRoleIds = newChannelPrivate
+      ? toUniqueIdList(selectedRoleIds)
+      : [];
+    const aggregatedMemberIds = newChannelPrivate
+      ? new Set<string>(toUniqueIdList(selectedMemberIds))
+      : new Set<string>();
+
+    if (newChannelPrivate) {
+      const defaults = [server.owner_id ?? null, $userStore.me?.id ?? null];
+      for (const candidate of defaults) {
+        if (!candidate) continue;
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) {
+          aggregatedMemberIds.add(trimmed);
+        }
+      }
+    }
+
+    const allowedUserIds = Array.from(aggregatedMemberIds);
+
+    if (newChannelPrivate && allowedRoleIds.length === 0 && allowedUserIds.length === 0) {
+      toasts.addToast(
+        "Select at least one role or member for a private channel.",
+        "error",
+      );
+      return;
+    }
+
     const newChannel: Channel = {
       id: uuidv4(),
       server_id: server.id,
@@ -478,6 +621,8 @@
       private: newChannelPrivate,
       category_id: null,
       topic: topicValue,
+      allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
+      allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
     };
 
     try {
@@ -491,6 +636,7 @@
       newChannelType = "text";
       newChannelPrivate = false;
       newChannelTopic = "";
+      clearAccessSelections();
       showCreateChannelModal = false;
     } catch (error) {
       console.error("Failed to create channel:", error);
@@ -517,7 +663,10 @@
         return;
       }
       if ($activeServerChannelId === channelId && nextChannelId) {
-        onSelectChannel(server.id, nextChannelId);
+        const nextChannel = getChannelById(nextChannelId);
+        if (nextChannel) {
+          handleChannelSelect(nextChannel);
+        }
       }
     } catch (error) {
       console.error("Failed to delete channel:", error);
@@ -770,6 +919,12 @@
             private: orig.private,
             category_id: orig.category_id ?? null,
             topic: orig.topic ?? null,
+            allowed_role_ids: orig.allowed_role_ids
+              ? [...orig.allowed_role_ids]
+              : [],
+            allowed_user_ids: orig.allowed_user_ids
+              ? [...orig.allowed_user_ids]
+              : [],
           };
           try {
             await invoke("create_channel", { channel: dup });
@@ -793,7 +948,10 @@
           break;
         }
         case "open_chat": {
-          onSelectChannel(server.id, channelId);
+          const channelToOpen = getChannelById(channelId);
+          if (channelToOpen) {
+            handleChannelSelect(channelToOpen);
+          }
           break;
         }
         case "mark_as_read": {
@@ -909,8 +1067,27 @@
     gotoResolved(`/channels/${server.id}/settings?tab=channels`);
   }
 
-  function handleVoiceChannelClick(channel: Channel) {
+  function handleChannelSelect(channel: Channel): boolean {
+    if (!server?.id) {
+      return false;
+    }
+    const allowed = serverStore.canAccessChannel({
+      serverId: server.id,
+      channel,
+    });
+    if (!allowed) {
+      toasts.addToast("You do not have access to this channel.", "error");
+      return false;
+    }
     onSelectChannel(server.id, channel.id);
+    return true;
+  }
+
+  function handleVoiceChannelClick(channel: Channel) {
+    const allowed = handleChannelSelect(channel);
+    if (!allowed) {
+      return;
+    }
     void callStore.joinVoiceChannel({
       chatId: channel.id,
       chatName: channel.name,
@@ -1065,27 +1242,35 @@
                           <div
                             role="button"
                             tabindex="0"
-                            class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                              $activeServerChannelId === channel.id
-                                ? "bg-primary/80 text-foreground"
-                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                            }`}
-                            onclick={() => onSelectChannel(server.id, channel.id)}
-                            onkeydown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                onSelectChannel(server.id, channel.id);
-                              }
-                            }}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            $activeServerChannelId === channel.id
+                              ? "bg-primary/80 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onclick={() => handleChannelSelect(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleChannelSelect(channel);
+                            }
+                          }}
                             oncontextmenu={(e) =>
                               handleChannelContextMenu(e, channel)}
                             title={channel.topic ?? undefined}
                           >
-                            <div class="flex items-center truncate">
-                              <Hash size={10} class="mr-1" />
-                              <span class="truncate select-none ml-2"
-                                >{channel.name}</span
+                          <div class="flex items-center truncate">
+                            <Hash size={10} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
                               >
-                            </div>
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
                             <div class="ml-auto flex items-center gap-2">
                               {#if unreadCount > 0}
                                 <Badge
@@ -1170,6 +1355,14 @@
                               <span class="truncate select-none ml-2"
                                 >{channel.name}</span
                               >
+                              {#if channel.private}
+                                <Badge
+                                  class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                >
+                                  <Lock size={10} />
+                                  Private
+                                </Badge>
+                              {/if}
                             </div>
                             <div
                               class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
@@ -1267,10 +1460,10 @@
                               ? "bg-primary/80 text-foreground"
                               : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                           }`}
-                          onclick={() => onSelectChannel(server.id, channel.id)}
+                          onclick={() => handleChannelSelect(channel)}
                           onkeydown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
-                              onSelectChannel(server.id, channel.id);
+                              handleChannelSelect(channel);
                             }
                           }}
                           oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
@@ -1281,6 +1474,14 @@
                             <span class="truncate select-none ml-2"
                               >{channel.name}</span
                             >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
                           </div>
                           <div class="ml-auto flex items-center gap-2">
                             {#if unreadCount > 0}
@@ -1412,6 +1613,14 @@
                             <span class="truncate select-none ml-2"
                               >{channel.name}</span
                             >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
                           </div>
                           <div
                             class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
@@ -1611,6 +1820,96 @@
           aria-label="Private Channel"
         />
       </div>
+
+      {#if newChannelPrivate}
+        <div class="space-y-4 rounded-md border border-border/60 bg-muted/20 p-3">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase text-muted-foreground">
+                Allowed Roles
+              </span>
+              <span class="text-[11px] text-muted-foreground">
+                Choose roles that can access this channel
+              </span>
+            </div>
+            <Input
+              type="text"
+              placeholder="Search roles..."
+              bind:value={roleSearchTerm}
+              class="w-full"
+            />
+            <ScrollArea class="max-h-32 pr-1">
+              {#if filteredRoles.length > 0}
+                <div class="space-y-1">
+                  {#each filteredRoles as role (role.id)}
+                    <label
+                      class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        checked={selectedRoleIds.has(role.id)}
+                        onchange={() => toggleRoleSelection(role.id)}
+                      />
+                      <span class="truncate">{role.name}</span>
+                    </label>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-xs text-muted-foreground">
+                  No roles match your search.
+                </p>
+              {/if}
+            </ScrollArea>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase text-muted-foreground">
+                Allowed Members
+              </span>
+              <span class="text-[11px] text-muted-foreground">
+                You’re always included.
+              </span>
+            </div>
+            <Input
+              type="text"
+              placeholder="Search members..."
+              bind:value={memberSearchTerm}
+              class="w-full"
+            />
+            <ScrollArea class="max-h-48 pr-1">
+              {#if filteredMembers.length > 0}
+                <div class="space-y-1">
+                  {#each filteredMembers as member (member.id)}
+                    <label
+                      class="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        checked={selectedMemberIds.has(member.id)}
+                        onchange={() => toggleMemberSelection(member.id)}
+                      />
+                      <Avatar class="h-6 w-6">
+                        <AvatarImage src={member.avatar} alt={member.name} />
+                        <AvatarFallback class="text-xs font-medium">
+                          {member.name?.[0] ?? "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span class="truncate">{member.name}</span>
+                    </label>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-xs text-muted-foreground">
+                  No members match your search.
+                </p>
+              {/if}
+            </ScrollArea>
+          </div>
+        </div>
+      {/if}
 
       {#if newChannelType === "text"}
         <div>

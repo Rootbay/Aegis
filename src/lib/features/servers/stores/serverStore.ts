@@ -177,6 +177,12 @@ interface ServerStore extends Readable<ServerStoreState> {
   handleServersUpdate: (servers: Server[]) => void;
   setActiveServer: (serverId: string | null) => void;
   applyRelayBindings: (relays: RelayRecord[]) => void;
+  canAccessChannel: (options: {
+    serverId: string;
+    channelId?: string;
+    channel?: Channel;
+    userId?: string;
+  }) => boolean;
   updateServerMemberPresence: (
     userId: string,
     presence: {
@@ -259,6 +265,56 @@ export function createServerStore(): ServerStore {
     return undefined;
   };
 
+  const normalizeIdList = (value: unknown): string[] => {
+    const seen = new Set<string>();
+
+    const push = (candidate: unknown) => {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) {
+          seen.add(trimmed);
+        }
+        return;
+      }
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        const normalized = candidate.toString();
+        if (normalized.length > 0) {
+          seen.add(normalized);
+        }
+        return;
+      }
+      if (candidate && typeof candidate === "object") {
+        const record = candidate as Record<string, unknown>;
+        if (typeof record.id === "string") {
+          const trimmed = record.id.trim();
+          if (trimmed.length > 0) {
+            seen.add(trimmed);
+          }
+        }
+      }
+    };
+
+    if (!value) {
+      return [];
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(push);
+    } else if (value instanceof Set) {
+      value.forEach(push);
+    } else if (typeof value === "string") {
+      value
+        .split(/[\s,]+/)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .forEach(push);
+    } else {
+      push(value);
+    }
+
+    return Array.from(seen);
+  };
+
   const mapBackendChannel = (channel: BackendChannel): Channel => {
     const {
       channel_type,
@@ -270,6 +326,22 @@ export function createServerStore(): ServerStore {
       channel_topic,
       topic,
       private: privateValue,
+      allowed_user_ids,
+      allowedUserIds,
+      allowed_users,
+      allowedUsers,
+      permitted_user_ids,
+      permittedUserIds,
+      permitted_users,
+      permittedUsers,
+      allowed_role_ids,
+      allowedRoleIds,
+      allowed_roles,
+      allowedRoles,
+      permitted_role_ids,
+      permittedRoleIds,
+      permitted_roles,
+      permittedRoles,
       ...rest
     } = channel;
 
@@ -307,6 +379,36 @@ export function createServerStore(): ServerStore {
 
     if (resolvedTopic !== undefined) {
       normalized.topic = resolvedTopic;
+    }
+
+    const normalizedAllowedUsers = normalizeIdList(
+      allowed_user_ids ??
+        allowedUserIds ??
+        allowed_users ??
+        allowedUsers ??
+        permitted_user_ids ??
+        permittedUserIds ??
+        permitted_users ??
+        permittedUsers ??
+        null,
+    );
+    if (normalizedAllowedUsers.length > 0) {
+      normalized.allowed_user_ids = normalizedAllowedUsers;
+    }
+
+    const normalizedAllowedRoles = normalizeIdList(
+      allowed_role_ids ??
+        allowedRoleIds ??
+        allowed_roles ??
+        allowedRoles ??
+        permitted_role_ids ??
+        permittedRoleIds ??
+        permitted_roles ??
+        permittedRoles ??
+        null,
+    );
+    if (normalizedAllowedRoles.length > 0) {
+      normalized.allowed_role_ids = normalizedAllowedRoles;
     }
 
     return normalized;
@@ -804,6 +906,35 @@ export function createServerStore(): ServerStore {
   const cloneServer = (server: Server): Server =>
     JSON.parse(JSON.stringify(normalizeServer(server))) as Server;
 
+  const collectRoleIdsFromUser = (user?: User | null): string[] => {
+    if (!user) {
+      return [];
+    }
+
+    const collected = new Set<string>();
+    const append = (values?: string[] | null) => {
+      if (!Array.isArray(values)) {
+        return;
+      }
+      for (const value of values) {
+        if (typeof value !== "string") {
+          continue;
+        }
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          collected.add(trimmed);
+        }
+      }
+    };
+
+    const record = user as Record<string, unknown>;
+    append(record.roles as string[] | undefined);
+    append(record.role_ids as string[] | undefined);
+    append(record.roleIds as string[] | undefined);
+
+    return Array.from(collected);
+  };
+
   const hasOwn = (object: Partial<Server>, key: keyof Server | string) =>
     Object.prototype.hasOwnProperty.call(object, key);
 
@@ -863,6 +994,91 @@ export function createServerStore(): ServerStore {
     }
 
     return normalizeServer(next);
+  };
+
+  const canAccessChannel = ({
+    serverId,
+    channelId,
+    channel: channelOverride,
+    userId,
+  }: {
+    serverId: string;
+    channelId?: string;
+    channel?: Channel;
+    userId?: string;
+  }): boolean => {
+    if (!serverId) {
+      return false;
+    }
+
+    const stateSnapshot = get({ subscribe });
+    const server = stateSnapshot.servers.find((entry) => entry.id === serverId);
+    if (!server) {
+      return false;
+    }
+
+    const resolvedChannel =
+      channelOverride ??
+      (channelId
+        ? server.channels.find((entry) => entry.id === channelId)
+        : undefined);
+    if (!resolvedChannel) {
+      return false;
+    }
+
+    if (!resolvedChannel.private) {
+      return true;
+    }
+
+    const trimmedUserId =
+      typeof userId === "string" && userId.trim().length > 0
+        ? userId.trim()
+        : undefined;
+    const userState = get(userStore);
+    const effectiveUserId = trimmedUserId ?? userState.me?.id ?? null;
+
+    if (!effectiveUserId) {
+      return false;
+    }
+
+    if (effectiveUserId === server.owner_id) {
+      return true;
+    }
+
+    const allowedUsers = new Set(
+      normalizeIdList(resolvedChannel.allowed_user_ids ?? []),
+    );
+    if (allowedUsers.has(effectiveUserId)) {
+      return true;
+    }
+
+    const allowedRoles = new Set(
+      normalizeIdList(resolvedChannel.allowed_role_ids ?? []),
+    );
+    if (allowedRoles.size === 0) {
+      return false;
+    }
+
+    const member =
+      server.members?.find((entry) => entry.id === effectiveUserId) ?? null;
+    const candidateRoles = new Set<string>();
+    for (const roleId of collectRoleIdsFromUser(member)) {
+      candidateRoles.add(roleId);
+    }
+
+    if (userState.me && userState.me.id === effectiveUserId) {
+      for (const roleId of collectRoleIdsFromUser(userState.me)) {
+        candidateRoles.add(roleId);
+      }
+    }
+
+    for (const roleId of candidateRoles) {
+      if (allowedRoles.has(roleId)) {
+        return true;
+      }
+    }
+
+    return false;
   };
 
   const getServer = async (serverId: string): Promise<Server | null> => {
@@ -1686,6 +1902,7 @@ export function createServerStore(): ServerStore {
     handleServersUpdate,
     setActiveServer,
     applyRelayBindings,
+    canAccessChannel,
     updateServerMemberPresence,
     addServer,
     upsertServerFromBackend,

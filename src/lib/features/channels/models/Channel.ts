@@ -6,4 +6,6 @@ export interface Channel {
   private: boolean;
   category_id?: string | null;
   topic?: string | null;
+  allowed_role_ids?: string[];
+  allowed_user_ids?: string[];
 }
