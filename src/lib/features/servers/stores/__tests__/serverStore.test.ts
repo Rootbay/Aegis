@@ -226,6 +226,92 @@ describe("serverStore social event helpers", () => {
       ).toBe(true);
     });
 
+    it("denies access when role overrides block read permissions", () => {
+      const store = createServerStore();
+      const overrideChannel: Channel = {
+        ...textChannel,
+        id: "channel-role-override",
+        private: false,
+        permission_overrides: {
+          roles: {
+            "role-deny": {
+              deny: { read_messages: true },
+            },
+          },
+        },
+      };
+
+      store.handleServersUpdate([
+        {
+          ...baseServer,
+          channels: [overrideChannel],
+          members: [buildMember("member-override", "Member Override", ["role-deny"])],
+          roles: [
+            {
+              id: "role-deny",
+              name: "Role Deny",
+              color: "#ffffff",
+              hoist: false,
+              mentionable: false,
+              position: 1,
+              permissions: {},
+              member_ids: ["member-override"],
+            },
+          ],
+        },
+      ]);
+
+      userStore.__setStateForTesting?.({
+        me: buildMember("member-override", "Member Override", ["role-deny"]),
+        loading: false,
+      });
+
+      expect(
+        store.canAccessChannel({
+          serverId: baseServer.id,
+          channelId: overrideChannel.id,
+        }),
+      ).toBe(false);
+    });
+
+    it("allows access when user overrides permit reading", () => {
+      const store = createServerStore();
+      const overrideChannel: Channel = {
+        ...textChannel,
+        id: "channel-user-override",
+        private: true,
+        allowed_role_ids: [],
+        allowed_user_ids: [],
+        permission_overrides: {
+          users: {
+            "member-override": {
+              allow: { read_messages: true },
+            },
+          },
+        },
+      };
+
+      store.handleServersUpdate([
+        {
+          ...baseServer,
+          channels: [overrideChannel],
+          members: [buildMember("member-override", "Member Override")],
+        },
+      ]);
+
+      userStore.__setStateForTesting?.({
+        me: buildMember("member-override", "Member Override"),
+        loading: false,
+      });
+
+      expect(
+        store.canAccessChannel({
+          serverId: baseServer.id,
+          channelId: overrideChannel.id,
+        }),
+      ).toBe(true);
+    });
+
     it("denies access when no membership or roles match", () => {
       const store = createServerStore();
       const privateChannel: Channel = {

@@ -105,6 +105,12 @@
     formatSlowmodeDuration,
     normalizeSlowmodeValue,
   } from "$lib/features/channels/utils/slowmode";
+  import {
+    CHANNEL_PERMISSION_KEYS,
+    type ChannelPermissionOverrides,
+    type ChannelPermissionOverrideEntry,
+    type KnownChannelPermissionKey,
+  } from "$lib/features/chat/utils/permissions";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -146,6 +152,291 @@
   let roleSearchTerm = $state("");
   let memberSearchTerm = $state("");
 
+  type PermissionOverrideChoice = "inherit" | "allow" | "deny";
+  type PermissionMatrixRow = Record<
+    KnownChannelPermissionKey,
+    PermissionOverrideChoice
+  >;
+
+  type PermissionMatrixState = {
+    roles: Record<string, PermissionMatrixRow>;
+    users: Record<string, PermissionMatrixRow>;
+  };
+
+  const channelPermissionKeys = CHANNEL_PERMISSION_KEYS;
+  const permissionKeyLabels: Record<KnownChannelPermissionKey, string> =
+    Object.fromEntries(
+      channelPermissionKeys.map((key) => [
+        key,
+        key
+          .split("_")
+          .map((segment) =>
+            segment.length > 0
+              ? segment[0].toUpperCase() + segment.slice(1)
+              : segment,
+          )
+          .join(" "),
+      ]),
+    ) as Record<KnownChannelPermissionKey, string>;
+
+  const overrideChoiceLabels: Record<
+    PermissionOverrideChoice,
+    { label: string; description: string }
+  > = {
+    inherit: {
+      label: "Inherit",
+      description: "Use default permissions.",
+    },
+    allow: {
+      label: "Allow",
+      description: "Explicitly allow this action.",
+    },
+    deny: {
+      label: "Deny",
+      description: "Explicitly deny this action.",
+    },
+  };
+
+  const overrideChoices: PermissionOverrideChoice[] = [
+    "inherit",
+    "allow",
+    "deny",
+  ];
+
+  function createEmptyPermissionMatrixRow(): PermissionMatrixRow {
+    const row = {} as PermissionMatrixRow;
+    for (const key of channelPermissionKeys) {
+      row[key] = "inherit";
+    }
+    return row;
+  }
+
+  function createEmptyPermissionOverridesState(): PermissionMatrixState {
+    return {
+      roles: {},
+      users: {},
+    };
+  }
+
+  function rowHasOverrides(row: PermissionMatrixRow): boolean {
+    for (const key of channelPermissionKeys) {
+      if (row[key] !== "inherit") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function createPermissionMatrixRowFromEntry(
+    entry?: ChannelPermissionOverrideEntry | null,
+  ): PermissionMatrixRow {
+    const row = createEmptyPermissionMatrixRow();
+    if (!entry) {
+      return row;
+    }
+
+    const apply = (
+      matrix: ChannelPermissionOverrideEntry["allow"],
+      choice: PermissionOverrideChoice,
+    ) => {
+      if (!matrix) {
+        return;
+      }
+      for (const key of channelPermissionKeys) {
+        if (matrix[key]) {
+          row[key] = choice;
+        }
+      }
+    };
+
+    apply(entry.deny ?? null, "deny");
+    apply(entry.allow ?? null, "allow");
+
+    return row;
+  }
+
+  let permissionOverrides = $state<PermissionMatrixState>(
+    createEmptyPermissionOverridesState(),
+  );
+  let pendingRoleOverrideSelection = $state("");
+  let pendingMemberOverrideSelection = $state("");
+
+  function resetPermissionOverrides() {
+    permissionOverrides = createEmptyPermissionOverridesState();
+    pendingRoleOverrideSelection = "";
+    pendingMemberOverrideSelection = "";
+  }
+
+  function addPermissionOverrideTarget(
+    target: keyof PermissionMatrixState,
+    id: string | null | undefined,
+  ) {
+    if (!id) return;
+    const trimmed = id.trim();
+    if (!trimmed || permissionOverrides[target][trimmed]) {
+      return;
+    }
+    const row = createEmptyPermissionMatrixRow();
+    permissionOverrides = {
+      ...permissionOverrides,
+      [target]: {
+        ...permissionOverrides[target],
+        [trimmed]: row,
+      },
+    };
+  }
+
+  function removeOverrideTarget(
+    target: keyof PermissionMatrixState,
+    id: string,
+  ) {
+    const trimmed = id.trim();
+    if (!trimmed || !permissionOverrides[target][trimmed]) {
+      return;
+    }
+    const nextTarget = { ...permissionOverrides[target] };
+    delete nextTarget[trimmed];
+    permissionOverrides = {
+      ...permissionOverrides,
+      [target]: nextTarget,
+    };
+  }
+
+  function setOverrideChoice(
+    target: keyof PermissionMatrixState,
+    id: string,
+    permission: KnownChannelPermissionKey,
+    choice: PermissionOverrideChoice,
+  ) {
+    const trimmed = id.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const existing = permissionOverrides[target][trimmed];
+    const updatedRow: PermissionMatrixRow = {
+      ...(existing ?? createEmptyPermissionMatrixRow()),
+      [permission]: choice,
+    };
+
+    if (!rowHasOverrides(updatedRow)) {
+      removeOverrideTarget(target, trimmed);
+      return;
+    }
+
+    permissionOverrides = {
+      ...permissionOverrides,
+      [target]: {
+        ...permissionOverrides[target],
+        [trimmed]: updatedRow,
+      },
+    };
+  }
+
+  function getOverrideChoice(
+    target: keyof PermissionMatrixState,
+    id: string,
+    permission: KnownChannelPermissionKey,
+  ): PermissionOverrideChoice {
+    return (
+      permissionOverrides[target][id]?.[permission] ?? ("inherit" as const)
+    );
+  }
+
+  function loadPermissionOverridesFromChannel(
+    overrides: ChannelPermissionOverrides | null | undefined,
+  ) {
+    const next = createEmptyPermissionOverridesState();
+    const applyEntries = (
+      target: keyof PermissionMatrixState,
+      entries?: Record<string, ChannelPermissionOverrideEntry | null | undefined>,
+    ) => {
+      if (!entries) {
+        return;
+      }
+      for (const [rawId, entry] of Object.entries(entries)) {
+        const trimmed = rawId.trim();
+        if (!trimmed) {
+          continue;
+        }
+        const row = createPermissionMatrixRowFromEntry(entry);
+        if (!rowHasOverrides(row)) {
+          continue;
+        }
+        next[target][trimmed] = row;
+      }
+    };
+
+    applyEntries("roles", overrides?.roles ?? undefined);
+    applyEntries("users", overrides?.users ?? undefined);
+
+    permissionOverrides = next;
+    pendingRoleOverrideSelection = "";
+    pendingMemberOverrideSelection = "";
+  }
+
+  function serializePermissionOverridesState(
+    state: PermissionMatrixState,
+  ): ChannelPermissionOverrides | undefined {
+    const serialize = (
+      entries: Record<string, PermissionMatrixRow>,
+    ): Record<string, ChannelPermissionOverrideEntry> => {
+      const result: Record<string, ChannelPermissionOverrideEntry> = {};
+      for (const [id, row] of Object.entries(entries)) {
+        if (!rowHasOverrides(row)) {
+          continue;
+        }
+        const allow: Partial<Record<KnownChannelPermissionKey, boolean>> = {};
+        const deny: Partial<Record<KnownChannelPermissionKey, boolean>> = {};
+        for (const key of channelPermissionKeys) {
+          if (row[key] === "allow") {
+            allow[key] = true;
+          } else if (row[key] === "deny") {
+            deny[key] = true;
+          }
+        }
+        const entry: ChannelPermissionOverrideEntry = {};
+        if (Object.keys(allow).length > 0) {
+          entry.allow = allow;
+        }
+        if (Object.keys(deny).length > 0) {
+          entry.deny = deny;
+        }
+        if (entry.allow || entry.deny) {
+          result[id] = entry;
+        }
+      }
+      return result;
+    };
+
+    const roles = serialize(state.roles);
+    const users = serialize(state.users);
+
+    const hasRoles = Object.keys(roles).length > 0;
+    const hasUsers = Object.keys(users).length > 0;
+    if (!hasRoles && !hasUsers) {
+      return undefined;
+    }
+
+    const overrides: ChannelPermissionOverrides = {};
+    if (hasRoles) {
+      overrides.roles = roles;
+    }
+    if (hasUsers) {
+      overrides.users = users;
+    }
+    return overrides;
+  }
+
+  function clonePermissionOverrides(
+    overrides: ChannelPermissionOverrides | null | undefined,
+  ): ChannelPermissionOverrides | undefined {
+    if (!overrides) {
+      return undefined;
+    }
+    return JSON.parse(JSON.stringify(overrides)) as ChannelPermissionOverrides;
+  }
+
   const slowmodeOptions = $derived(() =>
     buildSlowmodeOptions([...SLOWMODE_PRESETS, newChannelSlowmode]),
   );
@@ -186,6 +477,16 @@
     return [...server.roles].sort((a, b) => a.name.localeCompare(b.name));
   });
 
+  const rolesById = $derived.by(() => {
+    const map = new Map<string, Role>();
+    for (const role of server?.roles ?? []) {
+      if (role?.id) {
+        map.set(role.id, role);
+      }
+    }
+    return map;
+  });
+
   const filteredRoles = $derived.by(() => {
     const term = roleSearchTerm.trim().toLowerCase();
     if (!term) return sortedRoles;
@@ -217,6 +518,14 @@
       member.name.toLowerCase().includes(term),
     );
   });
+
+  const availableRoleOverrideOptions = $derived.by(() =>
+    sortedRoles.filter((role) => !permissionOverrides.roles[role.id]),
+  );
+
+  const availableMemberOverrideOptions = $derived.by(() =>
+    sortedMembers.filter((member) => !permissionOverrides.users[member.id]),
+  );
 
   function clearAccessSelections() {
     selectedRoleIds = new SvelteSet<string>();
@@ -793,6 +1102,7 @@
     newChannelCategoryId = normalizeCategoryId(categoryId);
     newChannelSlowmode = 0;
     clearAccessSelections();
+    resetPermissionOverrides();
     showCreateChannelModal = true;
   }
 
@@ -816,6 +1126,7 @@
     selectedMemberIds = new SvelteSet(channel.allowed_user_ids ?? []);
     roleSearchTerm = "";
     memberSearchTerm = "";
+    loadPermissionOverridesFromChannel(channel.permission_overrides ?? null);
     showCreateChannelModal = true;
   }
 
@@ -829,6 +1140,7 @@
     newChannelSlowmode = 0;
     editingChannelId = null;
     clearAccessSelections();
+    resetPermissionOverrides();
   }
 
   function handleCreateCategory() {
@@ -919,6 +1231,8 @@
     const normalizedCategoryId = normalizeCategoryId(newChannelCategoryId);
     const slowmodeSeconds =
       newChannelType === "text" ? normalizeSlowmodeValue(newChannelSlowmode) : 0;
+    const permissionOverridesPayload =
+      serializePermissionOverridesState(permissionOverrides);
 
     if (editingChannelId) {
       const existing = getChannelById(editingChannelId);
@@ -937,7 +1251,12 @@
         allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
         allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
         rate_limit_per_user: newChannelType === "text" ? slowmodeSeconds : 0,
+        permission_overrides: permissionOverridesPayload ?? undefined,
       };
+
+      if (!permissionOverridesPayload) {
+        delete (updatedChannel as Record<string, unknown>).permission_overrides;
+      }
 
       try {
         const updatedChannels = (server.channels || []).map((c: Channel) =>
@@ -976,6 +1295,9 @@
       allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
       allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
       rate_limit_per_user: slowmodeSeconds,
+      ...(permissionOverridesPayload
+        ? { permission_overrides: permissionOverridesPayload }
+        : {}),
     };
 
     try {
@@ -1238,6 +1560,9 @@
             orig.category_id ?? null,
             orig.channel_type,
           );
+          const duplicateOverrides = clonePermissionOverrides(
+            orig.permission_overrides ?? undefined,
+          );
           const dup: Channel = {
             id: uuidv4(),
             server_id: server.id,
@@ -1254,6 +1579,9 @@
               ? [...orig.allowed_user_ids]
               : [],
             rate_limit_per_user: orig.rate_limit_per_user ?? 0,
+            ...(duplicateOverrides
+              ? { permission_overrides: duplicateOverrides }
+              : {}),
           };
           try {
             await invoke("create_channel", { channel: dup });
@@ -2440,6 +2768,196 @@
           </div>
         </div>
       {/if}
+
+      <div class="space-y-5 rounded-md border border-border/60 bg-muted/20 p-3">
+        <div class="space-y-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-semibold uppercase text-muted-foreground">
+              Role Permission Overrides
+            </span>
+            <span class="text-[11px] text-muted-foreground">
+              Fine-tune channel permissions for specific roles.
+            </span>
+          </div>
+
+          {#if availableRoleOverrideOptions.length > 0}
+            <Select
+              type="single"
+              value={pendingRoleOverrideSelection}
+              onValueChange={(value: string) => {
+                if (!value) return;
+                addPermissionOverrideTarget("roles", value);
+                pendingRoleOverrideSelection = "";
+              }}
+            >
+              <SelectTrigger class="w-full justify-between">
+                <span data-slot="select-value" class="flex-1 text-left">
+                  Add role override
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" disabled>Select a role</SelectItem>
+                {#each availableRoleOverrideOptions as role (role.id)}
+                  <SelectItem value={role.id}>{role.name}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              All roles already have overrides configured.
+            </p>
+          {/if}
+
+          {#if Object.keys(permissionOverrides.roles).length > 0}
+            <div class="space-y-3">
+              {#each Object.keys(permissionOverrides.roles) as roleId (roleId)}
+                <div class="overflow-hidden rounded-md border border-border/50 bg-background/40">
+                  <div class="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+                    <span class="text-sm font-medium">
+                      {rolesById.get(roleId)?.name ?? roleId}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove overrides for ${rolesById.get(roleId)?.name ?? roleId}`}
+                      onclick={() => removeOverrideTarget("roles", roleId)}
+                    >
+                      <CircleX size={14} />
+                    </Button>
+                  </div>
+                  <div class="divide-y divide-border/40">
+                    {#each channelPermissionKeys as permission (permission)}
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+                        <span class="text-xs font-medium text-muted-foreground">
+                          {permissionKeyLabels[permission]}
+                        </span>
+                        <div class="flex gap-2">
+                          {#each overrideChoices as choice (choice)}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                getOverrideChoice("roles", roleId, permission) === choice
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              aria-label={`${overrideChoiceLabels[choice].label} ${permissionKeyLabels[permission]} for ${rolesById.get(roleId)?.name ?? roleId}`}
+                              onclick={() => setOverrideChoice("roles", roleId, permission, choice)}
+                            >
+                              {overrideChoiceLabels[choice].label}
+                            </Button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              No role overrides configured.
+            </p>
+          {/if}
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-semibold uppercase text-muted-foreground">
+              Member Permission Overrides
+            </span>
+            <span class="text-[11px] text-muted-foreground">
+              Override permissions for individual members.
+            </span>
+          </div>
+
+          {#if availableMemberOverrideOptions.length > 0}
+            <Select
+              type="single"
+              value={pendingMemberOverrideSelection}
+              onValueChange={(value: string) => {
+                if (!value) return;
+                addPermissionOverrideTarget("users", value);
+                pendingMemberOverrideSelection = "";
+              }}
+            >
+              <SelectTrigger class="w-full justify-between">
+                <span data-slot="select-value" class="flex-1 text-left">
+                  Add member override
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" disabled>Select a member</SelectItem>
+                {#each availableMemberOverrideOptions as member (member.id)}
+                  <SelectItem value={member.id}>{member.name}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              All members already have overrides configured.
+            </p>
+          {/if}
+
+          {#if Object.keys(permissionOverrides.users).length > 0}
+            <div class="space-y-3">
+              {#each Object.keys(permissionOverrides.users) as memberId (memberId)}
+                <div class="overflow-hidden rounded-md border border-border/50 bg-background/40">
+                  <div class="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+                    <span class="text-sm font-medium">
+                      {membersById.get(memberId)?.name ?? memberId}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove overrides for ${membersById.get(memberId)?.name ?? memberId}`}
+                      onclick={() => removeOverrideTarget("users", memberId)}
+                    >
+                      <CircleX size={14} />
+                    </Button>
+                  </div>
+                  <div class="divide-y divide-border/40">
+                    {#each channelPermissionKeys as permission (permission)}
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+                        <span class="text-xs font-medium text-muted-foreground">
+                          {permissionKeyLabels[permission]}
+                        </span>
+                        <div class="flex gap-2">
+                          {#each overrideChoices as choice (choice)}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                getOverrideChoice("users", memberId, permission) === choice
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              aria-label={`${overrideChoiceLabels[choice].label} ${permissionKeyLabels[permission]} for ${membersById.get(memberId)?.name ?? memberId}`}
+                              onclick={() =>
+                                setOverrideChoice("users", memberId, permission, choice)
+                              }
+                            >
+                              {overrideChoiceLabels[choice].label}
+                            </Button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              No member overrides configured.
+            </p>
+          {/if}
+        </div>
+      </div>
 
       {#if newChannelType === "text"}
         <div class="space-y-4">

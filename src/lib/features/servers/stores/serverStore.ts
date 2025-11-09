@@ -24,6 +24,15 @@ import {
   type VoiceChannelPresenceEntry,
   type VoicePresenceState,
 } from "$lib/features/calls/stores/voicePresenceStore";
+import {
+  aggregateChannelPermissions,
+  allowAllChannelPermissions,
+  buildRolePermissionMap,
+  CHANNEL_PERMISSION_KEYS,
+  type ChannelPermissionOverrides,
+  type ChannelPermissionOverrideEntry,
+  type ChannelPermissionOverrideMatrix,
+} from "$lib/features/chat/utils/permissions";
 
 type BackendUser = {
   id: string;
@@ -77,6 +86,12 @@ type BackendChannel = {
   sortOrder?: number | string | null;
   topic?: string | null;
   channel_topic?: string | null;
+  permission_overrides?: unknown;
+  permissionOverrides?: unknown;
+  permission_overrides_roles?: unknown;
+  permissionOverridesRoles?: unknown;
+  permission_overrides_users?: unknown;
+  permissionOverridesUsers?: unknown;
   [key: string]: unknown;
 };
 
@@ -337,6 +352,214 @@ export function createServerStore(): ServerStore {
     return Array.from(seen);
   };
 
+  const CHANNEL_PERMISSION_KEY_SET = new Set<string>(CHANNEL_PERMISSION_KEYS);
+
+  const normalizePermissionOverrideMatrix = (
+    value: unknown,
+  ): ChannelPermissionOverrideMatrix | undefined => {
+    if (!value) {
+      return undefined;
+    }
+
+    const matrix: ChannelPermissionOverrideMatrix = {};
+
+    const assign = (permission: unknown, rawValue: unknown = true) => {
+      if (typeof permission !== "string") {
+        return;
+      }
+      const trimmed = permission.trim();
+      if (!CHANNEL_PERMISSION_KEY_SET.has(trimmed)) {
+        return;
+      }
+      const coerced = coerceBoolean(rawValue);
+      if (coerced === undefined) {
+        if (rawValue === true) {
+          matrix[trimmed] = true;
+        }
+        return;
+      }
+      if (coerced) {
+        matrix[trimmed] = true;
+      }
+    };
+
+    const processCollection = (collection: Iterable<unknown>) => {
+      for (const entry of collection) {
+        if (typeof entry === "string") {
+          assign(entry, true);
+          continue;
+        }
+        if (!entry || typeof entry !== "object") {
+          continue;
+        }
+        const record = entry as Record<string, unknown>;
+        const permission =
+          record.permission ??
+          record.key ??
+          record.name ??
+          record.id ??
+          record.type;
+        const raw =
+          record.value ??
+          record.allowed ??
+          record.allow ??
+          record.enabled ??
+          true;
+        assign(permission, raw);
+      }
+    };
+
+    if (Array.isArray(value)) {
+      processCollection(value);
+    } else if (value instanceof Set) {
+      processCollection(value);
+    } else if (typeof value === "string") {
+      assign(value, true);
+    } else if (typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      let applied = false;
+      for (const [permission, raw] of Object.entries(record)) {
+        if (!CHANNEL_PERMISSION_KEY_SET.has(permission)) {
+          continue;
+        }
+        assign(permission, raw);
+        applied = true;
+      }
+      if (!applied) {
+        const permission =
+          record.permission ?? record.key ?? record.name ?? record.id;
+        if (permission) {
+          const raw =
+            record.value ??
+            record.allowed ??
+            record.allow ??
+            record.enabled ??
+            true;
+          assign(permission, raw);
+        }
+      }
+    }
+
+    return Object.keys(matrix).length > 0 ? matrix : undefined;
+  };
+
+  const normalizePermissionOverrideEntry = (
+    value: unknown,
+  ): ChannelPermissionOverrideEntry | undefined => {
+    if (!value) {
+      return undefined;
+    }
+
+    if (!isRecord(value)) {
+      const matrix = normalizePermissionOverrideMatrix(value);
+      return matrix ? { allow: matrix } : undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    const allowMatrix = normalizePermissionOverrideMatrix(
+      record.allow ?? record.allowed ?? record.allowances ?? record.permit,
+    );
+    const denyMatrix = normalizePermissionOverrideMatrix(
+      record.deny ??
+        record.denied ??
+        record.disallow ??
+        record.disallowed ??
+        record.block,
+    );
+
+    const directMatrix =
+      allowMatrix || denyMatrix
+        ? undefined
+        : normalizePermissionOverrideMatrix(record);
+
+    const entry: ChannelPermissionOverrideEntry = {};
+    if (allowMatrix) {
+      entry.allow = allowMatrix;
+    } else if (directMatrix) {
+      entry.allow = directMatrix;
+    }
+
+    if (denyMatrix) {
+      entry.deny = denyMatrix;
+    }
+
+    if (!entry.allow && !entry.deny) {
+      return undefined;
+    }
+
+    return entry;
+  };
+
+  const normalizePermissionOverrideCollection = (
+    source: unknown,
+  ): Record<string, ChannelPermissionOverrideEntry> => {
+    const result: Record<string, ChannelPermissionOverrideEntry> = {};
+    if (!source) {
+      return result;
+    }
+
+    const assign = (id: unknown, entry: ChannelPermissionOverrideEntry | undefined) => {
+      if (!entry) {
+        return;
+      }
+      if (typeof id !== "string") {
+        return;
+      }
+      const trimmed = id.trim();
+      if (!trimmed) {
+        return;
+      }
+      result[trimmed] = entry;
+    };
+
+    if (source instanceof Map) {
+      for (const [id, value] of source.entries()) {
+        assign(id, normalizePermissionOverrideEntry(value));
+      }
+      return result;
+    }
+
+    if (Array.isArray(source)) {
+      for (const entry of source) {
+        if (!entry || typeof entry !== "object") {
+          continue;
+        }
+        const record = entry as Record<string, unknown>;
+        const idCandidate =
+          record.id ??
+          record.role_id ??
+          record.roleId ??
+          record.user_id ??
+          record.userId ??
+          record.target_id ??
+          record.targetId;
+        assign(idCandidate, normalizePermissionOverrideEntry(record));
+      }
+      return result;
+    }
+
+    if (isRecord(source)) {
+      for (const [id, value] of Object.entries(source)) {
+        assign(id, normalizePermissionOverrideEntry(value));
+      }
+    }
+
+    return result;
+  };
+
+  const mergeOverrideCollections = (
+    ...sources: unknown[]
+  ): Record<string, ChannelPermissionOverrideEntry> => {
+    const merged: Record<string, ChannelPermissionOverrideEntry> = {};
+    sources.forEach((source) => {
+      const normalized = normalizePermissionOverrideCollection(source);
+      for (const [id, entry] of Object.entries(normalized)) {
+        merged[id] = entry;
+      }
+    });
+    return merged;
+  };
+
   const mapBackendChannel = (channel: BackendChannel): Channel => {
     const {
       channel_type,
@@ -377,6 +600,12 @@ export function createServerStore(): ServerStore {
       cooldown_seconds,
       cooldownSeconds,
       cooldown,
+      permission_overrides,
+      permissionOverrides,
+      permission_overrides_roles,
+      permissionOverridesRoles,
+      permission_overrides_users,
+      permissionOverridesUsers,
       ...rest
     } = channel;
 
@@ -486,6 +715,95 @@ export function createServerStore(): ServerStore {
           : 0,
       );
       normalized.rate_limit_per_user = normalizedRateLimit;
+    }
+
+    const rawPermissionOverrides =
+      permission_overrides ?? permissionOverrides ?? null;
+    const overridesRecord =
+      rawPermissionOverrides && typeof rawPermissionOverrides === "object"
+        ? (rawPermissionOverrides as Record<string, unknown>)
+        : null;
+
+    const roleOverrideSources: unknown[] = [
+      permission_overrides_roles,
+      permissionOverridesRoles,
+    ];
+    const userOverrideSources: unknown[] = [
+      permission_overrides_users,
+      permissionOverridesUsers,
+    ];
+
+    if (overridesRecord) {
+      roleOverrideSources.push(
+        overridesRecord.roles,
+        overridesRecord.role_overrides,
+        overridesRecord.roleOverrides,
+      );
+      userOverrideSources.push(
+        overridesRecord.users,
+        overridesRecord.user_overrides,
+        overridesRecord.userOverrides,
+      );
+
+      const fallbackRoleEntries: Record<string, unknown> = {};
+      const fallbackUserEntries: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(overridesRecord)) {
+        if (typeof key !== "string") {
+          continue;
+        }
+        if (
+          [
+            "roles",
+            "role_overrides",
+            "roleOverrides",
+            "users",
+            "user_overrides",
+            "userOverrides",
+          ].includes(key)
+        ) {
+          continue;
+        }
+
+        if (key.startsWith("user:") || key.startsWith("member:")) {
+          const trimmedKey = key.replace(/^user:|^member:/, "");
+          if (trimmedKey.trim().length > 0) {
+            fallbackUserEntries[trimmedKey] = value;
+          }
+          continue;
+        }
+
+        fallbackRoleEntries[key] = value;
+      }
+
+      if (Object.keys(fallbackRoleEntries).length > 0) {
+        roleOverrideSources.push(fallbackRoleEntries);
+      }
+
+      if (Object.keys(fallbackUserEntries).length > 0) {
+        userOverrideSources.push(fallbackUserEntries);
+      }
+    }
+
+    const normalizedRoleOverrides = mergeOverrideCollections(
+      ...roleOverrideSources,
+    );
+    const normalizedUserOverrides = mergeOverrideCollections(
+      ...userOverrideSources,
+    );
+
+    if (
+      Object.keys(normalizedRoleOverrides).length > 0 ||
+      Object.keys(normalizedUserOverrides).length > 0
+    ) {
+      const overrides: ChannelPermissionOverrides = {};
+      if (Object.keys(normalizedRoleOverrides).length > 0) {
+        overrides.roles = normalizedRoleOverrides;
+      }
+      if (Object.keys(normalizedUserOverrides).length > 0) {
+        overrides.users = normalizedUserOverrides;
+      }
+      normalized.permission_overrides = overrides;
     }
 
     return normalized;
@@ -1161,10 +1479,6 @@ export function createServerStore(): ServerStore {
       return false;
     }
 
-    if (!resolvedChannel.private) {
-      return true;
-    }
-
     const trimmedUserId =
       typeof userId === "string" && userId.trim().length > 0
         ? userId.trim()
@@ -1180,40 +1494,78 @@ export function createServerStore(): ServerStore {
       return true;
     }
 
+    const candidateRoles = new Set<string>();
+    const appendRoles = (user?: User | null) => {
+      for (const roleId of collectRoleIdsFromUser(user)) {
+        if (!roleId) {
+          continue;
+        }
+        candidateRoles.add(roleId);
+      }
+    };
+
     const allowedUsers = new Set(
       normalizeIdList(resolvedChannel.allowed_user_ids ?? []),
     );
+
     if (allowedUsers.has(effectiveUserId)) {
       return true;
     }
 
-    const allowedRoles = new Set(
-      normalizeIdList(resolvedChannel.allowed_role_ids ?? []),
-    );
-    if (allowedRoles.size === 0) {
+    const member =
+      server.members?.find((entry) => entry.id === effectiveUserId) ?? null;
+    appendRoles(member);
+
+    if (userState.me && userState.me.id === effectiveUserId) {
+      appendRoles(userState.me);
+    }
+
+    for (const role of server.roles ?? []) {
+      if (!role || !Array.isArray(role.member_ids)) {
+        continue;
+      }
+      if (role.member_ids.includes(effectiveUserId)) {
+        candidateRoles.add(role.id);
+      }
+    }
+
+    let allowedByPrivacy = !resolvedChannel.private;
+
+    if (resolvedChannel.private) {
+      const allowedRoles = new Set(
+        normalizeIdList(resolvedChannel.allowed_role_ids ?? []),
+      );
+      if (allowedRoles.size === 0) {
+        allowedByPrivacy = false;
+      } else {
+        for (const roleId of candidateRoles) {
+          if (allowedRoles.has(roleId)) {
+            allowedByPrivacy = true;
+            break;
+          }
+        }
+      }
+    }
+
+    const overrides = resolvedChannel.permission_overrides;
+    if (!overrides) {
+      return allowedByPrivacy;
+    }
+
+    const rolePermissionMap = buildRolePermissionMap(server.roles);
+    const permissions = aggregateChannelPermissions({
+      memberRoleIds: candidateRoles,
+      rolePermissionMap,
+      basePermissions: allowAllChannelPermissions(),
+      overrides,
+      userId: effectiveUserId,
+    });
+
+    if (permissions.read_messages !== true) {
       return false;
     }
 
-    const member =
-      server.members?.find((entry) => entry.id === effectiveUserId) ?? null;
-    const candidateRoles = new Set<string>();
-    for (const roleId of collectRoleIdsFromUser(member)) {
-      candidateRoles.add(roleId);
-    }
-
-    if (userState.me && userState.me.id === effectiveUserId) {
-      for (const roleId of collectRoleIdsFromUser(userState.me)) {
-        candidateRoles.add(roleId);
-      }
-    }
-
-    for (const roleId of candidateRoles) {
-      if (allowedRoles.has(roleId)) {
-        return true;
-      }
-    }
-
-    return false;
+    return allowedByPrivacy || permissions.read_messages === true;
   };
 
   const getServer = async (serverId: string): Promise<Server | null> => {
