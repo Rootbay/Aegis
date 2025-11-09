@@ -4,6 +4,7 @@ import type {
   AttachmentMeta,
   Message,
   MessageAuthorType,
+  MessageEmbed,
   ReplySnapshot,
 } from "$lib/features/chat/models/Message";
 import type {
@@ -30,6 +31,7 @@ import {
   encryptOutgoingMessagePayload,
   type MessageAttachmentPayload,
 } from "$lib/features/chat/services/chatEncryptionService";
+import { resolveMessageEmbeds } from "$lib/features/chat/services/messageUnfurlService";
 import { showNativeNotification } from "$lib/utils/nativeNotification";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
 import type { Server } from "$lib/features/servers/models/Server";
@@ -70,6 +72,7 @@ type BackendMessage = {
   replySnapshotAuthor?: string | null;
   reply_snapshot_snippet?: string | null;
   replySnapshotSnippet?: string | null;
+  embeds?: BackendMessageEmbed[] | null;
 };
 
 export type MessageReadReceiptEvent = {
@@ -101,6 +104,35 @@ type BackendAttachment = {
   contentType?: string;
   size?: number;
   data?: number[] | Uint8Array | ArrayBuffer;
+};
+
+type BackendMessageEmbedProvider = {
+  name?: string | null;
+  url?: string | null;
+  icon_url?: string | null;
+  iconUrl?: string | null;
+};
+
+type BackendMessageEmbed = {
+  id?: string;
+  type?: string | null;
+  url?: string | null;
+  title?: string | null;
+  description?: string | null;
+  site_name?: string | null;
+  siteName?: string | null;
+  color?: string | number | null;
+  thumbnail_url?: string | null;
+  thumbnailUrl?: string | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
+  provider?: BackendMessageEmbedProvider | null;
+  provider_name?: string | null;
+  providerName?: string | null;
+  provider_url?: string | null;
+  providerUrl?: string | null;
+  provider_icon_url?: string | null;
+  providerIconUrl?: string | null;
 };
 
 type RetryableMessagePayload = {
@@ -1574,6 +1606,133 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return attachments.map(toAttachmentMeta);
   };
 
+  const normalizeEmbedText = (value: unknown): string | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+
+  const normalizeEmbedUrl = (value: unknown): string | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return undefined;
+      }
+      return url.toString();
+    } catch {
+      return undefined;
+    }
+  };
+
+  const normalizeEmbedColor = (value: unknown): string | undefined => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const clamped = Math.max(0, Math.min(0xffffff, Math.floor(value)));
+      return `#${clamped.toString(16).padStart(6, "0")}`;
+    }
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return undefined;
+      }
+      if (/^0x[0-9a-f]{6}$/i.test(trimmed)) {
+        return `#${trimmed.slice(2)}`;
+      }
+      if (/^#?[0-9a-f]{6}$/i.test(trimmed)) {
+        return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+      }
+      if (/^#?[0-9a-f]{3}$/i.test(trimmed)) {
+        const hex = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+        const expanded = hex
+          .split("")
+          .map((char) => `${char}${char}`)
+          .join("");
+        return `#${expanded}`;
+      }
+    }
+    return undefined;
+  };
+
+  const isMeaningfulEmbed = (embed: MessageEmbed): boolean => {
+    if (!embed) {
+      return false;
+    }
+    if (
+      embed.title ||
+      embed.description ||
+      embed.url ||
+      embed.thumbnailUrl ||
+      embed.imageUrl ||
+      embed.siteName
+    ) {
+      return true;
+    }
+    const provider = embed.provider;
+    if (!provider) {
+      return false;
+    }
+    return Boolean(provider.name || provider.url || provider.iconUrl);
+  };
+
+  const toMessageEmbed = (embed: BackendMessageEmbed): MessageEmbed | null => {
+    const providerSource = embed.provider ?? null;
+    const providerName =
+      normalizeEmbedText(providerSource?.name) ??
+      normalizeEmbedText(embed.provider_name ?? embed.providerName);
+    const providerUrl =
+      normalizeEmbedUrl(providerSource?.url) ??
+      normalizeEmbedUrl(embed.provider_url ?? embed.providerUrl);
+    const providerIconUrl =
+      normalizeEmbedUrl(providerSource?.icon_url ?? providerSource?.iconUrl) ??
+      normalizeEmbedUrl(embed.provider_icon_url ?? embed.providerIconUrl);
+
+    const normalized: MessageEmbed = {
+      id: embed.id ?? undefined,
+      type: normalizeEmbedText(embed.type),
+      url: normalizeEmbedUrl(embed.url),
+      title: normalizeEmbedText(embed.title),
+      description: normalizeEmbedText(embed.description),
+      siteName: normalizeEmbedText(embed.site_name ?? embed.siteName),
+      accentColor: normalizeEmbedColor(embed.color),
+      thumbnailUrl: normalizeEmbedUrl(embed.thumbnail_url ?? embed.thumbnailUrl),
+      imageUrl: normalizeEmbedUrl(embed.image_url ?? embed.imageUrl),
+      provider:
+        providerName || providerUrl || providerIconUrl
+          ? {
+              name: providerName,
+              url: providerUrl,
+              iconUrl: providerIconUrl,
+            }
+          : undefined,
+    };
+
+    return isMeaningfulEmbed(normalized) ? normalized : null;
+  };
+
+  const mapBackendEmbeds = (
+    embeds?: BackendMessageEmbed[] | null,
+  ): MessageEmbed[] => {
+    if (!embeds || embeds.length === 0) {
+      return [];
+    }
+    const mapped = embeds
+      .map((embed) => {
+        try {
+          return toMessageEmbed(embed);
+        } catch (error) {
+          console.warn("Failed to normalize message embed", { embed, error });
+          return null;
+        }
+      })
+      .filter((embed): embed is MessageEmbed => Boolean(embed));
+
+    return mapped;
+  };
+
   const normalizeReactions = (
     reactions?: Record<string, string[] | null | undefined> | null,
   ): Record<string, string[]> | undefined => {
@@ -1688,6 +1847,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       attachments: message.attachments,
     });
     const attachments = mapAttachmentPayloads(decoded.attachments);
+    const backendEmbeds = mapBackendEmbeds(message.embeds ?? null);
+    const resolvedEmbeds = await resolveMessageEmbeds({
+      content: decoded.content,
+      existingEmbeds: backendEmbeds,
+    });
     const reactions = normalizeReactions(message.reactions ?? null);
     const editedAt = normalizeOptionalDate(
       message.edited_at ?? message.editedAt,
@@ -1736,6 +1900,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       pinned,
       pending: false,
       attachments: attachments.length > 0 ? attachments : undefined,
+      embeds: resolvedEmbeds.length > 0 ? resolvedEmbeds : undefined,
       reactions,
       editedAt: editedAt,
       editedBy: editedBy ?? undefined,
@@ -3226,6 +3391,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       replyToMessageId,
       replySnapshot,
     };
+    const realtimeEmbeds = await resolveMessageEmbeds({
+      content: decoded.content,
+      existingEmbeds: mapBackendEmbeds((message as BackendMessage).embeds ?? null),
+    });
+    if (realtimeEmbeds.length > 0) {
+      newMessage.embeds = realtimeEmbeds;
+    }
     newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
 
     const channelMuted =

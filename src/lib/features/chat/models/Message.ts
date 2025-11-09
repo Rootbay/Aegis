@@ -16,6 +16,25 @@ export interface ReplySnapshot {
 
 export type MessageAuthorType = "user" | "bot" | "webhook";
 
+export interface MessageEmbedProvider {
+  name?: string;
+  url?: string;
+  iconUrl?: string;
+}
+
+export interface MessageEmbed {
+  id?: string;
+  type?: string;
+  url?: string;
+  title?: string;
+  description?: string;
+  siteName?: string;
+  accentColor?: string;
+  thumbnailUrl?: string;
+  imageUrl?: string;
+  provider?: MessageEmbedProvider;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -49,4 +68,5 @@ export interface Message {
   deletedBy?: string;
   replyToMessageId?: string;
   replySnapshot?: ReplySnapshot;
+  embeds?: MessageEmbed[];
 }

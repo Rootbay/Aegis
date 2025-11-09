@@ -72,6 +72,7 @@
   } from "$lib/features/servers/stores/serverStore";
   import { settings } from "$lib/features/settings/stores/settings";
   import MessageAuthorName from "$lib/features/chat/components/MessageAuthorName.svelte";
+  import MessageEmbed from "$lib/features/chat/components/MessageEmbed.svelte";
   import { highlightText } from "$lib/features/chat/utils/highlightText";
   import LinkPreview from "$lib/features/chat/components/LinkPreview.svelte";
   import { extractFirstLink } from "$lib/features/chat/utils/linkPreviews";
@@ -3724,6 +3725,13 @@
                           </div>
                         {/if}
                       </div>
+                    </div>
+                  {/if}
+                  {#if msg.embeds && msg.embeds.length > 0}
+                    <div class="mt-2 space-y-2">
+                      {#each msg.embeds as embed, index (embed.id ?? `${embed.url ?? index}`)}
+                        <MessageEmbed {embed} />
+                      {/each}
                     </div>
                   {/if}
                   {#if msg.attachments && msg.attachments.length > 0}
