@@ -56,6 +56,7 @@ pub async fn run() {
             commands::servers::redeem_server_invite,
             commands::servers::leave_server,
             commands::servers::remove_server_member,
+            commands::servers::ban_server_member,
             commands::servers::unban_server_member,
             commands::servers::create_channel,
             commands::servers::create_channel_category,

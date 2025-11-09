@@ -2,6 +2,7 @@ import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Server } from "$lib/features/servers/models/Server";
 import type { Role } from "$lib/features/servers/models/Role";
+import { sortRolesByPosition } from "$lib/features/servers/models/Role";
 
 export const CHANNEL_PERMISSION_KEYS = [
   "manage_channels",
@@ -29,6 +30,22 @@ export type KnownChannelPermissionKey =
 export type ChannelPermissionSet = Record<KnownChannelPermissionKey, boolean> & {
   [permission: string]: boolean;
 };
+
+export type ChannelPermissionOverrideMatrix = Partial<
+  Record<KnownChannelPermissionKey, boolean>
+> & {
+  [permission: string]: boolean | undefined;
+};
+
+export interface ChannelPermissionOverrideEntry {
+  allow?: ChannelPermissionOverrideMatrix | null;
+  deny?: ChannelPermissionOverrideMatrix | null;
+}
+
+export interface ChannelPermissionOverrides {
+  roles?: Record<string, ChannelPermissionOverrideEntry | null | undefined>;
+  users?: Record<string, ChannelPermissionOverrideEntry | null | undefined>;
+}
 
 type RolePermissionMap = Map<string, Partial<Record<string, unknown>>>;
 
@@ -104,14 +121,50 @@ export function buildRolePermissionMap(roles?: Role[] | null): RolePermissionMap
   return map;
 }
 
+const CHANNEL_PERMISSION_KEY_SET = new Set<string>(CHANNEL_PERMISSION_KEYS);
+
+function applyOverrideMatrix(
+  aggregate: ChannelPermissionSet,
+  matrix: ChannelPermissionOverrideMatrix | null | undefined,
+  value: boolean,
+) {
+  if (!matrix) {
+    return;
+  }
+  for (const [permission, rawValue] of Object.entries(matrix)) {
+    if (!CHANNEL_PERMISSION_KEY_SET.has(permission)) {
+      continue;
+    }
+    if (!coercePermissionValue(rawValue)) {
+      continue;
+    }
+    aggregate[permission] = value;
+  }
+}
+
+function applyOverrideEntry(
+  aggregate: ChannelPermissionSet,
+  entry: ChannelPermissionOverrideEntry | null | undefined,
+) {
+  if (!entry) {
+    return;
+  }
+  applyOverrideMatrix(aggregate, entry.deny, false);
+  applyOverrideMatrix(aggregate, entry.allow, true);
+}
+
 export function aggregateChannelPermissions({
   memberRoleIds,
   rolePermissionMap,
   basePermissions,
+  overrides,
+  userId,
 }: {
   memberRoleIds: Iterable<string>;
   rolePermissionMap: RolePermissionMap;
   basePermissions?: ChannelPermissionSet | null;
+  overrides?: ChannelPermissionOverrides | null;
+  userId?: string | null;
 }): ChannelPermissionSet {
   const aggregate = cloneChannelPermissionState(basePermissions, false);
 
@@ -125,12 +178,23 @@ export function aggregateChannelPermissions({
     }
 
     for (const [permission, rawValue] of Object.entries(permissions)) {
-      const allowed = coercePermissionValue(rawValue);
-      if (allowed) {
-        aggregate[permission] = true;
-      } else if (!(permission in aggregate)) {
-        aggregate[permission] = false;
+      aggregate[permission] = coercePermissionValue(rawValue);
+    }
+  }
+
+  if (overrides) {
+    const normalizedRoles = overrides.roles ?? {};
+    const normalizedUsers = overrides.users ?? {};
+
+    for (const roleId of memberRoleIds) {
+      if (!roleId) {
+        continue;
       }
+      applyOverrideEntry(aggregate, normalizedRoles?.[roleId]);
+    }
+
+    if (userId) {
+      applyOverrideEntry(aggregate, normalizedUsers?.[userId]);
     }
   }
 
@@ -215,5 +279,33 @@ export function collectMemberRoleIds({
     }
   }
 
-  return Array.from(roleIds);
+  const orderedRoleIds = Array.from(roleIds);
+  if (!server) {
+    return orderedRoleIds;
+  }
+
+  const rolePositions = new Map<string, number>();
+  for (const role of sortRolesByPosition(server.roles ?? [])) {
+    if (!role || typeof role.id !== "string") {
+      continue;
+    }
+    rolePositions.set(role.id, role.position);
+  }
+
+  orderedRoleIds.sort((a, b) => {
+    const positionA = rolePositions.has(a)
+      ? rolePositions.get(a) ?? Number.POSITIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+    const positionB = rolePositions.has(b)
+      ? rolePositions.get(b) ?? Number.POSITIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+
+    if (positionA !== positionB) {
+      return positionB - positionA;
+    }
+
+    return a.localeCompare(b);
+  });
+
+  return orderedRoleIds;
 }

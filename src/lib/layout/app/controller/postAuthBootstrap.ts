@@ -20,6 +20,7 @@ import type {
   ServerStoreType,
   UserStoreType,
 } from "./types";
+import { voicePresenceStore } from "$lib/features/calls/stores/voicePresenceStore";
 
 type Unlisten = () => void;
 
@@ -232,6 +233,88 @@ function handleIncomingAepMessage({
         participants: payload.participants ?? [],
         timestamp: payload.timestamp,
       });
+    }
+    return;
+  }
+
+  if (receivedMessage.VoiceChannelPresence) {
+    const payload = receivedMessage.VoiceChannelPresence;
+    const channelId = payload.channelId ?? payload.channel_id ?? null;
+    if (channelId) {
+      const participants =
+        payload.participants ??
+        payload.participantIds ??
+        payload.participant_ids ??
+        [];
+      voicePresenceStore.syncChannelPresence({
+        channelId,
+        serverId: payload.serverId ?? payload.server_id ?? null,
+        participants,
+        updatedAt: payload.updatedAt ?? payload.updated_at ?? null,
+      });
+    }
+    return;
+  }
+
+  if (receivedMessage.VoiceChannelPresenceDelta) {
+    const payload = receivedMessage.VoiceChannelPresenceDelta;
+    const channelId = payload.channelId ?? payload.channel_id ?? null;
+    if (!channelId) {
+      return;
+    }
+    const serverId = payload.serverId ?? payload.server_id ?? null;
+    const updatedAt = payload.updatedAt ?? payload.updated_at ?? null;
+    const participantList =
+      payload.participants ??
+      payload.participantIds ??
+      payload.participant_ids ??
+      null;
+
+    if (participantList) {
+      voicePresenceStore.syncChannelPresence({
+        channelId,
+        serverId,
+        participants: participantList,
+        updatedAt,
+      });
+    } else {
+      const joinedEntries = payload.joined ?? [];
+      for (const entry of joinedEntries) {
+        const participantId =
+          typeof entry === "string"
+            ? entry
+            : entry?.userId ?? entry?.user_id ?? null;
+        if (!participantId) {
+          continue;
+        }
+        const joinedAtValue =
+          typeof entry === "string"
+            ? updatedAt
+            : entry.joinedAt ?? entry.joined_at ?? updatedAt;
+        voicePresenceStore.markParticipantJoined({
+          channelId,
+          serverId,
+          participantId,
+          joinedAt: joinedAtValue ?? undefined,
+          updatedAt,
+        });
+      }
+
+      const leftEntries = payload.left ?? [];
+      for (const entry of leftEntries) {
+        const participantId =
+          typeof entry === "string"
+            ? entry
+            : entry?.userId ?? entry?.user_id ?? null;
+        if (!participantId) {
+          continue;
+        }
+        voicePresenceStore.markParticipantLeft({
+          channelId,
+          participantId,
+          updatedAt,
+        });
+      }
     }
     return;
   }

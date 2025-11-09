@@ -142,6 +142,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: {
     subscribe: writable({ activeServerId: null, servers: [] }).subscribe,
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$lib/features/settings/stores/settings", () => ({

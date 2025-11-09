@@ -4,6 +4,7 @@ import type { MentionCandidate } from "$lib/features/chat/stores/mentionSuggesti
 import type { Server } from "$lib/features/servers/models/Server";
 import {
   aggregateChannelPermissions,
+  allowAllChannelPermissions,
   buildRolePermissionMap,
   collectMemberRoleIds,
 } from "$lib/features/chat/utils/permissions";
@@ -34,18 +35,27 @@ export function canMemberMentionEveryone({
   }
 
   const rolePermissionMap = buildRolePermissionMap(server.roles);
-  if (rolePermissionMap.size === 0) {
+  const channel = server.channels?.find((entry) => entry.id === chat.id);
+  const hasOverrides = Boolean(channel?.permission_overrides);
+
+  if (rolePermissionMap.size === 0 && !hasOverrides) {
     return false;
   }
 
   const memberRoleIds = collectMemberRoleIds({ me, server, chat });
-  if (memberRoleIds.length === 0) {
+  if (memberRoleIds.length === 0 && !hasOverrides) {
     return false;
   }
+
+  const noRoleData =
+    rolePermissionMap.size === 0 || memberRoleIds.length === 0;
 
   const permissions = aggregateChannelPermissions({
     memberRoleIds,
     rolePermissionMap,
+    basePermissions: noRoleData ? allowAllChannelPermissions() : undefined,
+    overrides: channel?.permission_overrides,
+    userId: me.id,
   });
 
   return permissions.mention_everyone === true;

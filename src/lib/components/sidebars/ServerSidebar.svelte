@@ -7,7 +7,10 @@
   import ChannelContextMenu from "$lib/components/context-menus/ChannelContextMenu.svelte";
   import CreateCategoryModal from "$lib/components/modals/CreateCategoryModal.svelte";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
-  import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import {
+    serverStore,
+    voiceChannelPresence,
+  } from "$lib/features/servers/stores/serverStore";
   import {
     chatMetadataByChatId,
     chatStore,
@@ -24,6 +27,7 @@
     ChevronDown,
     Hash,
     CircleX,
+    Check,
     Mic,
     Info,
     UserPlus,
@@ -32,6 +36,7 @@
     Shield,
     Square,
     Calendar,
+    Lock,
   } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import { getContext, onDestroy, onMount } from "svelte";
@@ -48,6 +53,11 @@
   } from "$lib/components/ui/dropdown-menu/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge";
+  import {
+    Avatar,
+    AvatarImage,
+    AvatarFallback,
+  } from "$lib/components/ui/avatar/index.js";
   import { SvelteSet } from "svelte/reactivity";
   import {
     Collapsible,
@@ -77,10 +87,36 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
+  import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+  } from "$lib/components/ui/select/index.js";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
+  import { mutedChannelsStore } from "$lib/features/channels/stores/mutedChannelsStore";
+  import { mutedCategoriesStore } from "$lib/features/channels/stores/mutedCategoriesStore";
+  import {
+    categoryNotificationPreferencesStore,
+    type CategoryNotificationLevel,
+    DEFAULT_CATEGORY_NOTIFICATION_LEVEL,
+  } from "$lib/features/channels/stores/categoryNotificationPreferencesStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
+  import { userStore } from "$lib/stores/userStore";
+  import {
+    SLOWMODE_PRESETS,
+    buildSlowmodeOptions,
+    formatSlowmodeDuration,
+    normalizeSlowmodeValue,
+  } from "$lib/features/channels/utils/slowmode";
+  import {
+    CHANNEL_PERMISSION_KEYS,
+    type ChannelPermissionOverrides,
+    type ChannelPermissionOverrideEntry,
+    type KnownChannelPermissionKey,
+  } from "$lib/features/chat/utils/permissions";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -110,9 +146,336 @@
   let showCreateChannelModal = $state(false);
   let showCreateCategoryModal = $state(false);
   let showServerEventModal = $state(false);
+  let showRenameCategoryModal = $state(false);
+  let categoryBeingRenamed = $state<ChannelCategory | null>(null);
+  let renameCategoryName = $state("");
+  let showCategoryNotificationsModal = $state(false);
+  let notificationsCategoryId = $state<string | null>(null);
+  let notificationsCategoryName = $state("");
+  let pendingNotificationLevel = $state<CategoryNotificationLevel>(
+    DEFAULT_CATEGORY_NOTIFICATION_LEVEL,
+  );
+  const CATEGORY_NOTIFICATION_OPTIONS: Array<{
+    value: CategoryNotificationLevel;
+    label: string;
+    description: string;
+  }> = [
+    {
+      value: "all_messages",
+      label: "All Messages",
+      description: "Get notified for every message in this category.",
+    },
+    {
+      value: "mentions_only",
+      label: "Mentions Only",
+      description: "Only notify when you are mentioned or replied to.",
+    },
+    {
+      value: "nothing",
+      label: "Nothing",
+      description: "Silence notifications while keeping the category visible.",
+    },
+  ];
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
+  let newChannelTopic = $state("");
+  let newChannelCategoryId = $state<string | null>(null);
+  let newChannelSlowmode = $state(0);
+  let editingChannelId = $state<string | null>(null);
+  let selectedRoleIds = new SvelteSet<string>();
+  let selectedMemberIds = new SvelteSet<string>();
+  let roleSearchTerm = $state("");
+  let memberSearchTerm = $state("");
+
+  type PermissionOverrideChoice = "inherit" | "allow" | "deny";
+  type PermissionMatrixRow = Record<
+    KnownChannelPermissionKey,
+    PermissionOverrideChoice
+  >;
+
+  type PermissionMatrixState = {
+    roles: Record<string, PermissionMatrixRow>;
+    users: Record<string, PermissionMatrixRow>;
+  };
+
+  const channelPermissionKeys = CHANNEL_PERMISSION_KEYS;
+  const permissionKeyLabels: Record<KnownChannelPermissionKey, string> =
+    Object.fromEntries(
+      channelPermissionKeys.map((key) => [
+        key,
+        key
+          .split("_")
+          .map((segment) =>
+            segment.length > 0
+              ? segment[0].toUpperCase() + segment.slice(1)
+              : segment,
+          )
+          .join(" "),
+      ]),
+    ) as Record<KnownChannelPermissionKey, string>;
+
+  const overrideChoiceLabels: Record<
+    PermissionOverrideChoice,
+    { label: string; description: string }
+  > = {
+    inherit: {
+      label: "Inherit",
+      description: "Use default permissions.",
+    },
+    allow: {
+      label: "Allow",
+      description: "Explicitly allow this action.",
+    },
+    deny: {
+      label: "Deny",
+      description: "Explicitly deny this action.",
+    },
+  };
+
+  const overrideChoices: PermissionOverrideChoice[] = [
+    "inherit",
+    "allow",
+    "deny",
+  ];
+
+  function createEmptyPermissionMatrixRow(): PermissionMatrixRow {
+    const row = {} as PermissionMatrixRow;
+    for (const key of channelPermissionKeys) {
+      row[key] = "inherit";
+    }
+    return row;
+  }
+
+  function createEmptyPermissionOverridesState(): PermissionMatrixState {
+    return {
+      roles: {},
+      users: {},
+    };
+  }
+
+  function rowHasOverrides(row: PermissionMatrixRow): boolean {
+    for (const key of channelPermissionKeys) {
+      if (row[key] !== "inherit") {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function createPermissionMatrixRowFromEntry(
+    entry?: ChannelPermissionOverrideEntry | null,
+  ): PermissionMatrixRow {
+    const row = createEmptyPermissionMatrixRow();
+    if (!entry) {
+      return row;
+    }
+
+    const apply = (
+      matrix: ChannelPermissionOverrideEntry["allow"],
+      choice: PermissionOverrideChoice,
+    ) => {
+      if (!matrix) {
+        return;
+      }
+      for (const key of channelPermissionKeys) {
+        if (matrix[key]) {
+          row[key] = choice;
+        }
+      }
+    };
+
+    apply(entry.deny ?? null, "deny");
+    apply(entry.allow ?? null, "allow");
+
+    return row;
+  }
+
+  let permissionOverrides = $state<PermissionMatrixState>(
+    createEmptyPermissionOverridesState(),
+  );
+  let pendingRoleOverrideSelection = $state("");
+  let pendingMemberOverrideSelection = $state("");
+
+  function resetPermissionOverrides() {
+    permissionOverrides = createEmptyPermissionOverridesState();
+    pendingRoleOverrideSelection = "";
+    pendingMemberOverrideSelection = "";
+  }
+
+  function addPermissionOverrideTarget(
+    target: keyof PermissionMatrixState,
+    id: string | null | undefined,
+  ) {
+    if (!id) return;
+    const trimmed = id.trim();
+    if (!trimmed || permissionOverrides[target][trimmed]) {
+      return;
+    }
+    const row = createEmptyPermissionMatrixRow();
+    permissionOverrides = {
+      ...permissionOverrides,
+      [target]: {
+        ...permissionOverrides[target],
+        [trimmed]: row,
+      },
+    };
+  }
+
+  function removeOverrideTarget(
+    target: keyof PermissionMatrixState,
+    id: string,
+  ) {
+    const trimmed = id.trim();
+    if (!trimmed || !permissionOverrides[target][trimmed]) {
+      return;
+    }
+    const nextTarget = { ...permissionOverrides[target] };
+    delete nextTarget[trimmed];
+    permissionOverrides = {
+      ...permissionOverrides,
+      [target]: nextTarget,
+    };
+  }
+
+  function setOverrideChoice(
+    target: keyof PermissionMatrixState,
+    id: string,
+    permission: KnownChannelPermissionKey,
+    choice: PermissionOverrideChoice,
+  ) {
+    const trimmed = id.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const existing = permissionOverrides[target][trimmed];
+    const updatedRow: PermissionMatrixRow = {
+      ...(existing ?? createEmptyPermissionMatrixRow()),
+      [permission]: choice,
+    };
+
+    if (!rowHasOverrides(updatedRow)) {
+      removeOverrideTarget(target, trimmed);
+      return;
+    }
+
+    permissionOverrides = {
+      ...permissionOverrides,
+      [target]: {
+        ...permissionOverrides[target],
+        [trimmed]: updatedRow,
+      },
+    };
+  }
+
+  function getOverrideChoice(
+    target: keyof PermissionMatrixState,
+    id: string,
+    permission: KnownChannelPermissionKey,
+  ): PermissionOverrideChoice {
+    return (
+      permissionOverrides[target][id]?.[permission] ?? ("inherit" as const)
+    );
+  }
+
+  function loadPermissionOverridesFromChannel(
+    overrides: ChannelPermissionOverrides | null | undefined,
+  ) {
+    const next = createEmptyPermissionOverridesState();
+    const applyEntries = (
+      target: keyof PermissionMatrixState,
+      entries?: Record<string, ChannelPermissionOverrideEntry | null | undefined>,
+    ) => {
+      if (!entries) {
+        return;
+      }
+      for (const [rawId, entry] of Object.entries(entries)) {
+        const trimmed = rawId.trim();
+        if (!trimmed) {
+          continue;
+        }
+        const row = createPermissionMatrixRowFromEntry(entry);
+        if (!rowHasOverrides(row)) {
+          continue;
+        }
+        next[target][trimmed] = row;
+      }
+    };
+
+    applyEntries("roles", overrides?.roles ?? undefined);
+    applyEntries("users", overrides?.users ?? undefined);
+
+    permissionOverrides = next;
+    pendingRoleOverrideSelection = "";
+    pendingMemberOverrideSelection = "";
+  }
+
+  function serializePermissionOverridesState(
+    state: PermissionMatrixState,
+  ): ChannelPermissionOverrides | undefined {
+    const serialize = (
+      entries: Record<string, PermissionMatrixRow>,
+    ): Record<string, ChannelPermissionOverrideEntry> => {
+      const result: Record<string, ChannelPermissionOverrideEntry> = {};
+      for (const [id, row] of Object.entries(entries)) {
+        if (!rowHasOverrides(row)) {
+          continue;
+        }
+        const allow: Partial<Record<KnownChannelPermissionKey, boolean>> = {};
+        const deny: Partial<Record<KnownChannelPermissionKey, boolean>> = {};
+        for (const key of channelPermissionKeys) {
+          if (row[key] === "allow") {
+            allow[key] = true;
+          } else if (row[key] === "deny") {
+            deny[key] = true;
+          }
+        }
+        const entry: ChannelPermissionOverrideEntry = {};
+        if (Object.keys(allow).length > 0) {
+          entry.allow = allow;
+        }
+        if (Object.keys(deny).length > 0) {
+          entry.deny = deny;
+        }
+        if (entry.allow || entry.deny) {
+          result[id] = entry;
+        }
+      }
+      return result;
+    };
+
+    const roles = serialize(state.roles);
+    const users = serialize(state.users);
+
+    const hasRoles = Object.keys(roles).length > 0;
+    const hasUsers = Object.keys(users).length > 0;
+    if (!hasRoles && !hasUsers) {
+      return undefined;
+    }
+
+    const overrides: ChannelPermissionOverrides = {};
+    if (hasRoles) {
+      overrides.roles = roles;
+    }
+    if (hasUsers) {
+      overrides.users = users;
+    }
+    return overrides;
+  }
+
+  function clonePermissionOverrides(
+    overrides: ChannelPermissionOverrides | null | undefined,
+  ): ChannelPermissionOverrides | undefined {
+    if (!overrides) {
+      return undefined;
+    }
+    return JSON.parse(JSON.stringify(overrides)) as ChannelPermissionOverrides;
+  }
+
+  const slowmodeOptions = $derived(() =>
+    buildSlowmodeOptions([...SLOWMODE_PRESETS, newChannelSlowmode]),
+  );
 
   let showCategoryContextMenu = $state(false);
   let contextMenuX = $state(0);
@@ -123,6 +486,10 @@
   let channelContextMenuX = $state(0);
   let channelContextMenuY = $state(0);
   let selectedChannelForContextMenu = $state<Channel | null>(null);
+  let draggingChannelId = $state<string | null>(null);
+
+  const DEFAULT_TEXT_CATEGORY_ID = "text-channels";
+  const DEFAULT_VOICE_CATEGORY_ID = "voice-channels";
 
   let textChannelsCollapsed = $state(false);
   let voiceChannelsCollapsed = $state(false);
@@ -130,6 +497,7 @@
   let lastCollapsedServerId = $state<string | null>(null);
   let hideMutedChannels = $state(false);
   let mutedChannelIds = new SvelteSet<string>();
+  let mutedCategoryIds = new SvelteSet<string>();
   let lastLoadedPreferencesKey = $state<string | null>(null);
 
   let isResizing = $state(false);
@@ -143,6 +511,126 @@
 
   const TEXT_COLLAPSED_KEY = "serverSidebar.textCollapsed";
   const VOICE_COLLAPSED_KEY = "serverSidebar.voiceCollapsed";
+
+  const sortedRoles = $derived.by(() => {
+    if (!server?.roles) return [];
+    return [...server.roles].sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  const rolesById = $derived.by(() => {
+    const map = new Map<string, Role>();
+    for (const role of server?.roles ?? []) {
+      if (role?.id) {
+        map.set(role.id, role);
+      }
+    }
+    return map;
+  });
+
+  const filteredRoles = $derived.by(() => {
+    const term = roleSearchTerm.trim().toLowerCase();
+    if (!term) return sortedRoles;
+    return sortedRoles.filter((role) => role.name.toLowerCase().includes(term));
+  });
+
+  const membersById = $derived.by(() => {
+    const map = new Map<string, Server["members"][number]>();
+    if (!server?.members) {
+      return map;
+    }
+    for (const member of server.members) {
+      if (member?.id) {
+        map.set(member.id, member);
+      }
+    }
+    return map;
+  });
+
+  const sortedMembers = $derived.by(() => {
+    if (!server?.members) return [];
+    return [...server.members].sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  const filteredMembers = $derived.by(() => {
+    const term = memberSearchTerm.trim().toLowerCase();
+    if (!term) return sortedMembers;
+    return sortedMembers.filter((member) =>
+      member.name.toLowerCase().includes(term),
+    );
+  });
+
+  const availableRoleOverrideOptions = $derived.by(() =>
+    sortedRoles.filter((role) => !permissionOverrides.roles[role.id]),
+  );
+
+  const availableMemberOverrideOptions = $derived.by(() =>
+    sortedMembers.filter((member) => !permissionOverrides.users[member.id]),
+  );
+
+  function clearAccessSelections() {
+    selectedRoleIds = new SvelteSet<string>();
+    selectedMemberIds = new SvelteSet<string>();
+    roleSearchTerm = "";
+    memberSearchTerm = "";
+  }
+
+  function toggleRoleSelection(roleId: string | null | undefined) {
+    if (!roleId) return;
+    const trimmed = roleId.trim();
+    if (!trimmed) return;
+    const next = new SvelteSet(selectedRoleIds);
+    if (next.has(trimmed)) {
+      next.delete(trimmed);
+    } else {
+      next.add(trimmed);
+    }
+    selectedRoleIds = next;
+  }
+
+  function toggleMemberSelection(memberId: string | null | undefined) {
+    if (!memberId) return;
+    const trimmed = memberId.trim();
+    if (!trimmed) return;
+    const next = new SvelteSet(selectedMemberIds);
+    if (next.has(trimmed)) {
+      next.delete(trimmed);
+    } else {
+      next.add(trimmed);
+    }
+    selectedMemberIds = next;
+  }
+
+  function toUniqueIdList(ids: Iterable<string>): string[] {
+    const seen = new Set<string>();
+    for (const id of ids) {
+      const trimmed = id.trim();
+      if (trimmed.length > 0) {
+        seen.add(trimmed);
+      }
+    }
+    return Array.from(seen);
+  }
+
+  function ensureDefaultPrivateMembers() {
+    if (!newChannelPrivate) {
+      return;
+    }
+    const defaults = [server?.owner_id ?? null, $userStore.me?.id ?? null];
+    const next = new SvelteSet(selectedMemberIds);
+    let changed = false;
+    for (const candidate of defaults) {
+      if (!candidate) continue;
+      const trimmed = candidate.trim();
+      if (!trimmed) continue;
+      if (!next.has(trimmed)) {
+        next.add(trimmed);
+        changed = true;
+      }
+    }
+    if (changed) {
+      selectedMemberIds = next;
+    }
+  }
 
   function persistCollapsedState(key: string, collapsed: boolean) {
     if (!browser) return;
@@ -178,6 +666,112 @@
     persistCollapsedState(VOICE_COLLAPSED_KEY, true);
   }
 
+  function getCategoryKey(categoryId: string | null, type?: "text" | "voice") {
+    if (categoryId && categoryId.length > 0) {
+      return categoryId;
+    }
+    return type === "voice" ? DEFAULT_VOICE_CATEGORY_ID : DEFAULT_TEXT_CATEGORY_ID;
+  }
+
+  function isCategoryMuted(categoryId: string | null, type?: "text" | "voice") {
+    const key = getCategoryKey(categoryId, type);
+    return mutedCategoryIds.has(key);
+  }
+
+  function getCategoryDisplayName(categoryId: string) {
+    if (categoryId === DEFAULT_TEXT_CATEGORY_ID) {
+      return "Text Channels";
+    }
+    if (categoryId === DEFAULT_VOICE_CATEGORY_ID) {
+      return "Voice Channels";
+    }
+    const category = server?.categories?.find(
+      (entry: ChannelCategory) => entry.id === categoryId,
+    );
+    return category?.name ?? "Category";
+  }
+
+  function closeRenameCategoryModal() {
+    showRenameCategoryModal = false;
+    categoryBeingRenamed = null;
+    renameCategoryName = "";
+  }
+
+  function openRenameCategoryModal(category: ChannelCategory) {
+    categoryBeingRenamed = category;
+    renameCategoryName = category.name;
+    showRenameCategoryModal = true;
+  }
+
+  async function submitRenameCategory() {
+    if (!categoryBeingRenamed) {
+      closeRenameCategoryModal();
+      return;
+    }
+    const trimmed = renameCategoryName.trim();
+    if (!trimmed) {
+      toasts.addToast("Enter a category name.", "error");
+      return;
+    }
+    const categories = server?.categories ?? [];
+    const exists = categories.some(
+      (entry: ChannelCategory) => entry.id === categoryBeingRenamed?.id,
+    );
+    if (!exists) {
+      toasts.addToast("Category not found.", "error");
+      closeRenameCategoryModal();
+      return;
+    }
+    const updatedCategories = categories.map((entry: ChannelCategory) =>
+      entry.id === categoryBeingRenamed?.id ? { ...entry, name: trimmed } : entry,
+    );
+    try {
+      const result = await serverStore.updateServer(server.id, {
+        categories: updatedCategories,
+      });
+      if (!result?.success) {
+        toasts.addToast(
+          result?.error ?? "Failed to rename category.",
+          "error",
+        );
+        return;
+      }
+      toasts.addToast("Category renamed.", "success");
+      closeRenameCategoryModal();
+    } catch (error) {
+      console.error("Failed to rename category:", error);
+      toasts.addToast("Failed to rename category.", "error");
+    }
+  }
+
+  function closeCategoryNotificationsModal() {
+    showCategoryNotificationsModal = false;
+    notificationsCategoryId = null;
+    notificationsCategoryName = "";
+    pendingNotificationLevel = DEFAULT_CATEGORY_NOTIFICATION_LEVEL;
+  }
+
+  function openCategoryNotificationsModal(categoryId: string, label: string) {
+    notificationsCategoryId = categoryId;
+    notificationsCategoryName = label;
+    pendingNotificationLevel =
+      categoryNotificationPreferencesStore.getPreference(categoryId);
+    showCategoryNotificationsModal = true;
+  }
+
+  function saveCategoryNotificationSettings() {
+    if (!notificationsCategoryId) {
+      closeCategoryNotificationsModal();
+      return;
+    }
+    categoryNotificationPreferencesStore.setPreference(
+      notificationsCategoryId,
+      pendingNotificationLevel,
+    );
+    toasts.addToast("Notification preferences updated.", "success");
+    closeCategoryNotificationsModal();
+  }
+
   function getSortedCategories() {
     return [...(server?.categories ?? [])].sort(
       (a: ChannelCategory, b: ChannelCategory) => {
@@ -187,16 +781,245 @@
     );
   }
 
+  function normalizeCategoryId(categoryId?: string | null) {
+    return categoryId ?? null;
+  }
+
+  function sortChannelsByPosition(channels: Channel[]) {
+    return [...channels].sort((a, b) => {
+      const positionA = Number.isFinite(a.position) ? a.position : 0;
+      const positionB = Number.isFinite(b.position) ? b.position : 0;
+      if (positionA !== positionB) {
+        return positionA - positionB;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  function getChannelsForCategory(
+    categoryId: string | null,
+    type: "text" | "voice",
+  ) {
+    const normalizedCategoryId = normalizeCategoryId(categoryId);
+    return (server?.channels ?? []).filter((channel: Channel) => {
+      return (
+        channel.channel_type === type &&
+        normalizeCategoryId(channel.category_id) === normalizedCategoryId
+      );
+    });
+  }
+
   function getVisibleChannels(
     categoryId: string | null,
     type: "text" | "voice",
   ) {
-    return (server?.channels ?? []).filter((channel: Channel) => {
-      const matchesType = channel.channel_type === type;
-      const matchesCategory = (channel.category_id ?? null) === categoryId;
+    const normalizedCategoryId = normalizeCategoryId(categoryId);
+    const base = getChannelsForCategory(normalizedCategoryId, type);
+    if (hideMutedChannels && isCategoryMuted(normalizedCategoryId, type)) {
+      return [];
+    }
+    const filtered = base.filter((channel) => {
       const isVisible = !hideMutedChannels || !mutedChannelIds.has(channel.id);
-      return matchesType && matchesCategory && isVisible;
+      const hasAccess =
+        !server?.id || !channel.private
+          ? true
+          : serverStore.canAccessChannel({
+              serverId: server.id,
+              channel,
+            });
+      return isVisible && hasAccess;
     });
+    return sortChannelsByPosition(filtered);
+  }
+
+  function getNextChannelPosition(
+    categoryId: string | null,
+    type: "text" | "voice",
+  ) {
+    const channelsInGroup = getChannelsForCategory(categoryId, type);
+    if (channelsInGroup.length === 0) {
+      return 0;
+    }
+    return (
+      Math.max(
+        ...channelsInGroup.map((channel) =>
+          Number.isFinite(channel.position) ? channel.position : 0,
+        ),
+      ) + 1
+    );
+  }
+
+  function buildGroupList(
+    channels: Channel[],
+    categoryId: string | null,
+    type: "text" | "voice",
+    excludeId?: string | null,
+  ) {
+    const normalizedCategoryId = normalizeCategoryId(categoryId);
+    return sortChannelsByPosition(
+      channels.filter((channel) => {
+        if (excludeId && channel.id === excludeId) {
+          return false;
+        }
+        return (
+          channel.channel_type === type &&
+          normalizeCategoryId(channel.category_id) === normalizedCategoryId
+        );
+      }),
+    );
+  }
+
+  function applyChannelMove({
+    channelId,
+    targetCategoryId,
+    targetType,
+    beforeChannelId,
+  }: {
+    channelId: string;
+    targetCategoryId: string | null;
+    targetType: "text" | "voice";
+    beforeChannelId?: string | null;
+  }): Channel[] | null {
+    if (!server?.channels) {
+      return null;
+    }
+
+    const normalizedTargetCategoryId = normalizeCategoryId(targetCategoryId);
+    const channels = server.channels.map((channel) => ({ ...channel }));
+    const channelIndex = channels.findIndex((channel) => channel.id === channelId);
+    if (channelIndex === -1) {
+      return null;
+    }
+
+    const channel = channels[channelIndex];
+    if (channel.channel_type !== targetType) {
+      return null;
+    }
+
+    const originalCategoryId = normalizeCategoryId(channel.category_id);
+    const sameCategory = originalCategoryId === normalizedTargetCategoryId;
+    const sanitizedBeforeId =
+      beforeChannelId && beforeChannelId === channelId ? null : beforeChannelId;
+
+    channels[channelIndex].category_id = normalizedTargetCategoryId;
+
+    const targetGroup = buildGroupList(
+      channels,
+      normalizedTargetCategoryId,
+      targetType,
+      channelId,
+    );
+
+    let insertIndex = targetGroup.length;
+    if (sanitizedBeforeId) {
+      const beforeIndex = targetGroup.findIndex(
+        (entry) => entry.id === sanitizedBeforeId,
+      );
+      if (beforeIndex !== -1) {
+        insertIndex = beforeIndex;
+      }
+    }
+
+    targetGroup.splice(insertIndex, 0, channels[channelIndex]);
+    targetGroup.forEach((entry, index) => {
+      entry.position = index;
+    });
+
+    if (!sameCategory) {
+      const originalGroup = buildGroupList(
+        channels,
+        originalCategoryId,
+        targetType,
+        channelId,
+      );
+      originalGroup.forEach((entry, index) => {
+        entry.position = index;
+      });
+    }
+
+    const originalChannels = server.channels ?? [];
+    const changed = channels.some((entry) => {
+      const existing = originalChannels.find((c) => c.id === entry.id);
+      if (!existing) {
+        return true;
+      }
+      return (
+        existing.category_id !== entry.category_id ||
+        existing.position !== entry.position
+      );
+    });
+
+    if (!changed) {
+      return null;
+    }
+
+    return channels;
+  }
+
+  function handleChannelDragStart(event: DragEvent, channel: Channel) {
+    if (!event.dataTransfer) {
+      return;
+    }
+    draggingChannelId = channel.id;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-channel-id", channel.id);
+    event.dataTransfer.setData("text/plain", channel.id);
+  }
+
+  function handleChannelDragEnd() {
+    draggingChannelId = null;
+  }
+
+  function handleChannelDragOver(
+    event: DragEvent,
+    targetCategoryId: string | null,
+    targetType: "text" | "voice",
+  ) {
+    if (!draggingChannelId) {
+      return;
+    }
+    const channel = getChannelById(draggingChannelId);
+    if (!channel || channel.channel_type !== targetType) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "move";
+    }
+  }
+
+  async function handleChannelDrop(
+    event: DragEvent,
+    targetCategoryId: string | null,
+    targetType: "text" | "voice",
+    beforeChannelId: string | null = null,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    const channelId =
+      draggingChannelId ??
+      event.dataTransfer?.getData("application/x-channel-id") ??
+      event.dataTransfer?.getData("text/plain");
+    draggingChannelId = null;
+    if (!channelId) {
+      return;
+    }
+    const updatedChannels = applyChannelMove({
+      channelId,
+      targetCategoryId,
+      targetType,
+      beforeChannelId,
+    });
+    if (!updatedChannels) {
+      return;
+    }
+    const result = await serverStore.updateServer(server.id, {
+      channels: updatedChannels,
+    });
+    if (!result?.success) {
+      toasts.addToast("Failed to update channel order.", "error");
+    }
   }
 
   function gotoResolved(path: string) {
@@ -268,11 +1091,19 @@
       void e;
     }
 
-    mutedChannelIds = loadMutedChannels();
+    const unsubscribeMutedChannels = mutedChannelsStore.subscribe((ids) => {
+      mutedChannelIds = new SvelteSet(ids);
+    });
+
+    const unsubscribeMutedCategories = mutedCategoriesStore.subscribe((ids) => {
+      mutedCategoryIds = new SvelteSet(ids);
+    });
 
     return () => {
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("scroll", handleGlobalScroll, true);
+      unsubscribeMutedChannels();
+      unsubscribeMutedCategories();
     };
   });
 
@@ -293,6 +1124,19 @@
           error,
         );
       });
+  });
+
+  $effect(() => {
+    if (!showCreateChannelModal || !newChannelPrivate) {
+      return;
+    }
+    ensureDefaultPrivateMembers();
+  });
+
+  $effect(() => {
+    if (newChannelType === "voice") {
+      newChannelSlowmode = 0;
+    }
   });
 
   $effect(() => {
@@ -333,6 +1177,35 @@
     }
   });
 
+  $effect(() => {
+    const validIds = new SvelteSet<string>([
+      DEFAULT_TEXT_CATEGORY_ID,
+      DEFAULT_VOICE_CATEGORY_ID,
+      ...(server?.categories ?? []).map(
+        (category: ChannelCategory) => category.id,
+      ),
+    ]);
+
+    if (mutedCategoryIds.size === 0) {
+      return;
+    }
+
+    let changed = false;
+    const next = new SvelteSet<string>();
+    for (const id of mutedCategoryIds) {
+      if (validIds.has(id)) {
+        next.add(id);
+      } else {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      mutedCategoryIds = new SvelteSet(next);
+      mutedCategoriesStore.setMuted(next);
+    }
+  });
+
   onDestroy(() => {
     if (rafId) cancelAnimationFrame(rafId);
     unsubscribeChatMetadata();
@@ -362,10 +1235,7 @@
       }
     }
     hideMutedChannels = next;
-    toasts.addToast(
-      `${next ? "Hiding" : "Showing"} muted channels (local).`,
-      "info",
-    );
+    toasts.addToast(`${next ? "Hiding" : "Showing"} muted channels.`, "info");
   }
 
   function handleViewReviews() {
@@ -403,8 +1273,57 @@
     }
   }
 
-  function handleCreateChannelClick() {
+  function handleCreateChannelClick(
+    type: "text" | "voice" = "text",
+    categoryId: string | null = null,
+  ) {
+    editingChannelId = null;
+    newChannelType = type;
+    newChannelName = "";
+    newChannelPrivate = false;
+    newChannelTopic = "";
+    newChannelCategoryId = normalizeCategoryId(categoryId);
+    newChannelSlowmode = 0;
+    clearAccessSelections();
+    resetPermissionOverrides();
     showCreateChannelModal = true;
+  }
+
+  function handleEditChannel(channelId: string) {
+    const channel = getChannelById(channelId);
+    if (!channel) {
+      return;
+    }
+
+    editingChannelId = channel.id;
+    newChannelType = channel.channel_type;
+    newChannelName = channel.name;
+    newChannelPrivate = channel.private;
+    newChannelTopic = channel.topic ?? "";
+    newChannelCategoryId = normalizeCategoryId(channel.category_id ?? null);
+    newChannelSlowmode =
+      channel.channel_type === "text"
+        ? normalizeSlowmodeValue(channel.rate_limit_per_user ?? 0)
+        : 0;
+    selectedRoleIds = new SvelteSet(channel.allowed_role_ids ?? []);
+    selectedMemberIds = new SvelteSet(channel.allowed_user_ids ?? []);
+    roleSearchTerm = "";
+    memberSearchTerm = "";
+    loadPermissionOverridesFromChannel(channel.permission_overrides ?? null);
+    showCreateChannelModal = true;
+  }
+
+  function closeChannelModal() {
+    showCreateChannelModal = false;
+    newChannelName = "";
+    newChannelType = "text";
+    newChannelPrivate = false;
+    newChannelTopic = "";
+    newChannelCategoryId = null;
+    newChannelSlowmode = 0;
+    editingChannelId = null;
+    clearAccessSelections();
+    resetPermissionOverrides();
   }
 
   function handleCreateCategory() {
@@ -452,8 +1371,100 @@
     }
   }
 
-  async function createChannel() {
+  async function submitChannelForm() {
     if (!newChannelName.trim()) return;
+
+    const normalizedTopic =
+      newChannelType === "text" ? newChannelTopic.trim() : "";
+    const topicValue =
+      newChannelType === "text"
+        ? normalizedTopic.length > 0
+          ? normalizedTopic
+          : null
+        : null;
+
+    const allowedRoleIds = newChannelPrivate
+      ? toUniqueIdList(selectedRoleIds)
+      : [];
+    const aggregatedMemberIds = newChannelPrivate
+      ? new Set<string>(toUniqueIdList(selectedMemberIds))
+      : new Set<string>();
+
+    if (newChannelPrivate) {
+      const defaults = [server.owner_id ?? null, $userStore.me?.id ?? null];
+      for (const candidate of defaults) {
+        if (!candidate) continue;
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) {
+          aggregatedMemberIds.add(trimmed);
+        }
+      }
+    }
+
+    const allowedUserIds = Array.from(aggregatedMemberIds);
+
+    if (newChannelPrivate && allowedRoleIds.length === 0 && allowedUserIds.length === 0) {
+      toasts.addToast(
+        "Select at least one role or member for a private channel.",
+        "error",
+      );
+      return;
+    }
+
+    const normalizedCategoryId = normalizeCategoryId(newChannelCategoryId);
+    const slowmodeSeconds =
+      newChannelType === "text" ? normalizeSlowmodeValue(newChannelSlowmode) : 0;
+    const permissionOverridesPayload =
+      serializePermissionOverridesState(permissionOverrides);
+
+    if (editingChannelId) {
+      const existing = getChannelById(editingChannelId);
+      if (!existing) {
+        toasts.addToast("Channel not found.", "error");
+        return;
+      }
+
+      const updatedChannel: Channel = {
+        ...existing,
+        name: slugifyChannelName(newChannelName),
+        channel_type: newChannelType,
+        private: newChannelPrivate,
+        category_id: normalizedCategoryId,
+        topic: topicValue,
+        allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
+        allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
+        rate_limit_per_user: newChannelType === "text" ? slowmodeSeconds : 0,
+        permission_overrides: permissionOverridesPayload ?? undefined,
+      };
+
+      if (!permissionOverridesPayload) {
+        delete (updatedChannel as Record<string, unknown>).permission_overrides;
+      }
+
+      try {
+        const updatedChannels = (server.channels || []).map((c: Channel) =>
+          c.id === existing.id ? updatedChannel : c,
+        );
+        const result = await serverStore.updateServer(server.id, {
+          channels: updatedChannels,
+        });
+        if (!result?.success) {
+          toasts.addToast("Failed to update channel.", "error");
+          return;
+        }
+        toasts.addToast("Channel updated.", "success");
+        closeChannelModal();
+      } catch (error) {
+        console.error("Failed to update channel:", error);
+        toasts.addToast("Failed to update channel.", "error");
+      }
+      return;
+    }
+
+    const newChannelPosition = getNextChannelPosition(
+      normalizedCategoryId,
+      newChannelType,
+    );
 
     const newChannel: Channel = {
       id: uuidv4(),
@@ -461,7 +1472,15 @@
       name: slugifyChannelName(newChannelName),
       channel_type: newChannelType,
       private: newChannelPrivate,
-      category_id: null,
+      position: newChannelPosition,
+      category_id: normalizedCategoryId,
+      topic: topicValue,
+      allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
+      allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
+      rate_limit_per_user: slowmodeSeconds,
+      ...(permissionOverridesPayload
+        ? { permission_overrides: permissionOverridesPayload }
+        : {}),
     };
 
     try {
@@ -471,10 +1490,7 @@
       if (newChannel.channel_type === "text") {
         onSelectChannel(server.id, newChannel.id);
       }
-      newChannelName = "";
-      newChannelType = "text";
-      newChannelPrivate = false;
-      showCreateChannelModal = false;
+      closeChannelModal();
     } catch (error) {
       console.error("Failed to create channel:", error);
       toasts.addToast("Failed to create channel.", "error");
@@ -500,7 +1516,10 @@
         return;
       }
       if ($activeServerChannelId === channelId && nextChannelId) {
-        onSelectChannel(server.id, nextChannelId);
+        const nextChannel = getChannelById(nextChannelId);
+        if (nextChannel) {
+          handleChannelSelect(nextChannel);
+        }
       }
     } catch (error) {
       console.error("Failed to delete channel:", error);
@@ -548,6 +1567,16 @@
     showCategoryContextMenu = false;
 
     switch (action) {
+      case "create_channel": {
+        const defaultType =
+          categoryId === "voice-channels" ? ("voice" as const) : "text";
+        const normalizedCategoryId =
+          categoryId === "text-channels" || categoryId === "voice-channels"
+            ? null
+            : categoryId;
+        handleCreateChannelClick(defaultType, normalizedCategoryId);
+        break;
+      }
       case "create_category":
         showCreateCategoryModal = true;
         break;
@@ -568,6 +1597,41 @@
       case "collapse_all":
         collapseAllCategories();
         break;
+      case "mute_category": {
+        const key = getCategoryKey(categoryId);
+        if (mutedCategoriesStore.isMuted(key)) {
+          mutedCategoriesStore.unmute(key);
+          toasts.addToast("Category unmuted.", "info");
+        } else {
+          mutedCategoriesStore.mute(key);
+          toasts.addToast("Category muted.", "info");
+        }
+        break;
+      }
+      case "notification_settings": {
+        const key = getCategoryKey(categoryId);
+        const label = getCategoryDisplayName(categoryId);
+        openCategoryNotificationsModal(key, label);
+        break;
+      }
+      case "edit_category": {
+        if (
+          categoryId === DEFAULT_TEXT_CATEGORY_ID ||
+          categoryId === DEFAULT_VOICE_CATEGORY_ID
+        ) {
+          toasts.addToast("Default sections cannot be renamed.", "info");
+          break;
+        }
+        const category = server?.categories?.find(
+          (entry: ChannelCategory) => entry.id === categoryId,
+        );
+        if (!category) {
+          toasts.addToast("Select a custom category to edit.", "info");
+          break;
+        }
+        openRenameCategoryModal(category);
+        break;
+      }
       case "delete_category": {
         const exists = Array.isArray(server.categories)
           ? server.categories.some((category) => category.id === categoryId)
@@ -618,7 +1682,7 @@
   }
 
   function getChannelById(id: string) {
-    return server.channels.find((c: Channel) => c.id === id);
+    return server.channels?.find((c: Channel) => c.id === id);
   }
 
   function buildChannelLink(channelId: string) {
@@ -667,29 +1731,6 @@
     uses: invite.uses,
   });
 
-  const MUTED_CHANNELS_KEY = "mutedChannels";
-  function loadMutedChannels(): SvelteSet<string> {
-    if (!browser) return new SvelteSet();
-    try {
-      const raw = localStorage.getItem(MUTED_CHANNELS_KEY);
-      if (!raw) return new SvelteSet();
-      return new SvelteSet(JSON.parse(raw));
-    } catch {
-      return new SvelteSet();
-    }
-  }
-  function saveMutedChannels(setVals: Set<string>) {
-    if (!browser) return;
-    try {
-      localStorage.setItem(
-        MUTED_CHANNELS_KEY,
-        JSON.stringify(Array.from(setVals)),
-      );
-    } catch (e) {
-      void e;
-    }
-  }
-
   async function handleChannelAction({
     action,
     channelId,
@@ -711,45 +1752,54 @@
           break;
         }
         case "create_text_channel": {
-          newChannelType = "text";
-          showCreateChannelModal = true;
+          const sourceChannel = getChannelById(channelId);
+          handleCreateChannelClick(
+            "text",
+            sourceChannel?.category_id ?? null,
+          );
           break;
         }
         case "create_voice_channel": {
-          newChannelType = "voice";
-          showCreateChannelModal = true;
+          const sourceChannel = getChannelById(channelId);
+          handleCreateChannelClick(
+            "voice",
+            sourceChannel?.category_id ?? null,
+          );
           break;
         }
         case "edit_channel": {
-          const ch = getChannelById(channelId);
-          if (!ch) break;
-          const newName = prompt("Rename channel", ch.name)?.trim();
-          if (newName && newName !== ch.name) {
-            const updatedName = slugifyChannelName(newName);
-            const updatedChannels = (server.channels || []).map((c: Channel) =>
-              c.id === ch.id ? { ...c, name: updatedName } : c,
-            );
-            const result = await serverStore.updateServer(server.id, {
-              channels: updatedChannels,
-            });
-            if (!result?.success) {
-              toasts.addToast("Failed to rename channel.", "error");
-            } else {
-              toasts.addToast("Channel renamed.", "success");
-            }
-          }
+          handleEditChannel(channelId);
           break;
         }
         case "duplicate_channel": {
           const orig = getChannelById(channelId);
           if (!orig) break;
+          const duplicatePosition = getNextChannelPosition(
+            orig.category_id ?? null,
+            orig.channel_type,
+          );
+          const duplicateOverrides = clonePermissionOverrides(
+            orig.permission_overrides ?? undefined,
+          );
           const dup: Channel = {
             id: uuidv4(),
             server_id: server.id,
             name: `${orig.name}-copy`,
             channel_type: orig.channel_type,
             private: orig.private,
+            position: duplicatePosition,
             category_id: orig.category_id ?? null,
+            topic: orig.topic ?? null,
+            allowed_role_ids: orig.allowed_role_ids
+              ? [...orig.allowed_role_ids]
+              : [],
+            allowed_user_ids: orig.allowed_user_ids
+              ? [...orig.allowed_user_ids]
+              : [],
+            rate_limit_per_user: orig.rate_limit_per_user ?? 0,
+            ...(duplicateOverrides
+              ? { permission_overrides: duplicateOverrides }
+              : {}),
           };
           try {
             await invoke("create_channel", { channel: dup });
@@ -773,7 +1823,10 @@
           break;
         }
         case "open_chat": {
-          onSelectChannel(server.id, channelId);
+          const channelToOpen = getChannelById(channelId);
+          if (channelToOpen) {
+            handleChannelSelect(channelToOpen);
+          }
           break;
         }
         case "mark_as_read": {
@@ -782,16 +1835,13 @@
           break;
         }
         case "mute_channel": {
-          const muted = loadMutedChannels();
-          if (muted.has(channelId)) {
-            muted.delete(channelId);
-            toasts.addToast("Channel unmuted (local).", "info");
+          if (mutedChannelsStore.isMuted(channelId)) {
+            mutedChannelsStore.unmute(channelId);
+            toasts.addToast("Channel unmuted.", "info");
           } else {
-            muted.add(channelId);
-            toasts.addToast("Channel muted (local).", "info");
+            mutedChannelsStore.mute(channelId);
+            toasts.addToast("Channel muted.", "info");
           }
-          saveMutedChannels(muted);
-          mutedChannelIds = new SvelteSet(muted);
           break;
         }
         case "hide_names": {
@@ -836,7 +1886,7 @@
   function handleServerBackgroundAction({ action }: { action: string }) {
     switch (action) {
       case "create_channel":
-        showCreateChannelModal = true;
+        handleCreateChannelClick();
         break;
       case "create_category":
         gotoServerSettings(server.id, "channels");
@@ -892,11 +1942,31 @@
     gotoResolved(`/channels/${server.id}/settings?tab=channels`);
   }
 
-  function handleVoiceChannelClick(channel: Channel) {
+  function handleChannelSelect(channel: Channel): boolean {
+    if (!server?.id) {
+      return false;
+    }
+    const allowed = serverStore.canAccessChannel({
+      serverId: server.id,
+      channel,
+    });
+    if (!allowed) {
+      toasts.addToast("You do not have access to this channel.", "error");
+      return false;
+    }
     onSelectChannel(server.id, channel.id);
+    return true;
+  }
+
+  function handleVoiceChannelClick(channel: Channel) {
+    const allowed = handleChannelSelect(channel);
+    if (!allowed) {
+      return;
+    }
     void callStore.joinVoiceChannel({
       chatId: channel.id,
       chatName: channel.name,
+      serverId: server?.id ?? null,
     });
   }
 </script>
@@ -988,13 +2058,19 @@
           {@const categories = getSortedCategories()}
           {#if categories.length > 0}
             {#each categories as category (category.id)}
-              {@const collapsed = isCategoryCollapsed(category.id)}
+              {@const categoryMuted = isCategoryMuted(category.id)}
+              {@const collapsed =
+                isCategoryCollapsed(category.id) ||
+                (hideMutedChannels && categoryMuted)}
               <Collapsible
                 open={!collapsed}
                 onOpenChange={(value) =>
                   setCategoryCollapsed(category.id, !value)}
               >
-                <div class="flex justify-between items-center py-1 mt-4">
+                <div
+                  class="flex justify-between items-center py-1 mt-4"
+                  class:opacity-60={categoryMuted}
+                >
                   <CollapsibleTrigger
                     class="flex items-center group cursor-pointer"
                   >
@@ -1018,7 +2094,7 @@
                     variant="ghost"
                     size="icon"
                     aria-label="Create Channel"
-                    onclick={handleCreateChannelClick}
+                    onclick={() => handleCreateChannelClick("text", category.id)}
                   >
                     <Plus size={12} />
                   </Button>
@@ -1033,146 +2109,304 @@
                     category.id,
                     "voice",
                   )}
-                  {#if textChannels.length === 0 && voiceChannels.length === 0}
-                    <p class="text-xs text-muted-foreground px-2 py-1">
-                      No channels in this category yet.
-                    </p>
-                  {/if}
+                  <div
+                    class="space-y-1"
+                    ondragover={(event) =>
+                      handleChannelDragOver(event, category.id, "text")}
+                    ondrop={(event) =>
+                      handleChannelDrop(event, category.id, "text")}
+                  >
+                    {#if textChannels.length === 0 && voiceChannels.length === 0}
+                      <p class="text-xs text-muted-foreground px-2 py-1">
+                        No channels in this category yet.
+                      </p>
+                    {/if}
 
-                  {#each textChannels as channel (channel.id)}
-                    {@const metadata = channelMetadataLookup.get(channel.id)}
-                    {@const unreadCount = metadata?.unreadCount ?? 0}
-                    <div
-                      role="button"
-                      tabindex="0"
-                      class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                        $activeServerChannelId === channel.id
-                          ? "bg-primary/80 text-foreground"
-                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      }`}
-                      onclick={() => onSelectChannel(server.id, channel.id)}
-                      onkeydown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          onSelectChannel(server.id, channel.id);
-                        }
-                      }}
-                      oncontextmenu={(e) =>
-                        handleChannelContextMenu(e, channel)}
-                    >
-                      <div class="flex items-center truncate">
-                        <Hash size={10} class="mr-1" />
-                        <span class="truncate select-none ml-2"
-                          >{channel.name}</span
-                        >
-                      </div>
-                      <div class="ml-auto flex items-center gap-2">
-                        {#if unreadCount > 0}
-                          <Badge
-                            class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                    {#each textChannels as channel (channel.id)}
+                      {@const metadata = channelMetadataLookup.get(channel.id)}
+                      {@const unreadCount = metadata?.unreadCount ?? 0}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              role="button"
+                              tabindex="0"
+                              draggable
+                              class:opacity-50={draggingChannelId === channel.id}
+                              ondragstart={(event) =>
+                                handleChannelDragStart(event, channel)}
+                              ondragend={handleChannelDragEnd}
+                              ondragover={(event) =>
+                                handleChannelDragOver(
+                                  event,
+                                  category.id,
+                                  "text",
+                                )}
+                              ondrop={(event) =>
+                                handleChannelDrop(
+                                  event,
+                                  category.id,
+                                  "text",
+                                  channel.id,
+                                )}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            $activeServerChannelId === channel.id
+                              ? "bg-primary/80 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onclick={() => handleChannelSelect(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleChannelSelect(channel);
+                            }
+                          }}
+                            oncontextmenu={(e) =>
+                              handleChannelContextMenu(e, channel)}
+                            title={channel.topic ?? undefined}
                           >
-                            {unreadCount > 99 ? "99+" : unreadCount}
-                          </Badge>
+                          <div class="flex items-center truncate">
+                            <Hash size={10} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
+                            <div class="ml-auto flex items-center gap-2">
+                              {#if unreadCount > 0}
+                                <Badge
+                                  class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                                >
+                                  {unreadCount > 99 ? "99+" : unreadCount}
+                                </Badge>
+                              {/if}
+                              <div
+                                class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                              >
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="text-muted-foreground hover:text-foreground"
+                                  aria-label="Invite to channel"
+                                  onclick={(event) =>
+                                    handleInviteToChannelClick(channel, event)}
+                                >
+                                  <Plus size={10} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  class="text-muted-foreground hover:text-foreground"
+                                  aria-label="Channel settings"
+                                  onclick={(event) =>
+                                    handleChannelSettingsClick(channel, event)}
+                                >
+                                  <Settings size={10} />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {#if channel.topic}
+                          <TooltipContent
+                            side="right"
+                            align="start"
+                            class="max-w-xs text-xs leading-snug"
+                          >
+                            {channel.topic}
+                          </TooltipContent>
                         {/if}
-                        <div
-                          class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="text-muted-foreground hover:text-foreground"
-                            aria-label="Invite to channel"
-                            onclick={(event) =>
-                              handleInviteToChannelClick(channel, event)}
-                          >
-                            <Plus size={10} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            class="text-muted-foreground hover:text-foreground"
-                            aria-label="Channel settings"
-                            onclick={(event) =>
-                              handleChannelSettingsClick(channel, event)}
-                          >
-                            <Settings size={10} />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
+                      </Tooltip>
+                    </TooltipProvider>
                   {/each}
 
-                  {#each voiceChannels as channel (channel.id)}
-                    {@const activeCall = $callStore.activeCall}
-                    {@const isActiveVoiceChannel =
-                      activeCall &&
-                      activeCall.chatType === "channel" &&
-                      activeCall.type === "voice" &&
-                      activeCall.status !== "ended" &&
-                      activeCall.status !== "error" &&
-                      activeCall.chatId === channel.id}
-                    <div
-                      role="button"
-                      tabindex="0"
-                      class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                        isActiveVoiceChannel
-                          ? "bg-primary/80 text-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      }`}
-                      data-active={isActiveVoiceChannel ? "true" : undefined}
-                      onclick={() => handleVoiceChannelClick(channel)}
-                      onkeydown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          handleVoiceChannelClick(channel);
-                        }
-                      }}
-                      oncontextmenu={(e) =>
-                        handleChannelContextMenu(e, channel)}
-                    >
-                      <div class="flex items-center truncate">
-                        <Mic size={12} class="mr-1" />
-                        <span class="truncate select-none ml-2"
-                          >{channel.name}</span
-                        >
+                  </div>
+                  <div
+                    class="space-y-1 mt-2"
+                    ondragover={(event) =>
+                      handleChannelDragOver(event, category.id, "voice")}
+                    ondrop={(event) =>
+                      handleChannelDrop(event, category.id, "voice")}
+                  >
+                    {#each voiceChannels as channel (channel.id)}
+                      {@const activeCall = $callStore.activeCall}
+                      {@const isActiveVoiceChannel =
+                        activeCall &&
+                        activeCall.chatType === "channel" &&
+                        activeCall.type === "voice" &&
+                        activeCall.status !== "ended" &&
+                        activeCall.status !== "error" &&
+                        activeCall.chatId === channel.id}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              role="button"
+                              tabindex="0"
+                              draggable
+                              class:opacity-50={draggingChannelId === channel.id}
+                              ondragstart={(event) =>
+                                handleChannelDragStart(event, channel)}
+                              ondragend={handleChannelDragEnd}
+                              ondragover={(event) =>
+                                handleChannelDragOver(
+                                  event,
+                                  category.id,
+                                  "voice",
+                                )}
+                              ondrop={(event) =>
+                                handleChannelDrop(
+                                  event,
+                                  category.id,
+                                  "voice",
+                                  channel.id,
+                                )}
+                              class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                                isActiveVoiceChannel
+                                  ? "bg-primary/80 text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                              }`}
+                              data-active={
+                                isActiveVoiceChannel ? "true" : undefined
+                              }
+                              onclick={() => handleVoiceChannelClick(channel)}
+                              onkeydown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  handleVoiceChannelClick(channel);
+                                }
+                              }}
+                              oncontextmenu={(e) =>
+                                handleChannelContextMenu(e, channel)}
+                              title={channel.topic ?? undefined}
+                            >
+                            <div class="flex items-center truncate">
+                              <Mic size={12} class="mr-1" />
+                              <span class="truncate select-none ml-2"
+                                >{channel.name}</span
+                              >
+                              {#if channel.private}
+                                <Badge
+                                  class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                >
+                                  <Lock size={10} />
+                                  Private
+                                </Badge>
+                              {/if}
+                            </div>
+                            <div
+                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Invite to channel"
+                                onclick={(event) =>
+                                  handleInviteToChannelClick(channel, event)}
+                              >
+                                <Plus size={10} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Channel settings"
+                                onclick={(event) =>
+                                  handleChannelSettingsClick(channel, event)}
+                              >
+                                <Settings size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        {#if channel.topic}
+                          <TooltipContent
+                            side="right"
+                            align="start"
+                            class="max-w-xs text-xs leading-snug"
+                          >
+                            {channel.topic}
+                          </TooltipContent>
+                        {/if}
+                      </Tooltip>
+                    </TooltipProvider>
+                    {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                    {#if presenceEntry}
+                      {@const participantEntries = Array.from(
+                        presenceEntry.participants.values(),
+                      ).sort(
+                        (a, b) =>
+                          (a.joinedAt ?? a.lastSeenAt) -
+                          (b.joinedAt ?? b.lastSeenAt),
+                      )}
+                      <div class="ml-8 mt-1 space-y-1 pb-1">
+                        <div class="text-[11px] font-medium text-muted-foreground">
+                          {participantEntries.length} connected
+                        </div>
+                        {#if participantEntries.length > 0}
+                          <div class="flex flex-wrap gap-1.5">
+                            {#each participantEntries as presence (presence.userId)}
+                              {@const member = membersById.get(presence.userId)}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                                      <Avatar class="h-5 w-5 border border-border">
+                                        <AvatarImage
+                                          src={member?.avatar}
+                                          alt={member?.name ?? presence.userId}
+                                        />
+                                        <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                          {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span class="max-w-[96px] truncate">
+                                        {member?.name ?? presence.userId}
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" align="start" class="text-xs">
+                                    {member?.name ?? presence.userId}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            {/each}
+                          </div>
+                        {:else}
+                          <p class="text-[11px] text-muted-foreground">
+                            No one connected.
+                          </p>
+                        {/if}
                       </div>
-                      <div
-                        class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Invite to channel"
-                          onclick={(event) =>
-                            handleInviteToChannelClick(channel, event)}
-                        >
-                          <Plus size={10} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Channel settings"
-                          onclick={(event) =>
-                            handleChannelSettingsClick(channel, event)}
-                        >
-                          <Settings size={10} />
-                        </Button>
-                      </div>
-                    </div>
+                    {/if}
                   {/each}
                 </CollapsibleContent>
               </Collapsible>
             {/each}
           {/if}
 
+          {@const textSectionMuted =
+            isCategoryMuted(DEFAULT_TEXT_CATEGORY_ID, "text")}
+          {@const textSectionCollapsed =
+            textChannelsCollapsed ||
+            (hideMutedChannels && textSectionMuted)}
           <Collapsible
-            open={!textChannelsCollapsed}
+            open={!textSectionCollapsed}
             onOpenChange={(value) => {
               textChannelsCollapsed = !value;
               persistCollapsedState(TEXT_COLLAPSED_KEY, textChannelsCollapsed);
             }}
           >
-            <div class="flex justify-between items-center py-1 mt-4">
+            <div
+              class="flex justify-between items-center py-1 mt-4"
+              class:opacity-60={textSectionMuted}
+            >
               <CollapsibleTrigger
                 class="flex items-center group cursor-pointer"
               >
@@ -1187,7 +2421,7 @@
                 </h3>
                 <ChevronDown
                   size={10}
-                  class="ml-1 transition-transform duration-200 {textChannelsCollapsed
+                  class="ml-1 transition-transform duration-200 {textSectionCollapsed
                     ? '-rotate-90'
                     : ''}"
                 />
@@ -1196,83 +2430,182 @@
                 variant="ghost"
                 size="icon"
                 aria-label="Create Channel"
-                onclick={handleCreateChannelClick}
+                onclick={() => handleCreateChannelClick("text", null)}
               >
                 <Plus size={12} />
               </Button>
             </div>
 
             <CollapsibleContent>
-              {#if server && server.channels && server.channels.length > 0}
-                {#each server.channels.filter((c: Channel) => c.channel_type === "text" && (c.category_id ?? null) === null && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+              {@const uncategorizedTextChannels = getVisibleChannels(
+                null,
+                "text",
+              )}
+              <div
+                class="space-y-1"
+                class:opacity-60={textSectionMuted && !hideMutedChannels}
+                ondragover={(event) =>
+                  handleChannelDragOver(event, null, "text")}
+                ondrop={(event) => handleChannelDrop(event, null, "text")}
+              >
+                {#if uncategorizedTextChannels.length === 0}
+                  <p class="text-xs text-muted-foreground px-2 py-1">
+                    No text channels yet.
+                  </p>
+                {/if}
+                {#each uncategorizedTextChannels as channel (channel.id)}
                   {@const metadata = channelMetadataLookup.get(channel.id)}
                   {@const unreadCount = metadata?.unreadCount ?? 0}
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md
-                    {$activeServerChannelId === channel.id
-                      ? 'bg-primary/80 text-foreground'
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                    onclick={() => onSelectChannel(server.id, channel.id)}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        onSelectChannel(server.id, channel.id);
-                      }
-                    }}
-                    oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-                  >
-                    <div class="flex items-center truncate">
-                      <Hash size={10} class="mr-1" />
-                      <span class="truncate select-none ml-2"
-                        >{channel.name}</span
-                      >
-                    </div>
-                    <div class="ml-auto flex items-center gap-2">
-                      {#if unreadCount > 0}
-                        <Badge
-                          class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          role="button"
+                          tabindex="0"
+                          draggable
+                          class:opacity-50={draggingChannelId === channel.id}
+                          ondragstart={(event) =>
+                            handleChannelDragStart(event, channel)}
+                          ondragend={handleChannelDragEnd}
+                          ondragover={(event) =>
+                            handleChannelDragOver(event, null, "text")}
+                          ondrop={(event) =>
+                            handleChannelDrop(event, null, "text", channel.id)}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            $activeServerChannelId === channel.id
+                              ? "bg-primary/80 text-foreground"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          onclick={() => handleChannelSelect(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleChannelSelect(channel);
+                            }
+                          }}
+                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                          title={channel.topic ?? undefined}
                         >
-                          {unreadCount > 99 ? "99+" : unreadCount}
-                        </Badge>
+                          <div class="flex items-center truncate">
+                            <Hash size={10} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
+                          <div class="ml-auto flex items-center gap-2">
+                            {#if unreadCount > 0}
+                              <Badge
+                                class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
+                              >
+                                {unreadCount > 99 ? "99+" : unreadCount}
+                              </Badge>
+                            {/if}
+                            <div
+                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Invite to channel"
+                                onclick={(event) =>
+                                  handleInviteToChannelClick(channel, event)}
+                              >
+                                <Plus size={10} />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground hover:text-foreground"
+                                aria-label="Channel settings"
+                                onclick={(event) =>
+                                  handleChannelSettingsClick(channel, event)}
+                              >
+                                <Settings size={10} />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      {#if channel.topic}
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          class="max-w-xs text-xs leading-snug"
+                        >
+                          {channel.topic}
+                        </TooltipContent>
                       {/if}
-                      <div
-                        class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Invite to channel"
-                          onclick={(event) =>
-                            handleInviteToChannelClick(channel, event)}
-                        >
-                          <Plus size={10} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="text-muted-foreground hover:text-foreground"
-                          aria-label="Channel settings"
-                          onclick={(event) =>
-                            handleChannelSettingsClick(channel, event)}
-                        >
-                          <Settings size={10} />
-                        </Button>
+                    </Tooltip>
+                  </TooltipProvider>
+                  {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                  {#if presenceEntry}
+                    {@const participantEntries = Array.from(
+                      presenceEntry.participants.values(),
+                    ).sort(
+                      (a, b) =>
+                        (a.joinedAt ?? a.lastSeenAt) -
+                        (b.joinedAt ?? b.lastSeenAt),
+                    )}
+                    <div class="ml-8 mt-1 space-y-1 pb-1">
+                      <div class="text-[11px] font-medium text-muted-foreground">
+                        {participantEntries.length} connected
                       </div>
+                      {#if participantEntries.length > 0}
+                        <div class="flex flex-wrap gap-1.5">
+                          {#each participantEntries as presence (presence.userId)}
+                            {@const member = membersById.get(presence.userId)}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                                    <Avatar class="h-5 w-5 border border-border">
+                                      <AvatarImage
+                                        src={member?.avatar}
+                                        alt={member?.name ?? presence.userId}
+                                      />
+                                      <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                        {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span class="max-w-[96px] truncate">
+                                      {member?.name ?? presence.userId}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" align="start" class="text-xs">
+                                  {member?.name ?? presence.userId}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          {/each}
+                        </div>
+                      {:else}
+                        <p class="text-[11px] text-muted-foreground">
+                          No one connected.
+                        </p>
+                      {/if}
                     </div>
-                  </div>
+                  {/if}
                 {/each}
-              {:else}
-                <p class="text-xs text-muted-foreground px-2 py-1">
-                  No text channels yet.
-                </p>
-              {/if}
+              </div>
             </CollapsibleContent>
           </Collapsible>
 
+          {@const voiceSectionMuted =
+            isCategoryMuted(DEFAULT_VOICE_CATEGORY_ID, "voice")}
+          {@const voiceSectionCollapsed =
+            voiceChannelsCollapsed ||
+            (hideMutedChannels && voiceSectionMuted)}
           <Collapsible
-            open={!voiceChannelsCollapsed}
+            open={!voiceSectionCollapsed}
             onOpenChange={(value) => {
               voiceChannelsCollapsed = !value;
               persistCollapsedState(
@@ -1281,7 +2614,10 @@
               );
             }}
           >
-            <div class="flex justify-between items-center py-1 mt-6">
+            <div
+              class="flex justify-between items-center py-1 mt-6"
+              class:opacity-60={voiceSectionMuted}
+            >
               <CollapsibleTrigger
                 class="flex items-center group cursor-pointer"
               >
@@ -1296,7 +2632,7 @@
                 </h3>
                 <ChevronDown
                   size={10}
-                  class="ml-1 transition-transform duration-200 {voiceChannelsCollapsed
+                  class="ml-1 transition-transform duration-200 {voiceSectionCollapsed
                     ? '-rotate-90'
                     : ''}"
                 />
@@ -1305,18 +2641,30 @@
                 variant="ghost"
                 size="icon"
                 aria-label="Create Voice Channel"
-                onclick={() => {
-                  newChannelType = "voice";
-                  handleCreateChannelClick();
-                }}
+                onclick={() => handleCreateChannelClick("voice", null)}
               >
                 <Plus size={12} />
               </Button>
             </div>
 
             <CollapsibleContent>
-              {#if server && server.channels && server.channels.length > 0}
-                {#each server.channels.filter((c: Channel) => c.channel_type === "voice" && (c.category_id ?? null) === null && (!hideMutedChannels || !mutedChannelIds.has(c.id))) as channel (channel.id)}
+              {@const uncategorizedVoiceChannels = getVisibleChannels(
+                null,
+                "voice",
+              )}
+              <div
+                class="space-y-1"
+                class:opacity-60={voiceSectionMuted && !hideMutedChannels}
+                ondragover={(event) =>
+                  handleChannelDragOver(event, null, "voice")}
+                ondrop={(event) => handleChannelDrop(event, null, "voice")}
+              >
+                {#if uncategorizedVoiceChannels.length === 0}
+                  <p class="text-xs text-muted-foreground px-2 py-1">
+                    No voice channels yet.
+                  </p>
+                {/if}
+                {#each uncategorizedVoiceChannels as channel (channel.id)}
                   {@const activeCall = $callStore.activeCall}
                   {@const isActiveVoiceChannel =
                     activeCall &&
@@ -1325,58 +2673,89 @@
                     activeCall.status !== "ended" &&
                     activeCall.status !== "error" &&
                     activeCall.chatId === channel.id}
-                  <div
-                    role="button"
-                    tabindex="0"
-                    class="group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md {isActiveVoiceChannel
-                      ? 'bg-primary/80 text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'}"
-                    data-active={isActiveVoiceChannel ? "true" : undefined}
-                    onclick={() => handleVoiceChannelClick(channel)}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        handleVoiceChannelClick(channel);
-                      }
-                    }}
-                    oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-                  >
-                    <div class="flex items-center truncate">
-                      <Mic size={12} class="mr-1" />
-                      <span class="truncate select-none ml-2"
-                        >{channel.name}</span
-                      >
-                    </div>
-                    <div
-                      class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-muted-foreground hover:text-foreground"
-                        aria-label="Invite to channel"
-                        onclick={(event) =>
-                          handleInviteToChannelClick(channel, event)}
-                      >
-                        <Plus size={10} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        class="text-muted-foreground hover:text-foreground"
-                        aria-label="Channel settings"
-                        onclick={(event) =>
-                          handleChannelSettingsClick(channel, event)}
-                      >
-                        <Settings size={10} />
-                      </Button>
-                    </div>
-                  </div>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          role="button"
+                          tabindex="0"
+                          draggable
+                          class:opacity-50={draggingChannelId === channel.id}
+                          ondragstart={(event) =>
+                            handleChannelDragStart(event, channel)}
+                          ondragend={handleChannelDragEnd}
+                          ondragover={(event) =>
+                            handleChannelDragOver(event, null, "voice")}
+                          ondrop={(event) =>
+                            handleChannelDrop(event, null, "voice", channel.id)}
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                            isActiveVoiceChannel
+                              ? "bg-primary/80 text-foreground shadow-sm"
+                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                          }`}
+                          data-active={isActiveVoiceChannel ? "true" : undefined}
+                          onclick={() => handleVoiceChannelClick(channel)}
+                          onkeydown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              handleVoiceChannelClick(channel);
+                            }
+                          }}
+                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
+                          title={channel.topic ?? undefined}
+                        >
+                          <div class="flex items-center truncate">
+                            <Mic size={12} class="mr-1" />
+                            <span class="truncate select-none ml-2"
+                              >{channel.name}</span
+                            >
+                            {#if channel.private}
+                              <Badge
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                              >
+                                <Lock size={10} />
+                                Private
+                              </Badge>
+                            {/if}
+                          </div>
+                          <div
+                            class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Invite to channel"
+                              onclick={(event) =>
+                                handleInviteToChannelClick(channel, event)}
+                            >
+                              <Plus size={10} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Channel settings"
+                              onclick={(event) =>
+                                handleChannelSettingsClick(channel, event)}
+                            >
+                              <Settings size={10} />
+                            </Button>
+                          </div>
+                        </div>
+                      </TooltipTrigger>
+                      {#if channel.topic}
+                        <TooltipContent
+                          side="right"
+                          align="start"
+                          class="max-w-xs text-xs leading-snug"
+                        >
+                          {channel.topic}
+                        </TooltipContent>
+                      {/if}
+                    </Tooltip>
+                  </TooltipProvider>
                 {/each}
-              {:else}
-                <p class="text-xs text-muted-foreground px-2 py-1">
-                  No voice channels yet.
-                </p>
-              {/if}
+              </div>
             </CollapsibleContent>
           </Collapsible>
         </ScrollArea>
@@ -1418,13 +2797,22 @@
 
 <Dialog
   open={showCreateChannelModal}
-  onOpenChange={(value) => (showCreateChannelModal = value)}
+  onOpenChange={(value) => {
+    showCreateChannelModal = value;
+    if (!value) {
+      newChannelCategoryId = null;
+    }
+  }}
 >
   <DialogContent>
     <DialogHeader>
-      <DialogTitle>Create Channel</DialogTitle>
+      <DialogTitle>
+        {editingChannelId ? "Edit Channel" : "Create Channel"}
+      </DialogTitle>
       <DialogDescription>
-        Create a text or voice channel with a name, optional topic, and privacy.
+        {editingChannelId
+          ? "Update channel settings, permissions, and slowmode."
+          : "Create a text or voice channel with a name, optional topic, and privacy."}
       </DialogDescription>
     </DialogHeader>
 
@@ -1489,7 +2877,7 @@
             bind:value={newChannelName}
             autofocus
             onkeydown={(e) => {
-              if (e.key === "Enter") createChannel();
+              if (e.key === "Enter") submitChannelForm();
             }}
           />
         </div>
@@ -1533,33 +2921,461 @@
         />
       </div>
 
+      {#if newChannelPrivate}
+        <div class="space-y-4 rounded-md border border-border/60 bg-muted/20 p-3">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase text-muted-foreground">
+                Allowed Roles
+              </span>
+              <span class="text-[11px] text-muted-foreground">
+                Choose roles that can access this channel
+              </span>
+            </div>
+            <Input
+              type="text"
+              placeholder="Search roles..."
+              bind:value={roleSearchTerm}
+              class="w-full"
+            />
+            <ScrollArea class="max-h-32 pr-1">
+              {#if filteredRoles.length > 0}
+                <div class="space-y-1">
+                  {#each filteredRoles as role (role.id)}
+                    <label
+                      class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        checked={selectedRoleIds.has(role.id)}
+                        onchange={() => toggleRoleSelection(role.id)}
+                      />
+                      <span class="truncate">{role.name}</span>
+                    </label>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-xs text-muted-foreground">
+                  No roles match your search.
+                </p>
+              {/if}
+            </ScrollArea>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase text-muted-foreground">
+                Allowed Members
+              </span>
+              <span class="text-[11px] text-muted-foreground">
+                You’re always included.
+              </span>
+            </div>
+            <Input
+              type="text"
+              placeholder="Search members..."
+              bind:value={memberSearchTerm}
+              class="w-full"
+            />
+            <ScrollArea class="max-h-48 pr-1">
+              {#if filteredMembers.length > 0}
+                <div class="space-y-1">
+                  {#each filteredMembers as member (member.id)}
+                    <label
+                      class="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        class="h-3.5 w-3.5 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        checked={selectedMemberIds.has(member.id)}
+                        onchange={() => toggleMemberSelection(member.id)}
+                      />
+                      <Avatar class="h-6 w-6">
+                        <AvatarImage src={member.avatar} alt={member.name} />
+                        <AvatarFallback class="text-xs font-medium">
+                          {member.name?.[0] ?? "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span class="truncate">{member.name}</span>
+                    </label>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-xs text-muted-foreground">
+                  No members match your search.
+                </p>
+              {/if}
+            </ScrollArea>
+          </div>
+        </div>
+      {/if}
+
+      <div class="space-y-5 rounded-md border border-border/60 bg-muted/20 p-3">
+        <div class="space-y-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-semibold uppercase text-muted-foreground">
+              Role Permission Overrides
+            </span>
+            <span class="text-[11px] text-muted-foreground">
+              Fine-tune channel permissions for specific roles.
+            </span>
+          </div>
+
+          {#if availableRoleOverrideOptions.length > 0}
+            <Select
+              type="single"
+              value={pendingRoleOverrideSelection}
+              onValueChange={(value: string) => {
+                if (!value) return;
+                addPermissionOverrideTarget("roles", value);
+                pendingRoleOverrideSelection = "";
+              }}
+            >
+              <SelectTrigger class="w-full justify-between">
+                <span data-slot="select-value" class="flex-1 text-left">
+                  Add role override
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" disabled>Select a role</SelectItem>
+                {#each availableRoleOverrideOptions as role (role.id)}
+                  <SelectItem value={role.id}>{role.name}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              All roles already have overrides configured.
+            </p>
+          {/if}
+
+          {#if Object.keys(permissionOverrides.roles).length > 0}
+            <div class="space-y-3">
+              {#each Object.keys(permissionOverrides.roles) as roleId (roleId)}
+                <div class="overflow-hidden rounded-md border border-border/50 bg-background/40">
+                  <div class="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+                    <span class="text-sm font-medium">
+                      {rolesById.get(roleId)?.name ?? roleId}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove overrides for ${rolesById.get(roleId)?.name ?? roleId}`}
+                      onclick={() => removeOverrideTarget("roles", roleId)}
+                    >
+                      <CircleX size={14} />
+                    </Button>
+                  </div>
+                  <div class="divide-y divide-border/40">
+                    {#each channelPermissionKeys as permission (permission)}
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+                        <span class="text-xs font-medium text-muted-foreground">
+                          {permissionKeyLabels[permission]}
+                        </span>
+                        <div class="flex gap-2">
+                          {#each overrideChoices as choice (choice)}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                getOverrideChoice("roles", roleId, permission) === choice
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              aria-label={`${overrideChoiceLabels[choice].label} ${permissionKeyLabels[permission]} for ${rolesById.get(roleId)?.name ?? roleId}`}
+                              onclick={() => setOverrideChoice("roles", roleId, permission, choice)}
+                            >
+                              {overrideChoiceLabels[choice].label}
+                            </Button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              No role overrides configured.
+            </p>
+          {/if}
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs font-semibold uppercase text-muted-foreground">
+              Member Permission Overrides
+            </span>
+            <span class="text-[11px] text-muted-foreground">
+              Override permissions for individual members.
+            </span>
+          </div>
+
+          {#if availableMemberOverrideOptions.length > 0}
+            <Select
+              type="single"
+              value={pendingMemberOverrideSelection}
+              onValueChange={(value: string) => {
+                if (!value) return;
+                addPermissionOverrideTarget("users", value);
+                pendingMemberOverrideSelection = "";
+              }}
+            >
+              <SelectTrigger class="w-full justify-between">
+                <span data-slot="select-value" class="flex-1 text-left">
+                  Add member override
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="" disabled>Select a member</SelectItem>
+                {#each availableMemberOverrideOptions as member (member.id)}
+                  <SelectItem value={member.id}>{member.name}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              All members already have overrides configured.
+            </p>
+          {/if}
+
+          {#if Object.keys(permissionOverrides.users).length > 0}
+            <div class="space-y-3">
+              {#each Object.keys(permissionOverrides.users) as memberId (memberId)}
+                <div class="overflow-hidden rounded-md border border-border/50 bg-background/40">
+                  <div class="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
+                    <span class="text-sm font-medium">
+                      {membersById.get(memberId)?.name ?? memberId}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove overrides for ${membersById.get(memberId)?.name ?? memberId}`}
+                      onclick={() => removeOverrideTarget("users", memberId)}
+                    >
+                      <CircleX size={14} />
+                    </Button>
+                  </div>
+                  <div class="divide-y divide-border/40">
+                    {#each channelPermissionKeys as permission (permission)}
+                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
+                        <span class="text-xs font-medium text-muted-foreground">
+                          {permissionKeyLabels[permission]}
+                        </span>
+                        <div class="flex gap-2">
+                          {#each overrideChoices as choice (choice)}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={
+                                getOverrideChoice("users", memberId, permission) === choice
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              aria-label={`${overrideChoiceLabels[choice].label} ${permissionKeyLabels[permission]} for ${membersById.get(memberId)?.name ?? memberId}`}
+                              onclick={() =>
+                                setOverrideChoice("users", memberId, permission, choice)
+                              }
+                            >
+                              {overrideChoiceLabels[choice].label}
+                            </Button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              No member overrides configured.
+            </p>
+          {/if}
+        </div>
+      </div>
+
       {#if newChannelType === "text"}
-        <div>
-          <Label
-            for="channel-topic"
-            class="text-xs font-semibold uppercase text-muted-foreground mb-2"
-          >
-            Topic
-          </Label>
-          <Input
-            id="channel-topic"
-            placeholder="What’s this channel about?"
-            class="w-full"
-          />
+        <div class="space-y-4">
+          <div>
+            <Label
+              for="channel-topic"
+              class="text-xs font-semibold uppercase text-muted-foreground mb-2"
+            >
+              Topic
+            </Label>
+            <Input
+              id="channel-topic"
+              placeholder="What’s this channel about?"
+              class="w-full"
+              bind:value={newChannelTopic}
+            />
+          </div>
+          <div>
+            <Label
+              class="text-xs font-semibold uppercase text-muted-foreground mb-2"
+            >
+              Slowmode
+            </Label>
+            <Select
+              type="single"
+              value={newChannelSlowmode.toString()}
+              onValueChange={(value: string) => {
+                newChannelSlowmode = normalizeSlowmodeValue(value);
+              }}
+            >
+              <SelectTrigger class="w-full justify-between">
+                <span data-slot="select-value" class="flex-1 text-left">
+                  {formatSlowmodeDuration(newChannelSlowmode)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {#each slowmodeOptions() as option (option.value)}
+                  <SelectItem value={option.value.toString()}>{option.label}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Limit how often members can send messages. Set to Off to disable.
+            </p>
+          </div>
         </div>
       {/if}
     </div>
 
     <DialogFooter>
-      <Button variant="ghost" onclick={() => (showCreateChannelModal = false)}
-        >Cancel</Button
-      >
-      <Button onclick={createChannel} disabled={!newChannelName.trim()}>
-        <Plus size={14} class="mr-2" /> Create Channel
+      <Button variant="ghost" onclick={closeChannelModal}>Cancel</Button>
+      <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
+        {#if editingChannelId}
+          <Check size={14} class="mr-2" /> Save Changes
+        {:else}
+          <Plus size={14} class="mr-2" /> Create Channel
+        {/if}
       </Button>
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
+{#if showRenameCategoryModal && categoryBeingRenamed}
+  <Dialog
+    open={showRenameCategoryModal}
+    onOpenChange={(value) => {
+      if (!value) {
+        closeRenameCategoryModal();
+      }
+    }}
+  >
+    <DialogContent data-testid="rename-category-modal">
+      <DialogHeader>
+        <DialogTitle>Rename Category</DialogTitle>
+        <DialogDescription>
+          Update the name for {categoryBeingRenamed.name}.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <Label
+            for="rename-category-name"
+            class="text-xs font-semibold uppercase text-muted-foreground"
+          >
+            Category Name
+          </Label>
+          <Input
+            id="rename-category-name"
+            placeholder="Operations"
+            bind:value={renameCategoryName}
+            onkeydown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submitRenameCategory();
+              }
+            }}
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onclick={closeRenameCategoryModal}>
+          Cancel
+        </Button>
+        <Button
+          onclick={() => {
+            void submitRenameCategory();
+          }}
+          disabled={!renameCategoryName.trim()}
+        >
+          <Check size={14} class="mr-2" /> Save Changes
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+{/if}
+
+{#if showCategoryNotificationsModal && notificationsCategoryId}
+  <Dialog
+    open={showCategoryNotificationsModal}
+    onOpenChange={(value) => {
+      if (!value) {
+        closeCategoryNotificationsModal();
+      }
+    }}
+  >
+    <DialogContent data-testid="category-notifications-modal">
+      <DialogHeader>
+        <DialogTitle>Category Notifications</DialogTitle>
+        <DialogDescription>
+          Choose how you’d like to be notified about {notificationsCategoryName}.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4">
+        <div class="space-y-2">
+          <Label class="text-xs font-semibold uppercase text-muted-foreground">
+            Delivery Preference
+          </Label>
+          <div class="space-y-2">
+            {#each CATEGORY_NOTIFICATION_OPTIONS as option (option.value)}
+              <Button
+                type="button"
+                variant={
+                  pendingNotificationLevel === option.value
+                    ? "secondary"
+                    : "outline"
+                }
+                class="flex w-full flex-col items-start gap-1 text-left"
+                data-testid={`category-notification-option-${option.value}`}
+                onclick={() => {
+                  pendingNotificationLevel = option.value;
+                }}
+              >
+                <span class="text-sm font-medium">{option.label}</span>
+                <span class="text-xs text-muted-foreground">
+                  {option.description}
+                </span>
+              </Button>
+            {/each}
+          </div>
+        </div>
+        <div class="rounded-md border border-border/60 bg-muted/10 p-3 text-xs text-muted-foreground">
+          Muting notifications won’t hide the category, but it will silence
+          pings and sounds from its channels.
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onclick={closeCategoryNotificationsModal}>
+          Cancel
+        </Button>
+        <Button onclick={saveCategoryNotificationSettings}>
+          <Check size={14} class="mr-2" /> Save Preference
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+{/if}
 
 {#if showCreateCategoryModal}
   <CreateCategoryModal

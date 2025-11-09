@@ -20,6 +20,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     upsertServerFromBackend: vi.fn(),
     setActiveServer: vi.fn(),
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 let gotoSpy: MockInstance<typeof appNavigation.goto> | undefined;

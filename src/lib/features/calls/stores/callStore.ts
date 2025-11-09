@@ -6,6 +6,7 @@ import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { userStore } from "$lib/stores/userStore";
 import { settings } from "$lib/features/settings/stores/settings";
 import { getIceServersFromConfig } from "$lib/features/calls/utils/iceServers";
+import { voicePresenceStore } from "./voicePresenceStore";
 
 const isBrowser = typeof window !== "undefined";
 
@@ -58,6 +59,7 @@ export interface ActiveCall {
   callId: string;
   direction: "incoming" | "outgoing";
   participants: Map<string, CallParticipant>;
+  serverId: string | null;
 }
 
 interface CallState {
@@ -149,6 +151,19 @@ const INITIAL_STATE: CallState = {
 };
 
 const STATUS_CLEAR_DELAY = 6000;
+
+function resolveServerIdForChannel(channelId: string | null | undefined): string | null {
+  if (!channelId) {
+    return null;
+  }
+  const { servers } = get(serverStore);
+  for (const server of servers) {
+    if ((server.channels ?? []).some((channel) => channel.id === channelId)) {
+      return server.id;
+    }
+  }
+  return null;
+}
 
 function resolveIceServers(): RTCIceServer[] {
   const currentSettings = get(settings);
@@ -320,6 +335,17 @@ function createCallStore() {
 
   function cleanupParticipant(peerId: string) {
     const existing = participantStates.get(peerId);
+    const active = get(store).activeCall;
+    if (
+      active &&
+      active.chatType === "channel" &&
+      active.type === "voice"
+    ) {
+      voicePresenceStore.markParticipantLeft({
+        channelId: active.chatId,
+        participantId: peerId,
+      });
+    }
     if (!existing) {
       return;
     }
@@ -575,6 +601,16 @@ function createCallStore() {
       });
     }
 
+    if (current.chatType === "channel" && current.type === "voice") {
+      const meId = get(userStore).me?.id;
+      if (meId) {
+        voicePresenceStore.markParticipantLeft({
+          channelId: current.chatId,
+          participantId: meId,
+        });
+      }
+    }
+
     cleanupMedia();
 
     update((next) => {
@@ -753,6 +789,19 @@ function createCallStore() {
           current.error = undefined;
           return current;
         });
+        const active = get(store).activeCall;
+        if (
+          active &&
+          active.type === "voice" &&
+          active.chatType === "channel"
+        ) {
+          voicePresenceStore.markParticipantJoined({
+            channelId: active.chatId,
+            serverId: active.serverId,
+            participantId: peerId,
+            joinedAt: Date.now(),
+          });
+        }
       } else if (connectionState === "failed") {
         mutateParticipant(peerId, (current) => {
           if (!current) {
@@ -779,6 +828,17 @@ function createCallStore() {
           current.status = "disconnected";
           return current;
         });
+        const active = get(store).activeCall;
+        if (
+          active &&
+          active.type === "voice" &&
+          active.chatType === "channel"
+        ) {
+          voicePresenceStore.markParticipantLeft({
+            channelId: active.chatId,
+            participantId: peerId,
+          });
+        }
         if (!hasActiveParticipants()) {
           completeCall({
             status: "ended",
@@ -1071,9 +1131,11 @@ function createCallStore() {
   async function joinVoiceChannel({
     chatId,
     chatName,
+    serverId,
   }: {
     chatId: string;
     chatName: string;
+    serverId?: string | null;
   }) {
     if (!isBrowser) {
       toasts.addToast(
@@ -1094,6 +1156,9 @@ function createCallStore() {
     clearDismissalTimer();
 
     const state = get(store);
+
+    const resolvedServerId =
+      serverId ?? resolveServerIdForChannel(chatId) ?? null;
 
     if (
       state.activeCall &&
@@ -1131,6 +1196,7 @@ function createCallStore() {
         callId,
         direction: "outgoing",
         participants: new Map(),
+        serverId: resolvedServerId,
       },
     }));
 
@@ -1158,6 +1224,17 @@ function createCallStore() {
           },
         };
       });
+
+      const me = get(userStore).me;
+      if (me) {
+        voicePresenceStore.markParticipantJoined({
+          channelId: chatId,
+          serverId: resolvedServerId,
+          participantId: me.id,
+          joinedAt: connectedAt,
+          updatedAt: connectedAt,
+        });
+      }
 
       return true;
     } catch (error) {
@@ -1303,6 +1380,10 @@ function createCallStore() {
         callId,
         direction: "outgoing",
         participants: new Map(),
+        serverId:
+          chatType === "channel"
+            ? serverId ?? resolveServerIdForChannel(chatId) ?? null
+            : null,
       },
     }));
 
@@ -1479,6 +1560,8 @@ function createCallStore() {
     const chatId = signal.chatId ?? (chatType === "dm" ? senderId : senderId);
     const state = get(store);
     const active = state.activeCall;
+    const derivedServerId =
+      chatType === "channel" ? resolveServerIdForChannel(chatId) : null;
 
     const isActiveChannelMatch =
       Boolean(active) &&
@@ -1556,6 +1639,7 @@ function createCallStore() {
           callId,
           direction: "incoming",
           participants: new Map(),
+          serverId: derivedServerId,
         },
       }));
       activeCallId = callId;
@@ -2161,6 +2245,16 @@ function createCallStore() {
   }
 
   function dismissCall() {
+    const currentCall = get(store).activeCall;
+    if (currentCall?.chatType === "channel" && currentCall.type === "voice") {
+      const meId = get(userStore).me?.id;
+      if (meId) {
+        voicePresenceStore.markParticipantLeft({
+          channelId: currentCall.chatId,
+          participantId: meId,
+        });
+      }
+    }
     cleanupMedia();
     clearDismissalTimer();
     update((state) => ({
@@ -2181,6 +2275,7 @@ function createCallStore() {
     participantStates = new Map();
     screenShareStream = null;
     screenShareSenders = new Map();
+    voicePresenceStore.reset();
     set(INITIAL_STATE);
     updateScreenShareAvailability();
   }

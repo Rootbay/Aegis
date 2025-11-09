@@ -209,6 +209,49 @@ pub async fn list_server_bans(
 }
 
 #[tauri::command]
+pub async fn ban_server_member(
+    server_id: String,
+    user_id: String,
+    reason: Option<String>,
+    state_container: State<'_, AppStateContainer>,
+    app: AppHandle,
+) -> Result<ServerBanUpdate, String> {
+    let state = get_initialized_state(&state_container).await?;
+    ensure_server_owner(&state, &server_id).await?;
+
+    let server = database::get_server_by_id(&state.db_pool, &server_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if server.owner_id == user_id {
+        return Err("Server owners cannot be banned from their own server.".into());
+    }
+
+    let my_id = state.identity.peer_id().to_base58();
+    if my_id == user_id {
+        return Err("You cannot ban yourself from the server.".into());
+    }
+
+    database::remove_server_member(&state.db_pool, &server_id, &user_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    database::add_server_ban(&state.db_pool, &server_id, &user_id, reason)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let payload = ServerBanUpdate {
+        server_id: server_id.clone(),
+        user_id: user_id.clone(),
+    };
+
+    app.emit("server-member-banned", payload.clone())
+        .map_err(|e| e.to_string())?;
+
+    Ok(payload)
+}
+
+#[tauri::command]
 pub async fn unban_server_member(
     server_id: String,
     user_id: String,

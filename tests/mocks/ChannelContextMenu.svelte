@@ -29,6 +29,14 @@
   </button>
   <button
     type="button"
+    data-testid="channel-context-mute"
+    onclick={() =>
+      onaction?.({ action: "mute_channel", channelId: channel.id })}
+  >
+    Toggle Mute
+  </button>
+  <button
+    type="button"
     data-testid="channel-context-close"
     onclick={() => onclose?.()}
   >

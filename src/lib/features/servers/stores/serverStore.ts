@@ -1,4 +1,5 @@
-import { writable, get, type Readable } from "svelte/store";
+import { derived, writable, get } from "svelte/store";
+import type { Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Server,
@@ -13,10 +14,26 @@ import type { User } from "../../auth/models/User";
 import type { Channel } from "../../channels/models/Channel";
 import type { ChannelCategory } from "../../channels/models/ChannelCategory";
 import type { Role } from "../models/Role";
+import { reindexRoles } from "../models/Role";
 import type { ServerInvite } from "../models/ServerInvite";
 import { userStore } from "../../../stores/userStore";
 import { serverCache } from "../../../utils/cache";
 import type { RelayRecord, RelayStatus } from "../../settings/models/relay";
+import {
+  voicePresenceStore,
+  type VoiceChannelPresenceEntry,
+  type VoicePresenceState,
+} from "$lib/features/calls/stores/voicePresenceStore";
+import {
+  aggregateChannelPermissions,
+  allowAllChannelPermissions,
+  buildRolePermissionMap,
+  CHANNEL_PERMISSION_KEYS,
+  type ChannelPermissionOverrides,
+  type ChannelPermissionOverrideEntry,
+  type ChannelPermissionOverrideMatrix,
+} from "$lib/features/chat/utils/permissions";
+import type { EmojiCategory } from "$lib/components/emoji/types";
 
 type BackendUser = {
   id: string;
@@ -51,6 +68,32 @@ type BackendChannelCategory = {
   name: string;
   position: number;
   created_at: string;
+};
+
+type BackendChannel = {
+  id: string;
+  name: string;
+  server_id?: string;
+  serverId?: string;
+  channel_type?: "text" | "voice" | string;
+  channelType?: "text" | "voice" | string;
+  private?: boolean | number | string;
+  category_id?: string | null;
+  categoryId?: string | null;
+  position?: number | string | null;
+  channel_position?: number | string | null;
+  channelPosition?: number | string | null;
+  sort_order?: number | string | null;
+  sortOrder?: number | string | null;
+  topic?: string | null;
+  channel_topic?: string | null;
+  permission_overrides?: unknown;
+  permissionOverrides?: unknown;
+  permission_overrides_roles?: unknown;
+  permissionOverridesRoles?: unknown;
+  permission_overrides_users?: unknown;
+  permissionOverridesUsers?: unknown;
+  [key: string]: unknown;
 };
 
 type BackendServerEmoji = {
@@ -122,7 +165,7 @@ type BackendServer = {
   iconUrl?: string;
   owner_id?: string;
   members?: BackendUser[];
-  channels?: Channel[];
+  channels?: BackendChannel[];
   roles?: Role[];
   created_at?: string;
   default_channel_id?: string;
@@ -162,6 +205,12 @@ interface ServerStore extends Readable<ServerStoreState> {
   handleServersUpdate: (servers: Server[]) => void;
   setActiveServer: (serverId: string | null) => void;
   applyRelayBindings: (relays: RelayRecord[]) => void;
+  canAccessChannel: (options: {
+    serverId: string;
+    channelId?: string;
+    channel?: Channel;
+    userId?: string;
+  }) => boolean;
   updateServerMemberPresence: (
     userId: string,
     presence: {
@@ -191,6 +240,11 @@ interface ServerStore extends Readable<ServerStoreState> {
     serverId: string,
     roles: Role[],
   ) => Promise<ServerUpdateResult>;
+  updateMemberRoles: (
+    serverId: string,
+    memberId: string,
+    roleIds: string[],
+  ) => Promise<ServerUpdateResult>;
   removeChannelFromServer: (serverId: string, channelId: string) => void;
   removeCategoryFromServer: (serverId: string, categoryId: string) => void;
   initialize: () => Promise<void>;
@@ -202,6 +256,11 @@ interface ServerStore extends Readable<ServerStoreState> {
   unbanMember: (
     serverId: string,
     userId: string,
+  ) => Promise<ServerUpdateResult>;
+  banMember: (
+    serverId: string,
+    member: User,
+    options?: { reason?: string },
   ) => Promise<ServerUpdateResult>;
 }
 
@@ -242,6 +301,513 @@ export function createServerStore(): ServerStore {
       }
     }
     return undefined;
+  };
+
+  const normalizeIdList = (value: unknown): string[] => {
+    const seen = new Set<string>();
+
+    const push = (candidate: unknown) => {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed.length > 0) {
+          seen.add(trimmed);
+        }
+        return;
+      }
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        const normalized = candidate.toString();
+        if (normalized.length > 0) {
+          seen.add(normalized);
+        }
+        return;
+      }
+      if (candidate && typeof candidate === "object") {
+        const record = candidate as Record<string, unknown>;
+        if (typeof record.id === "string") {
+          const trimmed = record.id.trim();
+          if (trimmed.length > 0) {
+            seen.add(trimmed);
+          }
+        }
+      }
+    };
+
+    if (!value) {
+      return [];
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach(push);
+    } else if (value instanceof Set) {
+      value.forEach(push);
+    } else if (typeof value === "string") {
+      value
+        .split(/[\s,]+/)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0)
+        .forEach(push);
+    } else {
+      push(value);
+    }
+
+    return Array.from(seen);
+  };
+
+  const CHANNEL_PERMISSION_KEY_SET = new Set<string>(CHANNEL_PERMISSION_KEYS);
+
+  const normalizePermissionOverrideMatrix = (
+    value: unknown,
+  ): ChannelPermissionOverrideMatrix | undefined => {
+    if (!value) {
+      return undefined;
+    }
+
+    const matrix: ChannelPermissionOverrideMatrix = {};
+
+    const assign = (permission: unknown, rawValue: unknown = true) => {
+      if (typeof permission !== "string") {
+        return;
+      }
+      const trimmed = permission.trim();
+      if (!CHANNEL_PERMISSION_KEY_SET.has(trimmed)) {
+        return;
+      }
+      const coerced = coerceBoolean(rawValue);
+      if (coerced === undefined) {
+        if (rawValue === true) {
+          matrix[trimmed] = true;
+        }
+        return;
+      }
+      if (coerced) {
+        matrix[trimmed] = true;
+      }
+    };
+
+    const processCollection = (collection: Iterable<unknown>) => {
+      for (const entry of collection) {
+        if (typeof entry === "string") {
+          assign(entry, true);
+          continue;
+        }
+        if (!entry || typeof entry !== "object") {
+          continue;
+        }
+        const record = entry as Record<string, unknown>;
+        const permission =
+          record.permission ??
+          record.key ??
+          record.name ??
+          record.id ??
+          record.type;
+        const raw =
+          record.value ??
+          record.allowed ??
+          record.allow ??
+          record.enabled ??
+          true;
+        assign(permission, raw);
+      }
+    };
+
+    if (Array.isArray(value)) {
+      processCollection(value);
+    } else if (value instanceof Set) {
+      processCollection(value);
+    } else if (typeof value === "string") {
+      assign(value, true);
+    } else if (typeof value === "object") {
+      const record = value as Record<string, unknown>;
+      let applied = false;
+      for (const [permission, raw] of Object.entries(record)) {
+        if (!CHANNEL_PERMISSION_KEY_SET.has(permission)) {
+          continue;
+        }
+        assign(permission, raw);
+        applied = true;
+      }
+      if (!applied) {
+        const permission =
+          record.permission ?? record.key ?? record.name ?? record.id;
+        if (permission) {
+          const raw =
+            record.value ??
+            record.allowed ??
+            record.allow ??
+            record.enabled ??
+            true;
+          assign(permission, raw);
+        }
+      }
+    }
+
+    return Object.keys(matrix).length > 0 ? matrix : undefined;
+  };
+
+  const normalizePermissionOverrideEntry = (
+    value: unknown,
+  ): ChannelPermissionOverrideEntry | undefined => {
+    if (!value) {
+      return undefined;
+    }
+
+    if (!isRecord(value)) {
+      const matrix = normalizePermissionOverrideMatrix(value);
+      return matrix ? { allow: matrix } : undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    const allowMatrix = normalizePermissionOverrideMatrix(
+      record.allow ?? record.allowed ?? record.allowances ?? record.permit,
+    );
+    const denyMatrix = normalizePermissionOverrideMatrix(
+      record.deny ??
+        record.denied ??
+        record.disallow ??
+        record.disallowed ??
+        record.block,
+    );
+
+    const directMatrix =
+      allowMatrix || denyMatrix
+        ? undefined
+        : normalizePermissionOverrideMatrix(record);
+
+    const entry: ChannelPermissionOverrideEntry = {};
+    if (allowMatrix) {
+      entry.allow = allowMatrix;
+    } else if (directMatrix) {
+      entry.allow = directMatrix;
+    }
+
+    if (denyMatrix) {
+      entry.deny = denyMatrix;
+    }
+
+    if (!entry.allow && !entry.deny) {
+      return undefined;
+    }
+
+    return entry;
+  };
+
+  const normalizePermissionOverrideCollection = (
+    source: unknown,
+  ): Record<string, ChannelPermissionOverrideEntry> => {
+    const result: Record<string, ChannelPermissionOverrideEntry> = {};
+    if (!source) {
+      return result;
+    }
+
+    const assign = (id: unknown, entry: ChannelPermissionOverrideEntry | undefined) => {
+      if (!entry) {
+        return;
+      }
+      if (typeof id !== "string") {
+        return;
+      }
+      const trimmed = id.trim();
+      if (!trimmed) {
+        return;
+      }
+      result[trimmed] = entry;
+    };
+
+    if (source instanceof Map) {
+      for (const [id, value] of source.entries()) {
+        assign(id, normalizePermissionOverrideEntry(value));
+      }
+      return result;
+    }
+
+    if (Array.isArray(source)) {
+      for (const entry of source) {
+        if (!entry || typeof entry !== "object") {
+          continue;
+        }
+        const record = entry as Record<string, unknown>;
+        const idCandidate =
+          record.id ??
+          record.role_id ??
+          record.roleId ??
+          record.user_id ??
+          record.userId ??
+          record.target_id ??
+          record.targetId;
+        assign(idCandidate, normalizePermissionOverrideEntry(record));
+      }
+      return result;
+    }
+
+    if (isRecord(source)) {
+      for (const [id, value] of Object.entries(source)) {
+        assign(id, normalizePermissionOverrideEntry(value));
+      }
+    }
+
+    return result;
+  };
+
+  const mergeOverrideCollections = (
+    ...sources: unknown[]
+  ): Record<string, ChannelPermissionOverrideEntry> => {
+    const merged: Record<string, ChannelPermissionOverrideEntry> = {};
+    sources.forEach((source) => {
+      const normalized = normalizePermissionOverrideCollection(source);
+      for (const [id, entry] of Object.entries(normalized)) {
+        merged[id] = entry;
+      }
+    });
+    return merged;
+  };
+
+  const mapBackendChannel = (channel: BackendChannel): Channel => {
+    const {
+      channel_type,
+      channelType,
+      server_id,
+      serverId,
+      category_id,
+      categoryId,
+      position,
+      channel_position,
+      channelPosition,
+      sort_order,
+      sortOrder,
+      channel_topic,
+      topic,
+      private: privateValue,
+      allowed_user_ids,
+      allowedUserIds,
+      allowed_users,
+      allowedUsers,
+      permitted_user_ids,
+      permittedUserIds,
+      permitted_users,
+      permittedUsers,
+      allowed_role_ids,
+      allowedRoleIds,
+      allowed_roles,
+      allowedRoles,
+      permitted_role_ids,
+      permittedRoleIds,
+      permitted_roles,
+      permittedRoles,
+      rate_limit_per_user,
+      rateLimitPerUser,
+      slow_mode,
+      slowMode,
+      slowmode,
+      cooldown_seconds,
+      cooldownSeconds,
+      cooldown,
+      permission_overrides,
+      permissionOverrides,
+      permission_overrides_roles,
+      permissionOverridesRoles,
+      permission_overrides_users,
+      permissionOverridesUsers,
+      ...rest
+    } = channel;
+
+    const resolvedTypeRaw =
+      (channel_type ?? channelType ?? "text")?.toString().toLowerCase();
+    const resolvedType =
+      resolvedTypeRaw === "voice" ? "voice" : ("text" as const);
+
+    const coercedPrivate = coerceBoolean(privateValue);
+    const resolvedPrivate =
+      coercedPrivate !== undefined
+        ? coercedPrivate
+        : typeof privateValue === "boolean"
+          ? privateValue
+          : Boolean(privateValue);
+
+    const topicSource =
+      typeof topic === "string" && topic.length === 0
+        ? ""
+        : topic ?? channel_topic ?? null;
+    const resolvedTopic =
+      typeof topicSource === "string"
+        ? topicSource.trim() || null
+        : topicSource ?? null;
+
+    const toNumber = (value: unknown): number | undefined => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const parsed = Number.parseFloat(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+      return undefined;
+    };
+
+    const resolvedPosition =
+      toNumber(position) ??
+      toNumber(channel_position) ??
+      toNumber(channelPosition) ??
+      toNumber(sort_order) ??
+      toNumber(sortOrder) ??
+      0;
+
+    const normalized: Channel = {
+      ...(rest as Record<string, unknown>),
+      id: channel.id,
+      name: channel.name,
+      server_id: server_id ?? serverId ?? "",
+      channel_type: resolvedType,
+      private: resolvedPrivate,
+      position: resolvedPosition,
+      category_id: category_id ?? categoryId ?? null,
+    } as Channel;
+
+    if (resolvedTopic !== undefined) {
+      normalized.topic = resolvedTopic;
+    }
+
+    const normalizedAllowedUsers = normalizeIdList(
+      allowed_user_ids ??
+        allowedUserIds ??
+        allowed_users ??
+        allowedUsers ??
+        permitted_user_ids ??
+        permittedUserIds ??
+        permitted_users ??
+        permittedUsers ??
+        null,
+    );
+    if (normalizedAllowedUsers.length > 0) {
+      normalized.allowed_user_ids = normalizedAllowedUsers;
+    }
+
+    const normalizedAllowedRoles = normalizeIdList(
+      allowed_role_ids ??
+        allowedRoleIds ??
+        allowed_roles ??
+        allowedRoles ??
+        permitted_role_ids ??
+        permittedRoleIds ??
+        permitted_roles ??
+        permittedRoles ??
+        null,
+    );
+    if (normalizedAllowedRoles.length > 0) {
+      normalized.allowed_role_ids = normalizedAllowedRoles;
+    }
+
+    const resolvedRateLimitRaw =
+      toNumber(rate_limit_per_user) ??
+      toNumber(rateLimitPerUser) ??
+      toNumber(slow_mode) ??
+      toNumber(slowMode) ??
+      toNumber(slowmode) ??
+      toNumber(cooldown_seconds) ??
+      toNumber(cooldownSeconds) ??
+      toNumber(cooldown);
+
+    if (resolvedRateLimitRaw !== undefined) {
+      const normalizedRateLimit = Math.max(
+        0,
+        Number.isFinite(resolvedRateLimitRaw)
+          ? Math.floor(resolvedRateLimitRaw)
+          : 0,
+      );
+      normalized.rate_limit_per_user = normalizedRateLimit;
+    }
+
+    const rawPermissionOverrides =
+      permission_overrides ?? permissionOverrides ?? null;
+    const overridesRecord =
+      rawPermissionOverrides && typeof rawPermissionOverrides === "object"
+        ? (rawPermissionOverrides as Record<string, unknown>)
+        : null;
+
+    const roleOverrideSources: unknown[] = [
+      permission_overrides_roles,
+      permissionOverridesRoles,
+    ];
+    const userOverrideSources: unknown[] = [
+      permission_overrides_users,
+      permissionOverridesUsers,
+    ];
+
+    if (overridesRecord) {
+      roleOverrideSources.push(
+        overridesRecord.roles,
+        overridesRecord.role_overrides,
+        overridesRecord.roleOverrides,
+      );
+      userOverrideSources.push(
+        overridesRecord.users,
+        overridesRecord.user_overrides,
+        overridesRecord.userOverrides,
+      );
+
+      const fallbackRoleEntries: Record<string, unknown> = {};
+      const fallbackUserEntries: Record<string, unknown> = {};
+
+      for (const [key, value] of Object.entries(overridesRecord)) {
+        if (typeof key !== "string") {
+          continue;
+        }
+        if (
+          [
+            "roles",
+            "role_overrides",
+            "roleOverrides",
+            "users",
+            "user_overrides",
+            "userOverrides",
+          ].includes(key)
+        ) {
+          continue;
+        }
+
+        if (key.startsWith("user:") || key.startsWith("member:")) {
+          const trimmedKey = key.replace(/^user:|^member:/, "");
+          if (trimmedKey.trim().length > 0) {
+            fallbackUserEntries[trimmedKey] = value;
+          }
+          continue;
+        }
+
+        fallbackRoleEntries[key] = value;
+      }
+
+      if (Object.keys(fallbackRoleEntries).length > 0) {
+        roleOverrideSources.push(fallbackRoleEntries);
+      }
+
+      if (Object.keys(fallbackUserEntries).length > 0) {
+        userOverrideSources.push(fallbackUserEntries);
+      }
+    }
+
+    const normalizedRoleOverrides = mergeOverrideCollections(
+      ...roleOverrideSources,
+    );
+    const normalizedUserOverrides = mergeOverrideCollections(
+      ...userOverrideSources,
+    );
+
+    if (
+      Object.keys(normalizedRoleOverrides).length > 0 ||
+      Object.keys(normalizedUserOverrides).length > 0
+    ) {
+      const overrides: ChannelPermissionOverrides = {};
+      if (Object.keys(normalizedRoleOverrides).length > 0) {
+        overrides.roles = normalizedRoleOverrides;
+      }
+      if (Object.keys(normalizedUserOverrides).length > 0) {
+        overrides.users = normalizedUserOverrides;
+      }
+      normalized.permission_overrides = overrides;
+    }
+
+    return normalized;
   };
 
   const computeRelayParticipation = (
@@ -471,22 +1037,29 @@ export function createServerStore(): ServerStore {
     return Array.from(ids.values());
   };
 
-  const normalizeRole = (role: Role): Role => {
+  const normalizeRole = (role: Role, index = 0): Role => {
     const permissions =
       role.permissions && typeof role.permissions === "object"
         ? role.permissions
         : {};
     const memberIds = normalizeRoleIds(role.member_ids ?? []);
+    const resolvedPosition =
+      typeof role.position === "number" && Number.isFinite(role.position)
+        ? Math.max(0, Math.floor(role.position))
+        : index;
     return {
       ...role,
       permissions: { ...permissions },
       member_ids: memberIds,
+      position: resolvedPosition,
     };
   };
 
   const normalizeRolesArray = (roles: unknown): Role[] =>
     Array.isArray(roles)
-      ? (roles as Role[]).map((role) => normalizeRole(role))
+      ? reindexRoles(
+          (roles as Role[]).map((role, index) => normalizeRole(role, index)),
+        )
       : [];
 
   const buildMemberRoleMap = (roles: Role[]): Map<string, string[]> => {
@@ -587,10 +1160,61 @@ export function createServerStore(): ServerStore {
     };
   };
 
+  const toStoreUser = (user: User): User => {
+    const normalizedRoles =
+      normalizeRoleIds(
+        user.roles ?? user.roleIds ?? user.role_ids ?? [],
+      ) ?? [];
+    const resolvedName =
+      user.name && user.name.trim().length > 0
+        ? user.name.trim()
+        : `User-${user.id.slice(0, 4)}`;
+    const statusMessage =
+      user.statusMessage == null
+        ? null
+        : user.statusMessage?.toString().trim().length
+            ? user.statusMessage
+            : null;
+    const location =
+      user.location == null
+        ? null
+        : user.location?.toString().trim().length
+            ? user.location
+            : null;
+
+    return {
+      id: user.id,
+      name: resolvedName,
+      avatar: user.avatar,
+      online: Boolean(user.online),
+      publicKey: user.publicKey,
+      bio: user.bio,
+      tag: user.tag,
+      roles: normalizedRoles,
+      roleIds: normalizedRoles,
+      role_ids: normalizedRoles,
+      statusMessage,
+      location,
+      pfpUrl: user.pfpUrl,
+      bannerUrl: user.bannerUrl,
+      isIgnored: user.isIgnored,
+    };
+  };
+
   const sortCategories = (categories: ChannelCategory[]): ChannelCategory[] =>
     [...categories].sort((a, b) => {
       if (a.position !== b.position) {
         return a.position - b.position;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+  const sortChannels = (channels: Channel[]): Channel[] =>
+    [...channels].sort((a, b) => {
+      const positionA = Number.isFinite(a.position) ? a.position : 0;
+      const positionB = Number.isFinite(b.position) ? b.position : 0;
+      if (positionA !== positionB) {
+        return positionA - positionB;
       }
       return a.name.localeCompare(b.name);
     });
@@ -621,7 +1245,7 @@ export function createServerStore(): ServerStore {
       ? members
       : [];
     const normalizedChannels: Channel[] = Array.isArray(channels)
-      ? (channels as Channel[])
+      ? (channels as BackendChannel[]).map(mapBackendChannel)
       : [];
     const normalizedRoles: Role[] = normalizeRolesArray(roles);
     const roleAssignments = buildMemberRoleMap(normalizedRoles);
@@ -702,7 +1326,7 @@ export function createServerStore(): ServerStore {
       name: s.name,
       owner_id: s.owner_id ?? "",
       iconUrl: s.iconUrl,
-      channels: normalizedChannels,
+      channels: sortChannels(normalizedChannels),
       categories: normalizedCategories,
       members: assignRolesToMembers(normalizedMembers, roleAssignments),
       roles: normalizedRoles,
@@ -720,7 +1344,7 @@ export function createServerStore(): ServerStore {
     const normalized = applyRoleAssignmentsToServer({
       ...server,
       invites: server.invites ?? [],
-      channels: server.channels ?? [],
+      channels: sortChannels(server.channels ?? []),
       categories: sortCategories(server.categories ?? []),
       members: server.members ?? [],
       roles: server.roles ?? [],
@@ -735,6 +1359,35 @@ export function createServerStore(): ServerStore {
 
   const cloneServer = (server: Server): Server =>
     JSON.parse(JSON.stringify(normalizeServer(server))) as Server;
+
+  const collectRoleIdsFromUser = (user?: User | null): string[] => {
+    if (!user) {
+      return [];
+    }
+
+    const collected = new Set<string>();
+    const append = (values?: string[] | null) => {
+      if (!Array.isArray(values)) {
+        return;
+      }
+      for (const value of values) {
+        if (typeof value !== "string") {
+          continue;
+        }
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          collected.add(trimmed);
+        }
+      }
+    };
+
+    const record = user as Record<string, unknown>;
+    append(record.roles as string[] | undefined);
+    append(record.role_ids as string[] | undefined);
+    append(record.roleIds as string[] | undefined);
+
+    return Array.from(collected);
+  };
 
   const hasOwn = (object: Partial<Server>, key: keyof Server | string) =>
     Object.prototype.hasOwnProperty.call(object, key);
@@ -795,6 +1448,125 @@ export function createServerStore(): ServerStore {
     }
 
     return normalizeServer(next);
+  };
+
+  const canAccessChannel = ({
+    serverId,
+    channelId,
+    channel: channelOverride,
+    userId,
+  }: {
+    serverId: string;
+    channelId?: string;
+    channel?: Channel;
+    userId?: string;
+  }): boolean => {
+    if (!serverId) {
+      return false;
+    }
+
+    const stateSnapshot = get({ subscribe });
+    const server = stateSnapshot.servers.find((entry) => entry.id === serverId);
+    if (!server) {
+      return false;
+    }
+
+    const resolvedChannel =
+      channelOverride ??
+      (channelId
+        ? server.channels.find((entry) => entry.id === channelId)
+        : undefined);
+    if (!resolvedChannel) {
+      return false;
+    }
+
+    const trimmedUserId =
+      typeof userId === "string" && userId.trim().length > 0
+        ? userId.trim()
+        : undefined;
+    const userState = get(userStore);
+    const effectiveUserId = trimmedUserId ?? userState.me?.id ?? null;
+
+    if (!effectiveUserId) {
+      return false;
+    }
+
+    if (effectiveUserId === server.owner_id) {
+      return true;
+    }
+
+    const candidateRoles = new Set<string>();
+    const appendRoles = (user?: User | null) => {
+      for (const roleId of collectRoleIdsFromUser(user)) {
+        if (!roleId) {
+          continue;
+        }
+        candidateRoles.add(roleId);
+      }
+    };
+
+    const allowedUsers = new Set(
+      normalizeIdList(resolvedChannel.allowed_user_ids ?? []),
+    );
+
+    if (allowedUsers.has(effectiveUserId)) {
+      return true;
+    }
+
+    const member =
+      server.members?.find((entry) => entry.id === effectiveUserId) ?? null;
+    appendRoles(member);
+
+    if (userState.me && userState.me.id === effectiveUserId) {
+      appendRoles(userState.me);
+    }
+
+    for (const role of server.roles ?? []) {
+      if (!role || !Array.isArray(role.member_ids)) {
+        continue;
+      }
+      if (role.member_ids.includes(effectiveUserId)) {
+        candidateRoles.add(role.id);
+      }
+    }
+
+    let allowedByPrivacy = !resolvedChannel.private;
+
+    if (resolvedChannel.private) {
+      const allowedRoles = new Set(
+        normalizeIdList(resolvedChannel.allowed_role_ids ?? []),
+      );
+      if (allowedRoles.size === 0) {
+        allowedByPrivacy = false;
+      } else {
+        for (const roleId of candidateRoles) {
+          if (allowedRoles.has(roleId)) {
+            allowedByPrivacy = true;
+            break;
+          }
+        }
+      }
+    }
+
+    const overrides = resolvedChannel.permission_overrides;
+    if (!overrides) {
+      return allowedByPrivacy;
+    }
+
+    const rolePermissionMap = buildRolePermissionMap(server.roles);
+    const permissions = aggregateChannelPermissions({
+      memberRoleIds: candidateRoles,
+      rolePermissionMap,
+      basePermissions: allowAllChannelPermissions(),
+      overrides,
+      userId: effectiveUserId,
+    });
+
+    if (permissions.read_messages !== true) {
+      return false;
+    }
+
+    return allowedByPrivacy || permissions.read_messages === true;
   };
 
   const getServer = async (serverId: string): Promise<Server | null> => {
@@ -991,7 +1763,7 @@ export function createServerStore(): ServerStore {
     try {
       const [channelsResult, membersResult, categoriesResult] =
         await Promise.all([
-          invoke<Channel[]>("get_channels_for_server", {
+          invoke<BackendChannel[]>("get_channels_for_server", {
             serverId,
             server_id: serverId,
           }).catch((e) => {
@@ -1027,7 +1799,7 @@ export function createServerStore(): ServerStore {
           const updatedServer = { ...server };
 
           if (channelsResult !== null) {
-            updatedServer.channels = channelsResult;
+            updatedServer.channels = channelsResult.map(mapBackendChannel);
           }
 
           if (categoriesResult !== null) {
@@ -1072,7 +1844,7 @@ export function createServerStore(): ServerStore {
         server.id === serverId
           ? {
               ...server,
-              channels: [...(server.channels || []), channel],
+              channels: sortChannels([...(server.channels || []), channel]),
               invites: server.invites ?? [],
             }
           : server,
@@ -1204,6 +1976,58 @@ export function createServerStore(): ServerStore {
             ? error
             : "Failed to fetch banned members.";
       throw new Error(message);
+    }
+  };
+
+  const banMember = async (
+    serverId: string,
+    member: User,
+    options: { reason?: string } = {},
+  ): Promise<ServerUpdateResult> => {
+    const memberId = member?.id;
+    if (!serverId || !memberId) {
+      return {
+        success: false,
+        error: "Missing server or member identifier.",
+      };
+    }
+
+    try {
+      await invoke("ban_server_member", {
+        serverId,
+        server_id: serverId,
+        userId: memberId,
+        user_id: memberId,
+        reason: options.reason,
+      });
+
+      removeMemberFromServer(serverId, memberId);
+
+      const normalizedMember = toStoreUser(member);
+      const cached = banCache.get(serverId) ?? [];
+      const next = [...cached.filter((entry) => entry.id !== memberId), normalizedMember];
+      banCache.set(serverId, next);
+
+      update((state) => ({
+        ...state,
+        bansByServer: {
+          ...state.bansByServer,
+          [serverId]: next,
+        },
+      }));
+
+      return { success: true };
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Failed to ban member.";
+      return {
+        success: false,
+        error: message,
+      };
     }
   };
 
@@ -1366,9 +2190,22 @@ export function createServerStore(): ServerStore {
     const channelsTouched =
       hasOwn(patch, "channels") && Array.isArray(patch.channels);
 
-    let normalizedPatch: Partial<Server> = rolesTouched
-      ? { ...patch, roles: normalizeRolesArray(patch.roles ?? []) }
-      : { ...patch };
+    let normalizedPatch: Partial<Server> = { ...patch };
+
+    if (rolesTouched) {
+      const reindexedPatchRoles = reindexRoles(patch.roles as Role[]);
+      normalizedPatch = {
+        ...normalizedPatch,
+        roles: normalizeRolesArray(reindexedPatchRoles),
+      };
+    }
+
+    if (channelsTouched) {
+      normalizedPatch = {
+        ...normalizedPatch,
+        channels: sortChannels(normalizedPatch.channels ?? []),
+      };
+    }
 
     if (hasOwn(normalizedPatch, "settings")) {
       delete (normalizedPatch as Record<string, unknown>).settings;
@@ -1408,7 +2245,7 @@ export function createServerStore(): ServerStore {
     let metadataResult: BackendServer | null = null;
     let moderationResult: BackendServer | null = null;
     let rolesResult: Role[] | null = null;
-    let channelsResult: Channel[] | null = null;
+    let channelsResult: BackendChannel[] | null = null;
 
     try {
       if (metadataTouched) {
@@ -1428,7 +2265,7 @@ export function createServerStore(): ServerStore {
       }
 
       if (channelsTouched) {
-        channelsResult = await invoke<Channel[]>("update_server_channels", {
+        channelsResult = await invoke<BackendChannel[]>("update_server_channels", {
           serverId,
           server_id: serverId,
           channels: patch.channels ?? [],
@@ -1454,7 +2291,7 @@ export function createServerStore(): ServerStore {
       if (channelsResult) {
         finalServer = {
           ...finalServer,
-          channels: channelsResult,
+          channels: channelsResult.map(mapBackendChannel),
         } as Server;
       }
 
@@ -1508,6 +2345,115 @@ export function createServerStore(): ServerStore {
     }
   };
 
+  const updateMemberRoles = async (
+    serverId: string,
+    memberId: string,
+    roleIds: string[],
+  ): Promise<ServerUpdateResult> => {
+    if (!serverId || !memberId) {
+      return {
+        success: false,
+        error: "Missing server or member identifier.",
+      };
+    }
+
+    const snapshot = get({ subscribe });
+    const serverIndex = snapshot.servers.findIndex(
+      (srv) => srv.id === serverId,
+    );
+
+    if (serverIndex === -1) {
+      return {
+        success: false,
+        error: `Server ${serverId} not found`,
+      };
+    }
+
+    const currentServer = snapshot.servers[serverIndex];
+    const previousServer = cloneServer(currentServer);
+    const normalizedRoleIds = normalizeRoleIds(roleIds);
+    const desiredRoleSet = new Set(normalizedRoleIds);
+
+    const updatedRoles = (currentServer.roles ?? []).map((role) => {
+      const hasRole = desiredRoleSet.has(role.id);
+      const alreadyAssigned = role.member_ids.includes(memberId);
+      if (hasRole === alreadyAssigned) {
+        return role;
+      }
+      if (hasRole && !alreadyAssigned) {
+        return {
+          ...role,
+          member_ids: [...role.member_ids, memberId],
+        };
+      }
+      return {
+        ...role,
+        member_ids: role.member_ids.filter((id) => id !== memberId),
+      };
+    });
+
+    const updatedMembers = (currentServer.members ?? []).map((member) =>
+      member.id === memberId
+        ? {
+            ...member,
+            roles: normalizedRoleIds,
+            role_ids: normalizedRoleIds,
+            roleIds: normalizedRoleIds,
+          }
+        : member,
+    );
+
+    const optimisticServer = applyRoleAssignmentsToServer({
+      ...currentServer,
+      roles: updatedRoles,
+      members: updatedMembers,
+    });
+
+    update((state) => {
+      const servers = state.servers.map((srv, index) =>
+        index === serverIndex ? optimisticServer : srv,
+      );
+      serverCache.set(serverId, optimisticServer);
+      return { ...state, servers };
+    });
+
+    try {
+      const persistedRoles = await invoke<Role[]>("update_server_roles", {
+        serverId,
+        server_id: serverId,
+        roles: normalizeRolesArray(updatedRoles),
+      });
+
+      const finalServer = applyRoleAssignmentsToServer({
+        ...optimisticServer,
+        roles: normalizeRolesArray(persistedRoles),
+      });
+
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? finalServer : srv,
+        );
+        serverCache.set(serverId, finalServer);
+        return { ...state, servers };
+      });
+
+      return { success: true };
+    } catch (error) {
+      update((state) => {
+        const servers = state.servers.map((srv, index) =>
+          index === serverIndex ? previousServer : srv,
+        );
+        serverCache.set(serverId, previousServer);
+        return { ...state, servers };
+      });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  };
+
   const replaceServerRoles = async (
     serverId: string,
     roles: Role[],
@@ -1525,7 +2471,8 @@ export function createServerStore(): ServerStore {
     }
 
     const previousServer = cloneServer(snapshot.servers[serverIndex]);
-    const normalizedRoles = normalizeRolesArray(roles);
+    const reindexedRoles = reindexRoles(roles);
+    const normalizedRoles = normalizeRolesArray(reindexedRoles);
     const optimisticServer = applyRoleAssignmentsToServer({
       ...previousServer,
       roles: normalizedRoles,
@@ -1618,6 +2565,7 @@ export function createServerStore(): ServerStore {
     handleServersUpdate,
     setActiveServer,
     applyRelayBindings,
+    canAccessChannel,
     updateServerMemberPresence,
     addServer,
     upsertServerFromBackend,
@@ -1630,14 +2578,147 @@ export function createServerStore(): ServerStore {
     removeMemberFromServer,
     removeMember,
     updateServer,
+    updateMemberRoles,
     replaceServerRoles,
     removeChannelFromServer,
     removeCategoryFromServer,
     initialize,
     getServer,
     fetchBans,
+    banMember,
     unbanMember,
   };
 }
 
 export const serverStore = createServerStore();
+export function buildServerEmojiCategoriesForPicker(
+  server: Server | null | undefined,
+): EmojiCategory[] {
+  if (!server) {
+    return [];
+  }
+
+  const categories: EmojiCategory[] = [];
+  const seenValues = new Set<string>();
+  const serverLabel =
+    typeof server.name === "string" && server.name.trim().length > 0
+      ? server.name.trim()
+      : "Server";
+
+  const emojis = Array.isArray(server.emojis) ? server.emojis : [];
+  if (emojis.length > 0) {
+    const entries = emojis
+      .map((emoji) => {
+        const url = typeof emoji.url === "string" ? emoji.url.trim() : "";
+        if (!url) {
+          return null;
+        }
+
+        const value = `<emoji:${emoji.id}>`;
+        if (seenValues.has(value)) {
+          return null;
+        }
+        seenValues.add(value);
+
+        const name = typeof emoji.name === "string" ? emoji.name.trim() : "";
+        const label = name ? `:${name}:` : value;
+
+        return {
+          type: "custom",
+          id: emoji.id,
+          name: name || emoji.id,
+          url,
+          value,
+          label,
+          animated: emoji.animated === true ? true : undefined,
+        } as EmojiCategory["emojis"][number];
+      })
+      .filter((entry): entry is EmojiCategory["emojis"][number] => entry !== null);
+
+    if (entries.length > 0) {
+      categories.push({
+        id: `server-${server.id}-emoji`,
+        label: `${serverLabel} Emoji`,
+        emojis: entries,
+      });
+    }
+  }
+
+  const stickers = Array.isArray(server.stickers) ? server.stickers : [];
+  if (stickers.length > 0) {
+    const entries = stickers
+      .map((sticker) => {
+        const preferredFormat =
+          typeof sticker.format === "string"
+            ? sticker.format.trim().toLowerCase()
+            : null;
+        const displayUrlCandidate =
+          preferredFormat === "lottie" && sticker.previewUrl
+            ? sticker.previewUrl
+            : sticker.url;
+        const url = typeof displayUrlCandidate === "string"
+          ? displayUrlCandidate.trim()
+          : "";
+
+        if (!url) {
+          return null;
+        }
+
+        const value = `<sticker:${sticker.id}>`;
+        if (seenValues.has(value)) {
+          return null;
+        }
+        seenValues.add(value);
+
+        const name = typeof sticker.name === "string" ? sticker.name.trim() : "";
+        const label = name || `Sticker ${sticker.id}`;
+        const isAnimated =
+          preferredFormat === "gif" ||
+          preferredFormat === "apng" ||
+          preferredFormat === "lottie";
+
+        return {
+          type: "sticker",
+          id: sticker.id,
+          name: name || sticker.id,
+          url,
+          value,
+          label,
+          animated: isAnimated ? true : undefined,
+          previewUrl: sticker.previewUrl ?? null,
+          format: sticker.format ?? null,
+        } as EmojiCategory["emojis"][number];
+      })
+      .filter((entry): entry is EmojiCategory["emojis"][number] => entry !== null);
+
+    if (entries.length > 0) {
+      categories.push({
+        id: `server-${server.id}-stickers`,
+        label: `${serverLabel} Stickers`,
+        emojis: entries,
+      });
+    }
+  }
+
+  return categories;
+}
+
+export const activeServerEmojiCategories = derived(
+  serverStore,
+  ($state): EmojiCategory[] => {
+    const activeId = $state.activeServerId;
+    if (!activeId) {
+      return [];
+    }
+
+    const activeServer = ($state.servers ?? []).find(
+      (server) => server.id === activeId,
+    );
+
+    return buildServerEmojiCategoriesForPicker(activeServer ?? null);
+  },
+);
+export const voiceChannelPresence = derived<
+  VoicePresenceState,
+  Map<string, VoiceChannelPresenceEntry>
+>(voicePresenceStore, ($presence) => new Map($presence));

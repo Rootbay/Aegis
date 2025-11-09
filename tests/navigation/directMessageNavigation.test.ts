@@ -104,6 +104,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: {
     setActiveServer: setActiveServerMock,
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 describe("direct message navigation", () => {

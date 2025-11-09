@@ -14,6 +14,7 @@ export interface ChannelChat {
   id: string;
   name: string;
   serverId: string;
+  topic?: string | null;
   members: User[];
   messages: Message[];
 }

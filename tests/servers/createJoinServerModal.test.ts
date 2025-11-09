@@ -20,6 +20,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     setActiveServer: vi.fn(),
     addServer: vi.fn(),
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 import { invoke } from "@tauri-apps/api/core";

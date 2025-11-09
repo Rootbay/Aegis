@@ -2245,6 +2245,31 @@ pub async fn remove_server_ban(
     Ok(())
 }
 
+pub async fn add_server_ban(
+    pool: &Pool<Sqlite>,
+    server_id: &str,
+    user_id: &str,
+    reason: Option<String>,
+) -> Result<(), sqlx::Error> {
+    let normalized_reason = reason
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let created_at = Utc::now().to_rfc3339();
+
+    sqlx::query!(
+        "INSERT INTO server_bans (server_id, user_id, reason, created_at) VALUES (?, ?, ?, ?) \
+         ON CONFLICT(server_id, user_id) DO UPDATE SET reason = excluded.reason, created_at = excluded.created_at",
+        server_id,
+        user_id,
+        normalized_reason.as_deref(),
+        created_at
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 struct ServerRoleRow {
     id: String,

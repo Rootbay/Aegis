@@ -1,6 +1,7 @@
 <script lang="ts">
   import RolesManagement from "$lib/features/servers/components/RolesManagement.svelte";
-  import type { Role } from "$lib/features/servers/models/Role";
+import type { Role } from "$lib/features/servers/models/Role";
+import { reindexRoles, sortRolesByPosition } from "$lib/features/servers/models/Role";
   import type { User } from "$lib/features/auth/models/User";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { SvelteSet } from "svelte/reactivity";
@@ -12,7 +13,7 @@
       : null,
   );
 
-  let roles = $derived(server?.roles ?? []);
+  let roles = $derived(sortRolesByPosition(server?.roles ?? []));
   let members = $derived(server?.members ?? []);
 
   let saving = $state(false);
@@ -28,7 +29,11 @@
     if (!server) return;
     saving = true;
     saveError = null;
-    const result = await serverStore.replaceServerRoles(server.id, nextRoles);
+    const normalizedRoles = reindexRoles(nextRoles);
+    const result = await serverStore.replaceServerRoles(
+      server.id,
+      normalizedRoles,
+    );
     saving = false;
     if (!result.success) {
       saveError = result.error ?? "Failed to update server roles.";
@@ -46,9 +51,6 @@
   };
 
   const sortMembers = (list: User[]): User[] =>
-    [...list].sort((a, b) => a.name.localeCompare(b.name));
-
-  const sortRoles = (list: Role[]): Role[] =>
     [...list].sort((a, b) => a.name.localeCompare(b.name));
 
   function isMemberAssigned(memberId: string, roleId: string): boolean {
@@ -74,6 +76,11 @@
     const nextRoles = roles.map((role) =>
       role.id === updatedRole.id ? { ...updatedRole } : role,
     );
+    await persistRoles(nextRoles);
+  }
+
+  async function handleReorderRoles(nextRoles: Role[]) {
+    if (!server) return;
     await persistRoles(nextRoles);
   }
 
@@ -125,7 +132,7 @@
   }
 
   const sortedMembers = $derived(sortMembers(members));
-  const sortedRoles = $derived(sortRoles(roles));
+  const sortedRoles = $derived(sortRolesByPosition(roles));
 </script>
 
 <h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase">
@@ -166,6 +173,7 @@
         onupdate_role={handleUpdateRole}
         ondelete_role={handleDeleteRole}
         ontoggle_permission={handleTogglePermission}
+        onreorder_roles={handleReorderRoles}
       />
     </div>
 

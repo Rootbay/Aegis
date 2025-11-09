@@ -19,6 +19,7 @@ import {
   messagesByChatId as messagesByChatIdReadable,
   hasMoreByChatId as hasMoreByChatIdReadable,
   loadingStateByChat as loadingStateByChatReadable,
+  slowmodeByChannelId as slowmodeByChannelIdReadable,
 } from "$lib/features/chat/stores/chatStore";
 import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
 import {
@@ -34,8 +35,14 @@ import type { User } from "$lib/features/auth/models/User";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import type { Role } from "$lib/features/servers/models/Role";
 
+const environmentState = { browser: false };
 vi.mock("$app/environment", () => ({
-  browser: false,
+  get browser() {
+    return environmentState.browser;
+  },
+  __setBrowser(value: boolean) {
+    environmentState.browser = value;
+  },
 }));
 
 if (typeof globalThis.ResizeObserver === "undefined") {
@@ -79,6 +86,11 @@ type WritableStore<T> = {
   update: (updater: (value: T) => T) => void;
 };
 
+type EnvironmentModule = {
+  browser: boolean;
+  __setBrowser: (value: boolean) => void;
+};
+
 type ToastModuleMock = {
   toasts: {
     addToast: ReturnType<typeof vi.fn>;
@@ -94,6 +106,11 @@ type ContextMenuModuleMock = {
 
 type CollabModuleMock = {
   generateCollaborationDocumentId: (prefix?: string) => string;
+};
+
+type SlowmodeTracker = {
+  cooldownSeconds: number;
+  availableAt: number;
 };
 
 type ChatStoreModule = {
@@ -119,6 +136,7 @@ type ChatStoreModule = {
   messagesByChatId: WritableStore<Map<string, Message[]>>;
   hasMoreByChatId: WritableStore<Map<string, boolean>>;
   loadingStateByChat: WritableStore<Map<string, boolean>>;
+  slowmodeByChannelId: WritableStore<Map<string, SlowmodeTracker>>;
 };
 
 type ChatSearchState = {
@@ -173,7 +191,7 @@ type FriendStoreModule = {
       (friendshipId: string, friendId: string) => Promise<void>
     >;
     initialize: Mock<() => Promise<void>>;
-    subscribe: WritableStore<{ friends: Friend[] }>['subscribe'];
+    subscribe: WritableStore<{ friends: Friend[] }>["subscribe"];
   };
   __resetFriendStore?: () => void;
 };
@@ -191,7 +209,13 @@ type ServerStoreModule = {
   serverStore: {
     subscribe: WritableStore<{ servers: unknown[] }>["subscribe"];
   };
-  __setServerState?: (state: { servers: unknown[]; [key: string]: unknown }) => void;
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => () => void;
+  };
+  __setServerState?: (state: {
+    servers: unknown[];
+    [key: string]: unknown;
+  }) => void;
 };
 
 const messagesByChatId = messagesByChatIdReadable as unknown as WritableStore<
@@ -202,6 +226,10 @@ const hasMoreByChatId = hasMoreByChatIdReadable as unknown as WritableStore<
 >;
 const loadingStateByChat =
   loadingStateByChatReadable as unknown as WritableStore<Map<string, boolean>>;
+const slowmodeByChannelId =
+  slowmodeByChannelIdReadable as unknown as WritableStore<
+    Map<string, SlowmodeTracker>
+  >;
 const { __setUser } = getUserStoreModule();
 const { __resetMutedFriends } = getMutedFriendsModule();
 
@@ -630,6 +658,8 @@ describe("ChatView mentions", () => {
         server_id: serverId,
         channel_type: "text",
         private: false,
+        position: 0,
+        category_id: null,
       },
       {
         id: "channel-random",
@@ -637,6 +667,8 @@ describe("ChatView mentions", () => {
         server_id: serverId,
         channel_type: "text",
         private: false,
+        position: 0,
+        category_id: null,
       },
     ];
     const roles: Role[] = [
@@ -750,6 +782,8 @@ describe("ChatView channel permissions", () => {
       server_id: serverId,
       channel_type: "text",
       private: false,
+      position: 0,
+      category_id: null,
     };
 
     const restrictedRole: Role = {
@@ -758,6 +792,7 @@ describe("ChatView channel permissions", () => {
       color: "#555555",
       hoist: false,
       mentionable: false,
+      position: 0,
       permissions: {
         send_messages: false,
         attach_files: false,
@@ -826,7 +861,9 @@ describe("ChatView channel permissions", () => {
       ),
     ).toBeInTheDocument();
 
-    expect(screen.queryByPlaceholderText(`Message #${channel.name}`)).toBeNull();
+    expect(
+      screen.queryByPlaceholderText(`Message #${channel.name}`),
+    ).toBeNull();
     expect(screen.queryByLabelText(/Attach files/i)).toBeNull();
     expect(screen.queryByLabelText(/Insert emoji/i)).toBeNull();
     expect(screen.queryByLabelText(/voice message/i)).toBeNull();
@@ -866,7 +903,6 @@ vi.mock("@lucide/svelte", () => ({
 vi.mock("@humanspeak/svelte-virtual-list", () => ({
   default: VirtualListStub,
 }));
-
 
 vi.mock("$lib/services/tauri", () => ({
   getInvoke: async () => null,
@@ -922,6 +958,9 @@ function getChatStoreModule(): ChatStoreModule {
     const messagesByChatId = createWritable<Map<string, Message[]>>(new Map());
     const hasMoreByChatId = createWritable<Map<string, boolean>>(new Map());
     const loadingStateByChat = createWritable<Map<string, boolean>>(new Map());
+    const slowmodeByChannelId = createWritable<Map<string, SlowmodeTracker>>(
+      new Map(),
+    );
 
     globals.__chatStoreModule = {
       chatStore: {
@@ -946,6 +985,7 @@ function getChatStoreModule(): ChatStoreModule {
       messagesByChatId,
       hasMoreByChatId,
       loadingStateByChat,
+      slowmodeByChannelId,
     };
   }
   return globals.__chatStoreModule;
@@ -996,12 +1036,12 @@ function getChatSearchModule(): ChatSearchModule {
             searching: false,
             loading: false,
             hasMore: false,
-          nextCursor: null,
-          searchRequestId: 0,
-          pagesLoaded: 0,
-          resultsReceived: 0,
-          loadMoreRequests: 0,
-        });
+            nextCursor: null,
+            searchRequestId: 0,
+            pagesLoaded: 0,
+            resultsReceived: 0,
+            loadMoreRequests: 0,
+          });
         },
         setSearchLoading: () => {},
         recordSearchPage: () => {},
@@ -1155,6 +1195,12 @@ function getServerStoreModule(): ServerStoreModule {
       serverStore: {
         subscribe: state.subscribe,
       },
+      activeServerEmojiCategories: {
+        subscribe: (run: (value: unknown) => void) => {
+          run([]);
+          return () => {};
+        },
+      },
       __setServerState: (next) => state.set(next),
     };
   }
@@ -1260,8 +1306,13 @@ async function resetChatViewState() {
   messagesByChatId.set(new Map());
   hasMoreByChatId.set(new Map());
   loadingStateByChat.set(new Map());
+  slowmodeByChannelId.set(new Map());
   chatSearchStore.reset();
   await resetChatDrafts();
+  const environmentModule = (await import(
+    "$app/environment"
+  )) as unknown as EnvironmentModule;
+  environmentModule.__setBrowser(false);
   __setUser({
     id: "user-current",
     name: "Current User",
@@ -2147,5 +2198,239 @@ describe("ChatView composer emoji picker", () => {
     });
 
     expect(emojiToggle.getAttribute("aria-expanded")).toBe("false");
+  });
+});
+
+describe("ChatView slowmode feedback", () => {
+  beforeEach(async () => {
+    await resetChatViewState();
+  });
+
+  it("shows countdown banner and re-enables send after cooldown", async () => {
+    vi.useFakeTimers();
+    try {
+      const environmentModule = (await import(
+        "$app/environment"
+      )) as unknown as EnvironmentModule;
+      environmentModule.__setBrowser(true);
+
+      const chatModule = getChatStoreModule();
+      const serverModule = getServerStoreModule();
+      const now = new Date("2024-01-01T00:00:00.000Z");
+      vi.setSystemTime(now);
+
+      const serverId = "server-slowmode";
+      const channelId = "channel-slowmode";
+
+      serverModule.__setServerState?.({
+        servers: [
+          {
+            id: serverId,
+            name: "Slowmode Test",
+            owner_id: "owner-1",
+            channels: [
+              {
+                id: channelId,
+                name: "general",
+                server_id: serverId,
+                channel_type: "text",
+                private: false,
+                position: 0,
+                rate_limit_per_user: 10,
+              },
+            ],
+            categories: [],
+            members: [
+              {
+                id: "user-current",
+                name: "Current User",
+                avatar: "https://example.com/me.png",
+                online: true,
+              },
+            ],
+            roles: [],
+          },
+        ],
+      });
+
+      const chat: Chat = {
+        type: "channel",
+        id: channelId,
+        name: "general",
+        serverId,
+        members: [
+          {
+            id: "user-current",
+            name: "Current User",
+            avatar: "https://example.com/me.png",
+            online: true,
+          },
+        ],
+        messages: [],
+      };
+
+      slowmodeByChannelId.set(
+        new Map([
+          [
+            channelId,
+            {
+              cooldownSeconds: 10,
+              availableAt: now.getTime() + 5_000,
+            },
+          ],
+        ]),
+      );
+
+      render(ChatView, { props: { chat } });
+
+      await tick();
+
+      const banner = await screen.findByText(/Slowmode enabled/i);
+      expect(banner.textContent).toContain("5s");
+
+      const sendButton = screen.getByRole("button", {
+        name: /Slowmode active/i,
+      }) as HTMLButtonElement;
+      expect(sendButton).toBeDisabled();
+
+      vi.advanceTimersByTime(5_000);
+      await tick();
+
+      await waitFor(() => {
+        expect(sendButton).not.toBeDisabled();
+      });
+
+      expect(chatModule.chatStore.sendMessage).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("disables sending after a slowmode error", async () => {
+    vi.useFakeTimers();
+    try {
+      const environmentModule = (await import(
+        "$app/environment"
+      )) as unknown as EnvironmentModule;
+      environmentModule.__setBrowser(true);
+
+      const chatModule = getChatStoreModule();
+      const serverModule = getServerStoreModule();
+      const now = new Date("2024-01-01T00:00:00.000Z");
+      vi.setSystemTime(now);
+
+      const serverId = "server-slowmode-error";
+      const channelId = "channel-slowmode-error";
+
+      serverModule.__setServerState?.({
+        servers: [
+          {
+            id: serverId,
+            name: "Slowmode Error",
+            owner_id: "owner-2",
+            channels: [
+              {
+                id: channelId,
+                name: "alerts",
+                server_id: serverId,
+                channel_type: "text",
+                private: false,
+                position: 0,
+                rate_limit_per_user: 5,
+              },
+            ],
+            categories: [],
+            members: [
+              {
+                id: "user-current",
+                name: "Current User",
+                avatar: "https://example.com/me.png",
+                online: true,
+              },
+            ],
+            roles: [],
+          },
+        ],
+      });
+
+      const chat: Chat = {
+        type: "channel",
+        id: channelId,
+        name: "alerts",
+        serverId,
+        members: [
+          {
+            id: "user-current",
+            name: "Current User",
+            avatar: "https://example.com/me.png",
+            online: true,
+          },
+        ],
+        messages: [],
+      };
+
+      const slowmodeError = {
+        name: "SlowmodeError",
+        remainingSeconds: 4,
+        cooldownSeconds: 5,
+        channelId,
+      };
+
+      chatModule.chatStore.sendMessage = vi
+        .fn(async () => {
+          slowmodeByChannelId.set(
+            new Map([
+              [
+                channelId,
+                {
+                  cooldownSeconds: 5,
+                  availableAt: Date.now() + 4_000,
+                },
+              ],
+            ]),
+          );
+          throw slowmodeError;
+        })
+        .mockName("sendMessage");
+
+      render(ChatView, { props: { chat } });
+
+      const composer = (await screen.findByPlaceholderText(
+        "Message #alerts",
+      )) as HTMLTextAreaElement;
+
+      await fireEvent.input(composer, {
+        target: { value: "Testing slowmode" },
+      });
+
+      const sendButton = screen.getByRole("button", {
+        name: "Send message",
+      });
+
+      await fireEvent.click(sendButton);
+
+      await tick();
+
+      expect(chatModule.chatStore.sendMessage).toHaveBeenCalledTimes(1);
+
+      const banner = await screen.findByText(/Slowmode enabled/i);
+      expect(banner.textContent).toContain("4s");
+
+      const disabledButton = screen.getByRole("button", {
+        name: /Slowmode active/i,
+      }) as HTMLButtonElement;
+      expect(disabledButton).toBeDisabled();
+
+      vi.advanceTimersByTime(4_000);
+      await tick();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Send message" }),
+        ).not.toBeDisabled();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -127,6 +127,12 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
 
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: serverStoreMock,
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$features/chat", async () => ({
@@ -214,29 +220,35 @@ describe("server root channel activation", () => {
         {
           id: "server-1",
           name: "Root Server",
-          channels: [
-            {
-              id: "channel-general",
-              server_id: "server-1",
-              name: "general",
-              channel_type: "text",
-              private: false,
-            },
-            {
-              id: "channel-random",
-              server_id: "server-1",
-              name: "random",
-              channel_type: "text",
-              private: false,
-            },
-            {
-              id: "voice-1",
-              server_id: "server-1",
-              name: "Lounge",
-              channel_type: "voice",
-              private: false,
-            },
-          ],
+            channels: [
+              {
+                id: "channel-general",
+                server_id: "server-1",
+                name: "general",
+                channel_type: "text",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+              {
+                id: "channel-random",
+                server_id: "server-1",
+                name: "random",
+                channel_type: "text",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+              {
+                id: "voice-1",
+                server_id: "server-1",
+                name: "Lounge",
+                channel_type: "voice",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+            ],
           members: [],
         },
       ],
@@ -281,22 +293,26 @@ describe("server root channel activation", () => {
         {
           id: "server-1",
           name: "Root Server",
-          channels: [
-            {
-              id: "channel-alpha",
-              server_id: "server-1",
-              name: "alpha",
-              channel_type: "text",
-              private: false,
-            },
-            {
-              id: "voice-1",
-              server_id: "server-1",
-              name: "Lounge",
-              channel_type: "voice",
-              private: false,
-            },
-          ],
+            channels: [
+              {
+                id: "channel-alpha",
+                server_id: "server-1",
+                name: "alpha",
+                channel_type: "text",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+              {
+                id: "voice-1",
+                server_id: "server-1",
+                name: "Lounge",
+                channel_type: "voice",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+            ],
           members: [],
         },
       ],
@@ -318,15 +334,17 @@ describe("server root channel activation", () => {
         {
           id: "server-1",
           name: "Root Server",
-          channels: [
-            {
-              id: "voice-1",
-              server_id: "server-1",
-              name: "Lounge",
-              channel_type: "voice",
-              private: false,
-            },
-          ],
+            channels: [
+              {
+                id: "voice-1",
+                server_id: "server-1",
+                name: "Lounge",
+                channel_type: "voice",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+            ],
           members: [],
         },
       ],
@@ -348,22 +366,26 @@ describe("channel route synchronization", () => {
         {
           id: "server-1",
           name: "Test Server",
-          channels: [
-            {
-              id: "channel-1",
-              server_id: "server-1",
-              name: "general",
-              channel_type: "text",
-              private: false,
-            },
-            {
-              id: "channel-2",
-              server_id: "server-1",
-              name: "random",
-              channel_type: "text",
-              private: false,
-            },
-          ],
+            channels: [
+              {
+                id: "channel-1",
+                server_id: "server-1",
+                name: "general",
+                channel_type: "text",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+              {
+                id: "channel-2",
+                server_id: "server-1",
+                name: "random",
+                channel_type: "text",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+            ],
           members: [],
         },
       ],

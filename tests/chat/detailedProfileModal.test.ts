@@ -277,6 +277,12 @@ vi.mock("$lib/features/friends/stores/ignoredUsersStore", () => ({
 
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: mocks.serverStoreMock,
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$lib/features/chat/stores/chatStore", () => ({

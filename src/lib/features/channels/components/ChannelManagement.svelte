@@ -2,6 +2,11 @@
   import type { Channel } from "$lib/features/channels/models/Channel";
   import { v4 as uuidv4 } from "uuid";
   import { Hash, Volume2, Plus, Pencil, Trash, X, Check } from "@lucide/svelte";
+  import {
+    SLOWMODE_PRESETS,
+    buildSlowmodeOptions,
+    normalizeSlowmodeValue,
+  } from "$lib/features/channels/utils/slowmode";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 
@@ -21,9 +26,40 @@
 
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
+  let newChannelSlowmode = $state(0);
   let editingChannel = $state<Channel | null>(null);
   let editingChannelName = $state("");
   let editingChannelType = $state<"text" | "voice">("text");
+  let editingChannelSlowmode = $state(0);
+
+  let newChannelSlowmodeOptions = buildSlowmodeOptions();
+  let editingChannelSlowmodeOptions = buildSlowmodeOptions();
+
+  $effect(() => {
+    newChannelSlowmodeOptions = buildSlowmodeOptions([
+      ...SLOWMODE_PRESETS,
+      newChannelSlowmode,
+    ]);
+  });
+
+  $effect(() => {
+    editingChannelSlowmodeOptions = buildSlowmodeOptions([
+      ...SLOWMODE_PRESETS,
+      editingChannelSlowmode,
+    ]);
+  });
+
+  $effect(() => {
+    if (newChannelType === "voice") {
+      newChannelSlowmode = 0;
+    }
+  });
+
+  $effect(() => {
+    if (editingChannelType === "voice") {
+      editingChannelSlowmode = 0;
+    }
+  });
 
   function addChannel() {
     if (newChannelName.trim()) {
@@ -33,10 +69,14 @@
         server_id: "",
         channel_type: newChannelType,
         private: false,
+        position: channels.length,
         category_id: null,
+        rate_limit_per_user:
+          newChannelType === "text" ? newChannelSlowmode : 0,
       };
       onadd_channel?.(newChannel);
       newChannelName = "";
+      newChannelSlowmode = 0;
     }
   }
 
@@ -44,6 +84,7 @@
     editingChannel = { ...channel };
     editingChannelName = channel.name;
     editingChannelType = channel.channel_type;
+    editingChannelSlowmode = channel.rate_limit_per_user ?? 0;
   }
 
   function saveEditChannel() {
@@ -52,15 +93,19 @@
         ...editingChannel,
         name: editingChannelName.trim(),
         channel_type: editingChannelType,
+        rate_limit_per_user:
+          editingChannelType === "text" ? editingChannelSlowmode : 0,
       });
       editingChannel = null;
       editingChannelName = "";
+      editingChannelSlowmode = 0;
     }
   }
 
   function cancelEditChannel() {
     editingChannel = null;
     editingChannelName = "";
+    editingChannelSlowmode = 0;
   }
 
   function deleteChannel(channelId: string) {
@@ -100,6 +145,27 @@
       <Plus size={12} />
     </button>
   </div>
+
+  {#if newChannelType === "text"}
+    <div class="flex items-center gap-2 mb-4">
+      <label class="text-xs font-semibold uppercase text-muted-foreground">
+        Slowmode
+      </label>
+      <select
+        class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        on:change={(event) => {
+          const target = event.target as HTMLSelectElement;
+          newChannelSlowmode = normalizeSlowmodeValue(target.value);
+        }}
+      >
+        {#each newChannelSlowmodeOptions as option (option.value)}
+          <option value={option.value} selected={option.value === newChannelSlowmode}>
+            {option.label}
+          </option>
+        {/each}
+      </select>
+    </div>
+  {/if}
 
   <div class="space-y-2">
     {#each channels as channel (channel.id)}
@@ -155,6 +221,26 @@
               <option value="voice">Voice</option>
             </select>
           </div>
+          {#if editingChannelType === "text"}
+            <div class="flex items-center gap-4">
+              <label class="text-sm font-medium text-muted-foreground w-24">
+                Slowmode
+              </label>
+              <select
+                class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                on:change={(event) => {
+                  const target = event.target as HTMLSelectElement;
+                  editingChannelSlowmode = normalizeSlowmodeValue(target.value);
+                }}
+              >
+                {#each editingChannelSlowmodeOptions as option (option.value)}
+                  <option value={option.value} selected={option.value === editingChannelSlowmode}>
+                    {option.label}
+                  </option>
+                {/each}
+              </select>
+            </div>
+          {/if}
           <div class="flex justify-end gap-2 mt-4">
             <button
               onclick={cancelEditChannel}

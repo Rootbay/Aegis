@@ -32,6 +32,7 @@
             id: channel.id,
             name: channel.name,
             serverId: server.id,
+            topic: channel.topic ?? null,
             members: server.members,
             messages,
           } satisfies ChannelChat;
