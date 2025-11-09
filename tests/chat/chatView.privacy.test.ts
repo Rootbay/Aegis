@@ -623,22 +623,26 @@ describe("ChatView mentions", () => {
 
   it("inserts channel and role mentions from the suggestion list", async () => {
     const serverId = "server-mention-suggestions";
-    const channels: Channel[] = [
-      {
-        id: "channel-general",
-        name: "general",
-        server_id: serverId,
-        channel_type: "text",
-        private: false,
-      },
-      {
-        id: "channel-random",
-        name: "random",
-        server_id: serverId,
-        channel_type: "text",
-        private: false,
-      },
-    ];
+      const channels: Channel[] = [
+        {
+          id: "channel-general",
+          name: "general",
+          server_id: serverId,
+          channel_type: "text",
+          private: false,
+          position: 0,
+          category_id: null,
+        },
+        {
+          id: "channel-random",
+          name: "random",
+          server_id: serverId,
+          channel_type: "text",
+          private: false,
+          position: 0,
+          category_id: null,
+        },
+      ];
     const roles: Role[] = [
       {
         id: "role-mods",
@@ -750,6 +754,8 @@ describe("ChatView channel permissions", () => {
       server_id: serverId,
       channel_type: "text",
       private: false,
+      position: 0,
+      category_id: null,
     };
 
     const restrictedRole: Role = {

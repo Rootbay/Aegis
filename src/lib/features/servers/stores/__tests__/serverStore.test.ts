@@ -23,6 +23,7 @@ const textChannel: Channel = {
   server_id: baseServer.id,
   channel_type: "text",
   private: false,
+  position: 0,
   category_id: null,
 };
 

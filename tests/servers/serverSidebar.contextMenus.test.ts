@@ -4,6 +4,7 @@ import type {
   ActiveCall,
   CallState,
 } from "$lib/features/calls/stores/callStore";
+import type { Channel } from "$lib/features/channels/models/Channel";
 
 import ChannelContextMenuMock from "../mocks/ChannelContextMenu.svelte";
 import ServerBackgroundContextMenuMock from "../mocks/ServerBackgroundContextMenu.svelte";
@@ -301,6 +302,31 @@ import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
 import { tick } from "svelte";
 
 describe("ServerSidebar context menus", () => {
+  const createDataTransfer = () => {
+    const store: Record<string, string> = {};
+    return {
+      data: store,
+      dropEffect: "move",
+      effectAllowed: "move",
+      files: [],
+      items: [],
+      types: [],
+      setData(type: string, value: string) {
+        store[type] = value;
+      },
+      getData(type: string) {
+        return store[type] ?? "";
+      },
+      clearData(type?: string) {
+        if (!type) {
+          Object.keys(store).forEach((key) => delete store[key]);
+          return;
+        }
+        delete store[type];
+      },
+    } as unknown as DataTransfer;
+  };
+
   const createLocalStorageMock = () => {
     const storage = new Map<string, string>();
     return {
@@ -348,6 +374,7 @@ describe("ServerSidebar context menus", () => {
           name: "ops",
           channel_type: "text" as const,
           private: false,
+          position: 0,
           category_id: "category-1",
         },
         {
@@ -356,6 +383,7 @@ describe("ServerSidebar context menus", () => {
           name: "briefing",
           channel_type: "voice" as const,
           private: false,
+          position: 1,
           category_id: "category-1",
         },
         {
@@ -364,6 +392,7 @@ describe("ServerSidebar context menus", () => {
           name: "general",
           channel_type: "text" as const,
           private: false,
+          position: 2,
           category_id: null,
         },
       ],
@@ -397,6 +426,85 @@ describe("ServerSidebar context menus", () => {
     expect(getByText("general")).toBeTruthy();
   });
 
+  it("creates a channel inside the active category when using the category add button", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "ops",
+          channel_type: "text" as const,
+          private: false,
+          position: 0,
+          category_id: "category-1",
+        },
+        {
+          id: "channel-2",
+          server_id: "server-1",
+          name: "support",
+          channel_type: "text" as const,
+          private: false,
+          position: 1,
+          category_id: "category-1",
+        },
+      ],
+      categories: [
+        {
+          id: "category-1",
+          server_id: "server-1",
+          name: "Operations",
+          position: 1,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    mockInvoke.mockResolvedValueOnce(undefined);
+
+    const { getByText, getByLabelText, getByRole } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    const categoryHeading = getByText("Operations");
+    const categoryContainer = categoryHeading.closest("div");
+    const createButton = categoryContainer?.parentElement?.querySelector(
+      'button[aria-label="Create Channel"]',
+    ) as HTMLButtonElement | null;
+    expect(createButton).toBeTruthy();
+
+    await fireEvent.click(createButton!);
+
+    const nameInput = getByLabelText("Channel Name") as HTMLInputElement;
+    await fireEvent.input(nameInput, { target: { value: "logistics" } });
+
+    mockInvoke.mockResolvedValueOnce(undefined);
+
+    const submitButton = getByRole("button", { name: /create channel/i });
+    await fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith(
+        "create_channel",
+        expect.objectContaining({
+          channel: expect.objectContaining({
+            category_id: "category-1",
+            channel_type: "text",
+            position: 2,
+          }),
+        }),
+      );
+    });
+  });
+
   it("generates and copies a server invite from the channel context menu", async () => {
     const invite = {
       id: "invite-1",
@@ -421,6 +529,7 @@ describe("ServerSidebar context menus", () => {
           name: "general",
           channel_type: "text" as const,
           private: false,
+          position: 0,
         },
       ],
       categories: [],
@@ -514,6 +623,7 @@ describe("ServerSidebar context menus", () => {
           name: "general",
           channel_type: "text" as const,
           private: false,
+          position: 0,
         },
         {
           id: "channel-2",
@@ -521,6 +631,7 @@ describe("ServerSidebar context menus", () => {
           name: "briefing",
           channel_type: "voice" as const,
           private: false,
+          position: 1,
         },
       ],
       categories: [],
@@ -552,6 +663,7 @@ describe("ServerSidebar context menus", () => {
           name: "general",
           channel_type: "text" as const,
           private: false,
+          position: 0,
         },
         {
           id: "channel-2",
@@ -559,6 +671,7 @@ describe("ServerSidebar context menus", () => {
           name: "briefing",
           channel_type: "voice" as const,
           private: false,
+          position: 1,
         },
       ],
       categories: [],
@@ -603,6 +716,7 @@ describe("ServerSidebar context menus", () => {
           name: "general",
           channel_type: "text" as const,
           private: false,
+          position: 0,
         },
         {
           id: "channel-2",
@@ -610,6 +724,7 @@ describe("ServerSidebar context menus", () => {
           name: "briefing",
           channel_type: "voice" as const,
           private: false,
+          position: 1,
         },
       ],
       categories: [],
@@ -654,6 +769,101 @@ describe("ServerSidebar context menus", () => {
     const voiceButton = voiceLabel.closest('[role="button"]');
     expect(voiceButton).toBeTruthy();
     expect(voiceButton?.getAttribute("data-active")).toBe("true");
+  });
+
+  it("reassigns category and position when dragging a channel to another category", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "alpha",
+          channel_type: "text" as const,
+          private: false,
+          position: 0,
+          category_id: "category-1",
+        },
+        {
+          id: "channel-2",
+          server_id: "server-1",
+          name: "beta",
+          channel_type: "text" as const,
+          private: false,
+          position: 1,
+          category_id: "category-1",
+        },
+        {
+          id: "channel-3",
+          server_id: "server-1",
+          name: "raid-planning",
+          channel_type: "text" as const,
+          private: false,
+          position: 0,
+          category_id: "category-2",
+        },
+      ],
+      categories: [
+        {
+          id: "category-1",
+          server_id: "server-1",
+          name: "Operations",
+          position: 1,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: "category-2",
+          server_id: "server-1",
+          name: "Logistics",
+          position: 2,
+          created_at: new Date().toISOString(),
+        },
+      ],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const { getByText } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    const source = getByText("beta").closest('[role="button"]');
+    const target = getByText("raid-planning").closest('[role="button"]');
+    expect(source).toBeTruthy();
+    expect(target).toBeTruthy();
+
+    const dataTransfer = createDataTransfer();
+
+    await fireEvent.dragStart(source!, { dataTransfer });
+    await fireEvent.dragOver(target!, { dataTransfer });
+    await fireEvent.drop(target!, { dataTransfer });
+
+    await waitFor(() => {
+      expect(updateServerMock).toHaveBeenCalled();
+    });
+
+    const updateCall = updateServerMock.mock.calls[0]?.[1] as {
+      channels: Channel[];
+    };
+    expect(updateCall).toBeDefined();
+    const updatedChannels = updateCall.channels;
+
+    const movedChannel = updatedChannels.find((ch) => ch.id === "channel-2");
+    expect(movedChannel?.category_id).toBe("category-2");
+    expect(movedChannel?.position).toBe(0);
+
+    const remainingChannel = updatedChannels.find((ch) => ch.id === "channel-1");
+    expect(remainingChannel?.category_id).toBe("category-1");
+    expect(remainingChannel?.position).toBe(0);
+
+    const targetChannel = updatedChannels.find((ch) => ch.id === "channel-3");
+    expect(targetChannel?.position).toBe(1);
   });
 
   it("retains muted channels across rerenders", async () => {

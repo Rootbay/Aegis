@@ -132,6 +132,7 @@ describe("serverStore.updateServer", () => {
         name: "general",
         channel_type: "text",
         private: false,
+        position: 0,
         category_id: null,
       },
       {
@@ -140,6 +141,7 @@ describe("serverStore.updateServer", () => {
         name: "voice",
         channel_type: "voice",
         private: false,
+        position: 0,
         category_id: null,
       },
     ];
