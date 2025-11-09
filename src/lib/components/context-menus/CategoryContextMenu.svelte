@@ -37,6 +37,9 @@
     class="w-52 text-sm"
     style={`position:fixed; left:${x}px; top:${y}px;`}
   >
+    <DropdownMenuItem onselect={() => handleAction("create_channel")}>
+      Create Channel
+    </DropdownMenuItem>
     <DropdownMenuItem onselect={() => handleAction("collapse_category")}>
       Collapse Category
     </DropdownMenuItem>

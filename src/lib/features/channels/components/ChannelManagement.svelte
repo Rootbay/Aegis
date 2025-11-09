@@ -33,6 +33,7 @@
         server_id: "",
         channel_type: newChannelType,
         private: false,
+        position: channels.length,
         category_id: null,
       };
       onadd_channel?.(newChannel);

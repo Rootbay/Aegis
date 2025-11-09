@@ -63,6 +63,11 @@ type BackendChannel = {
   private?: boolean | number | string;
   category_id?: string | null;
   categoryId?: string | null;
+  position?: number | string | null;
+  channel_position?: number | string | null;
+  channelPosition?: number | string | null;
+  sort_order?: number | string | null;
+  sortOrder?: number | string | null;
   topic?: string | null;
   channel_topic?: string | null;
   [key: string]: unknown;
@@ -323,6 +328,11 @@ export function createServerStore(): ServerStore {
       serverId,
       category_id,
       categoryId,
+      position,
+      channel_position,
+      channelPosition,
+      sort_order,
+      sortOrder,
       channel_topic,
       topic,
       private: privateValue,
@@ -367,6 +377,27 @@ export function createServerStore(): ServerStore {
         ? topicSource.trim() || null
         : topicSource ?? null;
 
+    const toNumber = (value: unknown): number | undefined => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const parsed = Number.parseFloat(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+      return undefined;
+    };
+
+    const resolvedPosition =
+      toNumber(position) ??
+      toNumber(channel_position) ??
+      toNumber(channelPosition) ??
+      toNumber(sort_order) ??
+      toNumber(sortOrder) ??
+      0;
+
     const normalized: Channel = {
       ...(rest as Record<string, unknown>),
       id: channel.id,
@@ -374,6 +405,7 @@ export function createServerStore(): ServerStore {
       server_id: server_id ?? serverId ?? "",
       channel_type: resolvedType,
       private: resolvedPrivate,
+      position: resolvedPosition,
       category_id: category_id ?? categoryId ?? null,
     } as Channel;
 
@@ -765,6 +797,16 @@ export function createServerStore(): ServerStore {
       return a.name.localeCompare(b.name);
     });
 
+  const sortChannels = (channels: Channel[]): Channel[] =>
+    [...channels].sort((a, b) => {
+      const positionA = Number.isFinite(a.position) ? a.position : 0;
+      const positionB = Number.isFinite(b.position) ? b.position : 0;
+      if (positionA !== positionB) {
+        return positionA - positionB;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
   const mapServer = (s: BackendServer): Server => {
     const {
       members = [],
@@ -872,7 +914,7 @@ export function createServerStore(): ServerStore {
       name: s.name,
       owner_id: s.owner_id ?? "",
       iconUrl: s.iconUrl,
-      channels: normalizedChannels,
+      channels: sortChannels(normalizedChannels),
       categories: normalizedCategories,
       members: assignRolesToMembers(normalizedMembers, roleAssignments),
       roles: normalizedRoles,
@@ -890,7 +932,7 @@ export function createServerStore(): ServerStore {
     const normalized = applyRoleAssignmentsToServer({
       ...server,
       invites: server.invites ?? [],
-      channels: server.channels ?? [],
+      channels: sortChannels(server.channels ?? []),
       categories: sortCategories(server.categories ?? []),
       members: server.members ?? [],
       roles: server.roles ?? [],
@@ -1356,7 +1398,7 @@ export function createServerStore(): ServerStore {
         server.id === serverId
           ? {
               ...server,
-              channels: [...(server.channels || []), channel],
+              channels: sortChannels([...(server.channels || []), channel]),
               invites: server.invites ?? [],
             }
           : server,
@@ -1653,6 +1695,13 @@ export function createServerStore(): ServerStore {
     let normalizedPatch: Partial<Server> = rolesTouched
       ? { ...patch, roles: normalizeRolesArray(patch.roles ?? []) }
       : { ...patch };
+
+    if (channelsTouched) {
+      normalizedPatch = {
+        ...normalizedPatch,
+        channels: sortChannels(normalizedPatch.channels ?? []),
+      };
+    }
 
     if (hasOwn(normalizedPatch, "settings")) {
       delete (normalizedPatch as Record<string, unknown>).settings;

@@ -110,16 +110,17 @@ describe("CommandPalette", () => {
           id: "server-1",
           name: "Test Server",
           owner_id: "owner-1",
-          channels: [
-            {
-              id: "channel-1",
-              name: "general",
-              server_id: "server-1",
-              channel_type: "text",
-              private: false,
-              category_id: null,
-            },
-          ],
+            channels: [
+              {
+                id: "channel-1",
+                name: "general",
+                server_id: "server-1",
+                channel_type: "text",
+                private: false,
+                position: 0,
+                category_id: null,
+              },
+            ],
           categories: [],
           members: [],
           roles: [],

@@ -70,6 +70,7 @@ type MockServerState = {
       name: string;
       channel_type: string;
       private: boolean;
+      position: number;
       category_id: string | null;
     }>;
     categories: unknown[];
@@ -234,6 +235,7 @@ describe("chatStore read receipts and typing indicators", () => {
               name: "general",
               channel_type: "text",
               private: false,
+              position: 0,
               category_id: null,
             },
           ],
