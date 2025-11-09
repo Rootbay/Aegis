@@ -116,6 +116,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     subscribe: ensureServerStoreStateRef().state.subscribe,
     __setState: (next: unknown) => ensureServerStoreStateRef().set(next as any),
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 function ensureConnectivityMocks() {

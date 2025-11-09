@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { get } from "svelte/store";
 
-import { createServerStore } from "../serverStore";
+import {
+  createServerStore,
+  buildServerEmojiCategoriesForPicker,
+} from "../serverStore";
 import type { Server } from "$lib/features/servers/models/Server";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import { serverCache } from "$lib/utils/cache";
@@ -356,6 +359,82 @@ describe("serverStore social event helpers", () => {
           channelId: privateChannel.id,
         }),
       ).toBe(false);
+    });
+  });
+});
+
+describe("server emoji metadata transformer", () => {
+  const serverWithAssets: Server = {
+    ...baseServer,
+    name: "Emoji Guild",
+    emojis: [
+      {
+        id: "emoji-1",
+        name: "wave",
+        url: "https://cdn.example.com/wave.png",
+        animated: true,
+      },
+      {
+        id: "emoji-1",
+        name: "wave-duplicate",
+        url: "https://cdn.example.com/wave-duplicate.png",
+        animated: false,
+      },
+    ],
+    stickers: [
+      {
+        id: "sticker-1",
+        name: "cheer",
+        url: "https://cdn.example.com/cheer.webp",
+        previewUrl: "https://cdn.example.com/cheer-preview.png",
+        format: "lottie",
+      },
+      {
+        id: "sticker-1",
+        name: "cheer-duplicate",
+        url: "https://cdn.example.com/cheer-duplicate.webp",
+        format: "gif",
+      },
+    ],
+  };
+
+  it("returns empty categories when no assets are present", () => {
+    expect(buildServerEmojiCategoriesForPicker(null)).toEqual([]);
+    expect(
+      buildServerEmojiCategoriesForPicker({ ...baseServer }),
+    ).toEqual([]);
+  });
+
+  it("maps server emoji and stickers into picker categories", () => {
+    const categories = buildServerEmojiCategoriesForPicker(serverWithAssets);
+
+    expect(categories).toHaveLength(2);
+
+    const emojiCategory = categories.find((category) =>
+      category.id.endsWith("emoji"),
+    );
+    expect(emojiCategory).toBeDefined();
+    expect(emojiCategory?.label).toBe("Emoji Guild Emoji");
+    expect(emojiCategory?.emojis).toHaveLength(1);
+    expect(emojiCategory?.emojis[0]).toMatchObject({
+      type: "custom",
+      value: "<emoji:emoji-1>",
+      label: ":wave:",
+      url: "https://cdn.example.com/wave.png",
+      animated: true,
+    });
+
+    const stickerCategory = categories.find((category) =>
+      category.id.endsWith("stickers"),
+    );
+    expect(stickerCategory).toBeDefined();
+    expect(stickerCategory?.label).toBe("Emoji Guild Stickers");
+    expect(stickerCategory?.emojis).toHaveLength(1);
+    expect(stickerCategory?.emojis[0]).toMatchObject({
+      type: "sticker",
+      value: "<sticker:sticker-1>",
+      url: "https://cdn.example.com/cheer-preview.png",
+      animated: true,
     });
   });
 });

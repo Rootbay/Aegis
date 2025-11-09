@@ -26,6 +26,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     fetchBans: mocks.fetchBansMock,
     unbanMember: mocks.unbanMemberMock,
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$lib/stores/ToastStore", () => ({

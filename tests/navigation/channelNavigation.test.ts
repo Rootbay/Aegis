@@ -127,6 +127,12 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
 
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: serverStoreMock,
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$features/chat", async () => ({

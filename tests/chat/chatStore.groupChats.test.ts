@@ -25,6 +25,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => {
     serverStore: {
       subscribe: state.subscribe,
     },
+    activeServerEmojiCategories: {
+      subscribe: (run: (value: unknown) => void) => {
+        run([]);
+        return () => {};
+      },
+    },
   };
 });
 vi.mock("../../src/lib/features/servers/stores/serverStore", () => {
@@ -32,6 +38,12 @@ vi.mock("../../src/lib/features/servers/stores/serverStore", () => {
   return {
     serverStore: {
       subscribe: state.subscribe,
+    },
+    activeServerEmojiCategories: {
+      subscribe: (run: (value: unknown) => void) => {
+        run([]);
+        return () => {};
+      },
     },
   };
 });

@@ -1,4 +1,4 @@
-import type { EmojiCategory } from "./types";
+import type { EmojiCategory, UnicodeEmojiEntry } from "./types";
 
 export type { EmojiCategory } from "./types";
 
@@ -11,7 +11,7 @@ export const fallbackEmojiCategories: EmojiCategory[] = [
   {
     id: "smileys",
     label: "Smileys & Emotion",
-    emojis: [
+    emojis: mapUnicode([
       "😀",
       "😁",
       "😂",
@@ -24,12 +24,12 @@ export const fallbackEmojiCategories: EmojiCategory[] = [
       "😴",
       "🤯",
       "😎",
-    ],
+    ]),
   },
   {
     id: "gestures",
     label: "People & Body",
-    emojis: [
+    emojis: mapUnicode([
       "👍",
       "👎",
       "👏",
@@ -42,12 +42,12 @@ export const fallbackEmojiCategories: EmojiCategory[] = [
       "🤟",
       "🤘",
       "🫶",
-    ],
+    ]),
   },
   {
     id: "symbols",
     label: "Symbols",
-    emojis: [
+    emojis: mapUnicode([
       "❤️",
       "💔",
       "🔥",
@@ -60,7 +60,7 @@ export const fallbackEmojiCategories: EmojiCategory[] = [
       "💡",
       "🎯",
       "📌",
-    ],
+    ]),
   },
 ];
 
@@ -108,9 +108,11 @@ function sanitizeCategory(candidate: unknown): EmojiCategory {
     "category";
   const label = getStringProperty(candidate, "label") || id;
   const emojis = Array.isArray((candidate as any).emojis)
-    ? (candidate as any).emojis.filter(
-        (emoji: unknown) =>
-          typeof emoji === "string" && emoji.trim().length > 0,
+    ? mapUnicode(
+        (candidate as any).emojis.filter(
+          (emoji: unknown) =>
+            typeof emoji === "string" && emoji.trim().length > 0,
+        ),
       )
     : [];
 
@@ -128,4 +130,8 @@ function getStringProperty(candidate: unknown, key: string): string | null {
     return value;
   }
   return null;
+}
+
+function mapUnicode(values: string[]): UnicodeEmojiEntry[] {
+  return values.map((value) => ({ type: "unicode", value }));
 }
