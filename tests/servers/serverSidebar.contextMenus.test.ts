@@ -1,10 +1,12 @@
 import { render, fireEvent, waitFor } from "@testing-library/svelte";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { tick } from "svelte";
 import type {
   ActiveCall,
   CallState,
 } from "$lib/features/calls/stores/callStore";
 import type { Channel } from "$lib/features/channels/models/Channel";
+import { voicePresenceStore } from "$lib/features/calls/stores/voicePresenceStore";
 
 import ChannelContextMenuMock from "../mocks/ChannelContextMenu.svelte";
 import ServerBackgroundContextMenuMock from "../mocks/ServerBackgroundContextMenu.svelte";
@@ -355,6 +357,7 @@ describe("ServerSidebar context menus", () => {
     });
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     resetCallStoreState();
+    voicePresenceStore.reset();
     mutedChannelsModule.reset();
   });
 
@@ -751,6 +754,7 @@ describe("ServerSidebar context menus", () => {
         callId: "call-123",
         direction: "outgoing",
         participants: new Map() as ActiveCall["participants"],
+        serverId: "server-1",
       } satisfies ActiveCall,
     });
 
@@ -769,6 +773,53 @@ describe("ServerSidebar context menus", () => {
     const voiceButton = voiceLabel.closest('[role="button"]');
     expect(voiceButton).toBeTruthy();
     expect(voiceButton?.getAttribute("data-active")).toBe("true");
+  });
+
+  it("shows voice channel presence below the channel row", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-voice",
+          server_id: "server-1",
+          name: "ops-brief",
+          channel_type: "voice" as const,
+          private: false,
+          position: 0,
+        },
+      ],
+      categories: [],
+      members: [
+        { id: "user-2", name: "Echo Leader", avatar: "" },
+        { id: "user-3", name: "Sierra", avatar: "" },
+      ],
+      roles: [],
+      invites: [],
+    };
+
+    voicePresenceStore.syncChannelPresence({
+      channelId: "channel-voice",
+      serverId: "server-1",
+      participants: [
+        { userId: "user-2", joinedAt: Date.now() - 2000 },
+        { userId: "user-3", joinedAt: Date.now() - 500 },
+      ],
+    });
+
+    const { getByText } = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    await tick();
+
+    expect(getByText("2 connected")).toBeTruthy();
+    expect(getByText("Echo Leader")).toBeTruthy();
+    expect(getByText("Sierra")).toBeTruthy();
   });
 
   it("reassigns category and position when dragging a channel to another category", async () => {

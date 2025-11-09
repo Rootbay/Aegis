@@ -291,6 +291,39 @@ export interface FileTransferError {
   error: string;
 }
 
+export interface VoicePresenceParticipant {
+  user_id?: string;
+  userId?: string;
+  joined_at?: string | number | Date | null;
+  joinedAt?: string | number | Date | null;
+}
+
+export interface VoiceChannelPresence {
+  channel_id?: string;
+  channelId?: string;
+  server_id?: string | null;
+  serverId?: string | null;
+  participants?: string[];
+  participant_ids?: string[];
+  participantIds?: string[];
+  updated_at?: string | number | Date | null;
+  updatedAt?: string | number | Date | null;
+}
+
+export interface VoiceChannelPresenceDelta {
+  channel_id?: string;
+  channelId?: string;
+  server_id?: string | null;
+  serverId?: string | null;
+  joined?: Array<string | VoicePresenceParticipant>;
+  left?: Array<string | VoicePresenceParticipant>;
+  updated_at?: string | number | Date | null;
+  updatedAt?: string | number | Date | null;
+  participants?: string[];
+  participant_ids?: string[];
+  participantIds?: string[];
+}
+
 export interface AepMessage {
   ChatMessage?: ChatMessage;
   EncryptedChatMessage?: EncryptedChatMessage;
@@ -316,6 +349,8 @@ export interface AepMessage {
   FileTransferChunk?: FileTransferChunk;
   FileTransferComplete?: FileTransferComplete;
   FileTransferError?: FileTransferError;
+  VoiceChannelPresence?: VoiceChannelPresence;
+  VoiceChannelPresenceDelta?: VoiceChannelPresenceDelta;
   MessageReaction?: MessageReaction;
   DeleteMessage?: DeleteMessage;
   EditMessage?: EditMessage;

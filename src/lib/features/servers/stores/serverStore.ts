@@ -1,4 +1,5 @@
-import { writable, get, type Readable } from "svelte/store";
+import { derived, writable, get } from "svelte/store";
+import type { Readable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Server,
@@ -18,6 +19,11 @@ import type { ServerInvite } from "../models/ServerInvite";
 import { userStore } from "../../../stores/userStore";
 import { serverCache } from "../../../utils/cache";
 import type { RelayRecord, RelayStatus } from "../../settings/models/relay";
+import {
+  voicePresenceStore,
+  type VoiceChannelPresenceEntry,
+  type VoicePresenceState,
+} from "$lib/features/calls/stores/voicePresenceStore";
 
 type BackendUser = {
   id: string;
@@ -2018,3 +2024,7 @@ export function createServerStore(): ServerStore {
 }
 
 export const serverStore = createServerStore();
+export const voiceChannelPresence = derived<
+  VoicePresenceState,
+  Map<string, VoiceChannelPresenceEntry>
+>(voicePresenceStore, ($presence) => new Map($presence));
