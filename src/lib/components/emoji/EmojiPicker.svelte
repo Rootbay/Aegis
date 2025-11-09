@@ -4,8 +4,8 @@
   import { onMount, tick } from "svelte";
   import { createEventDispatcher } from "svelte";
 
-  import { loadEmojiData } from "./emojiData";
-  import type { EmojiCategory, EmojiLoadResult } from "./emojiData";
+  import { loadEmojiData, type EmojiLoadResult } from "./emojiData";
+  import type { EmojiCategory, EmojiEntry } from "./types";
 
   const dispatch = createEventDispatcher<{
     select: { emoji: string };
@@ -14,14 +14,21 @@
 
   const GRID_COLUMNS = 8;
 
+  export let emojiCategories: EmojiCategory[] | null | undefined = undefined;
+  export let fallbackUsed: boolean | null | undefined = null;
+
   let categories = $state<EmojiCategory[]>([]);
   let loading = $state(true);
-  let usedFallback = $state(false);
+  let fallbackActive = $state(false);
   let containerEl = $state<HTMLDivElement | null>(null);
   let emojiButtons: HTMLButtonElement[] = [];
+  let hasLoadedDefaults = false;
+  let defaultLoadPromise: Promise<void> | null = null;
+  let lastProvidedCategories: EmojiCategory[] | null | undefined = undefined;
+  let lastFallbackHint: boolean | null | undefined = undefined;
 
   onMount(() => {
-    void initialize();
+    void ensureCategories();
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -35,10 +42,63 @@
     };
   });
 
-  async function initialize() {
-    const result: EmojiLoadResult = await loadEmojiData();
-    categories = result.categories;
-    usedFallback = result.usedFallback;
+  $effect(() => {
+    void ensureCategories();
+  });
+
+  async function ensureCategories() {
+    const provided = emojiCategories;
+    const fallbackHint = fallbackUsed ?? false;
+
+    if (provided != null) {
+      const shouldApply =
+        provided !== lastProvidedCategories ||
+        fallbackHint !== (lastFallbackHint ?? false);
+
+      if (shouldApply) {
+        lastProvidedCategories = provided;
+        lastFallbackHint = fallbackHint;
+        await applyCategories(provided, fallbackHint);
+      }
+      return;
+    }
+
+    lastProvidedCategories = null;
+    lastFallbackHint = fallbackHint;
+
+    await loadDefaultCategories();
+  }
+
+  async function loadDefaultCategories() {
+    if (hasLoadedDefaults) {
+      return;
+    }
+
+    if (defaultLoadPromise) {
+      await defaultLoadPromise;
+      return;
+    }
+
+    loading = true;
+    defaultLoadPromise = (async () => {
+      const result: EmojiLoadResult = await loadEmojiData();
+      hasLoadedDefaults = true;
+      await applyCategories(result.categories, result.usedFallback);
+    })();
+
+    try {
+      await defaultLoadPromise;
+    } finally {
+      defaultLoadPromise = null;
+    }
+  }
+
+  async function applyCategories(
+    next: EmojiCategory[] | null | undefined,
+    fallback: boolean,
+  ) {
+    categories = Array.isArray(next) ? next : [];
+    fallbackActive = fallback;
     loading = false;
 
     await tick();
@@ -124,6 +184,38 @@
   function handleSelect(emoji: string) {
     dispatch("select", { emoji });
   }
+
+  function getEmojiKey(emoji: EmojiEntry, index: number): string {
+    switch (emoji.type) {
+      case "unicode":
+        return `${emoji.value}-${index}`;
+      case "custom":
+      case "sticker":
+        return `${emoji.type}-${emoji.id}-${index}`;
+      default:
+        return `${index}`;
+    }
+  }
+
+  function getEmojiLabel(emoji: EmojiEntry): string {
+    if (emoji.label && emoji.label.trim().length > 0) {
+      return emoji.label;
+    }
+
+    if (emoji.type === "custom" || emoji.type === "sticker") {
+      return emoji.name;
+    }
+
+    return emoji.value;
+  }
+
+  function getEmojiValue(emoji: EmojiEntry): string {
+    if (emoji.type === "unicode") {
+      return emoji.value;
+    }
+
+    return emoji.value;
+  }
 </script>
 
 {#if loading}
@@ -155,7 +247,7 @@
     }}
     onclick={(event) => event.stopPropagation()}
   >
-    {#if usedFallback}
+    {#if fallbackActive}
       <p class="mb-2 text-xs text-white/60">Showing limited emoji list.</p>
     {/if}
     <div class="max-h-64 space-y-3 overflow-y-auto pr-1">
@@ -167,15 +259,26 @@
             {category.label}
           </p>
           <div class="mt-2 grid grid-cols-8 gap-1">
-            {#each category.emojis as emoji, index (emoji + index)}
+            {#each category.emojis as emoji, index (getEmojiKey(emoji, index))}
               <button
                 type="button"
                 class="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-700 text-xl transition focus-visible:outline focus-visible:outline-cyan-500 hover:bg-zinc-600"
-                data-emoji={emoji}
-                aria-label={`React with ${emoji}`}
-                onclick={() => handleSelect(emoji)}
+                data-emoji={getEmojiValue(emoji)}
+                aria-label={`React with ${getEmojiLabel(emoji)}`}
+                onclick={() => handleSelect(getEmojiValue(emoji))}
               >
-                {emoji}
+                {#if emoji.type === "unicode"}
+                  {emoji.value}
+                {:else}
+                  <img
+                    src={emoji.url}
+                    alt={getEmojiLabel(emoji)}
+                    class="h-7 w-7 object-contain"
+                    decoding="async"
+                    loading="lazy"
+                    data-animated={emoji.animated ? "true" : undefined}
+                  />
+                {/if}
               </button>
             {/each}
           </div>

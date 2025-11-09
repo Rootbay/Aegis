@@ -63,6 +63,12 @@ vi.mock("$lib/stores/userStore", () => ({
 
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: { subscribe: storeMocks.serverState.subscribe },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 const { messagesStore, userState, serverState } = storeMocks;

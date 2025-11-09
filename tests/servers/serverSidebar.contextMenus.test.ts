@@ -397,6 +397,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     fetchBans: vi.fn(async () => []),
     unbanMember: vi.fn(async () => ({ success: true })),
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 vi.mock("$lib/features/chat/stores/chatStore", () => ({

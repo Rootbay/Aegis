@@ -33,6 +33,7 @@ import {
   type ChannelPermissionOverrideEntry,
   type ChannelPermissionOverrideMatrix,
 } from "$lib/features/chat/utils/permissions";
+import type { EmojiCategory } from "$lib/components/emoji/types";
 
 type BackendUser = {
   id: string;
@@ -2590,6 +2591,133 @@ export function createServerStore(): ServerStore {
 }
 
 export const serverStore = createServerStore();
+export function buildServerEmojiCategoriesForPicker(
+  server: Server | null | undefined,
+): EmojiCategory[] {
+  if (!server) {
+    return [];
+  }
+
+  const categories: EmojiCategory[] = [];
+  const seenValues = new Set<string>();
+  const serverLabel =
+    typeof server.name === "string" && server.name.trim().length > 0
+      ? server.name.trim()
+      : "Server";
+
+  const emojis = Array.isArray(server.emojis) ? server.emojis : [];
+  if (emojis.length > 0) {
+    const entries = emojis
+      .map((emoji) => {
+        const url = typeof emoji.url === "string" ? emoji.url.trim() : "";
+        if (!url) {
+          return null;
+        }
+
+        const value = `<emoji:${emoji.id}>`;
+        if (seenValues.has(value)) {
+          return null;
+        }
+        seenValues.add(value);
+
+        const name = typeof emoji.name === "string" ? emoji.name.trim() : "";
+        const label = name ? `:${name}:` : value;
+
+        return {
+          type: "custom",
+          id: emoji.id,
+          name: name || emoji.id,
+          url,
+          value,
+          label,
+          animated: emoji.animated === true ? true : undefined,
+        } as EmojiCategory["emojis"][number];
+      })
+      .filter((entry): entry is EmojiCategory["emojis"][number] => entry !== null);
+
+    if (entries.length > 0) {
+      categories.push({
+        id: `server-${server.id}-emoji`,
+        label: `${serverLabel} Emoji`,
+        emojis: entries,
+      });
+    }
+  }
+
+  const stickers = Array.isArray(server.stickers) ? server.stickers : [];
+  if (stickers.length > 0) {
+    const entries = stickers
+      .map((sticker) => {
+        const preferredFormat =
+          typeof sticker.format === "string"
+            ? sticker.format.trim().toLowerCase()
+            : null;
+        const displayUrlCandidate =
+          preferredFormat === "lottie" && sticker.previewUrl
+            ? sticker.previewUrl
+            : sticker.url;
+        const url = typeof displayUrlCandidate === "string"
+          ? displayUrlCandidate.trim()
+          : "";
+
+        if (!url) {
+          return null;
+        }
+
+        const value = `<sticker:${sticker.id}>`;
+        if (seenValues.has(value)) {
+          return null;
+        }
+        seenValues.add(value);
+
+        const name = typeof sticker.name === "string" ? sticker.name.trim() : "";
+        const label = name || `Sticker ${sticker.id}`;
+        const isAnimated =
+          preferredFormat === "gif" ||
+          preferredFormat === "apng" ||
+          preferredFormat === "lottie";
+
+        return {
+          type: "sticker",
+          id: sticker.id,
+          name: name || sticker.id,
+          url,
+          value,
+          label,
+          animated: isAnimated ? true : undefined,
+          previewUrl: sticker.previewUrl ?? null,
+          format: sticker.format ?? null,
+        } as EmojiCategory["emojis"][number];
+      })
+      .filter((entry): entry is EmojiCategory["emojis"][number] => entry !== null);
+
+    if (entries.length > 0) {
+      categories.push({
+        id: `server-${server.id}-stickers`,
+        label: `${serverLabel} Stickers`,
+        emojis: entries,
+      });
+    }
+  }
+
+  return categories;
+}
+
+export const activeServerEmojiCategories = derived(
+  serverStore,
+  ($state): EmojiCategory[] => {
+    const activeId = $state.activeServerId;
+    if (!activeId) {
+      return [];
+    }
+
+    const activeServer = ($state.servers ?? []).find(
+      (server) => server.id === activeId,
+    );
+
+    return buildServerEmojiCategoriesForPicker(activeServer ?? null);
+  },
+);
 export const voiceChannelPresence = derived<
   VoicePresenceState,
   Map<string, VoiceChannelPresenceEntry>

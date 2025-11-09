@@ -25,6 +25,10 @@
   import FileTransferHistory from "$lib/features/chat/components/FileTransferHistory.svelte";
   import CallStatusBanner from "$lib/features/calls/components/CallStatusBanner.svelte";
   import EmojiPicker from "$lib/components/emoji/EmojiPicker.svelte";
+  import {
+    loadEmojiData,
+    type EmojiCategory,
+  } from "$lib/components/emoji/emojiData";
 
   import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
@@ -63,7 +67,10 @@
   } from "$lib/features/chat/utils/chatSearch";
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
   import { callStore } from "$lib/features/calls/stores/callStore";
-  import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import {
+    serverStore,
+    activeServerEmojiCategories,
+  } from "$lib/features/servers/stores/serverStore";
   import { settings } from "$lib/features/settings/stores/settings";
   import MessageAuthorName from "$lib/features/chat/components/MessageAuthorName.svelte";
   import { highlightText } from "$lib/features/chat/utils/highlightText";
@@ -715,6 +722,83 @@
   const composerEmojiPickerId = $derived(
     () => `chat-composer-emoji-picker-${chat?.id ?? "unknown"}`,
   );
+  let defaultEmojiCategories = $state<EmojiCategory[] | null>(null);
+  let defaultEmojiFallbackUsed = $state(false);
+  let emojiMetadataLoad: Promise<void> | null = null;
+
+  const serverEmojiPickerCategories = $derived(
+    () => $activeServerEmojiCategories,
+  );
+
+  const emojiPickerCategories = $derived(() => {
+    const combinedSources: EmojiCategory[] = [];
+
+    if (
+      Array.isArray(serverEmojiPickerCategories) &&
+      serverEmojiPickerCategories.length > 0
+    ) {
+      combinedSources.push(...serverEmojiPickerCategories);
+    }
+
+    if (defaultEmojiCategories) {
+      combinedSources.push(...defaultEmojiCategories);
+    }
+
+    if (combinedSources.length === 0) {
+      return null;
+    }
+
+    const seen = new Set<string>();
+    const merged: EmojiCategory[] = [];
+
+    for (const category of combinedSources) {
+      if (!category) continue;
+      const filtered = category.emojis.filter((entry) => {
+        const key = entry.value;
+        if (!key) {
+          return false;
+        }
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+
+      if (filtered.length > 0) {
+        merged.push({ ...category, emojis: filtered });
+      }
+    }
+
+    return merged.length > 0 ? merged : null;
+  });
+
+  const emojiPickerFallbackUsed = $derived(() =>
+    defaultEmojiCategories ? defaultEmojiFallbackUsed : false,
+  );
+
+  async function loadDefaultEmojiCategoriesOnce() {
+    if (defaultEmojiCategories) {
+      return;
+    }
+
+    if (emojiMetadataLoad) {
+      await emojiMetadataLoad;
+      return;
+    }
+
+    emojiMetadataLoad = (async () => {
+      const result = await loadEmojiData();
+      defaultEmojiCategories = result.categories;
+      defaultEmojiFallbackUsed = result.usedFallback;
+    })();
+
+    try {
+      await emojiMetadataLoad;
+    } finally {
+      emojiMetadataLoad = null;
+    }
+  }
 
   const mentionableMembers = $derived(() => {
     if (!chat) return [] as MentionCandidate[];
@@ -1203,6 +1287,7 @@
   }
 
   onMount(() => {
+    void loadDefaultEmojiCategoriesOnce();
     const unregisterSearchHandlers = chatSearchStore.registerHandlers({
       jumpToMatch,
       clearSearch,
@@ -3616,6 +3701,8 @@
                               onkeydown={(event) => event.stopPropagation()}
                             >
                               <EmojiPicker
+                                emojiCategories={emojiPickerCategories ?? undefined}
+                                fallbackUsed={emojiPickerFallbackUsed}
                                 on:select={(event) =>
                                   handleReactionSelect(event.detail.emoji)}
                                 on:close={closeReactionPicker}
@@ -3646,6 +3733,8 @@
                             onkeydown={(event) => event.stopPropagation()}
                           >
                             <EmojiPicker
+                              emojiCategories={emojiPickerCategories ?? undefined}
+                              fallbackUsed={emojiPickerFallbackUsed}
                               on:select={(event) =>
                                 handleReactionSelect(event.detail.emoji)}
                               on:close={closeReactionPicker}
@@ -3895,6 +3984,8 @@
                   role="presentation"
                 >
                   <EmojiPicker
+                    emojiCategories={emojiPickerCategories ?? undefined}
+                    fallbackUsed={emojiPickerFallbackUsed}
                     on:select={(event) =>
                       handleComposerEmojiSelect(event.detail.emoji)}
                     on:close={() =>

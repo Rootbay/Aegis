@@ -103,6 +103,12 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
     subscribe: serverStoreStateRef.state.subscribe,
     __setState: (next: MockServerState) => serverStoreStateRef.set(next),
   },
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => {
+      run([]);
+      return () => {};
+    },
+  },
 }));
 
 const connectivityMocks = vi.hoisted(() => createMockConnectivityStore());

@@ -209,6 +209,9 @@ type ServerStoreModule = {
   serverStore: {
     subscribe: WritableStore<{ servers: unknown[] }>["subscribe"];
   };
+  activeServerEmojiCategories: {
+    subscribe: (run: (value: unknown) => void) => () => void;
+  };
   __setServerState?: (state: {
     servers: unknown[];
     [key: string]: unknown;
@@ -1191,6 +1194,12 @@ function getServerStoreModule(): ServerStoreModule {
     globals.__serverStoreModule = {
       serverStore: {
         subscribe: state.subscribe,
+      },
+      activeServerEmojiCategories: {
+        subscribe: (run: (value: unknown) => void) => {
+          run([]);
+          return () => {};
+        },
       },
       __setServerState: (next) => state.set(next),
     };
