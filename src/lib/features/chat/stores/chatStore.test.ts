@@ -909,6 +909,110 @@ describe("chatStore message link composition", () => {
   });
 });
 
+describe("chatStore message embeds", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
+    localStorage.clear();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+    friendStore.handleFriendsUpdate([]);
+    settings.update((current) => ({
+      ...current,
+      enableLinkPreviews: true,
+    }));
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+    friendStore.handleFriendsUpdate([]);
+  });
+
+  it("maps backend embeds onto messages", async () => {
+    const timestamp = new Date().toISOString();
+    invokeMock.mockImplementation(async (command) => {
+      if (command === "get_messages") {
+        return [
+          {
+            id: "msg-embed",
+            content: "Check this article",
+            timestamp,
+            embeds: [
+              {
+                id: "embed-1",
+                url: "https://example.com/article",
+                title: "Example Article",
+                description: "A sample description",
+                site_name: "Example",
+                provider_icon_url: "https://example.com/icon.png",
+                thumbnail_url: "https://example.com/thumb.jpg",
+                color: 0x336699,
+              },
+            ],
+          },
+        ];
+      }
+      return undefined;
+    });
+
+    const store = createChatStore();
+    await store.setActiveChat("chat-embed", "dm");
+
+    const message = get(store.messagesByChatId).get("chat-embed")?.[0];
+    expect(message?.embeds?.length).toBe(1);
+    const [embed] = message?.embeds ?? [];
+    expect(embed?.url).toBe("https://example.com/article");
+    expect(embed?.title).toBe("Example Article");
+    expect(embed?.thumbnailUrl).toBe("https://example.com/thumb.jpg");
+    expect(embed?.provider?.iconUrl).toBe("https://example.com/icon.png");
+    expect(embed?.accentColor).toBe("#336699");
+  });
+
+  it("unfurls link embeds when backend payload is missing", async () => {
+    const timestamp = new Date().toISOString();
+    invokeMock.mockImplementation(async (command, payload) => {
+      if (command === "get_messages") {
+        return [
+          {
+            id: "msg-embed",
+            content: "https://example.com/resource",
+            timestamp,
+            embeds: [],
+          },
+        ];
+      }
+      if (command === "resolve_link_preview") {
+        const targetUrl =
+          (payload as { url?: string } | undefined)?.url ??
+          "https://example.com/resource";
+        return {
+          url: targetUrl,
+          title: "Example Resource",
+          description: "Metadata description",
+          imageUrl: "https://example.com/image.png",
+          siteName: "Example",
+          iconUrl: "https://example.com/icon.png",
+        };
+      }
+      return undefined;
+    });
+
+    const store = createChatStore();
+    await store.setActiveChat("chat-embed", "dm");
+
+    const message = get(store.messagesByChatId).get("chat-embed")?.[0];
+    expect(message?.embeds?.length).toBe(1);
+    const [embed] = message?.embeds ?? [];
+    expect(embed?.url).toBe("https://example.com/resource");
+    expect(embed?.title).toBe("Example Resource");
+    expect(embed?.thumbnailUrl).toBe("https://example.com/image.png");
+    expect(embed?.provider?.name).toBe("Example");
+    expect(embed?.provider?.iconUrl).toBe("https://example.com/icon.png");
+  });
+});
+
 describe("chatStore slowmode enforcement", () => {
   const buildServer = ({
     serverId = "server-slowmode",
