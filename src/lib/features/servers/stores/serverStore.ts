@@ -53,6 +53,21 @@ type BackendChannelCategory = {
   created_at: string;
 };
 
+type BackendChannel = {
+  id: string;
+  name: string;
+  server_id?: string;
+  serverId?: string;
+  channel_type?: "text" | "voice" | string;
+  channelType?: "text" | "voice" | string;
+  private?: boolean | number | string;
+  category_id?: string | null;
+  categoryId?: string | null;
+  topic?: string | null;
+  channel_topic?: string | null;
+  [key: string]: unknown;
+};
+
 type BackendServerEmoji = {
   id: string;
   name: string;
@@ -122,7 +137,7 @@ type BackendServer = {
   iconUrl?: string;
   owner_id?: string;
   members?: BackendUser[];
-  channels?: Channel[];
+  channels?: BackendChannel[];
   roles?: Role[];
   created_at?: string;
   default_channel_id?: string;
@@ -242,6 +257,59 @@ export function createServerStore(): ServerStore {
       }
     }
     return undefined;
+  };
+
+  const mapBackendChannel = (channel: BackendChannel): Channel => {
+    const {
+      channel_type,
+      channelType,
+      server_id,
+      serverId,
+      category_id,
+      categoryId,
+      channel_topic,
+      topic,
+      private: privateValue,
+      ...rest
+    } = channel;
+
+    const resolvedTypeRaw =
+      (channel_type ?? channelType ?? "text")?.toString().toLowerCase();
+    const resolvedType =
+      resolvedTypeRaw === "voice" ? "voice" : ("text" as const);
+
+    const coercedPrivate = coerceBoolean(privateValue);
+    const resolvedPrivate =
+      coercedPrivate !== undefined
+        ? coercedPrivate
+        : typeof privateValue === "boolean"
+          ? privateValue
+          : Boolean(privateValue);
+
+    const topicSource =
+      typeof topic === "string" && topic.length === 0
+        ? ""
+        : topic ?? channel_topic ?? null;
+    const resolvedTopic =
+      typeof topicSource === "string"
+        ? topicSource.trim() || null
+        : topicSource ?? null;
+
+    const normalized: Channel = {
+      ...(rest as Record<string, unknown>),
+      id: channel.id,
+      name: channel.name,
+      server_id: server_id ?? serverId ?? "",
+      channel_type: resolvedType,
+      private: resolvedPrivate,
+      category_id: category_id ?? categoryId ?? null,
+    } as Channel;
+
+    if (resolvedTopic !== undefined) {
+      normalized.topic = resolvedTopic;
+    }
+
+    return normalized;
   };
 
   const computeRelayParticipation = (
@@ -621,7 +689,7 @@ export function createServerStore(): ServerStore {
       ? members
       : [];
     const normalizedChannels: Channel[] = Array.isArray(channels)
-      ? (channels as Channel[])
+      ? (channels as BackendChannel[]).map(mapBackendChannel)
       : [];
     const normalizedRoles: Role[] = normalizeRolesArray(roles);
     const roleAssignments = buildMemberRoleMap(normalizedRoles);
@@ -991,7 +1059,7 @@ export function createServerStore(): ServerStore {
     try {
       const [channelsResult, membersResult, categoriesResult] =
         await Promise.all([
-          invoke<Channel[]>("get_channels_for_server", {
+          invoke<BackendChannel[]>("get_channels_for_server", {
             serverId,
             server_id: serverId,
           }).catch((e) => {
@@ -1027,7 +1095,7 @@ export function createServerStore(): ServerStore {
           const updatedServer = { ...server };
 
           if (channelsResult !== null) {
-            updatedServer.channels = channelsResult;
+            updatedServer.channels = channelsResult.map(mapBackendChannel);
           }
 
           if (categoriesResult !== null) {
@@ -1408,7 +1476,7 @@ export function createServerStore(): ServerStore {
     let metadataResult: BackendServer | null = null;
     let moderationResult: BackendServer | null = null;
     let rolesResult: Role[] | null = null;
-    let channelsResult: Channel[] | null = null;
+    let channelsResult: BackendChannel[] | null = null;
 
     try {
       if (metadataTouched) {
@@ -1428,7 +1496,7 @@ export function createServerStore(): ServerStore {
       }
 
       if (channelsTouched) {
-        channelsResult = await invoke<Channel[]>("update_server_channels", {
+        channelsResult = await invoke<BackendChannel[]>("update_server_channels", {
           serverId,
           server_id: serverId,
           channels: patch.channels ?? [],
@@ -1454,7 +1522,7 @@ export function createServerStore(): ServerStore {
       if (channelsResult) {
         finalServer = {
           ...finalServer,
-          channels: channelsResult,
+          channels: channelsResult.map(mapBackendChannel),
         } as Server;
       }
 
