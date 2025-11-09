@@ -31,8 +31,16 @@ export default defineConfig({
         ),
       },
       {
+        find: "$lib/components/ui/dialog/index.js",
+        replacement: resolve(projectRootDir, "tests/mocks/ui-dialog.ts"),
+      },
+      {
         find: "$lib/components/ui/dialog",
         replacement: resolve(projectRootDir, "tests/mocks/ui-dialog.ts"),
+      },
+      {
+        find: "$lib/components/ui/scroll-area/index.js",
+        replacement: resolve(projectRootDir, "tests/mocks/scroll-area.ts"),
       },
       {
         find: "$lib/components/ui/scroll-area",

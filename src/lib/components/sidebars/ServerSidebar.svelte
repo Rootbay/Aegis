@@ -78,6 +78,7 @@
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
+  import { mutedChannelsStore } from "$lib/features/channels/stores/mutedChannelsStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
@@ -268,11 +269,14 @@
       void e;
     }
 
-    mutedChannelIds = loadMutedChannels();
+    const unsubscribeMutedChannels = mutedChannelsStore.subscribe((ids) => {
+      mutedChannelIds = new SvelteSet(ids);
+    });
 
     return () => {
       window.removeEventListener("keydown", handleGlobalKeydown);
       window.removeEventListener("scroll", handleGlobalScroll, true);
+      unsubscribeMutedChannels();
     };
   });
 
@@ -362,10 +366,7 @@
       }
     }
     hideMutedChannels = next;
-    toasts.addToast(
-      `${next ? "Hiding" : "Showing"} muted channels (local).`,
-      "info",
-    );
+    toasts.addToast(`${next ? "Hiding" : "Showing"} muted channels.`, "info");
   }
 
   function handleViewReviews() {
@@ -667,29 +668,6 @@
     uses: invite.uses,
   });
 
-  const MUTED_CHANNELS_KEY = "mutedChannels";
-  function loadMutedChannels(): SvelteSet<string> {
-    if (!browser) return new SvelteSet();
-    try {
-      const raw = localStorage.getItem(MUTED_CHANNELS_KEY);
-      if (!raw) return new SvelteSet();
-      return new SvelteSet(JSON.parse(raw));
-    } catch {
-      return new SvelteSet();
-    }
-  }
-  function saveMutedChannels(setVals: Set<string>) {
-    if (!browser) return;
-    try {
-      localStorage.setItem(
-        MUTED_CHANNELS_KEY,
-        JSON.stringify(Array.from(setVals)),
-      );
-    } catch (e) {
-      void e;
-    }
-  }
-
   async function handleChannelAction({
     action,
     channelId,
@@ -782,16 +760,13 @@
           break;
         }
         case "mute_channel": {
-          const muted = loadMutedChannels();
-          if (muted.has(channelId)) {
-            muted.delete(channelId);
-            toasts.addToast("Channel unmuted (local).", "info");
+          if (mutedChannelsStore.isMuted(channelId)) {
+            mutedChannelsStore.unmute(channelId);
+            toasts.addToast("Channel unmuted.", "info");
           } else {
-            muted.add(channelId);
-            toasts.addToast("Channel muted (local).", "info");
+            mutedChannelsStore.mute(channelId);
+            toasts.addToast("Channel muted.", "info");
           }
-          saveMutedChannels(muted);
-          mutedChannelIds = new SvelteSet(muted);
           break;
         }
         case "hide_names": {
