@@ -33,6 +33,7 @@ const settingsStoreState = writable({
   videoInputDeviceId: "",
   audioOutputDeviceId: "",
   turnServers: [],
+  pushToTalkShortcut: "Shift+Space",
 });
 
 class MockMediaStream {
@@ -284,6 +285,77 @@ describe("callStore signaling", () => {
       "info",
     );
 
+    callStore.reset();
+  });
+
+  it("keeps the microphone muted until push-to-talk is held", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+    const { pushToTalkStore } = await import(
+      "$lib/features/calls/stores/pushToTalkStore"
+    );
+
+    pushToTalkStore.enable();
+
+    await callStore.joinVoiceChannel({
+      chatId: "channel-ptt",
+      chatName: "Push To Talk",
+    });
+
+    let state = get(callStore);
+    expect(state.pushToTalk.enabled).toBe(true);
+    expect(state.localMedia.audioEnabled).toBe(false);
+
+    callStore.toggleMute();
+    state = get(callStore);
+    expect(state.localMedia.audioEnabled).toBe(false);
+
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: " ", code: "Space", shiftKey: true }),
+    );
+
+    await Promise.resolve();
+
+    state = get(callStore);
+    expect(state.localMedia.audioEnabled).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: " ", code: "Space" }));
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift" }));
+
+    await Promise.resolve();
+
+    state = get(callStore);
+    expect(state.localMedia.audioEnabled).toBe(false);
+
+    pushToTalkStore.disable();
+    callStore.reset();
+  });
+
+  it("falls back to manual mute toggling when push-to-talk is disabled", async () => {
+    const { callStore } = await import("$lib/features/calls/stores/callStore");
+    const { pushToTalkStore } = await import(
+      "$lib/features/calls/stores/pushToTalkStore"
+    );
+
+    pushToTalkStore.disable();
+
+    await callStore.joinVoiceChannel({
+      chatId: "channel-toggle",
+      chatName: "Toggle",
+    });
+
+    let state = get(callStore);
+    expect(state.pushToTalk.enabled).toBe(false);
+    expect(state.localMedia.audioEnabled).toBe(true);
+
+    callStore.toggleMute();
+    state = get(callStore);
+    expect(state.localMedia.audioEnabled).toBe(false);
+
+    callStore.toggleMute();
+    state = get(callStore);
+    expect(state.localMedia.audioEnabled).toBe(true);
+
+    pushToTalkStore.disable();
     callStore.reset();
   });
 
