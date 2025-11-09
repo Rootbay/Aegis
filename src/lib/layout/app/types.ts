@@ -10,6 +10,7 @@ import type { Friend } from "$lib/features/friends/models/Friend";
 import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 import type {
   GroupModalOptions,
+  ReportMessageModalPayload,
   ReportUserModalPayload,
 } from "$lib/features/chat/utils/contextMenu";
 import type { CollaborationSessionKind } from "$lib/features/collaboration/collabDocumentStore";
@@ -23,6 +24,7 @@ export type AppModalType =
   | "profileReviews"
   | "userCard"
   | "reportUser"
+  | "reportMessage"
   | "collaborationDocument"
   | "collaborationWhiteboard";
 
@@ -61,6 +63,7 @@ export type PageState = {
   ) => void;
   readonly openCreateGroupModal: (options?: GroupModalOptions) => void;
   readonly openReportUserModal: (payload: ReportUserModalPayload) => void;
+  readonly openReportMessageModal: (payload: ReportMessageModalPayload) => void;
   readonly openCollaborativeDocument: (options?: {
     documentId?: string;
     initialContent?: string;

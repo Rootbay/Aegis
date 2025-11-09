@@ -118,6 +118,7 @@
     buildReportUserPayload,
     normalizeUser,
   } from "$lib/features/chat/utils/contextMenu";
+  import type { ReportMessageModalPayload } from "$lib/features/chat/utils/contextMenu";
   import type { User } from "$lib/features/auth/models/User";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { Chat } from "$lib/features/chat/models/Chat";
@@ -428,6 +429,7 @@
   const openDetailedProfileModal = createGroupContext?.openDetailedProfileModal;
   const openCreateGroupModal = createGroupContext?.openCreateGroupModal;
   const openReportUserModal = createGroupContext?.openReportUserModal;
+  const openReportMessageModal = createGroupContext?.openReportMessageModal;
   const openCollaborativeDocumentModal =
     createGroupContext?.openCollaborativeDocumentModal;
   const openCollaborativeWhiteboard =
@@ -2246,6 +2248,82 @@
     return undefined;
   }
 
+  function resolveReportChatName(): string | undefined {
+    if (!chat) {
+      return undefined;
+    }
+
+    if (chat.type === "channel" || chat.type === "group") {
+      return chat.name;
+    }
+
+    if (chat.type === "dm") {
+      return chat.friend?.name ?? undefined;
+    }
+
+    return undefined;
+  }
+
+  function resolveMessageAuthor(message: Message): User | Friend | null {
+    if (message.senderId === $userStore.me?.id) {
+      return $userStore.me ?? null;
+    }
+
+    if (!chat) {
+      return memberById.get(message.senderId) ?? null;
+    }
+
+    if (chat.type === "dm") {
+      if (message.senderId === chat.friend.id) {
+        return chat.friend;
+      }
+      return $userStore.me ?? null;
+    }
+
+    return memberById.get(message.senderId) ?? null;
+  }
+
+  function collectSurroundingMessageIds(
+    message: Message,
+    windowSize = 2,
+  ): string[] {
+    const messages = currentChatMessages || [];
+    const index = messages.findIndex((entry) => entry.id === message.id);
+    if (index === -1) {
+      return [];
+    }
+
+    const start = Math.max(0, index - windowSize);
+    const end = Math.min(messages.length, index + windowSize + 1);
+
+    return messages
+      .slice(start, end)
+      .map((entry) => entry.id)
+      .filter((id) => id !== message.id);
+  }
+
+  function buildReportMessagePayload(
+    message: Message,
+  ): ReportMessageModalPayload {
+    const author = resolveMessageAuthor(message);
+    const resolvedAuthorName =
+      author?.name ?? resolveReplyAuthor(message) ?? message.senderId;
+    const authorAvatar = author?.avatar ?? null;
+
+    return {
+      messageId: message.id,
+      chatId: chat?.id,
+      chatType: chat?.type,
+      chatName: resolveReportChatName(),
+      authorId: author?.id ?? message.senderId,
+      authorName: resolvedAuthorName,
+      authorAvatar,
+      messageExcerpt: buildReplySnippet(message) ?? message.content ?? undefined,
+      messageTimestamp: message.timestamp,
+      surroundingMessageIds: collectSurroundingMessageIds(message),
+    };
+  }
+
   function buildReplyPreviewFromMessage(message: Message): ReplyPreview {
     return {
       messageId: message.id,
@@ -3012,6 +3090,11 @@
       { label: "Copy Message", action: "copy_message" },
       { label: "Copy Message Link", action: "copy_message_link" },
     ];
+    items.push({
+      label: "Report Message",
+      action: "report_message",
+      isDestructive: true,
+    });
     if (canSendMessages()) {
       items.push({ label: "Reply", action: "reply_message" });
     }
@@ -3052,6 +3135,13 @@
             console.error("[ChatView] Failed to copy message link", error);
             toasts.addToast("Failed to copy message link.", "error");
           });
+        break;
+      case "report_message":
+        if (!openReportMessageModal) {
+          toasts.addToast("Reporting is currently unavailable.", "error");
+          break;
+        }
+        openReportMessageModal(buildReportMessagePayload(selectedMsg));
         break;
       case "reply_message":
         if (!canSendMessages()) {

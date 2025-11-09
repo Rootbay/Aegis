@@ -134,6 +134,12 @@ export function createModalManager() {
     openModal("reportUser", payload);
   };
 
+  const openReportMessageModal: PageState["openReportMessageModal"] = (
+    payload,
+  ) => {
+    openModal("reportMessage", payload);
+  };
+
   const openCollaborativeDocument: PageState["openCollaborativeDocument"] = (
     options = {},
   ) => {
@@ -159,6 +165,7 @@ export function createModalManager() {
     openProfileReviewsModal,
     openCreateGroupModal,
     openReportUserModal,
+    openReportMessageModal,
     openCollaborativeDocument,
     openCollaborativeWhiteboard,
   };

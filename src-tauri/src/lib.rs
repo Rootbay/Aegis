@@ -126,6 +126,7 @@ pub async fn run() {
             commands::connected_accounts::link_external_account,
             commands::connected_accounts::unlink_external_account,
             commands::moderation::submit_user_report,
+            commands::moderation::report_message,
             commands::connectivity::get_connectivity_snapshot,
             commands::connectivity::set_bridge_mode_enabled,
             commands::connectivity::set_bluetooth_enabled,

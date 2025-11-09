@@ -54,6 +54,29 @@ export interface ServerAuditLogEntry {
   metadata?: Record<string, unknown>;
 }
 
+export interface ServerModerationReportBase {
+  id: string;
+  reporterId: string;
+  reporterName?: string;
+  reason: string;
+  createdAt: string;
+  status?: "open" | "reviewing" | "resolved" | "dismissed";
+  notes?: string;
+}
+
+export interface UserModerationReport extends ServerModerationReportBase {
+  targetUserId: string;
+  targetUserName?: string;
+  summary?: string;
+}
+
+export interface MessageModerationReport extends ServerModerationReportBase {
+  messageId: string;
+  chatId?: string;
+  chatName?: string;
+  messageExcerpt?: string;
+}
+
 export type ServerModerationSettings = {
   transparentEdits?: boolean;
   deletedMessageDisplay?: "ghost" | "tombstone";
@@ -91,4 +114,8 @@ export interface Server {
   widgetSettings?: ServerWidgetSettings | null;
   auditLog?: ServerAuditLogEntry[];
   relayParticipation?: ServerRelayParticipation[];
+  moderationReports?: {
+    userReports?: UserModerationReport[];
+    messageReports?: MessageModerationReport[];
+  };
 }

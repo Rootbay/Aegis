@@ -57,6 +57,7 @@ export function createPageState({
     openProfileReviewsModal: modalManager.openProfileReviewsModal,
     openCreateGroupModal: modalManager.openCreateGroupModal,
     openReportUserModal: modalManager.openReportUserModal,
+    openReportMessageModal: modalManager.openReportMessageModal,
     openCollaborativeDocument: modalManager.openCollaborativeDocument,
     openCollaborativeWhiteboard: modalManager.openCollaborativeWhiteboard,
     messagesByChatId: messages,
