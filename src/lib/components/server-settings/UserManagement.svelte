@@ -34,6 +34,7 @@
       : null,
   );
   let members = $derived(activeServer?.members ?? []);
+  let roles = $derived(activeServer?.roles ?? []);
   let memberLookup = $derived.by(() => {
     const lookup: Record<string, User> = {};
     for (const member of members) {
@@ -509,6 +510,7 @@
 
         <MemberList
           {members}
+          {roles}
           serverId={activeServer.id}
           onMemberRemoved={handleMemberRemoved}
         />
