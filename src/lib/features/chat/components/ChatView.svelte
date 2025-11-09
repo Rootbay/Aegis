@@ -3166,7 +3166,7 @@
             </div>
             {#if chat.topic}
               <p
-                class="text-sm text-muted-foreground leading-snug whitespace-pre-wrap break-words"
+                class="text-sm text-muted-foreground leading-snug whitespace-pre-wrap wrap-break-word"
               >
                 {chat.topic}
               </p>
@@ -3276,7 +3276,7 @@
                           ]}
                         <TooltipProvider>
                           <Tooltip>
-                            <TooltipTrigger asChild>
+                            <TooltipTrigger>
                               <span
                                 class="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-secondary-foreground"
                                 aria-label={badgeMeta.tooltip}
@@ -3518,7 +3518,7 @@
                                       href={segment.url}
                                       rel="noreferrer noopener"
                                       target="_blank"
-                                      class="underline break-words text-cyan-200 hover:text-white"
+                                      class="underline wrap-break-word text-cyan-200 hover:text-white"
                                     >
                                       {segment.label}
                                     </a>
@@ -3562,7 +3562,7 @@
                                     href={segment.url}
                                     rel="noreferrer noopener"
                                     target="_blank"
-                                    class="underline break-words text-cyan-200 hover:text-white"
+                                    class="underline wrap-break-word text-cyan-200 hover:text-white"
                                   >
                                     {segment.label}
                                   </a>
@@ -3612,7 +3612,7 @@
                                 href={segment.url}
                                 rel="noreferrer noopener"
                                 target="_blank"
-                                class="underline break-words text-cyan-200 hover:text-white"
+                                class="underline wrap-break-word text-cyan-200 hover:text-white"
                               >
                                 {segment.label}
                               </a>
@@ -3701,8 +3701,8 @@
                               onkeydown={(event) => event.stopPropagation()}
                             >
                               <EmojiPicker
-                                emojiCategories={emojiPickerCategories ?? undefined}
-                                fallbackUsed={emojiPickerFallbackUsed}
+                                emojiCategories={emojiPickerCategories() ?? undefined}
+                                fallbackUsed={emojiPickerFallbackUsed()}
                                 on:select={(event) =>
                                   handleReactionSelect(event.detail.emoji)}
                                 on:close={closeReactionPicker}
@@ -3733,8 +3733,8 @@
                             onkeydown={(event) => event.stopPropagation()}
                           >
                             <EmojiPicker
-                              emojiCategories={emojiPickerCategories ?? undefined}
-                              fallbackUsed={emojiPickerFallbackUsed}
+                              emojiCategories={emojiPickerCategories() ?? undefined}
+                              fallbackUsed={emojiPickerFallbackUsed()}
                               on:select={(event) =>
                                 handleReactionSelect(event.detail.emoji)}
                               on:close={closeReactionPicker}
@@ -3872,8 +3872,8 @@
             </button>
           </div>
         {/if}
-        {#if composerConnectivityNotice()}
-          {@const notice = composerConnectivityNotice()}
+        {#if composerConnectivityNotice}
+          {@const notice = composerConnectivityNotice}
           {@const IconComponent = connectivityNoticeIcons[notice.tone]}
           <div
             class={`mb-2 flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed ${
@@ -3965,7 +3965,7 @@
                   : "Emoji insertion is disabled in this channel"}
                 aria-haspopup="dialog"
                 aria-expanded={showComposerEmojiPicker}
-                aria-controls={composerEmojiPickerId}
+                aria-controls={composerEmojiPickerId()}
                 onclick={toggleComposerEmojiPicker}
                 bind:this={composerEmojiButton}
                 disabled={!canUseComposerEmoji()}
@@ -3979,13 +3979,13 @@
               {#if showComposerEmojiPicker}
                 <div
                   class="absolute bottom-full left-0 z-30 mb-2"
-                  id={composerEmojiPickerId}
+                  id={composerEmojiPickerId()}
                   bind:this={composerEmojiPickerEl}
                   role="presentation"
                 >
                   <EmojiPicker
-                    emojiCategories={emojiPickerCategories ?? undefined}
-                    fallbackUsed={emojiPickerFallbackUsed}
+                    emojiCategories={emojiPickerCategories() ?? undefined}
+                    fallbackUsed={emojiPickerFallbackUsed()}
                     on:select={(event) =>
                       handleComposerEmojiSelect(event.detail.emoji)}
                     on:close={() =>

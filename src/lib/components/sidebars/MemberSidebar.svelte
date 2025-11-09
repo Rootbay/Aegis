@@ -272,7 +272,7 @@
   <Sidebar
     class="hidden lg:flex"
     data-settings-page={isSettingsPage}
-    aria-label={sidebarAriaLabel()}
+    aria-label={sidebarAriaLabel}
     data-testid="desktop-member-sidebar"
   >
     {#if isSettingsPage}
@@ -283,7 +283,7 @@
       <MemberListContent
         members={members}
         groupedMembers={groupedMembers}
-        canInviteMembers={canInviteMembers()}
+        canInviteMembers={canInviteMembers}
         hasInviteCandidates={hasInviteCandidates()}
         onInviteMembers={openInviteMembersDialog}
         canRemoveMember={canRemoveMember}
@@ -291,8 +291,8 @@
         isRemovingMember={isRemovingMember}
         {openUserCardModal}
         variant="desktop"
-        isServerContext={isServerContext()}
-        resolvedServerId={resolvedServerId()}
+        isServerContext={isServerContext}
+        resolvedServerId={resolvedServerId}
       >
         <svelte:fragment
           slot="user-card"
@@ -316,7 +316,7 @@
       <MemberListContent
         members={members}
         groupedMembers={groupedMembers}
-        canInviteMembers={canInviteMembers()}
+        canInviteMembers={canInviteMembers}
         hasInviteCandidates={hasInviteCandidates()}
         onInviteMembers={openInviteMembersDialog}
         canRemoveMember={canRemoveMember}
@@ -324,8 +324,8 @@
         isRemovingMember={isRemovingMember}
         {openUserCardModal}
         variant="desktop"
-        isServerContext={isServerContext()}
-        resolvedServerId={resolvedServerId()}
+        isServerContext={isServerContext}
+        resolvedServerId={resolvedServerId}
       >
         <svelte:fragment
           slot="user-card"
@@ -358,15 +358,15 @@
         <div class="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
             <p class="text-sm font-semibold text-foreground">
-              {sidebarAriaLabel()}
+              {sidebarAriaLabel}
             </p>
-            {#if canInviteMembers()}
+            {#if canInviteMembers}
               <p class="text-xs text-muted-foreground">
                 Manage group members
               </p>
             {/if}
           </div>
-          <DialogClose asChild let:close>
+          <DialogClose>
             <Button
               variant="ghost"
               size="icon"
@@ -381,7 +381,7 @@
         <MemberListContent
           members={members}
           groupedMembers={groupedMembers}
-          canInviteMembers={canInviteMembers()}
+          canInviteMembers={canInviteMembers}
           hasInviteCandidates={hasInviteCandidates()}
           onInviteMembers={openInviteMembersDialog}
           canRemoveMember={canRemoveMember}
@@ -389,8 +389,8 @@
           isRemovingMember={isRemovingMember}
           {openUserCardModal}
           variant="mobile"
-          isServerContext={isServerContext()}
-          resolvedServerId={resolvedServerId()}
+          isServerContext={isServerContext}
+          resolvedServerId={resolvedServerId}
         >
           <svelte:fragment
             slot="user-card"
@@ -415,7 +415,7 @@
   </Dialog>
 {/if}
 
-{#if canInviteMembers()}
+{#if canInviteMembers}
   <Dialog
     open={showInviteMembersDialog}
     onOpenChange={(value) => {

@@ -1,4 +1,3 @@
-//--- FILE: src/aep/src/database.rs ---
 use aegis_types::AegisError;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -2255,13 +2254,14 @@ pub async fn add_server_ban(
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
     let created_at = Utc::now().to_rfc3339();
+    let reason_ref = normalized_reason.as_deref();
 
     sqlx::query!(
         "INSERT INTO server_bans (server_id, user_id, reason, created_at) VALUES (?, ?, ?, ?) \
          ON CONFLICT(server_id, user_id) DO UPDATE SET reason = excluded.reason, created_at = excluded.created_at",
         server_id,
         user_id,
-        normalized_reason.as_deref(),
+        reason_ref,
         created_at
     )
     .execute(pool)

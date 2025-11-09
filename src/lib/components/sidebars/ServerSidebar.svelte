@@ -183,8 +183,8 @@
   let newChannelCategoryId = $state<string | null>(null);
   let newChannelSlowmode = $state(0);
   let editingChannelId = $state<string | null>(null);
-  let selectedRoleIds = new SvelteSet<string>();
-  let selectedMemberIds = new SvelteSet<string>();
+  let selectedRoleIds = $state(new SvelteSet<string>());
+  let selectedMemberIds = $state(new SvelteSet<string>());
   let roleSearchTerm = $state("");
   let memberSearchTerm = $state("");
 
@@ -2127,7 +2127,7 @@
                       {@const unreadCount = metadata?.unreadCount ?? 0}
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger asChild>
+                          <TooltipTrigger>
                             <div
                               role="button"
                               tabindex="0"
@@ -2171,7 +2171,7 @@
                             >
                             {#if channel.private}
                               <Badge
-                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                               >
                                 <Lock size={10} />
                                 Private
@@ -2245,7 +2245,7 @@
                         activeCall.chatId === channel.id}
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger asChild>
+                          <TooltipTrigger>
                             <div
                               role="button"
                               tabindex="0"
@@ -2292,7 +2292,7 @@
                               >
                               {#if channel.private}
                                 <Badge
-                                  class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                  class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                                 >
                                   <Lock size={10} />
                                   Private
@@ -2355,7 +2355,7 @@
                               {@const member = membersById.get(presence.userId)}
                               <TooltipProvider>
                                 <Tooltip>
-                                  <TooltipTrigger asChild>
+                                  <TooltipTrigger>
                                     <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
                                       <Avatar class="h-5 w-5 border border-border">
                                         <AvatarImage
@@ -2366,7 +2366,7 @@
                                           {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
                                         </AvatarFallback>
                                       </Avatar>
-                                      <span class="max-w-[96px] truncate">
+                                      <span class="max-w-24 truncate">
                                         {member?.name ?? presence.userId}
                                       </span>
                                     </div>
@@ -2458,7 +2458,7 @@
                   {@const unreadCount = metadata?.unreadCount ?? 0}
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger>
                         <div
                           role="button"
                           tabindex="0"
@@ -2492,7 +2492,7 @@
                             >
                             {#if channel.private}
                               <Badge
-                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                               >
                                 <Lock size={10} />
                                 Private
@@ -2564,7 +2564,7 @@
                             {@const member = membersById.get(presence.userId)}
                             <TooltipProvider>
                               <Tooltip>
-                                <TooltipTrigger asChild>
+                                <TooltipTrigger>
                                   <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
                                     <Avatar class="h-5 w-5 border border-border">
                                       <AvatarImage
@@ -2575,7 +2575,7 @@
                                         {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
                                       </AvatarFallback>
                                     </Avatar>
-                                    <span class="max-w-[96px] truncate">
+                                    <span class="max-w-24 truncate">
                                       {member?.name ?? presence.userId}
                                     </span>
                                   </div>
@@ -2675,7 +2675,7 @@
                     activeCall.chatId === channel.id}
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger>
                         <div
                           role="button"
                           tabindex="0"
@@ -2710,7 +2710,7 @@
                             >
                             {#if channel.private}
                               <Badge
-                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                               >
                                 <Lock size={10} />
                                 Private

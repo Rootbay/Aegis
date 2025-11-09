@@ -2,10 +2,14 @@
 
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { createEventDispatcher } from "svelte";
-
   import { loadEmojiData, type EmojiLoadResult } from "./emojiData";
   import type { EmojiCategory, EmojiEntry } from "./types";
+  import { createEventDispatcher } from "svelte";
+
+  let { emojiCategories, fallbackUsed } = $props<{
+    emojiCategories?: EmojiCategory[] | null;
+    fallbackUsed?: boolean | null;
+  }>();
 
   const dispatch = createEventDispatcher<{
     select: { emoji: string };
@@ -13,9 +17,6 @@
   }>();
 
   const GRID_COLUMNS = 8;
-
-  export let emojiCategories: EmojiCategory[] | null | undefined = undefined;
-  export let fallbackUsed: boolean | null | undefined = null;
 
   let categories = $state<EmojiCategory[]>([]);
   let loading = $state(true);
@@ -37,9 +38,7 @@
     };
 
     document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("keydown", handleEscape);
-    };
+    return () => document.removeEventListener("keydown", handleEscape);
   });
 
   $effect(() => {
@@ -65,15 +64,11 @@
 
     lastProvidedCategories = null;
     lastFallbackHint = fallbackHint;
-
     await loadDefaultCategories();
   }
 
   async function loadDefaultCategories() {
-    if (hasLoadedDefaults) {
-      return;
-    }
-
+    if (hasLoadedDefaults) return;
     if (defaultLoadPromise) {
       await defaultLoadPromise;
       return;
@@ -119,9 +114,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (!emojiButtons.length) {
-      refreshButtons();
-    }
+    if (!emojiButtons.length) refreshButtons();
 
     if (event.key === "Escape") {
       event.preventDefault();
@@ -129,9 +122,7 @@
       return;
     }
 
-    if (!emojiButtons.length) {
-      return;
-    }
+    if (!emojiButtons.length) return;
 
     const active = document.activeElement as HTMLButtonElement | null;
     const currentIndex = active ? emojiButtons.indexOf(active) : -1;
@@ -198,25 +189,16 @@
   }
 
   function getEmojiLabel(emoji: EmojiEntry): string {
-    if (emoji.label && emoji.label.trim().length > 0) {
-      return emoji.label;
-    }
-
-    if (emoji.type === "custom" || emoji.type === "sticker") {
-      return emoji.name;
-    }
-
+    if (emoji.label && emoji.label.trim().length > 0) return emoji.label;
+    if (emoji.type === "custom" || emoji.type === "sticker") return emoji.name;
     return emoji.value;
   }
 
   function getEmojiValue(emoji: EmojiEntry): string {
-    if (emoji.type === "unicode") {
-      return emoji.value;
-    }
-
     return emoji.value;
   }
 </script>
+
 
 {#if loading}
   <div
