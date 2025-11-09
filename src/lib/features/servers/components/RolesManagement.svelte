@@ -1,7 +1,17 @@
 <script lang="ts">
   import type { Role } from "$lib/features/servers/models/Role";
+  import { reindexRoles } from "$lib/features/servers/models/Role";
   import { v4 as uuidv4 } from "uuid";
-  import { Plus, Pencil, Trash, X, Check, Eye } from "@lucide/svelte";
+  import {
+    Plus,
+    Pencil,
+    Trash,
+    X,
+    Check,
+    Eye,
+    ArrowUp,
+    ArrowDown,
+  } from "@lucide/svelte";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 
@@ -14,6 +24,7 @@
       roleId: string;
       permission: keyof Role["permissions"];
     }>;
+    onreorder_roles?: UnaryHandler<Role[]>;
   };
 
   let {
@@ -22,6 +33,7 @@
     onupdate_role,
     ondelete_role,
     ontoggle_permission,
+    onreorder_roles,
   }: RolesManagementProps = $props();
 
   let newRoleName = $state("");
@@ -30,6 +42,34 @@
   let editingRoleColor = $state("#000000");
   let editingRoleHoist = $state(false);
   let editingRoleMentionable = $state(false);
+  let localRoles = $state<Role[]>([]);
+
+  const syncLocalRoles = (incoming: Role[]) => {
+    localRoles = reindexRoles(incoming).map((role) => ({
+      ...role,
+      permissions: { ...role.permissions },
+      member_ids: [...role.member_ids],
+    }));
+  };
+
+  $effect(() => {
+    syncLocalRoles(roles);
+  });
+
+  const emitReorder = (next: Role[]) => {
+    const reindexed = reindexRoles(next);
+    localRoles = reindexed;
+    onreorder_roles?.(reindexed);
+  };
+
+  const applyLocalRoles = (
+    producer: (roles: Role[]) => Role[],
+  ): Role[] => {
+    const produced = producer(localRoles);
+    const reindexed = reindexRoles(produced);
+    localRoles = reindexed;
+    return reindexed;
+  };
 
   const permissionCategories = {
     "General Permissions": [
@@ -73,19 +113,22 @@
 
   function addRole() {
     if (newRoleName.trim()) {
-      const newRole: Role = {
+      const baseRole: Role = {
         id: uuidv4(),
         name: newRoleName.trim(),
         color: "#99AAB5",
         hoist: false,
         mentionable: false,
+        position: localRoles.length,
         permissions: Object.keys(allPermissions).reduce(
           (acc, perm) => ({ ...acc, [perm]: false }),
           {},
         ),
         member_ids: [],
       };
-      onadd_role?.(newRole);
+      const nextRoles = applyLocalRoles((roles) => [...roles, baseRole]);
+      const created = nextRoles.find((role) => role.id === baseRole.id) ?? baseRole;
+      onadd_role?.(created);
       newRoleName = "";
     }
   }
@@ -100,13 +143,19 @@
 
   function saveEditRole() {
     if (editingRole && editingRoleName.trim()) {
-      onupdate_role?.({
+      const updatedRole: Role = {
         ...editingRole,
         name: editingRoleName.trim(),
         color: editingRoleColor,
         hoist: editingRoleHoist,
         mentionable: editingRoleMentionable,
-      });
+      };
+      const nextRoles = applyLocalRoles((roles) =>
+        roles.map((role) => (role.id === updatedRole.id ? updatedRole : role)),
+      );
+      const emitted =
+        nextRoles.find((role) => role.id === updatedRole.id) ?? updatedRole;
+      onupdate_role?.(emitted);
       editingRole = null;
       editingRoleName = "";
       editingRoleColor = "#000000";
@@ -125,6 +174,7 @@
 
   function deleteRole(roleId: string) {
     if (confirm("Are you sure you want to delete this role?")) {
+      applyLocalRoles((roles) => roles.filter((role) => role.id !== roleId));
       ondelete_role?.(roleId);
       if (editingRole?.id === roleId) {
         editingRole = null;
@@ -137,12 +187,41 @@
       editingRole.permissions[permissionKey] =
         !editingRole.permissions[permissionKey];
       editingRole = { ...editingRole };
+      applyLocalRoles((roles) =>
+        roles.map((role) =>
+          role.id === editingRole!.id
+            ? {
+                ...role,
+                permissions: {
+                  ...role.permissions,
+                  [permissionKey]: editingRole!.permissions[permissionKey],
+                },
+              }
+            : role,
+        ),
+      );
       ontoggle_permission?.({
         roleId: editingRole.id,
         permission: permissionKey as keyof Role["permissions"],
       });
     }
   }
+
+  function moveRole(roleId: string, direction: -1 | 1) {
+    const currentIndex = localRoles.findIndex((role) => role.id === roleId);
+    if (currentIndex === -1) {
+      return;
+    }
+    const targetIndex = currentIndex + direction;
+    if (targetIndex < 0 || targetIndex >= localRoles.length) {
+      return;
+    }
+    const next = [...localRoles];
+    const [moved] = next.splice(currentIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    emitReorder(next);
+  }
+
 </script>
 
 <div class="flex flex-col md:flex-row gap-4">
@@ -168,7 +247,7 @@
     </div>
 
     <div class="space-y-2 pr-2">
-      {#each roles as role (role.id)}
+      {#each localRoles as role, index (role.id)}
         <div
           role="button"
           tabindex="0"
@@ -187,6 +266,30 @@
             >{role.name}</span
           >
           <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              onclick={(e) => {
+                e.stopPropagation();
+                moveRole(role.id, -1);
+              }}
+              disabled={index === 0}
+              aria-label={`Move ${role.name} up`}
+            >
+              <ArrowUp size={10} />
+            </button>
+            <button
+              type="button"
+              class="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              onclick={(e) => {
+                e.stopPropagation();
+                moveRole(role.id, 1);
+              }}
+              disabled={index === localRoles.length - 1}
+              aria-label={`Move ${role.name} down`}
+            >
+              <ArrowDown size={10} />
+            </button>
             <Pencil
               size={10}
               class="text-muted-foreground hover:text-foreground cursor-pointer"
