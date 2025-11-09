@@ -352,6 +352,14 @@ export function createServerStore(): ServerStore {
       permittedRoleIds,
       permitted_roles,
       permittedRoles,
+      rate_limit_per_user,
+      rateLimitPerUser,
+      slow_mode,
+      slowMode,
+      slowmode,
+      cooldown_seconds,
+      cooldownSeconds,
+      cooldown,
       ...rest
     } = channel;
 
@@ -441,6 +449,26 @@ export function createServerStore(): ServerStore {
     );
     if (normalizedAllowedRoles.length > 0) {
       normalized.allowed_role_ids = normalizedAllowedRoles;
+    }
+
+    const resolvedRateLimitRaw =
+      toNumber(rate_limit_per_user) ??
+      toNumber(rateLimitPerUser) ??
+      toNumber(slow_mode) ??
+      toNumber(slowMode) ??
+      toNumber(slowmode) ??
+      toNumber(cooldown_seconds) ??
+      toNumber(cooldownSeconds) ??
+      toNumber(cooldown);
+
+    if (resolvedRateLimitRaw !== undefined) {
+      const normalizedRateLimit = Math.max(
+        0,
+        Number.isFinite(resolvedRateLimitRaw)
+          ? Math.floor(resolvedRateLimitRaw)
+          : 0,
+      );
+      normalized.rate_limit_per_user = normalizedRateLimit;
     }
 
     return normalized;

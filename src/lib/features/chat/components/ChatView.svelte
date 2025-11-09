@@ -17,6 +17,7 @@
     Webhook,
     Wifi,
   } from "@lucide/svelte";
+  import { browser } from "$app/environment";
   import { invoke } from "@tauri-apps/api/core";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
@@ -36,7 +37,9 @@
     messagesByChatId,
     hasMoreByChatId,
     loadingStateByChat,
+    slowmodeByChannelId,
   } from "$lib/features/chat/stores/chatStore";
+  import { normalizeSlowmodeValue } from "$lib/features/channels/utils/slowmode";
   import {
     getContext,
     onDestroy,
@@ -350,6 +353,36 @@
     return permissions.attach_files === true;
   });
 
+  const canBypassSlowmode = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return true;
+    }
+    const permissions = channelPermissions();
+    return (
+      permissions.manage_messages === true ||
+      permissions.moderate_members === true ||
+      permissions.manage_channels === true
+    );
+  });
+
+  const channelSlowmodeSeconds = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return 0;
+    }
+    const server = $serverStore.servers.find(
+      (entry) => entry.id === chat.serverId,
+    );
+    const channel = server?.channels?.find((entry) => entry.id === chat.id);
+    if (!channel || channel.channel_type !== "text") {
+      return 0;
+    }
+    return normalizeSlowmodeValue(channel.rate_limit_per_user ?? 0);
+  });
+
+  const slowmodeActive = $derived(
+    () => channelSlowmodeSeconds() > 0 && !canBypassSlowmode(),
+  );
+
   const voiceMemoControlEnabled = $derived(
     () => voiceMemosEnabled && canSendVoiceMessages(),
   );
@@ -389,6 +422,59 @@
   let lastTopLoad = 0;
   let attachedFiles = $state<File[]>([]);
   let sending = $state(false);
+  let slowmodeRemainingSeconds = $state(0);
+  let slowmodeIntervalId: number | null = $state(null);
+
+  $effect(() => {
+    if (!browser || typeof window === "undefined") {
+      return;
+    }
+
+    if (!chat || chat.type !== "channel" || !slowmodeActive()) {
+      slowmodeRemainingSeconds = 0;
+      if (slowmodeIntervalId) {
+        clearInterval(slowmodeIntervalId);
+        slowmodeIntervalId = null;
+      }
+      return;
+    }
+
+    const tracker = $slowmodeByChannelId.get(chat.id);
+    const now = Date.now();
+    const availableAt = tracker?.availableAt ?? 0;
+    const initialRemaining =
+      availableAt > now ? Math.ceil((availableAt - now) / 1000) : 0;
+    slowmodeRemainingSeconds = initialRemaining;
+
+    if (slowmodeIntervalId) {
+      clearInterval(slowmodeIntervalId);
+      slowmodeIntervalId = null;
+    }
+
+    if (initialRemaining > 0) {
+      slowmodeIntervalId = window.setInterval(() => {
+        const latestTracker = $slowmodeByChannelId.get(chat.id);
+        const activeAvailableAt = latestTracker?.availableAt ?? availableAt;
+        const nowTick = Date.now();
+        const nextRemaining =
+          activeAvailableAt > nowTick
+            ? Math.ceil((activeAvailableAt - nowTick) / 1000)
+            : 0;
+        slowmodeRemainingSeconds = nextRemaining;
+        if (nextRemaining <= 0 && slowmodeIntervalId) {
+          clearInterval(slowmodeIntervalId);
+          slowmodeIntervalId = null;
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (slowmodeIntervalId) {
+        clearInterval(slowmodeIntervalId);
+        slowmodeIntervalId = null;
+      }
+    };
+  });
   let isRestoringDraft = $state(false);
   let activeDraftLoadToken: symbol | null = null;
   let isAtBottom = $state(true);
@@ -670,9 +756,8 @@
           }
         }
 
-        const specialCandidates = buildSpecialMentionCandidates(
-          allowSpecialMentions,
-        );
+        const specialCandidates =
+          buildSpecialMentionCandidates(allowSpecialMentions);
         if (specialCandidates.length > 0) {
           candidates.push(...specialCandidates);
         }
@@ -890,7 +975,9 @@
       case "role":
         return `@${candidate.name}`;
       case "special":
-        return candidate.name.startsWith("@") ? candidate.name : `@${candidate.name}`;
+        return candidate.name.startsWith("@")
+          ? candidate.name
+          : `@${candidate.name}`;
       case "user":
       default:
         return candidate.name;
@@ -911,7 +998,9 @@
     }
   }
 
-  function getMentionCandidateBadgeClasses(candidate: MentionCandidate): string {
+  function getMentionCandidateBadgeClasses(
+    candidate: MentionCandidate,
+  ): string {
     switch (candidate.kind) {
       case "channel":
         return "bg-cyan-600/70 text-cyan-100";
@@ -968,7 +1057,8 @@
     }
     queueMicrotask(() => {
       if (textareaRef) {
-        const caret = start + mentionToken.length + (needsTrailingSpace ? 1 : 0);
+        const caret =
+          start + mentionToken.length + (needsTrailingSpace ? 1 : 0);
         textareaRef.focus();
         textareaRef.setSelectionRange(caret, caret);
       }
@@ -1261,7 +1351,10 @@
       );
       if (server) {
         channelById = new Map(
-          (server.channels ?? []).map((channel: Channel) => [channel.id, channel]),
+          (server.channels ?? []).map((channel: Channel) => [
+            channel.id,
+            channel,
+          ]),
         );
         roleById = new Map(
           (server.roles ?? []).map((role: Role) => [role.id, role]),
@@ -1359,7 +1452,9 @@
       const server = $serverStore.servers.find(
         (entry) => entry.id === chat.serverId,
       );
-      const fallback = server?.channels?.find((entry) => entry.id === channelId);
+      const fallback = server?.channels?.find(
+        (entry) => entry.id === channelId,
+      );
       if (fallback?.name) {
         return fallback.name;
       }
@@ -1902,6 +1997,35 @@
     return `${minutes}:${seconds}`;
   }
 
+  function formatSlowmodeCountdown(seconds: number): string {
+    const clamped = Math.max(0, Math.floor(seconds));
+    if (clamped < 60) {
+      return `${clamped}s`;
+    }
+    if (clamped < 3600) {
+      const minutes = Math.floor(clamped / 60);
+      const remainder = clamped % 60;
+      return remainder === 0 ? `${minutes}m` : `${minutes}m ${remainder}s`;
+    }
+    const hours = Math.floor(clamped / 3600);
+    const minutes = Math.floor((clamped % 3600) / 60);
+    if (minutes === 0) {
+      return `${hours}h`;
+    }
+    return `${hours}h ${minutes}m`;
+  }
+
+  function isSlowmodeError(error: unknown): boolean {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+    const record = error as Record<string, unknown>;
+    if (record.name === "SlowmodeError") {
+      return true;
+    }
+    return typeof record.remainingSeconds === "number";
+  }
+
   function resolveReplyAuthor(message: Message): string | undefined {
     if (message.senderId === myId) {
       return $userStore.me?.name ?? "You";
@@ -2086,8 +2210,11 @@
         void chatStore.sendTypingIndicator(false);
       }
       resetTypingTimer();
-    } catch (e) {
-      console.error("Failed to send message", e);
+    } catch (error) {
+      if (isSlowmodeError(error)) {
+        return;
+      }
+      console.error("Failed to send message", error);
       toasts.addToast("Failed to send message.", "error");
     } finally {
       sending = false;
@@ -2418,7 +2545,11 @@
 
   async function fetchSearchPages(
     controller: RemoteSearchController,
-    context: { chatId: string; query: string; filters: typeof activeSearchFilters },
+    context: {
+      chatId: string;
+      query: string;
+      filters: typeof activeSearchFilters;
+    },
   ) {
     if (controller.running) {
       return;
@@ -2508,10 +2639,7 @@
           controller.hasMore &&
           (pendingAutoPages > 0 || pendingManualPages > 0);
 
-        chatSearchStore.setSearchLoading(
-          controller.id,
-          shouldRemainLoading,
-        );
+        chatSearchStore.setSearchLoading(controller.id, shouldRemainLoading);
       }
     }
   }
@@ -2867,7 +2995,9 @@
               <h1 class="text-base font-semibold leading-5">#{chat.name}</h1>
             </div>
             {#if chat.topic}
-              <p class="text-sm text-muted-foreground leading-snug whitespace-pre-wrap break-words">
+              <p
+                class="text-sm text-muted-foreground leading-snug whitespace-pre-wrap break-words"
+              >
                 {chat.topic}
               </p>
             {/if}
@@ -2971,7 +3101,9 @@
                         msg.authorType.toLowerCase() as MessageAuthorType}
                       {#if normalizedAuthorType !== "user"}
                         {@const badgeMeta =
-                          AUTHOR_TYPE_META[normalizedAuthorType as AutomatedAuthorType]}
+                          AUTHOR_TYPE_META[
+                            normalizedAuthorType as AutomatedAuthorType
+                          ]}
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -3173,11 +3305,10 @@
                           </div>
                         </form>
                       {:else if $chatSearchStore.query}
-                        <p class="text-base whitespace-pre-wrap wrap-break-word">
-                          {#each highlightText(
-                            msg.content,
-                            $chatSearchStore.query,
-                          ) as part, i (i)}
+                        <p
+                          class="text-base whitespace-pre-wrap wrap-break-word"
+                        >
+                          {#each highlightText(msg.content, $chatSearchStore.query) as part, i (i)}
                             {@const segments = formatMessageSegments(part.text)}
                             {#if part.match}
                               <mark class="bg-yellow-500/60 text-white">
@@ -3272,7 +3403,9 @@
                         </p>
                       {:else}
                         {@const segments = formatMessageSegments(msg.content)}
-                        <p class="text-base whitespace-pre-wrap wrap-break-word">
+                        <p
+                          class="text-base whitespace-pre-wrap wrap-break-word"
+                        >
                           {#each segments as segment, segIndex (segIndex)}
                             {#if segment.type === "text"}
                               {@html segment.html}
@@ -3582,6 +3715,19 @@
             <span class="flex-1">{notice.message}</span>
           </div>
         {/if}
+        {#if slowmodeActive() && slowmodeRemainingSeconds > 0}
+          <div
+            class="mb-2 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100"
+            role="status"
+            aria-live="polite"
+          >
+            <Timer class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span class="flex-1">
+              Slowmode enabled. You can send another message in
+              {" "}{formatSlowmodeCountdown(slowmodeRemainingSeconds)}.
+            </span>
+          </div>
+        {/if}
         {#if canSendMessages() && attachedFiles.length > 0}
           <div class="p-2 mb-2 border-b border-zinc-700/50">
             <p class="text-sm font-semibold mb-2 text-zinc-300">Attachments</p>
@@ -3773,12 +3919,14 @@
                 ? isRecording
                   ? "Stop recording voice message"
                   : "Record voice message"
-                : voiceMemoRestrictionMessage() ?? "Voice memos are unavailable"}
+                : (voiceMemoRestrictionMessage() ??
+                  "Voice memos are unavailable")}
               title={voiceMemoControlEnabled()
                 ? isRecording
                   ? "Stop recording voice message"
                   : "Record voice message"
-                : voiceMemoRestrictionMessage() ?? "Voice memos are unavailable"}
+                : (voiceMemoRestrictionMessage() ??
+                  "Voice memos are unavailable")}
             >
               {#if isRecording}
                 <Square size={12} />
@@ -3789,14 +3937,21 @@
             <button
               type="submit"
               class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
-              disabled={sending || connectivitySendBlocked()}
+              disabled={sending ||
+                connectivitySendBlocked() ||
+                (slowmodeActive() && slowmodeRemainingSeconds > 0)}
               aria-busy={sending}
-              aria-label={connectivitySendBlocked() || connectivityQueueing()
-                ? (connectivitySendBlockedMessage() ?? "Send message")
-                : "Send message"}
-              title={connectivitySendBlocked() || connectivityQueueing()
-                ? (connectivitySendBlockedMessage() ?? "Connectivity unavailable")
-                : "Send message"}
+              aria-label={slowmodeActive() && slowmodeRemainingSeconds > 0
+                ? `Slowmode active. ${formatSlowmodeCountdown(slowmodeRemainingSeconds)} remaining.`
+                : connectivitySendBlocked() || connectivityQueueing()
+                  ? (connectivitySendBlockedMessage() ?? "Send message")
+                  : "Send message"}
+              title={slowmodeActive() && slowmodeRemainingSeconds > 0
+                ? `Slowmode active. ${formatSlowmodeCountdown(slowmodeRemainingSeconds)} remaining.`
+                : connectivitySendBlocked() || connectivityQueueing()
+                  ? (connectivitySendBlockedMessage() ??
+                    "Connectivity unavailable")
+                  : "Send message"}
             >
               <SendHorizontal size={12} />
             </button>
@@ -3808,7 +3963,9 @@
             aria-live="polite"
           >
             <CircleAlert class="h-4 w-4" aria-hidden="true" />
-            <span>You do not have permission to send messages in this channel.</span>
+            <span
+              >You do not have permission to send messages in this channel.</span
+            >
           </div>
         {/if}
       </footer>

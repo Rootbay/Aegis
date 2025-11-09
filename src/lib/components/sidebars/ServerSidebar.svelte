@@ -24,6 +24,7 @@
     ChevronDown,
     Hash,
     CircleX,
+    Check,
     Mic,
     Info,
     UserPlus,
@@ -83,12 +84,24 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
+  import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+  } from "$lib/components/ui/select/index.js";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
   import { mutedChannelsStore } from "$lib/features/channels/stores/mutedChannelsStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
   import { userStore } from "$lib/stores/userStore";
+  import {
+    SLOWMODE_PRESETS,
+    buildSlowmodeOptions,
+    formatSlowmodeDuration,
+    normalizeSlowmodeValue,
+  } from "$lib/features/channels/utils/slowmode";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -123,10 +136,16 @@
   let newChannelPrivate = $state(false);
   let newChannelTopic = $state("");
   let newChannelCategoryId = $state<string | null>(null);
+  let newChannelSlowmode = $state(0);
+  let editingChannelId = $state<string | null>(null);
   let selectedRoleIds = new SvelteSet<string>();
   let selectedMemberIds = new SvelteSet<string>();
   let roleSearchTerm = $state("");
   let memberSearchTerm = $state("");
+
+  const slowmodeOptions = $derived(() =>
+    buildSlowmodeOptions([...SLOWMODE_PRESETS, newChannelSlowmode]),
+  );
 
   let showCategoryContextMenu = $state(false);
   let contextMenuX = $state(0);
@@ -636,6 +655,12 @@
   });
 
   $effect(() => {
+    if (newChannelType === "voice") {
+      newChannelSlowmode = 0;
+    }
+  });
+
+  $effect(() => {
     if (!server?.id) {
       if (collapsedCategoryIds.size > 0) {
         collapsedCategoryIds = new SvelteSet<string>();
@@ -744,13 +769,50 @@
     type: "text" | "voice" = "text",
     categoryId: string | null = null,
   ) {
+    editingChannelId = null;
     newChannelType = type;
     newChannelName = "";
     newChannelPrivate = false;
     newChannelTopic = "";
     newChannelCategoryId = normalizeCategoryId(categoryId);
+    newChannelSlowmode = 0;
     clearAccessSelections();
     showCreateChannelModal = true;
+  }
+
+  function handleEditChannel(channelId: string) {
+    const channel = getChannelById(channelId);
+    if (!channel) {
+      return;
+    }
+
+    editingChannelId = channel.id;
+    newChannelType = channel.channel_type;
+    newChannelName = channel.name;
+    newChannelPrivate = channel.private;
+    newChannelTopic = channel.topic ?? "";
+    newChannelCategoryId = normalizeCategoryId(channel.category_id ?? null);
+    newChannelSlowmode =
+      channel.channel_type === "text"
+        ? normalizeSlowmodeValue(channel.rate_limit_per_user ?? 0)
+        : 0;
+    selectedRoleIds = new SvelteSet(channel.allowed_role_ids ?? []);
+    selectedMemberIds = new SvelteSet(channel.allowed_user_ids ?? []);
+    roleSearchTerm = "";
+    memberSearchTerm = "";
+    showCreateChannelModal = true;
+  }
+
+  function closeChannelModal() {
+    showCreateChannelModal = false;
+    newChannelName = "";
+    newChannelType = "text";
+    newChannelPrivate = false;
+    newChannelTopic = "";
+    newChannelCategoryId = null;
+    newChannelSlowmode = 0;
+    editingChannelId = null;
+    clearAccessSelections();
   }
 
   function handleCreateCategory() {
@@ -798,7 +860,7 @@
     }
   }
 
-  async function createChannel() {
+  async function submitChannelForm() {
     if (!newChannelName.trim()) return;
 
     const normalizedTopic =
@@ -839,6 +901,48 @@
     }
 
     const normalizedCategoryId = normalizeCategoryId(newChannelCategoryId);
+    const slowmodeSeconds =
+      newChannelType === "text" ? normalizeSlowmodeValue(newChannelSlowmode) : 0;
+
+    if (editingChannelId) {
+      const existing = getChannelById(editingChannelId);
+      if (!existing) {
+        toasts.addToast("Channel not found.", "error");
+        return;
+      }
+
+      const updatedChannel: Channel = {
+        ...existing,
+        name: slugifyChannelName(newChannelName),
+        channel_type: newChannelType,
+        private: newChannelPrivate,
+        category_id: normalizedCategoryId,
+        topic: topicValue,
+        allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
+        allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
+        rate_limit_per_user: newChannelType === "text" ? slowmodeSeconds : 0,
+      };
+
+      try {
+        const updatedChannels = (server.channels || []).map((c: Channel) =>
+          c.id === existing.id ? updatedChannel : c,
+        );
+        const result = await serverStore.updateServer(server.id, {
+          channels: updatedChannels,
+        });
+        if (!result?.success) {
+          toasts.addToast("Failed to update channel.", "error");
+          return;
+        }
+        toasts.addToast("Channel updated.", "success");
+        closeChannelModal();
+      } catch (error) {
+        console.error("Failed to update channel:", error);
+        toasts.addToast("Failed to update channel.", "error");
+      }
+      return;
+    }
+
     const newChannelPosition = getNextChannelPosition(
       normalizedCategoryId,
       newChannelType,
@@ -855,6 +959,7 @@
       topic: topicValue,
       allowed_role_ids: newChannelPrivate ? allowedRoleIds : [],
       allowed_user_ids: newChannelPrivate ? allowedUserIds : [],
+      rate_limit_per_user: slowmodeSeconds,
     };
 
     try {
@@ -864,13 +969,7 @@
       if (newChannel.channel_type === "text") {
         onSelectChannel(server.id, newChannel.id);
       }
-      newChannelName = "";
-      newChannelType = "text";
-      newChannelPrivate = false;
-      newChannelTopic = "";
-      newChannelCategoryId = null;
-      clearAccessSelections();
-      showCreateChannelModal = false;
+      closeChannelModal();
     } catch (error) {
       console.error("Failed to create channel:", error);
       toasts.addToast("Failed to create channel.", "error");
@@ -1113,50 +1212,7 @@
           break;
         }
         case "edit_channel": {
-          const ch = getChannelById(channelId);
-          if (!ch) break;
-          const nameInput = prompt("Rename channel", ch.name);
-          if (nameInput === null) break;
-
-          const trimmedName = nameInput.trim();
-          if (!trimmedName) {
-            toasts.addToast("Channel name cannot be empty.", "error");
-            break;
-          }
-
-          const topicInput = prompt(
-            "Update channel topic (leave blank for none)",
-            ch.topic ?? "",
-          );
-
-          const normalizedTopic =
-            topicInput === null
-              ? ch.topic ?? null
-              : topicInput.trim().length > 0
-                ? topicInput.trim()
-                : null;
-
-          const updatedName = slugifyChannelName(trimmedName);
-          const nameChanged = updatedName !== ch.name;
-          const topicChanged = normalizedTopic !== (ch.topic ?? null);
-
-          if (!nameChanged && !topicChanged) {
-            break;
-          }
-
-          const updatedChannels = (server.channels || []).map((c: Channel) =>
-            c.id === ch.id
-              ? { ...c, name: updatedName, topic: normalizedTopic }
-              : c,
-          );
-          const result = await serverStore.updateServer(server.id, {
-            channels: updatedChannels,
-          });
-          if (!result?.success) {
-            toasts.addToast("Failed to update channel.", "error");
-          } else {
-            toasts.addToast("Channel updated.", "success");
-          }
+          handleEditChannel(channelId);
           break;
         }
         case "duplicate_channel": {
@@ -1181,6 +1237,7 @@
             allowed_user_ids: orig.allowed_user_ids
               ? [...orig.allowed_user_ids]
               : [],
+            rate_limit_per_user: orig.rate_limit_per_user ?? 0,
           };
           try {
             await invoke("create_channel", { channel: dup });
@@ -2064,9 +2121,13 @@
 >
   <DialogContent>
     <DialogHeader>
-      <DialogTitle>Create Channel</DialogTitle>
+      <DialogTitle>
+        {editingChannelId ? "Edit Channel" : "Create Channel"}
+      </DialogTitle>
       <DialogDescription>
-        Create a text or voice channel with a name, optional topic, and privacy.
+        {editingChannelId
+          ? "Update channel settings, permissions, and slowmode."
+          : "Create a text or voice channel with a name, optional topic, and privacy."}
       </DialogDescription>
     </DialogHeader>
 
@@ -2131,7 +2192,7 @@
             bind:value={newChannelName}
             autofocus
             onkeydown={(e) => {
-              if (e.key === "Enter") createChannel();
+              if (e.key === "Enter") submitChannelForm();
             }}
           />
         </div>
@@ -2266,34 +2327,61 @@
       {/if}
 
       {#if newChannelType === "text"}
-        <div>
-          <Label
-            for="channel-topic"
-            class="text-xs font-semibold uppercase text-muted-foreground mb-2"
-          >
-            Topic
-          </Label>
-          <Input
-            id="channel-topic"
-            placeholder="What’s this channel about?"
-            class="w-full"
-            bind:value={newChannelTopic}
-          />
+        <div class="space-y-4">
+          <div>
+            <Label
+              for="channel-topic"
+              class="text-xs font-semibold uppercase text-muted-foreground mb-2"
+            >
+              Topic
+            </Label>
+            <Input
+              id="channel-topic"
+              placeholder="What’s this channel about?"
+              class="w-full"
+              bind:value={newChannelTopic}
+            />
+          </div>
+          <div>
+            <Label
+              class="text-xs font-semibold uppercase text-muted-foreground mb-2"
+            >
+              Slowmode
+            </Label>
+            <Select
+              type="single"
+              value={newChannelSlowmode.toString()}
+              onValueChange={(value: string) => {
+                newChannelSlowmode = normalizeSlowmodeValue(value);
+              }}
+            >
+              <SelectTrigger class="w-full justify-between">
+                <span data-slot="select-value" class="flex-1 text-left">
+                  {formatSlowmodeDuration(newChannelSlowmode)}
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {#each slowmodeOptions() as option (option.value)}
+                  <SelectItem value={option.value.toString()}>{option.label}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+            <p class="mt-1 text-xs text-muted-foreground">
+              Limit how often members can send messages. Set to Off to disable.
+            </p>
+          </div>
         </div>
       {/if}
     </div>
 
     <DialogFooter>
-      <Button
-        variant="ghost"
-        onclick={() => {
-          showCreateChannelModal = false;
-          newChannelCategoryId = null;
-        }}
-        >Cancel</Button
-      >
-      <Button onclick={createChannel} disabled={!newChannelName.trim()}>
-        <Plus size={14} class="mr-2" /> Create Channel
+      <Button variant="ghost" onclick={closeChannelModal}>Cancel</Button>
+      <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
+        {#if editingChannelId}
+          <Check size={14} class="mr-2" /> Save Changes
+        {:else}
+          <Plus size={14} class="mr-2" /> Create Channel
+        {/if}
       </Button>
     </DialogFooter>
   </DialogContent>
