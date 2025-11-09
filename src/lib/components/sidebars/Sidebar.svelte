@@ -63,7 +63,7 @@
     return value > 99 ? "99+" : `${value}`;
   };
 
-  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (..._args: [string | URL]) => Promise<void>; // eslint-disable-line no-unused-vars
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -98,7 +98,7 @@
 
   function gotoResolved(path: string) {
     // eslint-disable-next-line svelte/no-navigation-without-resolve
-    gotoUnsafe(path);
+    return gotoUnsafe(path);
   }
 
   function gotoServerSettings(serverId: string, tab?: string) {
@@ -165,7 +165,7 @@
     params.set("tab", tab);
     const query = params.toString();
     const href = query ? `${pathname}?${query}` : pathname;
-    gotoResolved(href);
+    return gotoResolved(href);
   }
 
   function handleServerClick(server: Server) {
@@ -347,14 +347,16 @@
             variant="secondary"
             aria-label="Home"
             class="rounded-xl cursor-pointer"
-            onclick={() => {
-              serverStore.setActiveServer(null);
-              if ($friendStore.friends.length > 0) {
-                gotoWithTab("/", "All");
-              } else {
-                gotoResolved("/friends/add");
-              }
-            }}
+              onclick={async () => {
+                serverStore.setActiveServer(null);
+                chatStore.clearActiveChat();
+                if ($friendStore.friends.length > 0) {
+                  await gotoWithTab("/", "All");
+                } else {
+                  await gotoResolved("/friends/add");
+                }
+                chatStore.clearActiveChat();
+              }}
           >
             <House class="size-4" />
           </Button>

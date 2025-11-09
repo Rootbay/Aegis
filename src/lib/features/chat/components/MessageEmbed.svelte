@@ -3,21 +3,22 @@
 <script lang="ts">
   import type { MessageEmbed } from "$lib/features/chat/models/Message";
 
-  let { embed }: { embed: MessageEmbed } = $props();
+  let { embed } = $props<{ embed: MessageEmbed }>();
 
-  $: host = (() => {
+  const host = $derived(() => {
     if (!embed?.url) return null;
     try {
-      const parsed = new URL(embed.url);
-      return parsed.host;
+      return new URL(embed.url).host;
     } catch {
       return null;
     }
-  })();
+  });
 
-  $: accentStyle = embed?.accentColor
-    ? `border-left-color: ${embed.accentColor}; border-left-width: 4px;`
-    : undefined;
+  const accentStyle = $derived(() =>
+    embed?.accentColor
+      ? `border-left-color: ${embed.accentColor}; border-left-width: 4px;`
+      : undefined
+  );
 </script>
 
 {#if embed}

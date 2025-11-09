@@ -7,14 +7,14 @@
     Link,
     LoaderCircle,
     Mic,
-    RadioTower,
+    Plus,
     SendHorizontal,
     Smile,
     Square,
     Timer,
     Users,
     Webhook,
-    Wifi,
+    Clapperboard
   } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { invoke } from "@tauri-apps/api/core";
@@ -31,6 +31,7 @@
 
   import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
+  import * as Popover from "$lib/components/ui/popover/index.js";
 
   import { userStore } from "$lib/stores/userStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
@@ -123,6 +124,7 @@
   import type { Message } from "$lib/features/chat/models/Message";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { Role } from "$lib/features/servers/models/Role";
+  import { Button } from "$lib/components/ui/button";
 
   type SendServerInviteResult = {
     server_id: string;
@@ -599,21 +601,6 @@
 
   type ComposerConnectivityTone = "info" | "warning" | "success";
 
-  const connectivityNoticeToneClasses: Record<
-    ComposerConnectivityTone,
-    string
-  > = {
-    info: "border-cyan-500/40 bg-cyan-500/10 text-cyan-100",
-    warning: "border-amber-500/40 bg-amber-500/10 text-amber-200",
-    success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
-  };
-
-  const connectivityNoticeIcons = {
-    info: RadioTower,
-    warning: CircleAlert,
-    success: Wifi,
-  } as const;
-
   const connectivityQueueing = $derived(() => {
     const status = $connectivityStore.status;
     return status === "offline";
@@ -683,6 +670,28 @@
       return null;
     },
   );
+
+  let lastComposerConnectivityNotice: ComposerConnectivityNotice | null =
+    $state(null);
+
+  $effect(() => {
+    const notice = composerConnectivityNotice();
+    if (!notice) {
+      lastComposerConnectivityNotice = null;
+      return;
+    }
+
+    if (
+      lastComposerConnectivityNotice &&
+      lastComposerConnectivityNotice.message === notice.message &&
+      lastComposerConnectivityNotice.tone === notice.tone
+    ) {
+      return;
+    }
+
+    toasts.addToast(notice.message, notice.tone);
+    lastComposerConnectivityNotice = notice;
+  });
 
   $effect(() => {
     if (!connectivitySendBlocked() && !connectivityQueueing()) {
@@ -2416,6 +2425,54 @@
     }
   }
 
+  function handleComposerAttachFile() {
+    if (!canAttachFiles()) {
+      toasts.addToast(
+        "You do not have permission to attach files in this channel.",
+        "error",
+      );
+      return;
+    }
+    fileInput?.click();
+  }
+
+  function handleComposerCreateThread() {
+    toasts.addToast("Thread creation is coming soon.", "info");
+  }
+
+  function handleComposerCreatePoll() {
+    toasts.addToast("Poll creation is coming soon.", "info");
+  }
+
+  function micButtonClasses() {
+    const base =
+      "flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors";
+    const states = [];
+    if (voiceMemoControlEnabled()) {
+      states.push("cursor-pointer", "hover:text-white");
+    } else {
+      states.push("opacity-50", "cursor-not-allowed");
+    }
+    if (isRecording) {
+      states.push("text-red-400");
+    }
+    return [base, ...states].join(" ");
+  }
+
+  function popoverVoiceButtonClasses() {
+    const base = "justify-start w-full transition";
+    const states = [];
+    if (voiceMemoControlEnabled()) {
+      states.push("hover:text-white", "cursor-pointer");
+    } else {
+      states.push("opacity-50", "cursor-not-allowed");
+    }
+    if (isRecording) {
+      states.push("text-red-400");
+    }
+    return [base, ...states].join(" ");
+  }
+
   function removeAttachment(fileToRemove: File) {
     attachedFiles = attachedFiles.filter((file) => file !== fileToRemove);
   }
@@ -3838,7 +3895,7 @@
         {/if}
       </div>
 
-      <footer class="p-4 bg-card/50 border-t border-zinc-700/50">
+      <footer class="p-2">
         {#if replyPreview}
           <div
             class="mb-2 flex items-center justify-between rounded-md border border-zinc-700/40 bg-muted/60 px-3 py-2 text-sm"
@@ -3860,23 +3917,6 @@
             >
               Cancel
             </button>
-          </div>
-        {/if}
-        {#if composerConnectivityNotice}
-          {@const notice = composerConnectivityNotice}
-          {@const IconComponent = connectivityNoticeIcons[notice.tone]}
-          <div
-            class={`mb-2 flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-relaxed ${
-              connectivityNoticeToneClasses[notice.tone]
-            }`}
-            role="status"
-            aria-live="polite"
-          >
-            <IconComponent
-              class="mt-0.5 h-3.5 w-3.5 shrink-0"
-              aria-hidden="true"
-            />
-            <span class="flex-1">{notice.message}</span>
           </div>
         {/if}
         {#if slowmodeActive() && slowmodeRemainingSeconds > 0}
@@ -3905,7 +3945,7 @@
         {#if canSendMessages()}
           <form
             onsubmit={sendMessage}
-            class="flex items-center bg-muted/50 rounded-lg pr-2 py-1 border border-transparent focus-within:border-zinc-600 transition-all"
+            class="flex items-center bg-muted/50 rounded-lg pr-2 py-2 border border-transparent focus-within:border-zinc-600 transition-all"
             onpaste={handlePaste}
             ondrop={handleDrop}
             ondragover={handleDragOver}
@@ -3918,72 +3958,76 @@
               class="hidden"
               aria-disabled={!canAttachFiles()}
             />
-            <button
-              type="button"
-              onclick={() => {
-                if (!canAttachFiles()) {
-                  return;
-                }
-                fileInput?.click();
-              }}
-              class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
-              class:hover:text-white={canAttachFiles()}
-              class:cursor-pointer={canAttachFiles()}
-              class:cursor-not-allowed={!canAttachFiles()}
-              class:opacity-50={!canAttachFiles()}
-              aria-disabled={!canAttachFiles()}
-              disabled={!canAttachFiles()}
-              aria-label={canAttachFiles()
-                ? "Attach files"
-                : "File attachments are disabled in this channel"}
-              title={canAttachFiles()
-                ? "Attach files"
-                : "You do not have permission to attach files in this channel."}
-            >
-              <Link size={12} />
-            </button>
-            <div class="relative ml-1">
-              <button
+            <Popover.Root>
+              <Popover.Trigger
                 type="button"
-                class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
-                class:hover:text-white={canUseComposerEmoji()}
-                class:cursor-pointer={canUseComposerEmoji()}
-                class:cursor-not-allowed={!canUseComposerEmoji()}
-                class:opacity-50={!canUseComposerEmoji()}
-                aria-label={canUseComposerEmoji()
-                  ? "Insert emoji"
-                  : "Emoji insertion is disabled in this channel"}
-                aria-haspopup="dialog"
-                aria-expanded={showComposerEmojiPicker}
-                aria-controls={composerEmojiPickerId()}
-                onclick={toggleComposerEmojiPicker}
-                bind:this={composerEmojiButton}
-                disabled={!canUseComposerEmoji()}
-                aria-disabled={!canUseComposerEmoji()}
-                title={canUseComposerEmoji()
-                  ? "Insert emoji"
-                  : "You do not have permission to use emojis in this channel."}
+                class="p-2 text-muted-foreground transition-colors hover:text-white cursor-pointer"
+                aria-label="Composer actions"
               >
-                <Smile size={12} />
-              </button>
-              {#if showComposerEmojiPicker}
-                <div
-                  class="absolute bottom-full left-0 z-30 mb-2"
-                  id={composerEmojiPickerId()}
-                  bind:this={composerEmojiPickerEl}
-                  role="presentation"
-                >
-                  <EmojiPicker
-                    emojiCategories={emojiPickerCategories() ?? undefined}
-                    fallbackUsed={emojiPickerFallbackUsed()}
-                    on:select={(event) =>
-                      handleComposerEmojiSelect(event.detail.emoji)}
-                    on:close={() =>
-                      closeComposerEmojiPicker({ focusComposer: true })}
-                  />
+                <Plus size={20} />
+              </Popover.Trigger>
+              <Popover.Content
+                side="top"
+                align="start"
+                sideOffset={6}
+                class="w-48 border border-border bg-card p-2"
+              >
+                <div class="flex flex-col gap-1 items-start">
+                  <Button
+                    variant="ghost"
+                    onclick={handleComposerAttachFile}
+                    disabled={!canAttachFiles()}
+                    class="justify-start w-full"
+                  >
+                    <Link size={16} />
+                    Upload a File
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onclick={handleMicClick}
+                    disabled={!voiceMemoControlEnabled()}
+                    class={popoverVoiceButtonClasses()}
+                    aria-pressed={isRecording}
+                    aria-disabled={!voiceMemoControlEnabled()}
+                    aria-label={voiceMemoControlEnabled()
+                      ? isRecording
+                        ? "Stop recording voice message"
+                        : "Record voice message"
+                      : (voiceMemoRestrictionMessage() ??
+                        "Voice memos are unavailable")}
+                    title={voiceMemoControlEnabled()
+                      ? isRecording
+                        ? "Stop recording voice message"
+                        : "Record voice message"
+                      : (voiceMemoRestrictionMessage() ??
+                        "Voice memos are unavailable")}
+                  >
+                    {#if isRecording}
+                      <Square size={16} />
+                    {:else}
+                      <Mic size={16} />
+                    {/if}
+                    Record Voice
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onclick={handleComposerCreateThread}
+                    class="justify-start w-full"
+                  >
+                    <Users size={16} />
+                    Create Thread
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onclick={handleComposerCreatePoll}
+                    class="justify-start w-full"
+                  >
+                    <Bot size={16} />
+                    Create Poll
+                  </Button>
                 </div>
-              {/if}
-            </div>
+              </Popover.Content>
+            </Popover.Root>
             <div class="relative mx-2 flex-1">
               <textarea
                 rows="1"
@@ -4058,51 +4102,60 @@
                 </div>
               {/if}
             </div>
-            {#if isRecording}
-              <div
-                class="mr-2 flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400"
+            <div class="relative ml-1">
+              <button
+                type="button"
+                class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
+                class:hover:text-white={canUseComposerEmoji()}
+                class:cursor-pointer={canUseComposerEmoji()}
+                class:cursor-not-allowed={!canUseComposerEmoji()}
+                class:opacity-50={!canUseComposerEmoji()}
+                aria-label={canUseComposerEmoji()
+                  ? "Insert emoji"
+                  : "Emoji insertion is disabled in this channel"}
+                aria-haspopup="dialog"
+                aria-expanded={showComposerEmojiPicker}
+                aria-controls={composerEmojiPickerId()}
+                onclick={toggleComposerEmojiPicker}
+                bind:this={composerEmojiButton}
+                disabled={!canUseComposerEmoji()}
+                aria-disabled={!canUseComposerEmoji()}
+                title={canUseComposerEmoji()
+                  ? "Insert emoji"
+                  : "You do not have permission to use emojis in this channel."}
               >
-                <span
-                  class="inline-flex h-2 w-2 animate-pulse rounded-full bg-red-500"
-                  aria-hidden="true"
-                ></span>
-                <span>{formatRecordingDuration(recordingDuration)}</span>
-              </div>
-            {/if}
+                <Smile size={20} />
+              </button>
+              {#if showComposerEmojiPicker}
+                <div
+                  class="absolute bottom-full left-0 z-30 mb-2"
+                  id={composerEmojiPickerId()}
+                  bind:this={composerEmojiPickerEl}
+                  role="presentation"
+                >
+                  <EmojiPicker
+                    emojiCategories={emojiPickerCategories() ?? undefined}
+                    fallbackUsed={emojiPickerFallbackUsed()}
+                    on:select={(event) =>
+                      handleComposerEmojiSelect(event.detail.emoji)}
+                    on:close={() =>
+                      closeComposerEmojiPicker({ focusComposer: true })}
+                  />
+                </div>
+              {/if}
+
+            </div>
             <button
               type="button"
-              class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
-              class:hover:text-white={voiceMemoControlEnabled()}
-              class:cursor-pointer={voiceMemoControlEnabled()}
-              class:cursor-not-allowed={!voiceMemoControlEnabled()}
-              class:opacity-50={!voiceMemoControlEnabled()}
-              class:text-red-400={isRecording}
-              aria-pressed={isRecording}
-              onclick={handleMicClick}
-              aria-disabled={!voiceMemoControlEnabled()}
-              disabled={!voiceMemoControlEnabled()}
-              aria-label={voiceMemoControlEnabled()
-                ? isRecording
-                  ? "Stop recording voice message"
-                  : "Record voice message"
-                : (voiceMemoRestrictionMessage() ??
-                  "Voice memos are unavailable")}
-              title={voiceMemoControlEnabled()
-                ? isRecording
-                  ? "Stop recording voice message"
-                  : "Record voice message"
-                : (voiceMemoRestrictionMessage() ??
-                  "Voice memos are unavailable")}
+              class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors hover:text-white cursor-pointer"
+              aria-label="Open GIFs picker"
+              title="GIFs picker"
             >
-              {#if isRecording}
-                <Square size={12} />
-              {:else}
-                <Mic size={12} />
-              {/if}
+                <Clapperboard size={20} />
             </button>
             <button
               type="submit"
-              class="flex items-center justify-center ml-2 p-2 text-white bg-cyan-600 hover:bg-cyan-700 disabled:bg-cyan-800 disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
+              class="flex items-center justify-center ml-2 p-2 text-white disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"
               disabled={sending ||
                 connectivitySendBlocked() ||
                 (slowmodeActive() && slowmodeRemainingSeconds > 0)}
@@ -4119,7 +4172,7 @@
                     "Connectivity unavailable")
                   : "Send message"}
             >
-              <SendHorizontal size={12} />
+              <SendHorizontal size={16} />
             </button>
           </form>
         {:else}
@@ -4128,7 +4181,6 @@
             role="status"
             aria-live="polite"
           >
-            <CircleAlert class="h-4 w-4" aria-hidden="true" />
             <span
               >You do not have permission to send messages in this channel.</span
             >

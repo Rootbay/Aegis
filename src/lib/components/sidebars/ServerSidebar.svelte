@@ -1972,10 +1972,10 @@
 </script>
 
 <ServerBackgroundContextMenu onaction={handleServerBackgroundAction}>
-  <Sidebar
+<Sidebar
     side="left"
     variant="muted"
-    class="relative flex"
+    class="relative flex h-full flex-col bg-card/50 overflow-hidden"
     style={`width: ${sidebarWidth}px`}
     aria-label="Server sidebar"
   >
@@ -2053,8 +2053,8 @@
         </Button>
       </SidebarHeader>
 
-      <SidebarContent class="flex">
-        <ScrollArea class="h-full w-full px-2">
+      <SidebarContent class="flex flex-1 flex-col overflow-hidden">
+        <ScrollArea class="h-full w-full overflow-hidden px-2">
           {@const categories = getSortedCategories()}
           {#if categories.length > 0}
             {#each categories as category (category.id)}
@@ -2761,8 +2761,8 @@
         </ScrollArea>
       </SidebarContent>
     {:else}
-      <SidebarContent class="flex">
-        <ScrollArea class="h-full w-full px-2">
+      <SidebarContent class="flex flex-1 flex-col overflow-hidden">
+        <ScrollArea class="h-full w-full overflow-hidden px-2">
           <p class="text-xs text-muted-foreground px-2 py-1">
             No server selected.
           </p>

@@ -33,7 +33,7 @@
 <svelte:window onkeydown={handlers.handleKeydown} />
 
 <div
-  class="flex h-screen bg-base-100 text-foreground"
+  class="flex h-screen overflow-hidden bg-base-100 text-foreground"
   data-friends-loading={$friendsLoading ? "true" : undefined}
 >
   {#if $shouldShowInitialSetup}

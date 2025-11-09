@@ -16,6 +16,7 @@
   } from "$lib/components/ui/card/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
+  import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { friendInvitesStore } from "$lib/features/friends/stores/friendInvitesStore";
   import { Check, Clock, Loader2, Search, UserPlus, UserX } from "@lucide/svelte";
 
@@ -84,8 +85,10 @@
   });
 </script>
 
-<div class="space-y-6 p-4">
-  <section class="space-y-4">
+<div class="flex h-full flex-col overflow-hidden">
+  <ScrollArea class="flex-1 overflow-hidden">
+    <div class="space-y-6 p-4">
+      <section class="space-y-4">
     <div>
       <h1 class="text-xl font-semibold tracking-tight text-foreground">
         Find collaborators
@@ -199,136 +202,7 @@
         {/if}
       </Card>
     {/if}
-  </section>
-
-  <section class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-foreground">Incoming invites</h2>
-      <Badge variant="outline" class="border-border/60 text-xs text-muted-foreground">
-        {$store.pendingInvites.length} open
-      </Badge>
+      </section>
     </div>
-    {#if $store.loading}
-      <div class="flex items-center gap-3 rounded-lg border border-border/60 bg-card/60 p-4">
-        <Loader2 class="size-4 animate-spin text-muted-foreground" />
-        <span class="text-sm text-muted-foreground">Loading invites…</span>
-      </div>
-    {:else if $store.pendingInvites.length === 0}
-      <Card class="border-dashed border-border/60 bg-card/40">
-        <CardContent class="py-8 text-center text-sm text-muted-foreground">
-          No pending invitations. When someone shares their Aegis ID with you, it will show up here.
-        </CardContent>
-      </Card>
-    {:else}
-      <div class="space-y-3">
-        {#each $store.pendingInvites as invite (invite.id)}
-          <Card class="border-border/70 bg-card/70">
-            <CardContent class="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div class="flex items-start gap-3">
-                <Avatar class="size-10">
-                  <AvatarImage src={invite.from.avatar} alt={invite.from.name} />
-                  <AvatarFallback>{fallbackInitials(invite.from.name)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p class="text-sm font-medium text-foreground">{invite.from.name}</p>
-                  <p class="text-xs text-muted-foreground">@{invite.from.tag ?? invite.from.id}</p>
-                  <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>
-                      <Clock class="mr-1 inline size-3" />
-                      {formatRelativeTime(invite.receivedAt)}
-                    </span>
-                    {#if typeof invite.mutualFriends === "number"}
-                      <span>{invite.mutualFriends} mutual connections</span>
-                    {/if}
-                  </div>
-                  {#if invite.message}
-                    <p class="mt-2 text-xs text-muted-foreground">“{invite.message}”</p>
-                  {/if}
-                </div>
-              </div>
-              <div class="flex flex-col gap-2 sm:flex-row">
-                <Button
-                  variant="secondary"
-                  class="sm:w-32"
-                  disabled={$store.respondingInviteIds.includes(invite.id)}
-                  onclick={() => store.declineInvite(invite.id)}
-                >
-                  {#if $store.respondingInviteIds.includes(invite.id)}
-                    <Loader2 class="mr-2 size-4 animate-spin" />
-                    Working
-                  {:else}
-                    <UserX class="mr-2 size-4" />
-                    Dismiss
-                  {/if}
-                </Button>
-                <Button
-                  class="sm:w-32"
-                  disabled={$store.respondingInviteIds.includes(invite.id)}
-                  onclick={() => store.acceptInvite(invite.id)}
-                >
-                  {#if $store.respondingInviteIds.includes(invite.id)}
-                    <Loader2 class="mr-2 size-4 animate-spin" />
-                    Accepting
-                  {:else}
-                    <Check class="mr-2 size-4" />
-                    Accept
-                  {/if}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        {/each}
-      </div>
-    {/if}
-  </section>
-
-  <Separator class="bg-border/60" />
-
-  <section class="space-y-4">
-    <h2 class="text-lg font-semibold text-foreground">Recent peers</h2>
-    {#if $store.recentPeers.length === 0}
-      <p class="text-sm text-muted-foreground">
-        Once you collaborate with others, they will appear here for quick access.
-      </p>
-    {:else}
-      <div class="grid gap-3 sm:grid-cols-2">
-        {#each $store.recentPeers as peer (peer.id)}
-          <Card class="border-border/70 bg-card/70">
-            <CardContent class="flex items-center justify-between gap-3 py-4">
-              <div class="flex items-center gap-3">
-                <Avatar class="size-10">
-                  <AvatarImage src={peer.user.avatar} alt={peer.user.name} />
-                  <AvatarFallback>{fallbackInitials(peer.user.name)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p class="text-sm font-medium text-foreground">{peer.user.name}</p>
-                  <p class="text-xs text-muted-foreground">@{peer.user.tag ?? peer.user.id}</p>
-                  <p class="mt-1 text-xs text-muted-foreground">
-                    Last chatted {formatRelativeTime(peer.lastInteractionAt)}
-                  </p>
-                  {#if peer.context}
-                    <p class="text-xs text-muted-foreground">{peer.context}</p>
-                  {/if}
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                class="whitespace-nowrap"
-                disabled={$store.sendingRequestIds.includes(peer.user.id)}
-                onclick={() => store.sendRequest(peer.user.id)}
-              >
-                {#if $store.sendingRequestIds.includes(peer.user.id)}
-                  <Loader2 class="mr-2 size-4 animate-spin" />
-                  Sending
-                {:else}
-                  <UserPlus class="mr-2 size-4" />
-                  Connect
-                {/if}
-              </Button>
-            </CardContent>
-          </Card>
-        {/each}
-      </div>
-    {/if}
-  </section>
+  </ScrollArea>
 </div>

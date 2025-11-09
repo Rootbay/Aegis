@@ -244,7 +244,7 @@
   });
 </script>
 
-<div class="w-80 bg-card/50 flex flex-col border-r border-border">
+<div class="w-80 h-full min-h-0 flex flex-col overflow-hidden bg-card/50 border-r border-border">
   <header class="h-[55px] px-4 flex items-center border-b border-border">
     <Button
       variant="ghost"
@@ -281,7 +281,7 @@
     <Separator />
   </div>
 
-  <ScrollArea class="flex-1 px-2">
+  <ScrollArea class="flex-1 overflow-hidden px-2">
     {#if sortedEntries.length === 0}
       <div class="text-center p-6 text-muted-foreground">
         <p>No conversations yet.</p>
