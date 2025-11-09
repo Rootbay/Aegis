@@ -1,14 +1,7 @@
-import {
-  describe,
-  beforeEach,
-  afterEach,
-  it,
-  expect,
-  vi,
-} from "vitest";
+import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
 import type { MockInstance } from "vitest";
 import { get } from "svelte/store";
-import { createChatStore } from "./chatStore";
+import { createChatStore, SlowmodeError } from "./chatStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
@@ -863,22 +856,16 @@ describe("chatStore message link composition", () => {
     settings.update((current) => ({
       ...current,
     }));
-    vi.stubGlobal(
-      "navigator",
-      {
-        clipboard: {
-          writeText: clipboardWriteMock,
-        },
-      } as unknown as Navigator,
-    );
-    vi.stubGlobal(
-      "window",
-      {
-        location: {
-          origin: "https://app.local",
-        },
-      } as unknown as Window & typeof globalThis,
-    );
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        writeText: clipboardWriteMock,
+      },
+    } as unknown as Navigator);
+    vi.stubGlobal("window", {
+      location: {
+        origin: "https://app.local",
+      },
+    } as unknown as Window & typeof globalThis);
   });
 
   afterEach(() => {
@@ -919,5 +906,119 @@ describe("chatStore message link composition", () => {
       "https://app.local/channels/server-9/channel-3#message-msg-789",
     );
     expect(clipboardWriteMock).toHaveBeenCalledWith(link);
+  });
+});
+
+describe("chatStore slowmode enforcement", () => {
+  const buildServer = ({
+    serverId = "server-slowmode",
+    channelId = "channel-general",
+    ownerId = "owner-1",
+    rateLimit = 5,
+  }: {
+    serverId?: string;
+    channelId?: string;
+    ownerId?: string;
+    rateLimit?: number;
+  } = {}): Server => {
+    const members = [
+      {
+        id: "user-1",
+        name: "Test User",
+        avatar: "https://example.com/me.png",
+        online: true,
+      },
+    ];
+
+    if (ownerId !== "user-1") {
+      members.push({
+        id: ownerId,
+        name: "Owner",
+        avatar: "https://example.com/owner.png",
+        online: true,
+      });
+    }
+
+    return {
+      id: serverId,
+      name: "Slowmode Test",
+      owner_id: ownerId,
+      channels: [
+        {
+          id: channelId,
+          name: "general",
+          server_id: serverId,
+          channel_type: "text",
+          private: false,
+          position: 0,
+          rate_limit_per_user: rateLimit,
+        },
+      ],
+      categories: [],
+      members,
+      roles: [],
+    };
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-01-01T00:00:00.000Z"));
+    serverStore.handleServersUpdate([]);
+    serverStore.setActiveServer(null);
+  });
+
+  it("blocks repeated sends until the cooldown expires", async () => {
+    const store = createChatStore();
+    const server = buildServer({ ownerId: "owner-2", rateLimit: 5 });
+    serverStore.handleServersUpdate([server]);
+
+    await store.setActiveChat(server.id, "server", server.channels[0].id);
+
+    await store.sendMessage("hello world");
+    const firstTracker = get(store.slowmodeByChannelId).get(
+      server.channels[0].id,
+    );
+    expect(firstTracker?.cooldownSeconds).toBe(5);
+    expect(firstTracker?.availableAt).toBeGreaterThan(Date.now());
+
+    await expect(store.sendMessage("too soon")).rejects.toBeInstanceOf(
+      SlowmodeError,
+    );
+
+    const secondTracker = get(store.slowmodeByChannelId).get(
+      server.channels[0].id,
+    );
+    expect(secondTracker).toEqual(firstTracker);
+  });
+
+  it("allows sending again after the cooldown window", async () => {
+    const store = createChatStore();
+    const server = buildServer({ ownerId: "owner-3", rateLimit: 3 });
+    serverStore.handleServersUpdate([server]);
+
+    await store.setActiveChat(server.id, "server", server.channels[0].id);
+
+    await store.sendMessage("initial");
+    vi.advanceTimersByTime(3_000);
+
+    await expect(store.sendMessage("after wait")).resolves.toBeUndefined();
+
+    const tracker = get(store.slowmodeByChannelId).get(server.channels[0].id);
+    expect(tracker?.cooldownSeconds).toBe(3);
+    expect(tracker?.availableAt).toBeGreaterThan(Date.now());
+  });
+
+  it("lets privileged members bypass slowmode", async () => {
+    const store = createChatStore();
+    const server = buildServer({ ownerId: "user-1", rateLimit: 8 });
+    serverStore.handleServersUpdate([server]);
+
+    await store.setActiveChat(server.id, "server", server.channels[0].id);
+
+    await expect(store.sendMessage("first")).resolves.toBeUndefined();
+    await expect(store.sendMessage("second")).resolves.toBeUndefined();
+
+    const tracker = get(store.slowmodeByChannelId).get(server.channels[0].id);
+    expect(tracker).toBeUndefined();
   });
 });

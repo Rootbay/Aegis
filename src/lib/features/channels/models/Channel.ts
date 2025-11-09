@@ -9,4 +9,5 @@ export interface Channel {
   topic?: string | null;
   allowed_role_ids?: string[];
   allowed_user_ids?: string[];
+  rate_limit_per_user?: number | null;
 }

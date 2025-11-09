@@ -34,6 +34,13 @@ import { showNativeNotification } from "$lib/utils/nativeNotification";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
 import type { Server } from "$lib/features/servers/models/Server";
 import type { ParsedSearchFilters } from "$lib/features/chat/utils/chatSearch";
+import type { Channel } from "$lib/features/channels/models/Channel";
+import type { Chat } from "$lib/features/chat/models/Chat";
+import {
+  aggregateChannelPermissions,
+  buildRolePermissionMap,
+  collectMemberRoleIds,
+} from "$lib/features/chat/utils/permissions";
 
 type BackendMessage = {
   id: string;
@@ -104,6 +111,38 @@ type RetryableMessagePayload = {
   content: string;
   attachments?: MessageAttachmentPayload[];
   options?: SendMessageOptions;
+};
+
+export class SlowmodeError extends Error {
+  readonly remainingSeconds: number;
+  readonly cooldownSeconds: number;
+  readonly channelId: string;
+
+  constructor({
+    remainingSeconds,
+    cooldownSeconds,
+    channelId,
+  }: {
+    remainingSeconds: number;
+    cooldownSeconds: number;
+    channelId: string;
+  }) {
+    const clampedRemaining = Math.max(0, Math.floor(remainingSeconds));
+    super(
+      clampedRemaining > 0
+        ? `Slowmode active. Try again in ${clampedRemaining} seconds.`
+        : "Slowmode active.",
+    );
+    this.name = "SlowmodeError";
+    this.remainingSeconds = clampedRemaining;
+    this.cooldownSeconds = Math.max(0, Math.floor(cooldownSeconds));
+    this.channelId = channelId;
+  }
+}
+
+type SlowmodeTracker = {
+  cooldownSeconds: number;
+  availableAt: number;
 };
 
 export type BackendGroupChat = {
@@ -300,6 +339,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const hasMoreByChatIdStore = writable<Map<string, boolean>>(new Map());
   const groupChatsStore = writable<Map<string, GroupChatSummary>>(new Map());
   const typingByChatIdStore = writable<Map<string, string[]>>(new Map());
+  const slowmodeStateByChannelIdStore = writable<Map<string, SlowmodeTracker>>(
+    new Map(),
+  );
   const chatPreferenceOverridesRecord = persistentStore<ChatPreferenceState>(
     CHAT_PREFERENCE_OVERRIDES_KEY,
     {},
@@ -333,6 +375,182 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return map;
     },
   );
+
+  const updateSlowmodeEntry = (
+    channelId: string,
+    producer: (previous: SlowmodeTracker | undefined) => SlowmodeTracker | null,
+  ) => {
+    slowmodeStateByChannelIdStore.update((map) => {
+      const next = new Map(map);
+      const nextState = producer(map.get(channelId));
+      if (!nextState) {
+        next.delete(channelId);
+      } else {
+        next.set(channelId, { ...nextState });
+      }
+      return next;
+    });
+  };
+
+  const resolveChannelSlowmodeCooldown = (channel?: Channel | null): number => {
+    if (!channel || channel.channel_type !== "text") {
+      return 0;
+    }
+    const value = (channel as Record<string, unknown>).rate_limit_per_user ??
+      channel.rate_limit_per_user;
+    if (typeof channel.rate_limit_per_user === "number") {
+      if (Number.isFinite(channel.rate_limit_per_user)) {
+        return Math.max(0, Math.floor(channel.rate_limit_per_user));
+      }
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return Math.max(0, Math.floor(value));
+    }
+    if (typeof value === "string") {
+      const parsed = Number.parseFloat(value);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, Math.floor(parsed));
+      }
+    }
+    return 0;
+  };
+
+  const canBypassSlowmode = (server: Server, channel: Channel): boolean => {
+    const me = get(userStore).me;
+    if (!me) {
+      return false;
+    }
+    if (me.id === server.owner_id) {
+      return true;
+    }
+    const chatContext: Chat = {
+      type: "channel",
+      id: channel.id,
+      name: channel.name,
+      serverId: server.id,
+      members: server.members ?? [],
+      messages: [],
+    };
+    const memberRoleIds = collectMemberRoleIds({ me, server, chat: chatContext });
+    if (memberRoleIds.length === 0) {
+      return false;
+    }
+    const permissions = aggregateChannelPermissions({
+      memberRoleIds,
+      rolePermissionMap: buildRolePermissionMap(server.roles),
+    });
+    return (
+      permissions.manage_messages === true ||
+      permissions.moderate_members === true ||
+      permissions.manage_channels === true
+    );
+  };
+
+  const enforceSlowmodeForChannel = (
+    serverId: string,
+    channelId: string | null,
+  ) => {
+    if (!channelId) {
+      return;
+    }
+
+    const serverState = get(serverStore);
+    const server = serverState.servers?.find((entry) => entry.id === serverId);
+    if (!server) {
+      updateSlowmodeEntry(channelId, () => null);
+      return;
+    }
+
+    const channel = server.channels?.find((entry) => entry.id === channelId);
+    if (!channel) {
+      updateSlowmodeEntry(channelId, () => null);
+      return;
+    }
+
+    const cooldown = resolveChannelSlowmodeCooldown(channel);
+    if (cooldown <= 0) {
+      updateSlowmodeEntry(channelId, () => null);
+      return;
+    }
+
+    if (canBypassSlowmode(server, channel)) {
+      updateSlowmodeEntry(channelId, () => null);
+      return;
+    }
+
+    const now = Date.now();
+    const currentState = get(slowmodeStateByChannelIdStore).get(channelId);
+    if (currentState && currentState.availableAt > now) {
+      const remainingSeconds = Math.ceil(
+        (currentState.availableAt - now) / 1000,
+      );
+      updateSlowmodeEntry(channelId, () => ({
+        cooldownSeconds: cooldown,
+        availableAt: currentState.availableAt,
+      }));
+      throw new SlowmodeError({
+        channelId,
+        cooldownSeconds: cooldown,
+        remainingSeconds,
+      });
+    }
+
+    updateSlowmodeEntry(channelId, () => ({
+      cooldownSeconds: cooldown,
+      availableAt: now + cooldown * 1000,
+    }));
+  };
+
+  const syncSlowmodeState = (servers: Server[] | undefined) => {
+    const index = new Map<string, Channel>();
+    if (Array.isArray(servers)) {
+      for (const server of servers) {
+        for (const channel of server.channels ?? []) {
+          index.set(channel.id, channel);
+        }
+      }
+    }
+
+    slowmodeStateByChannelIdStore.update((map) => {
+      if (map.size === 0) {
+        return map;
+      }
+      const now = Date.now();
+      let changed = false;
+      const next = new Map<string, SlowmodeTracker>();
+      for (const [channelId, state] of map) {
+        const channel = index.get(channelId);
+        if (!channel) {
+          changed = true;
+          continue;
+        }
+        const cooldown = resolveChannelSlowmodeCooldown(channel);
+        if (cooldown <= 0) {
+          changed = true;
+          continue;
+        }
+        if (state.availableAt <= now) {
+          changed = true;
+          continue;
+        }
+        const adjustedAvailableAt = Math.min(
+          state.availableAt,
+          now + cooldown * 1000,
+        );
+        if (
+          adjustedAvailableAt !== state.availableAt ||
+          state.cooldownSeconds !== cooldown
+        ) {
+          changed = true;
+        }
+        next.set(channelId, {
+          cooldownSeconds: cooldown,
+          availableAt: adjustedAvailableAt,
+        });
+      }
+      return changed ? next : map;
+    });
+  };
 
   let chatPreferenceOverridesSnapshot = new Map<
     string,
@@ -958,6 +1176,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
   serverStore.subscribe(($serverState) => {
     rebuildModerationIndexes($serverState.servers);
+    syncSlowmodeState($serverState.servers);
   });
 
   const setChatPreferenceOverride = (
@@ -2346,6 +2565,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const messageChatId = type === "server" ? channelId : chatId;
     if (!messageChatId) return;
 
+    if (type === "server") {
+      enforceSlowmodeForChannel(chatId, channelId ?? null);
+    }
+
     const tempId = Date.now().toString();
     const timestamp = new Date().toISOString();
     const optimisticExpiresAt = computeExpiryForTimestamp(timestamp);
@@ -2432,6 +2655,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         await sendMessage(trimmed, options);
         return;
       }
+    }
+
+    if (type === "server") {
+      enforceSlowmodeForChannel(chatId, channelId ?? null);
     }
 
     const tempId = Date.now().toString() + "-a";
@@ -3964,6 +4191,10 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       metadataByChatIdReadable,
       ($map) => new Map($map),
     ),
+    slowmodeByChannelId: derived(
+      slowmodeStateByChannelIdStore,
+      ($map) => new Map($map),
+    ),
     serverUnreadCountByServerId: derived(
       [metadataByChatIdReadable, serverStore],
       ([$metadata, $serverState]) => {
@@ -4060,6 +4291,7 @@ export const chatStore = createChatStore();
 export const messagesByChatId = chatStore.messagesByChatId;
 export const hasMoreByChatId = chatStore.hasMoreByChatId;
 export const chatMetadataByChatId = chatStore.metadataByChatId;
+export const slowmodeByChannelId = chatStore.slowmodeByChannelId;
 export const serverUnreadCountByServerId = chatStore.serverUnreadCountByServerId;
 export const activeChannelId = chatStore.activeChannelId;
 export const serverChannelSelections = chatStore.serverChannelSelections;
