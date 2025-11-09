@@ -13,6 +13,7 @@ import type { User } from "../../auth/models/User";
 import type { Channel } from "../../channels/models/Channel";
 import type { ChannelCategory } from "../../channels/models/ChannelCategory";
 import type { Role } from "../models/Role";
+import { reindexRoles } from "../models/Role";
 import type { ServerInvite } from "../models/ServerInvite";
 import { userStore } from "../../../stores/userStore";
 import { serverCache } from "../../../utils/cache";
@@ -701,22 +702,29 @@ export function createServerStore(): ServerStore {
     return Array.from(ids.values());
   };
 
-  const normalizeRole = (role: Role): Role => {
+  const normalizeRole = (role: Role, index = 0): Role => {
     const permissions =
       role.permissions && typeof role.permissions === "object"
         ? role.permissions
         : {};
     const memberIds = normalizeRoleIds(role.member_ids ?? []);
+    const resolvedPosition =
+      typeof role.position === "number" && Number.isFinite(role.position)
+        ? Math.max(0, Math.floor(role.position))
+        : index;
     return {
       ...role,
       permissions: { ...permissions },
       member_ids: memberIds,
+      position: resolvedPosition,
     };
   };
 
   const normalizeRolesArray = (roles: unknown): Role[] =>
     Array.isArray(roles)
-      ? (roles as Role[]).map((role) => normalizeRole(role))
+      ? reindexRoles(
+          (roles as Role[]).map((role, index) => normalizeRole(role, index)),
+        )
       : [];
 
   const buildMemberRoleMap = (roles: Role[]): Map<string, string[]> => {
@@ -1720,9 +1728,15 @@ export function createServerStore(): ServerStore {
     const channelsTouched =
       hasOwn(patch, "channels") && Array.isArray(patch.channels);
 
-    let normalizedPatch: Partial<Server> = rolesTouched
-      ? { ...patch, roles: normalizeRolesArray(patch.roles ?? []) }
-      : { ...patch };
+    let normalizedPatch: Partial<Server> = { ...patch };
+
+    if (rolesTouched) {
+      const reindexedPatchRoles = reindexRoles(patch.roles as Role[]);
+      normalizedPatch = {
+        ...normalizedPatch,
+        roles: normalizeRolesArray(reindexedPatchRoles),
+      };
+    }
 
     if (channelsTouched) {
       normalizedPatch = {
@@ -1886,7 +1900,8 @@ export function createServerStore(): ServerStore {
     }
 
     const previousServer = cloneServer(snapshot.servers[serverIndex]);
-    const normalizedRoles = normalizeRolesArray(roles);
+    const reindexedRoles = reindexRoles(roles);
+    const normalizedRoles = normalizeRolesArray(reindexedRoles);
     const optimisticServer = applyRoleAssignmentsToServer({
       ...previousServer,
       roles: normalizedRoles,

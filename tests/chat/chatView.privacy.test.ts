@@ -789,6 +789,7 @@ describe("ChatView channel permissions", () => {
       color: "#555555",
       hoist: false,
       mentionable: false,
+      position: 0,
       permissions: {
         send_messages: false,
         attach_files: false,

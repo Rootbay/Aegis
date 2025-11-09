@@ -2,6 +2,7 @@ import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Server } from "$lib/features/servers/models/Server";
 import type { Role } from "$lib/features/servers/models/Role";
+import { sortRolesByPosition } from "$lib/features/servers/models/Role";
 
 export const CHANNEL_PERMISSION_KEYS = [
   "manage_channels",
@@ -125,12 +126,7 @@ export function aggregateChannelPermissions({
     }
 
     for (const [permission, rawValue] of Object.entries(permissions)) {
-      const allowed = coercePermissionValue(rawValue);
-      if (allowed) {
-        aggregate[permission] = true;
-      } else if (!(permission in aggregate)) {
-        aggregate[permission] = false;
-      }
+      aggregate[permission] = coercePermissionValue(rawValue);
     }
   }
 
@@ -215,5 +211,33 @@ export function collectMemberRoleIds({
     }
   }
 
-  return Array.from(roleIds);
+  const orderedRoleIds = Array.from(roleIds);
+  if (!server) {
+    return orderedRoleIds;
+  }
+
+  const rolePositions = new Map<string, number>();
+  for (const role of sortRolesByPosition(server.roles ?? [])) {
+    if (!role || typeof role.id !== "string") {
+      continue;
+    }
+    rolePositions.set(role.id, role.position);
+  }
+
+  orderedRoleIds.sort((a, b) => {
+    const positionA = rolePositions.has(a)
+      ? rolePositions.get(a) ?? Number.POSITIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+    const positionB = rolePositions.has(b)
+      ? rolePositions.get(b) ?? Number.POSITIVE_INFINITY
+      : Number.POSITIVE_INFINITY;
+
+    if (positionA !== positionB) {
+      return positionB - positionA;
+    }
+
+    return a.localeCompare(b);
+  });
+
+  return orderedRoleIds;
 }

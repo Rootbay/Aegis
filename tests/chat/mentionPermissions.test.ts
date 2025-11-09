@@ -83,6 +83,7 @@ describe("canMemberMentionEveryone", () => {
           color: "#ffffff",
           hoist: false,
           mentionable: true,
+          position: 0,
           permissions: { mention_everyone: true },
           member_ids: ["member-1"],
         },
@@ -121,5 +122,41 @@ describe("extractSpecialMentionKeys", () => {
     );
 
     expect(Array.from(detected)).toEqual(["everyone"]);
+  });
+});
+
+describe("role hierarchy permission resolution", () => {
+  it("honors the highest ranked role when permissions conflict", () => {
+    const member = createTestUser({ id: "member-1", roles: ["role-low", "role-high"] });
+    const server = createTestServer({
+      members: [member],
+      roles: [
+        {
+          id: "role-low",
+          name: "Allow Mention",
+          color: "#ffffff",
+          hoist: false,
+          mentionable: true,
+          position: 2,
+          permissions: { mention_everyone: true },
+          member_ids: ["member-1"],
+        },
+        {
+          id: "role-high",
+          name: "Deny Mention",
+          color: "#ff0000",
+          hoist: true,
+          mentionable: false,
+          position: 0,
+          permissions: { mention_everyone: false },
+          member_ids: ["member-1"],
+        },
+      ],
+    });
+    const chat = createTestChannelChat([member]);
+
+    expect(
+      canMemberMentionEveryone({ chat, server, me: member }),
+    ).toBe(false);
   });
 });
