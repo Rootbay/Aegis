@@ -929,7 +929,7 @@ vi.mock("$lib/features/calls/components/CallStatusBanner.svelte", () => ({
   default: Passthrough,
 }));
 
-vi.mock("$lib/components/context-menus/BaseContextMenu.svelte", () => ({
+vi.mock("$lib/components/context-menus/FloatingContextMenu.svelte", () => ({
   default: ContextMenuActionDispatcher,
 }));
 

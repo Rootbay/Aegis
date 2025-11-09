@@ -29,7 +29,7 @@
     type EmojiCategory,
   } from "$lib/components/emoji/emojiData";
 
-  import BaseContextMenu from "$lib/components/context-menus/BaseContextMenu.svelte";
+  import FloatingContextMenu from "$lib/components/context-menus/FloatingContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
   import * as Popover from "$lib/components/ui/popover/index.js";
 
@@ -4209,7 +4209,7 @@
 {/if}
 
 {#if showContextMenu}
-  <BaseContextMenu
+  <FloatingContextMenu
     x={contextMenuX}
     y={contextMenuY}
     show={showContextMenu}
@@ -4223,7 +4223,7 @@
 {/if}
 
 {#if showMsgMenu && selectedMsg}
-  <BaseContextMenu
+  <FloatingContextMenu
     x={msgMenuX}
     y={msgMenuY}
     show={showMsgMenu}

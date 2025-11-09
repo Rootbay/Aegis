@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import BaseContextMenu from "./BaseContextMenu.svelte";
+  import FloatingContextMenu from "./FloatingContextMenu.svelte";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { User } from "$lib/features/auth/models/User";
 
@@ -49,7 +49,7 @@
   }
 </script>
 
-<BaseContextMenu
+<FloatingContextMenu
   {x}
   {y}
   bind:show
