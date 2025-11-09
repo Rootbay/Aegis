@@ -7,7 +7,10 @@
   import ChannelContextMenu from "$lib/components/context-menus/ChannelContextMenu.svelte";
   import CreateCategoryModal from "$lib/components/modals/CreateCategoryModal.svelte";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
-  import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import {
+    serverStore,
+    voiceChannelPresence,
+  } from "$lib/features/servers/stores/serverStore";
   import {
     chatMetadataByChatId,
     chatStore,
@@ -187,6 +190,19 @@
     const term = roleSearchTerm.trim().toLowerCase();
     if (!term) return sortedRoles;
     return sortedRoles.filter((role) => role.name.toLowerCase().includes(term));
+  });
+
+  const membersById = $derived.by(() => {
+    const map = new Map<string, Server["members"][number]>();
+    if (!server?.members) {
+      return map;
+    }
+    for (const member of server.members) {
+      if (member?.id) {
+        map.set(member.id, member);
+      }
+    }
+    return map;
   });
 
   const sortedMembers = $derived.by(() => {
@@ -1404,6 +1420,7 @@
     void callStore.joinVoiceChannel({
       chatId: channel.id,
       chatName: channel.name,
+      serverId: server?.id ?? null,
     });
   }
 </script>
@@ -1767,6 +1784,55 @@
                         {/if}
                       </Tooltip>
                     </TooltipProvider>
+                    {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                    {#if presenceEntry}
+                      {@const participantEntries = Array.from(
+                        presenceEntry.participants.values(),
+                      ).sort(
+                        (a, b) =>
+                          (a.joinedAt ?? a.lastSeenAt) -
+                          (b.joinedAt ?? b.lastSeenAt),
+                      )}
+                      <div class="ml-8 mt-1 space-y-1 pb-1">
+                        <div class="text-[11px] font-medium text-muted-foreground">
+                          {participantEntries.length} connected
+                        </div>
+                        {#if participantEntries.length > 0}
+                          <div class="flex flex-wrap gap-1.5">
+                            {#each participantEntries as presence (presence.userId)}
+                              {@const member = membersById.get(presence.userId)}
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                                      <Avatar class="h-5 w-5 border border-border">
+                                        <AvatarImage
+                                          src={member?.avatar}
+                                          alt={member?.name ?? presence.userId}
+                                        />
+                                        <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                          {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span class="max-w-[96px] truncate">
+                                        {member?.name ?? presence.userId}
+                                      </span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" align="start" class="text-xs">
+                                    {member?.name ?? presence.userId}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            {/each}
+                          </div>
+                        {:else}
+                          <p class="text-[11px] text-muted-foreground">
+                            No one connected.
+                          </p>
+                        {/if}
+                      </div>
+                    {/if}
                   {/each}
                 </CollapsibleContent>
               </Collapsible>
@@ -1918,6 +1984,55 @@
                       {/if}
                     </Tooltip>
                   </TooltipProvider>
+                  {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                  {#if presenceEntry}
+                    {@const participantEntries = Array.from(
+                      presenceEntry.participants.values(),
+                    ).sort(
+                      (a, b) =>
+                        (a.joinedAt ?? a.lastSeenAt) -
+                        (b.joinedAt ?? b.lastSeenAt),
+                    )}
+                    <div class="ml-8 mt-1 space-y-1 pb-1">
+                      <div class="text-[11px] font-medium text-muted-foreground">
+                        {participantEntries.length} connected
+                      </div>
+                      {#if participantEntries.length > 0}
+                        <div class="flex flex-wrap gap-1.5">
+                          {#each participantEntries as presence (presence.userId)}
+                            {@const member = membersById.get(presence.userId)}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
+                                    <Avatar class="h-5 w-5 border border-border">
+                                      <AvatarImage
+                                        src={member?.avatar}
+                                        alt={member?.name ?? presence.userId}
+                                      />
+                                      <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                        {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span class="max-w-[96px] truncate">
+                                      {member?.name ?? presence.userId}
+                                    </span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" align="start" class="text-xs">
+                                  {member?.name ?? presence.userId}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          {/each}
+                        </div>
+                      {:else}
+                        <p class="text-[11px] text-muted-foreground">
+                          No one connected.
+                        </p>
+                      {/if}
+                    </div>
+                  {/if}
                 {/each}
               </div>
             </CollapsibleContent>

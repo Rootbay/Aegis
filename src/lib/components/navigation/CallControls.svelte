@@ -159,6 +159,7 @@
       await callStore.joinVoiceChannel({
         chatId: chat.id,
         chatName: getChatDisplayName(),
+        serverId: chat.serverId,
       });
       return;
     }
