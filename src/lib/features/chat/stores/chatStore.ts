@@ -24,6 +24,7 @@ import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";
 import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
 import { persistentStore } from "$lib/stores/persistentStore";
+import { mutedChannelsStore } from "$lib/features/channels/stores/mutedChannelsStore";
 import {
   decodeIncomingMessagePayload,
   encryptOutgoingMessagePayload,
@@ -476,8 +477,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   };
 
   const metadataByChatIdReadable = derived(
-    [messagesByChatIdStore, participantProfilesStore],
-    ([$messages, $participants]): Map<string, ChatMetadata> => {
+    [messagesByChatIdStore, participantProfilesStore, mutedChannelsStore],
+    ([$messages, $participants, $mutedChannels]): Map<string, ChatMetadata> => {
       const metadata = new Map<string, ChatMetadata>();
       for (const [chatId, messages] of $messages.entries()) {
         const participant = $participants.get(chatId);
@@ -498,6 +499,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         let lastMessage: Message | null = null;
         let fallbackTimestamp: string | null = null;
         let unreadCount = 0;
+        const isMutedChannel = $mutedChannels.has(chatId);
 
         for (const message of messages) {
           const candidateTimestamp =
@@ -511,7 +513,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             }
           }
 
-          if (!message.read) {
+          if (!isMutedChannel && !message.read) {
             unreadCount += 1;
           }
         }
@@ -533,7 +535,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           chatId,
           lastMessage,
           lastActivityAt: normalizedActivity ?? null,
-          unreadCount,
+          unreadCount: isMutedChannel ? 0 : unreadCount,
           fallbackUserId: participant?.id ?? null,
           fallbackName: participant?.name ?? null,
           fallbackAvatar: participant?.avatar ?? null,
@@ -2997,6 +2999,14 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     };
     newMessage.expiresAt = computeExpiryForTimestamp(newMessage.timestamp);
 
+    const channelMuted =
+      channelIdFromPayload !== null &&
+      mutedChannelsStore.isMuted(channelIdFromPayload);
+
+    if (channelMuted) {
+      newMessage.read = true;
+    }
+
     let suppressedBySpam = false;
 
     if (!isSelfAuthored) {
@@ -3088,7 +3098,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           ? currentSettings.enableNewMessageNotifications
           : currentSettings.enableGroupMessageNotifications;
 
-      if (notificationsEnabled && !suppressedBySpam) {
+      if (notificationsEnabled && !suppressedBySpam && !channelMuted) {
         const activeType = get(activeChatType);
         const activeId = get(activeChatId);
         const activeChannel = get(activeChannelId);

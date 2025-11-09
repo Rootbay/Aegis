@@ -43,6 +43,7 @@ const {
 const {
   callStoreMock,
   startCallMock,
+  joinVoiceChannelMock,
   resetCallStoreState,
   setCallStoreState,
   createInitialCallState,
@@ -51,6 +52,7 @@ const {
   const subscribers: Array<(value: CallState) => void> = [];
 
   const startCallMock = vi.fn();
+  const joinVoiceChannelMock = vi.fn(async () => undefined);
   const setCallModalOpenMock = vi.fn();
   const initializeMock = vi.fn();
 
@@ -94,14 +96,17 @@ const {
     callStoreMock: {
       subscribe,
       startCall: (...args: unknown[]) => startCallMock(...args),
+      joinVoiceChannel: (...args: unknown[]) => joinVoiceChannelMock(...args),
       setCallModalOpen: setCallModalOpenMock,
       initialize: initializeMock,
     },
     startCallMock,
+    joinVoiceChannelMock,
     resetCallStoreState: () => {
       state = createInitialCallState();
       notify();
       startCallMock.mockReset();
+      joinVoiceChannelMock.mockReset();
       setCallModalOpenMock.mockReset();
       initializeMock.mockReset();
     },
@@ -111,6 +116,84 @@ const {
     },
     createInitialCallState,
     getCallStoreState: () => state,
+  };
+});
+
+const mutedChannelsModule = vi.hoisted(() => {
+  type Subscriber = (value: Set<string>) => void;
+  let state = new Set<string>();
+  const subscribers: Subscriber[] = [];
+
+  const emit = () => {
+    const snapshot = new Set(state);
+    for (const subscriber of subscribers) {
+      subscriber(snapshot);
+    }
+  };
+
+  const subscribe = (run: Subscriber) => {
+    run(new Set(state));
+    subscribers.push(run);
+    return () => {
+      const index = subscribers.indexOf(run);
+      if (index !== -1) {
+        subscribers.splice(index, 1);
+      }
+    };
+  };
+
+  const mutate = (updater: (next: Set<string>) => void) => {
+    const next = new Set(state);
+    updater(next);
+    if (next.size === state.size && [...next].every((id) => state.has(id))) {
+      return;
+    }
+    state = next;
+    emit();
+  };
+
+  const store = {
+    subscribe,
+    mute(channelId: string) {
+      if (!channelId) return;
+      mutate((next) => next.add(channelId));
+    },
+    unmute(channelId: string) {
+      if (!channelId) return;
+      mutate((next) => next.delete(channelId));
+    },
+    toggle(channelId: string) {
+      if (!channelId) return;
+      mutate((next) => {
+        if (next.has(channelId)) {
+          next.delete(channelId);
+        } else {
+          next.add(channelId);
+        }
+      });
+    },
+    isMuted(channelId: string) {
+      if (!channelId) return false;
+      return state.has(channelId);
+    },
+    setMuted(channelIds: Iterable<string>) {
+      state = new Set(channelIds);
+      emit();
+    },
+    clear() {
+      if (state.size === 0) return;
+      state = new Set();
+      emit();
+    },
+  };
+
+  return {
+    store,
+    reset() {
+      state = new Set();
+      emit();
+    },
+    getState: () => new Set(state),
   };
 });
 
@@ -210,6 +293,10 @@ vi.mock("$lib/features/calls/stores/callStore", () => ({
   callStore: callStoreMock,
 }));
 
+vi.mock("$lib/features/channels/stores/mutedChannelsStore", () => ({
+  mutedChannelsStore: mutedChannelsModule.store,
+}));
+
 import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
 import { tick } from "svelte";
 
@@ -242,6 +329,7 @@ describe("ServerSidebar context menus", () => {
     });
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     resetCallStoreState();
+    mutedChannelsModule.reset();
   });
 
   afterEach(() => {
@@ -496,12 +584,9 @@ describe("ServerSidebar context menus", () => {
 
     expect(onSelectChannel).toHaveBeenCalledWith("server-1", "channel-2");
     await waitFor(() => {
-      expect(startCallMock).toHaveBeenCalledWith({
+      expect(joinVoiceChannelMock).toHaveBeenCalledWith({
         chatId: "channel-2",
         chatName: "briefing",
-        chatType: "channel",
-        type: "voice",
-        serverId: "server-1",
       });
     });
   });
@@ -569,5 +654,70 @@ describe("ServerSidebar context menus", () => {
     const voiceButton = voiceLabel.closest('[role="button"]');
     expect(voiceButton).toBeTruthy();
     expect(voiceButton?.getAttribute("data-active")).toBe("true");
+  });
+
+  it("retains muted channels across rerenders", async () => {
+    const server = {
+      id: "server-1",
+      name: "Test Server",
+      owner_id: "user-1",
+      channels: [
+        {
+          id: "channel-1",
+          server_id: "server-1",
+          name: "general",
+          channel_type: "text" as const,
+          private: false,
+        },
+      ],
+      categories: [],
+      members: [],
+      roles: [],
+      invites: [],
+    };
+
+    const renderResult = render(ServerSidebar, {
+      props: {
+        server,
+        onSelectChannel: vi.fn(),
+      },
+    });
+
+    const channelLabel = renderResult.getByText("general");
+    const channelItem = channelLabel.closest('[role="button"]');
+    expect(channelItem).toBeTruthy();
+
+    await fireEvent.contextMenu(channelItem!);
+    const muteButton = await renderResult.findByTestId("channel-context-mute");
+    await fireEvent.click(muteButton);
+
+    await waitFor(() => {
+      expect(mutedChannelsModule.getState().has("channel-1")).toBe(true);
+    });
+    expect(addToastMock).toHaveBeenCalledWith("Channel muted.", "info");
+
+    await renderResult.rerender({
+      server,
+      onSelectChannel: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(mutedChannelsModule.getState().has("channel-1")).toBe(true);
+    });
+
+    const channelLabelAfter = renderResult.getByText("general");
+    const channelItemAfter = channelLabelAfter.closest('[role="button"]');
+    expect(channelItemAfter).toBeTruthy();
+
+    await fireEvent.contextMenu(channelItemAfter!);
+    const unmuteButton = await renderResult.findByTestId(
+      "channel-context-mute",
+    );
+    await fireEvent.click(unmuteButton);
+
+    await waitFor(() => {
+      expect(mutedChannelsModule.getState().has("channel-1")).toBe(false);
+    });
+    expect(addToastMock).toHaveBeenCalledWith("Channel unmuted.", "info");
   });
 });
