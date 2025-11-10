@@ -118,6 +118,13 @@ pub async fn report_message(
     payload: ReportMessagePayload,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
+    report_message_internal(payload, &state_container).await
+}
+
+pub async fn report_message_internal(
+    payload: ReportMessagePayload,
+    state_container: &AppStateContainer,
+) -> Result<(), String> {
     let message_id = payload.message_id.trim();
     if message_id.is_empty() {
         return Err("Message ID is required.".to_string());

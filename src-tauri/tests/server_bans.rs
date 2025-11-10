@@ -10,7 +10,7 @@ use crypto::identity::Identity;
 use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
-use tauri::{test::mock_app, Listener, State};
+use tauri::{test::mock_app, Listener, Manager};
 use tempfile::tempdir;
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
@@ -56,12 +56,14 @@ async fn ban_command_persists_ban_and_emits_event() {
     .await
     .expect("insert member");
 
+    let server_created_at = Utc::now().to_rfc3339();
+
     sqlx::query!(
         "INSERT INTO servers (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)",
         server_id,
         "Test Server",
         owner_id,
-        Utc::now().to_rfc3339(),
+        server_created_at,
     )
     .execute(&pool)
     .await
@@ -99,16 +101,16 @@ async fn ban_command_persists_ban_and_emits_event() {
     let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));
 
     let app = mock_app();
+    app.manage(state_container);
     let app_handle = app.handle();
 
     let (event_tx, event_rx) = std::sync::mpsc::channel::<String>();
     let listener_id = app_handle.listen("server-member-banned", move |event| {
-        if let Some(payload) = event.payload() {
-            let _ = event_tx.send(payload.to_string());
-        }
+        let payload = event.payload();
+        let _ = event_tx.send(payload.to_string());
     });
 
-    let bans_before = list_server_bans(server_id.clone(), State(&state_container))
+    let bans_before = list_server_bans(server_id.clone(), app_handle.state::<AppStateContainer>())
         .await
         .expect("list bans before");
     assert!(bans_before.is_empty());
@@ -117,7 +119,7 @@ async fn ban_command_persists_ban_and_emits_event() {
         server_id.clone(),
         target_id.clone(),
         Some("  Spamming  ".to_string()),
-        State(&state_container),
+        app_handle.state::<AppStateContainer>(),
         app_handle.clone(),
     )
     .await
@@ -155,7 +157,7 @@ async fn ban_command_persists_ban_and_emits_event() {
 
     app_handle.unlisten(listener_id);
 
-    let bans_after = list_server_bans(server_id.clone(), State(&state_container))
+    let bans_after = list_server_bans(server_id.clone(), app_handle.state::<AppStateContainer>())
         .await
         .expect("list bans after");
     assert_eq!(bans_after.len(), 1);
@@ -205,23 +207,27 @@ async fn unban_command_removes_ban_and_emits_event() {
     .await
     .expect("insert banned user");
 
+    let unban_server_created_at = Utc::now().to_rfc3339();
+
     sqlx::query!(
         "INSERT INTO servers (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)",
         server_id,
         "Test Server",
         owner_id,
-        Utc::now().to_rfc3339(),
+        unban_server_created_at,
     )
     .execute(&pool)
     .await
     .expect("insert server");
+
+    let ban_created_at = Utc::now().to_rfc3339();
 
     sqlx::query!(
         "INSERT INTO server_bans (server_id, user_id, reason, created_at) VALUES (?, ?, ?, ?)",
         server_id,
         banned_id,
         Option::<String>::None,
-        Utc::now().to_rfc3339(),
+        ban_created_at,
     )
     .execute(&pool)
     .await
@@ -250,16 +256,16 @@ async fn unban_command_removes_ban_and_emits_event() {
     let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));
 
     let app = mock_app();
+    app.manage(state_container);
     let app_handle = app.handle();
 
     let (event_tx, event_rx) = std::sync::mpsc::channel::<String>();
     let listener_id = app_handle.listen("server-member-unbanned", move |event| {
-        if let Some(payload) = event.payload() {
-            let _ = event_tx.send(payload.to_string());
-        }
+        let payload = event.payload();
+        let _ = event_tx.send(payload.to_string());
     });
 
-    let bans_before = list_server_bans(server_id.clone(), State(&state_container))
+    let bans_before = list_server_bans(server_id.clone(), app_handle.state::<AppStateContainer>())
         .await
         .expect("list bans before");
     assert_eq!(bans_before.len(), 1);
@@ -267,7 +273,7 @@ async fn unban_command_removes_ban_and_emits_event() {
     let payload = unban_server_member(
         server_id.clone(),
         banned_id.clone(),
-        State(&state_container),
+        app_handle.state::<AppStateContainer>(),
         app_handle.clone(),
     )
     .await
@@ -295,7 +301,7 @@ async fn unban_command_removes_ban_and_emits_event() {
 
     app_handle.unlisten(listener_id);
 
-    let bans_after = list_server_bans(server_id, State(&state_container))
+    let bans_after = list_server_bans(server_id, app_handle.state::<AppStateContainer>())
         .await
         .expect("list bans after");
     assert!(bans_after.is_empty());

@@ -4,7 +4,7 @@ use aegis_protocol::{self, AepMessage};
 use aep::{database, user_service};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,12 +209,12 @@ pub async fn list_server_bans(
 }
 
 #[tauri::command]
-pub async fn ban_server_member(
+pub async fn ban_server_member<R: Runtime>(
     server_id: String,
     user_id: String,
     reason: Option<String>,
     state_container: State<'_, AppStateContainer>,
-    app: AppHandle,
+    app: AppHandle<R>,
 ) -> Result<ServerBanUpdate, String> {
     let state = get_initialized_state(&state_container).await?;
     ensure_server_owner(&state, &server_id).await?;
@@ -252,11 +252,11 @@ pub async fn ban_server_member(
 }
 
 #[tauri::command]
-pub async fn unban_server_member(
+pub async fn unban_server_member<R: Runtime>(
     server_id: String,
     user_id: String,
     state_container: State<'_, AppStateContainer>,
-    app: AppHandle,
+    app: AppHandle<R>,
 ) -> Result<ServerBanUpdate, String> {
     let state = get_initialized_state(&state_container).await?;
     ensure_server_owner(&state, &server_id).await?;

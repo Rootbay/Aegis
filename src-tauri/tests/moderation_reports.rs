@@ -1,4 +1,4 @@
-use aegis_lib::commands::moderation::{report_message, ReportMessagePayload};
+use aegis_lib::commands::moderation::{report_message_internal, ReportMessagePayload};
 use aegis_lib::commands::state::AppStateContainer;
 use aegis_shared_types::{
     AppState, ConnectivityEventPayload, FileAclPolicy, FileTransferCommand, IncomingFile,
@@ -6,9 +6,9 @@ use aegis_shared_types::{
 use chrono::Utc;
 use crypto::identity::Identity;
 use serde_json::Value;
+use sqlx::Row;
 use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, Arc};
-use tauri::State;
 use tempfile::tempdir;
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
@@ -20,6 +20,13 @@ async fn report_message_command_persists_report_with_context() {
     let pool = aep::database::initialize_db(db_path)
         .await
         .expect("initialize db");
+
+    let applied_migrations: Vec<String> = sqlx::query("SELECT version FROM __sqlx_migrations ORDER BY applied_on")
+        .map(|row: sqlx::sqlite::SqliteRow| row.get("version"))
+        .fetch_all(&pool)
+        .await
+        .expect("fetch migrations");
+    println!("applied migrations: {:?}", applied_migrations);
 
     let reporter_identity = Identity::generate();
     let reporter_id = reporter_identity.peer_id().to_base58();
@@ -91,7 +98,7 @@ async fn report_message_command_persists_report_with_context() {
 
     let surrounding_ids = vec![Uuid::new_v4().to_string(), Uuid::new_v4().to_string()];
 
-    report_message(
+    report_message_internal(
         ReportMessagePayload {
             message_id: message_id.clone(),
             reason: "harassment".to_string(),
@@ -105,7 +112,7 @@ async fn report_message_command_persists_report_with_context() {
             message_timestamp: Some(message_timestamp.clone()),
             surrounding_message_ids: Some(surrounding_ids.clone()),
         },
-        State(&state_container),
+        &state_container,
     )
     .await
     .expect("report message");

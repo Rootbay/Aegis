@@ -4,10 +4,11 @@ use super::delivery::persist_and_broadcast_message;
 use super::events::{broadcast_read_receipt, broadcast_typing_indicator};
 use super::moderation::{delete_message_internal, edit_message_internal};
 use super::*;
-use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};
+use aegis_protocol::{AepMessage, MessageDeletionScope, ReadReceiptData, TypingIndicatorData};
 use aegis_shared_types::{
     AppState, FileAclPolicy, IncomingFile, PendingDeviceProvisioning, TrustedDeviceRecord, User,
 };
+use aep::database;
 use aep::user_service;
 use bs58;
 use chrono::Utc;
@@ -23,7 +24,7 @@ fn build_app_state(identity: Identity, db_pool: sqlx::Pool<sqlx::Sqlite>) -> App
     let (network_tx, _network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
-    let app_data_dir = temp_dir.into_path();
+    let app_data_dir = temp_dir.keep();
     AppState {
         identity,
         network_tx,
@@ -55,6 +56,7 @@ async fn send_read_receipt_is_broadcast_and_signed() {
     let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
+    let app_data_dir = temp_dir.keep();
     let app_state = AppState {
         identity: identity.clone(),
         network_tx,
@@ -62,7 +64,7 @@ async fn send_read_receipt_is_broadcast_and_signed() {
         incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
         file_cmd_tx,
         file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
-        app_data_dir: temp_dir.into_path(),
+        app_data_dir,
         connectivity_snapshot: Arc::new(Mutex::new(None)),
         voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         relays: Arc::new(Mutex::new(Vec::new())),
@@ -126,6 +128,7 @@ async fn send_typing_indicator_is_broadcast_and_signed() {
     let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
+    let app_data_dir = temp_dir.keep();
     let app_state = AppState {
         identity: identity.clone(),
         network_tx,
@@ -133,7 +136,7 @@ async fn send_typing_indicator_is_broadcast_and_signed() {
         incoming_files: Arc::new(Mutex::new(HashMap::<String, IncomingFile>::new())),
         file_cmd_tx,
         file_acl_policy: Arc::new(Mutex::new(FileAclPolicy::Everyone)),
-        app_data_dir: temp_dir.into_path(),
+        app_data_dir,
         connectivity_snapshot: Arc::new(Mutex::new(None)),
         voice_memos_enabled: Arc::new(AtomicBool::new(true)),
         relays: Arc::new(Mutex::new(Vec::new())),
@@ -238,7 +241,7 @@ async fn delete_message_is_broadcast_and_applied() {
     let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
-    let app_data_dir = temp_dir.into_path();
+    let app_data_dir = temp_dir.keep();
     let local_state = AppState {
         identity: identity.clone(),
         network_tx,
@@ -313,7 +316,7 @@ async fn voice_memo_attachments_blocked_when_disabled() {
         .expect("init db");
 
     let identity = Identity::generate();
-    let mut state = build_app_state(identity.clone(), db_pool.clone());
+    let state = build_app_state(identity.clone(), db_pool.clone());
     state.voice_memos_enabled.store(false, Ordering::Relaxed);
 
     let attachments = vec![AttachmentDescriptor {
@@ -398,7 +401,7 @@ async fn edit_message_is_persisted_and_broadcast() {
     let (network_tx, mut network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
-    let app_data_dir = temp_dir.into_path();
+    let app_data_dir = temp_dir.keep();
     let local_state = AppState {
         identity: identity.clone(),
         network_tx,

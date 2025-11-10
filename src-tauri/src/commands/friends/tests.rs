@@ -26,7 +26,7 @@ fn build_app_state(
     let (network_tx, network_rx) = tokio::sync::mpsc::channel(8);
     let (file_cmd_tx, _file_cmd_rx) = tokio::sync::mpsc::channel(8);
     let temp_dir = tempdir().expect("tempdir");
-    let (_dir_handle, app_data_dir) = temp_dir.keep().expect("Failed to keep temp dir");
+    let app_data_dir = temp_dir.keep();
     let app_state = AppState {
         identity,
         network_tx,

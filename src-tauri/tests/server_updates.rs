@@ -33,7 +33,11 @@ fn build_server(owner_id: &str) -> database::Server {
         allow_invites: Some(true),
         moderation_level: None,
         explicit_content_filter: Some(false),
+        transparent_edits: None,
+        deleted_message_display: None,
+        read_receipts_enabled: None,
         channels: vec![],
+        categories: vec![],
         members: vec![],
         roles: vec![],
         invites: vec![],
@@ -49,7 +53,7 @@ async fn server_metadata_update_persists_columns() {
     let owner_id = Uuid::new_v4().to_string();
     seed_user(&pool, &owner_id).await;
 
-    let mut server = build_server(&owner_id);
+    let server = build_server(&owner_id);
     database::insert_server(&pool, &server)
         .await
         .expect("insert server");
@@ -88,7 +92,10 @@ async fn server_metadata_update_persists_columns() {
         Some("https://example/icon.png")
     );
     assert_eq!(updated.description.as_deref(), Some("Updated description"));
-    assert_eq!(updated.default_channel_id.as_deref(), Some(&channel.id));
+    assert_eq!(
+        updated.default_channel_id.as_deref(),
+        Some(channel.id.as_str())
+    );
     assert_eq!(updated.allow_invites, Some(false));
 }
 
@@ -121,6 +128,7 @@ async fn server_roles_replace_round_trip() {
             hoist: true,
             mentionable: true,
             permissions: admin_permissions,
+            member_ids: Vec::new(),
         },
         Role {
             id: Uuid::new_v4().to_string(),
@@ -129,6 +137,7 @@ async fn server_roles_replace_round_trip() {
             hoist: false,
             mentionable: true,
             permissions: mod_permissions,
+            member_ids: Vec::new(),
         },
     ];
 
@@ -210,6 +219,9 @@ async fn server_moderation_update_persists_flags() {
     let moderation = ServerModerationUpdate {
         moderation_level: Some(Some("High".to_string())),
         explicit_content_filter: Some(true),
+        transparent_edits: None,
+        deleted_message_display: None,
+        read_receipts_enabled: None,
     };
 
     database::update_server_moderation(&pool, &server.id, &moderation)
