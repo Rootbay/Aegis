@@ -4,6 +4,7 @@
   import { onMount } from "svelte";
   import NavigationHeader from "$lib/components/NavigationHeader.svelte";
   import { ChatView } from "$features/chat";
+  import VoiceCallView from "$lib/features/calls/components/VoiceCallView.svelte";
   import SearchSidebar from "$lib/components/sidebars/SearchSidebar.svelte";
   import SearchResultsPanel from "$lib/components/sidebars/SearchResultsPanel.svelte";
   import MemberSidebar from "$lib/components/sidebars/MemberSidebar.svelte";
@@ -27,6 +28,9 @@
   const sidebarContext = $derived(() => (isGroupChat() ? "group" : "server"));
   const groupOwnerId = $derived(() =>
     chat.type === "group" ? chat.ownerId ?? null : null,
+  );
+  const isVoiceChannelCall = $derived(
+    () => chat.type === "channel" && chat.channelType === "voice",
   );
 
   const members = $derived(() =>
@@ -150,57 +154,63 @@
   }
 </script>
 
-<div class="flex flex-1 min-h-0 flex-col">
-  <NavigationHeader
-    {chat}
-    onOpenDetailedProfile={openDetailedProfileModal}
-    showMemberPanelToggle={!isLgViewport && canShowMembers()}
-    mobileMemberPanelOpen={mobileMemberPanelOpen}
-    onToggleMemberPanel={handleToggleMemberPanel}
-  />
-
-  <div class="flex flex-1 min-h-0">
-    <div class="flex flex-1 flex-col min-w-0">
-      <ChatView {chat} />
-    </div>
-
-    {#if showSearchSidebar()}
-      <SearchSidebar {chat} />
-    {:else if shouldShowMemberSidebar() && canShowMembers()}
-      <MemberSidebar
-        members={members()}
-        {openDetailedProfileModal}
-        context={sidebarContext()}
-        groupId={isGroupChat() ? chat.id : undefined}
-        groupOwnerId={groupOwnerId() ?? undefined}
-      />
-    {/if}
+{#if isVoiceChannelCall()}
+  <div class="flex flex-1 min-h-0 flex-col">
+    <VoiceCallView {chat} />
   </div>
-</div>
+{:else}
+  <div class="flex flex-1 min-h-0 flex-col">
+    <NavigationHeader
+      {chat}
+      onOpenDetailedProfile={openDetailedProfileModal}
+      showMemberPanelToggle={!isLgViewport && canShowMembers()}
+      mobileMemberPanelOpen={mobileMemberPanelOpen}
+      onToggleMemberPanel={handleToggleMemberPanel}
+    />
 
-{#if canShowMembers()}
-  <MemberSidebar
-    members={members()}
-    {openDetailedProfileModal}
-    context={sidebarContext()}
-    groupId={isGroupChat() ? chat.id : undefined}
-    groupOwnerId={groupOwnerId() ?? undefined}
-    variant="mobile"
-    mobileOpen={mobileMemberPanelOpen}
-    onMobileOpenChange={handleMobileMemberPanelOpenChange}
-  />
-{/if}
+    <div class="flex flex-1 min-h-0">
+      <div class="flex flex-1 flex-col min-w-0">
+        <ChatView {chat} />
+      </div>
 
-<Dialog open={mobileDialogOpen} onOpenChange={handleMobileDialogOpenChange}>
-  <DialogContent
-    class="w-full max-w-[min(420px,calc(100vw-1.5rem))] border-none bg-transparent p-0 shadow-none sm:max-w-md"
-    showCloseButton={false}
-  >
-    <div
-      class="w-full overflow-hidden rounded-lg border border-border bg-card shadow-xl"
-      data-testid="mobile-search-results"
-    >
-      <SearchResultsPanel {chat} variant="dialog" />
+      {#if showSearchSidebar()}
+        <SearchSidebar {chat} />
+      {:else if shouldShowMemberSidebar() && canShowMembers()}
+        <MemberSidebar
+          members={members()}
+          {openDetailedProfileModal}
+          context={sidebarContext()}
+          groupId={isGroupChat() ? chat.id : undefined}
+          groupOwnerId={groupOwnerId() ?? undefined}
+        />
+      {/if}
     </div>
-  </DialogContent>
-</Dialog>
+  </div>
+
+  {#if canShowMembers()}
+    <MemberSidebar
+      members={members()}
+      {openDetailedProfileModal}
+      context={sidebarContext()}
+      groupId={isGroupChat() ? chat.id : undefined}
+      groupOwnerId={groupOwnerId() ?? undefined}
+      variant="mobile"
+      mobileOpen={mobileMemberPanelOpen}
+      onMobileOpenChange={handleMobileMemberPanelOpenChange}
+    />
+  {/if}
+
+  <Dialog open={mobileDialogOpen} onOpenChange={handleMobileDialogOpenChange}>
+    <DialogContent
+      class="w-full max-w-[min(420px,calc(100vw-1.5rem))] border-none bg-transparent p-0 shadow-none sm:max-w-md"
+      showCloseButton={false}
+    >
+      <div
+        class="w-full overflow-hidden rounded-lg border border-border bg-card shadow-xl"
+        data-testid="mobile-search-results"
+      >
+        <SearchResultsPanel {chat} variant="dialog" />
+      </div>
+    </DialogContent>
+  </Dialog>
+{/if}

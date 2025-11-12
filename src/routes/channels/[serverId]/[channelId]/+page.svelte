@@ -35,6 +35,7 @@
             topic: channel.topic ?? null,
             members: server.members,
             messages,
+            channelType: channel.channel_type,
           } satisfies ChannelChat;
         }
       }

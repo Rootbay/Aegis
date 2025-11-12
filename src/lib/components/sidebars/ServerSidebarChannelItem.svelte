@@ -116,24 +116,20 @@
         <div
           class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            class="text-muted-foreground hover:text-foreground"
+          <button
+            class="text-muted-foreground hover:text-foreground cursor-pointer mr-1.5"
             aria-label="Invite to channel"
             onclick={(event) => inviteHandler(channel, event)}
           >
-            <Plus size={10} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="text-muted-foreground hover:text-foreground"
+            <Plus size={16} />
+          </button>
+          <button
+            class="text-muted-foreground hover:text-foreground cursor-pointer"
             aria-label="Channel settings"
             onclick={(event) => settingsHandler(channel, event)}
           >
-            <Settings size={10} />
-          </Button>
+            <Settings size={16} />
+          </button>
         </div>
       </div>
     </TooltipTrigger>

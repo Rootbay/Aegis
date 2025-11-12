@@ -4,8 +4,10 @@
   import {
     Bot,
     CircleAlert,
+    Hash,
     Link,
     LoaderCircle,
+    MessageCircle,
     Mic,
     Plus,
     SendHorizontal,
@@ -14,10 +16,12 @@
     Timer,
     Users,
     Webhook,
-    Clapperboard
+    Clapperboard,
+    Pencil
   } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { invoke } from "@tauri-apps/api/core";
+  import { goto } from "$app/navigation";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
   import FileTransferApprovals from "$lib/features/chat/components/FileTransferApprovals.svelte";
@@ -2725,6 +2729,16 @@
     chat ? Boolean($loadingStateByChat.get(chat.id)) : false,
   );
 
+  let showEmptyChannelMessage = $derived(() => {
+    if (!chat || chat.type !== "channel") {
+      return false;
+    }
+    if (isChatLoading) {
+      return false;
+    }
+    return (currentChatMessages?.length ?? 0) === 0;
+  });
+
   const messageContentCache: MessageContentCache = new Map();
 
   let normalizedMessages = $derived(
@@ -3303,6 +3317,13 @@
       event.preventDefault();
       submitMessageEdit(msg);
     }
+  }
+
+  function handleEditChannelClick() {
+    if (!chat?.serverId || chat.type !== "channel") {
+      return;
+    }
+    void goto(`/channels/${chat.serverId}/settings?tab=channels`);
   }
 </script>
 
@@ -3971,6 +3992,37 @@
             </div>
           {/snippet}
         </VirtualList>
+
+        {#if showEmptyChannelMessage()}
+          <div class="pointer-events-none absolute inset-x-4 bottom-4 flex justify-start">
+            <div class="pointer-events-auto max-w-sm p-4 text-sm">
+              <div class="mb-3 flex justify-left">
+                <div class="flex h-18 w-18 items-center justify-center rounded-full border border-border bg-muted/80 text-muted-foreground">
+                  {#if chat?.channelType === "voice"}
+                    <MessageCircle size={40} />
+                  {:else}
+                    <Hash size={40} />
+                  {/if}
+                </div>
+              </div>
+              <h1 class="text-4xl font-bold text-foreground">
+                Welcome to #{chat.name}!
+              </h1>
+              <p class="text-base text-muted-foreground">
+                This is the start of the #{chat.name} channel.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                class="mt-3 w-fit"
+                onclick={handleEditChannelClick}
+              >
+                <Pencil size={16} />
+                Edit Channel
+              </Button>
+            </div>
+          </div>
+        {/if}
 
         {#if isChatLoading && (currentChatMessages?.length ?? 0) === 0}
           <div

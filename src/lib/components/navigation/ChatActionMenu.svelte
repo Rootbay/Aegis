@@ -285,7 +285,7 @@
     </Button>
     <Button
       variant="ghost"
-      class={cn("cursor-pointer", memberSidebarVisible ? "text-cyan-400" : "")}
+      class={cn("cursor-pointer", memberSidebarVisible ? "text-muted" : "")}
       size="icon"
       aria-label={memberSidebarVisible
         ? "Hide Member Sidebar"
