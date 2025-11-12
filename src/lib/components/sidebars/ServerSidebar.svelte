@@ -10,6 +10,7 @@
   import CreateCategoryModal from "$lib/components/modals/CreateCategoryModal.svelte";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import ServerSidebarChannelItem from "$lib/components/sidebars/ServerSidebarChannelItem.svelte";
+  import ServerSidebarChannelDialog from "$lib/components/sidebars/ServerSidebarChannelDialog.svelte";
   import PrivateChannelAccessDialog from "$lib/components/sidebars/PrivateChannelAccessDialog.svelte";
   import RenameCategoryDialog from "$lib/components/sidebars/RenameCategoryDialog.svelte";
   import CategoryNotificationDialog from "$lib/components/sidebars/CategoryNotificationDialog.svelte";
@@ -27,14 +28,7 @@
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
-  import {
-    Plus,
-    ChevronDown,
-    Hash,
-    Check,
-    Mic,
-    Info,
-  } from "@lucide/svelte";
+import { Plus, ChevronDown } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import { getContext, onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
@@ -58,17 +52,6 @@
     SidebarHeader,
     SidebarContent,
   } from "$lib/components/ui/sidebar";
-  import {
-    Dialog,
-    DialogHeader,
-    DialogContent,
-    DialogTitle,
-    DialogDescription,
-    DialogFooter,
-  } from "$lib/components/ui/dialog/index";
-  import { Label } from "$lib/components/ui/label/index";
-  import { Input } from "$lib/components/ui/input/index";
-  import { Switch } from "$lib/components/ui/switch/index";
   import {
     Tooltip,
     TooltipContent,
@@ -102,12 +85,31 @@
     createEmptyPermissionMatrixRow,
     createEmptyPermissionOverridesState,
     createPermissionMatrixRowFromEntry,
-    PermissionMatrixRow,
-    PermissionMatrixState,
-    PermissionOverrideChoice,
     rowHasOverrides,
     serializePermissionOverridesState,
   } from "$lib/features/chat/utils/channelPermissionMatrix";
+  import type {
+    PermissionMatrixRow,
+    PermissionMatrixState,
+    PermissionOverrideChoice,
+  } from "$lib/features/chat/utils/channelPermissionMatrix";
+  import {
+    applyChannelMove,
+    generateUniqueId,
+    normalizeCategoryId,
+    sortChannelsByPosition,
+    toUniqueIdList,
+  } from "$lib/components/sidebars/serverSidebarChannelOrdering";
+  import {
+    clampToViewport,
+    slugifyChannelName,
+    buildChannelLink,
+    buildInviteLinkFromCode,
+    getCategoryKey,
+    getCategoryDisplayName,
+    mapInviteResponse,
+    type ServerInviteResponse,
+  } from "$lib/components/sidebars/serverSidebarHelpers";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
@@ -414,17 +416,6 @@
     selectedMemberIds = next;
   }
 
-  function toUniqueIdList(ids: Iterable<string>): string[] {
-    const seen = new Set<string>();
-    for (const id of ids) {
-      const trimmed = id.trim();
-      if (trimmed.length > 0) {
-        seen.add(trimmed);
-      }
-    }
-    return Array.from(seen);
-  }
-
   function ensureDefaultPrivateMembers() {
     if (!newChannelPrivate) {
       return;
@@ -523,22 +514,11 @@
     );
   }
 
-  function getCategoryKey(categoryId: string | null) {
-    return categoryId ?? "";
-  }
-
   function isCategoryMuted(categoryId: string | null) {
     if (!categoryId) {
       return false;
     }
     return mutedCategoryIds.has(categoryId);
-  }
-
-  function getCategoryDisplayName(categoryId: string) {
-    const category = server?.categories?.find(
-      (entry: ChannelCategory) => entry.id === categoryId,
-    );
-    return category?.name ?? "Category";
   }
 
   function closeRenameCategoryModal() {
@@ -632,21 +612,6 @@
     );
   }
 
-  function normalizeCategoryId(categoryId?: string | null) {
-    return categoryId ?? null;
-  }
-
-  function sortChannelsByPosition(channels: Channel[]) {
-    return [...channels].sort((a, b) => {
-      const positionA = Number.isFinite(a.position) ? a.position : 0;
-      const positionB = Number.isFinite(b.position) ? b.position : 0;
-      if (positionA !== positionB) {
-        return positionA - positionB;
-      }
-      return a.name.localeCompare(b.name);
-    });
-  }
-
   function getChannelsForCategory(
     categoryId: string | null,
     type: "text" | "voice",
@@ -698,113 +663,6 @@
         ),
       ) + 1
     );
-  }
-
-  function buildGroupList(
-    channels: Channel[],
-    categoryId: string | null,
-    type: "text" | "voice",
-    excludeId?: string | null,
-  ) {
-    const normalizedCategoryId = normalizeCategoryId(categoryId);
-    return sortChannelsByPosition(
-      channels.filter((channel) => {
-        if (excludeId && channel.id === excludeId) {
-          return false;
-        }
-        return (
-          channel.channel_type === type &&
-          normalizeCategoryId(channel.category_id) === normalizedCategoryId
-        );
-      }),
-    );
-  }
-
-  function applyChannelMove({
-    channelId,
-    targetCategoryId,
-    targetType,
-    beforeChannelId,
-  }: {
-    channelId: string;
-    targetCategoryId: string | null;
-    targetType: "text" | "voice";
-    beforeChannelId?: string | null;
-  }): Channel[] | null {
-    if (!server?.channels) {
-      return null;
-    }
-
-    const normalizedTargetCategoryId = normalizeCategoryId(targetCategoryId);
-    const channels = server.channels.map((channel) => ({ ...channel }));
-    const channelIndex = channels.findIndex((channel) => channel.id === channelId);
-    if (channelIndex === -1) {
-      return null;
-    }
-
-    const channel = channels[channelIndex];
-    if (channel.channel_type !== targetType) {
-      return null;
-    }
-
-    const originalCategoryId = normalizeCategoryId(channel.category_id);
-    const sameCategory = originalCategoryId === normalizedTargetCategoryId;
-    const sanitizedBeforeId =
-      beforeChannelId && beforeChannelId === channelId ? null : beforeChannelId;
-
-    channels[channelIndex].category_id = normalizedTargetCategoryId;
-
-    const targetGroup = buildGroupList(
-      channels,
-      normalizedTargetCategoryId,
-      targetType,
-      channelId,
-    );
-
-    let insertIndex = targetGroup.length;
-    if (sanitizedBeforeId) {
-      const beforeIndex = targetGroup.findIndex(
-        (entry) => entry.id === sanitizedBeforeId,
-      );
-      if (beforeIndex !== -1) {
-        insertIndex = beforeIndex;
-      }
-    }
-
-    targetGroup.splice(insertIndex, 0, channels[channelIndex]);
-    targetGroup.forEach((entry, index) => {
-      entry.position = index;
-    });
-
-    if (!sameCategory) {
-      const originalGroup = buildGroupList(
-        channels,
-        originalCategoryId,
-        targetType,
-        channelId,
-      );
-      originalGroup.forEach((entry, index) => {
-        entry.position = index;
-      });
-    }
-
-    const originalChannels = server.channels ?? [];
-    const changed = channels.some((entry) => {
-      const existing = originalChannels.find((c) => c.id === entry.id);
-      if (!existing) {
-        return true;
-      }
-      return (
-        existing.category_id !== entry.category_id ||
-        existing.position !== entry.position
-      );
-    });
-
-    if (!changed) {
-      return null;
-    }
-
-    return channels;
   }
 
   function handleChannelDragStart(event: DragEvent, channel: Channel) {
@@ -886,6 +744,7 @@
       targetCategoryId,
       targetType,
       beforeChannelId,
+      channels: server.channels ?? [],
     });
     if (!updatedChannels) {
       return;
@@ -966,22 +825,6 @@
       ? `/channels/${serverId}/settings?${query}`
       : `/channels/${serverId}/settings`;
     gotoResolved(href);
-  }
-
-  function slugifyChannelName(name: string) {
-    return name.trim().toLowerCase().replace(/\s+/g, "-");
-  }
-
-  function generateUniqueId() {
-    if (
-      typeof globalThis.crypto !== "undefined" &&
-      typeof globalThis.crypto.randomUUID === "function"
-    ) {
-      return globalThis.crypto.randomUUID();
-    }
-    return `${Date.now().toString(36)}-${Math.random()
-      .toString(36)
-      .slice(2, 10)}`;
   }
 
   function startResize(e: MouseEvent) {
@@ -1329,17 +1172,6 @@
     selectedChannelForContextMenu = null;
   }
 
-  function clampToViewport(
-    x: number,
-    y: number,
-    approxWidth = 220,
-    approxHeight = 260,
-  ) {
-    const maxX = Math.max(0, (window.innerWidth || 0) - approxWidth - 8);
-    const maxY = Math.max(0, (window.innerHeight || 0) - approxHeight - 8);
-    return { x: Math.min(x, maxX), y: Math.min(y, maxY) };
-  }
-
   async function handleLeaveServer() {
     if (
       confirm(`Are you sure you want to leave the server "${server.name}"?`)
@@ -1583,7 +1415,7 @@
       }
       case "notification_settings": {
         const key = getCategoryKey(categoryId);
-        const label = getCategoryDisplayName(categoryId);
+        const label = getCategoryDisplayName(server, categoryId);
         openCategoryNotificationsModal(key, label);
         break;
       }
@@ -1646,52 +1478,6 @@
   function getChannelById(id: string) {
     return server.channels?.find((c: Channel) => c.id === id);
   }
-
-  function buildChannelLink(channelId: string) {
-    const path = `/channels/${server.id}/${channelId}`;
-    try {
-      if (typeof window !== "undefined" && window.location?.origin) {
-        return `${window.location.origin}${path}`;
-      }
-    } catch (e) {
-      void e;
-    }
-    return path;
-  }
-
-  function buildInviteLinkFromCode(code: string) {
-    const path = `/inv/${code}`;
-    try {
-      if (typeof window !== "undefined" && window.location?.origin) {
-        return `${window.location.origin}${path}`;
-      }
-    } catch (e) {
-      void e;
-    }
-    return path;
-  }
-
-  type ServerInviteResponse = {
-    id: string;
-    server_id: string;
-    code: string;
-    created_by: string;
-    created_at: string;
-    expires_at?: string | null;
-    max_uses?: number | null;
-    uses: number;
-  };
-
-  const mapInviteResponse = (invite: ServerInviteResponse): ServerInvite => ({
-    id: invite.id,
-    serverId: invite.server_id,
-    code: invite.code,
-    createdBy: invite.created_by,
-    createdAt: invite.created_at,
-    expiresAt: invite.expires_at ?? undefined,
-    maxUses: invite.max_uses ?? undefined,
-    uses: invite.uses,
-  });
 
   async function handleChannelAction({
     action,
@@ -1780,7 +1566,7 @@
           break;
         }
         case "copy_link": {
-          const link = buildChannelLink(channelId);
+          const link = buildChannelLink(server.id, channelId);
           await navigator.clipboard.writeText(link);
           toasts.addToast("Channel link copied.", "success");
           break;
@@ -1889,7 +1675,7 @@
 
   function handleInviteToChannelClick(channel: Channel, event?: MouseEvent) {
     event?.stopPropagation();
-    const link = buildChannelLink(channel.id);
+    const link = buildChannelLink(server.id, channel.id);
     navigator.clipboard
       .writeText(link)
       .then(() => {
@@ -2017,13 +1803,14 @@
               {#each uncategorizedVoiceChannels as channel (channel.id)}
                 {@const metadata = channelMetadataLookup.get(channel.id)}
                 {@const activeCall = $callStore.activeCall}
-                {@const isActiveVoiceChannel =
+                {@const isActiveVoiceChannel = Boolean(
                   activeCall &&
-                  activeCall.chatType === "channel" &&
-                  activeCall.type === "voice" &&
-                  activeCall.status !== "ended" &&
-                  activeCall.status !== "error" &&
-                  activeCall.chatId === channel.id}
+                    activeCall.chatType === "channel" &&
+                    activeCall.type === "voice" &&
+                    activeCall.status !== "ended" &&
+                    activeCall.status !== "error" &&
+                    activeCall.chatId === channel.id,
+                )}
                 {#if shouldShowDropIndicator(null, "voice", channel.id)}
                   <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
                 {/if}
@@ -2166,13 +1953,14 @@
                     {#each voiceChannels as channel (channel.id)}
                       {@const metadata = channelMetadataLookup.get(channel.id)}
                       {@const activeCall = $callStore.activeCall}
-                      {@const isActiveVoiceChannel =
+                      {@const isActiveVoiceChannel = Boolean(
                         activeCall &&
-                        activeCall.chatType === "channel" &&
-                        activeCall.type === "voice" &&
-                        activeCall.status !== "ended" &&
-                        activeCall.status !== "error" &&
-                        activeCall.chatId === channel.id}
+                          activeCall.chatType === "channel" &&
+                          activeCall.type === "voice" &&
+                          activeCall.status !== "ended" &&
+                          activeCall.status !== "error" &&
+                          activeCall.chatId === channel.id,
+                      )}
                       {#if shouldShowDropIndicator(category.id, "voice", channel.id)}
                         <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
                       {/if}
@@ -2307,156 +2095,22 @@
   />
 {/if}
 
-<Dialog
+<ServerSidebarChannelDialog
   open={showCreateChannelModal}
+  editingChannelId={editingChannelId}
+  bind:newChannelType={newChannelType}
+  bind:newChannelName={newChannelName}
+  bind:newChannelPrivate={newChannelPrivate}
+  submitChannelForm={submitChannelForm}
+  closeChannelModal={closeChannelModal}
+  openPrivateChannelAccessDialog={openPrivateChannelAccessDialog}
   onOpenChange={(value: boolean) => {
     showCreateChannelModal = value;
     if (!value) {
       newChannelCategoryId = null;
     }
   }}
->
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>
-        {editingChannelId ? "Edit Channel" : "Create Channel"}
-      </DialogTitle>
-      <DialogDescription>
-        {editingChannelId
-          ? "Update channel settings, permissions, and slowmode."
-          : "Create a text or voice channel with a name, optional topic, and privacy."}
-      </DialogDescription>
-    </DialogHeader>
-
-    <div class="space-y-6">
-      <div>
-        <Label
-          class="text-xs font-semibold uppercase text-muted-foreground mb-2"
-        >
-          Channel Type
-        </Label>
-        <div class="flex flex-col gap-3 w-full">
-          <Button
-            type="button"
-            variant={newChannelType === "text" ? "secondary" : "outline"}
-            class="w-full flex items-center gap-3 justify-start text-left py-4! h-auto!"
-            onclick={() => (newChannelType = "text")}
-          >
-            <Hash size={16} />
-            <div>
-              <div class="text-sm font-medium">Text</div>
-              <div class="text-xs text-muted-foreground">
-                Chat with messages, images, links
-              </div>
-            </div>
-          </Button>
-          <Button
-            type="button"
-            variant={newChannelType === "voice" ? "secondary" : "outline"}
-            class="w-full flex items-center gap-3 justify-start text-left py-4! h-auto!"
-            onclick={() => (newChannelType = "voice")}
-          >
-            <Mic size={16} />
-            <div>
-              <div class="text-sm font-medium">Voice</div>
-              <div class="text-xs text-muted-foreground">
-                Talk, video, and share screen
-              </div>
-            </div>
-          </Button>
-        </div>
-      </div>
-
-      <div>
-        <Label
-          for="channel-name"
-          class="text-xs font-semibold uppercase text-muted-foreground mb-2"
-        >
-          Channel Name
-        </Label>
-        <div
-          class="flex items-center bg-muted border border-border rounded-md px-3 focus-within:ring-2 focus-within:ring-ring"
-        >
-          {#if newChannelType === "text"}
-            <span class="text-muted-foreground mr-2">#</span>
-          {:else if newChannelType === "voice"}
-            <Mic size={12} class="text-muted-foreground mr-2" />
-          {/if}
-          <Input
-            id="channel-name"
-            placeholder={newChannelType === "text"
-              ? "new-channel"
-              : "New Voice Channel"}
-            class="flex-1 border-0 bg-transparent px-0 py-2 text-sm focus-visible:ring-0"
-            bind:value={newChannelName}
-            autofocus
-            onkeydown={(e) => {
-              if (e.key === "Enter") submitChannelForm();
-            }}
-          />
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between gap-4">
-        <div class="flex flex-col">
-          <span class="text-sm font-medium flex items-center gap-1">
-            Private Channel
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="text-muted-foreground hover:text-foreground"
-                    aria-label="More info about private channels"
-                  >
-                    <Info size={14} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="top"
-                  align="start"
-                  class="max-w-xs text-xs leading-snug"
-                >
-                  When enabled, only selected members and roles will be able to
-                  see and join this channel.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </span>
-          <span class="text-xs text-muted-foreground">
-            Restrict access to specific members or roles
-          </span>
-        </div>
-        <Switch
-          bind:checked={newChannelPrivate}
-          id="priv"
-          aria-label="Private Channel"
-        />
-      </div>
-    </div>
-
-    <DialogFooter>
-      <Button variant="ghost" onclick={closeChannelModal}>Cancel</Button>
-      {#if editingChannelId}
-        <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
-          <Check size={14} class="mr-2" /> Save Changes
-        </Button>
-      {:else if newChannelPrivate}
-        <Button
-          onclick={openPrivateChannelAccessDialog}
-          disabled={!newChannelName.trim()}
-        >
-          Next
-        </Button>
-      {:else}
-        <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
-          <Plus size={14} class="mr-2" /> Create Channel
-        </Button>
-      {/if}
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+/>
 
 {#if showPrivateChannelAccessDialog}
   <PrivateChannelAccessDialog
