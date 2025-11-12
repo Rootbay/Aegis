@@ -342,7 +342,7 @@
                   style={`background-image: url('${server.iconUrl}')`}
                 ></div>
               {:else}
-                <div class={`absolute inset-0 bg-gradient-to-br ${bannerGradient}`}></div>
+                <div class={`absolute inset-0 bg-linear-to-br ${bannerGradient}`}></div>
               {/if}
               <div class="absolute inset-0 bg-linear-to-b from-black/10 via-transparent to-transparent"></div>
             </div>

@@ -39,7 +39,6 @@
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
   import { SvelteURLSearchParams } from "svelte/reactivity";
-  import { v4 as uuidv4 } from "uuid";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge";
   import {
@@ -115,7 +114,12 @@
   let {
     server,
     onSelectChannel,
-  }: { server: Server; onSelectChannel: ChannelSelectHandler } = $props();
+    refreshServerData,
+  }: {
+    server: Server;
+    onSelectChannel: ChannelSelectHandler;
+    refreshServerData?: () => Promise<void>;
+  } = $props();
 
   const { activeServerChannelId } = chatStore;
 
@@ -175,6 +179,8 @@
   let selectedRoleIds = $state(new SvelteSet<string>());
   let selectedMemberIds = $state(new SvelteSet<string>());
   let privateAccessSearchTerm = $state("");
+  let roleSearchTerm = $state("");
+  let memberSearchTerm = $state("");
   let showPrivateChannelAccessDialog = $state(false);
 
   type PermissionOverrideChoice = "inherit" | "allow" | "deny";
@@ -782,6 +788,7 @@
       }
       toasts.addToast("Category renamed.", "success");
       closeRenameCategoryModal();
+      triggerServerRefresh();
     } catch (error) {
       console.error("Failed to rename category:", error);
       toasts.addToast("Failed to rename category.", "error");
@@ -1063,7 +1070,9 @@
     });
     if (!result?.success) {
       toasts.addToast("Failed to update channel order.", "error");
+      return;
     }
+    triggerServerRefresh();
   }
 
   function gotoResolved(path: string) {
@@ -1084,6 +1093,18 @@
 
   function slugifyChannelName(name: string) {
     return name.trim().toLowerCase().replace(/\s+/g, "-");
+  }
+
+  function generateUniqueId() {
+    if (
+      typeof globalThis.crypto !== "undefined" &&
+      typeof globalThis.crypto.randomUUID === "function"
+    ) {
+      return globalThis.crypto.randomUUID();
+    }
+    return `${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
   }
 
   function startResize(e: MouseEvent) {
@@ -1298,7 +1319,7 @@
   function handleServerHeaderDropdownAction(
     event: CustomEvent<ServerHeaderDropdownAction>,
   ) {
-    const { action } = event.detail;
+    const action = event.detail;
     switch (action) {
       case "invite_to_server":
         void handleInviteToServerClick();
@@ -1418,6 +1439,15 @@
 
   function handleCreateEvent() {
     showServerEventModal = true;
+  }
+
+  function triggerServerRefresh() {
+    if (!refreshServerData) {
+      return;
+    }
+    void refreshServerData().catch((error) => {
+      console.error("Failed to refresh server data:", error);
+    });
   }
 
   function handleNotificationSettings() {
@@ -1542,6 +1572,7 @@
         }
         toasts.addToast("Channel updated.", "success");
         closeChannelModal();
+        triggerServerRefresh();
       } catch (error) {
         console.error("Failed to update channel:", error);
         toasts.addToast("Failed to update channel.", "error");
@@ -1555,7 +1586,7 @@
     );
 
     const newChannel: Channel = {
-      id: uuidv4(),
+      id: generateUniqueId(),
       server_id: server.id,
       name: slugifyChannelName(newChannelName),
       channel_type: newChannelType,
@@ -1579,6 +1610,7 @@
         onSelectChannel(server.id, newChannel.id);
       }
       closeChannelModal();
+      triggerServerRefresh();
     } catch (error) {
       console.error("Failed to create channel:", error);
       toasts.addToast("Failed to create channel.", "error");
@@ -1609,6 +1641,7 @@
           handleChannelSelect(nextChannel);
         }
       }
+      triggerServerRefresh();
     } catch (error) {
       console.error("Failed to delete channel:", error);
       toasts.addToast("Failed to delete channel.", "error");
@@ -1625,6 +1658,7 @@
       });
       serverStore.removeCategoryFromServer(server.id, categoryId);
       toasts.addToast("Category deleted.", "success");
+      triggerServerRefresh();
     } catch (error: any) {
       console.error("Failed to delete category:", error);
       const message =
@@ -1870,7 +1904,7 @@
             orig.permission_overrides ?? undefined,
           );
           const dup: Channel = {
-            id: uuidv4(),
+            id: generateUniqueId(),
             server_id: server.id,
             name: `${orig.name}-copy`,
             channel_type: orig.channel_type,
@@ -1893,6 +1927,7 @@
             await invoke("create_channel", { channel: dup });
             serverStore.addChannelToServer(server.id, dup);
             toasts.addToast("Channel duplicated.", "success");
+            triggerServerRefresh();
           } catch (e) {
             console.error("Failed to duplicate channel:", e);
             toasts.addToast("Failed to duplicate channel.", "error");
@@ -2094,7 +2129,7 @@
                 (hideMutedChannels && categoryMuted)}
               <Collapsible
                 open={!collapsed}
-                onOpenChange={(value) =>
+                onOpenChange={(value: boolean) =>
                   setCategoryCollapsed(category.id, !value)}
               >
                 <div
@@ -2162,7 +2197,7 @@
                             role="button"
                             tabindex="0"
                             draggable
-                          class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
                               $activeServerChannelId === channel.id
                                 ? "bg-primary/80 text-foreground"
                                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -2279,7 +2314,7 @@
                             role="button"
                             tabindex="0"
                             draggable
-                          class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
                               isActiveVoiceChannel
                                 ? "bg-primary/80 text-foreground shadow-sm"
                                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -2426,7 +2461,7 @@
             (hideMutedChannels && textSectionMuted)}
           <Collapsible
             open={!textSectionCollapsed}
-            onOpenChange={(value) => {
+            onOpenChange={(value: boolean) => {
               textChannelsCollapsed = !value;
               persistCollapsedState(TEXT_COLLAPSED_KEY, textChannelsCollapsed);
             }}
@@ -2491,7 +2526,7 @@
                         role="button"
                         tabindex="0"
                         draggable
-                        class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                        class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
                           $activeServerChannelId === channel.id
                             ? "bg-primary/80 text-foreground"
                             : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -2633,7 +2668,7 @@
             (hideMutedChannels && voiceSectionMuted)}
           <Collapsible
             open={!voiceSectionCollapsed}
-            onOpenChange={(value) => {
+            onOpenChange={(value: boolean) => {
               voiceChannelsCollapsed = !value;
               persistCollapsedState(
                 VOICE_COLLAPSED_KEY,
@@ -2707,7 +2742,7 @@
                         role="button"
                         tabindex="0"
                         draggable
-                        class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                        class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
                           isActiveVoiceChannel
                             ? "bg-primary/80 text-foreground shadow-sm"
                             : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -2823,7 +2858,7 @@
 
 <Dialog
   open={showCreateChannelModal}
-  onOpenChange={(value) => {
+  onOpenChange={(value: boolean) => {
     showCreateChannelModal = value;
     if (!value) {
       newChannelCategoryId = null;
@@ -2975,7 +3010,7 @@
 {#if showPrivateChannelAccessDialog}
   <Dialog
     open={showPrivateChannelAccessDialog}
-    onOpenChange={(value) => {
+    onOpenChange={(value: boolean) => {
       if (!value) {
         closePrivateChannelAccessDialog();
       }
@@ -2999,12 +3034,14 @@
         {#if selectedRoleIds.size > 0 || selectedMemberIds.size > 0}
           <div class="flex flex-wrap gap-2">
             {#each Array.from(selectedRoleIds) as roleId}
-              {#if rolesById.get(roleId) as role}
+              {@const role = rolesById.get(roleId)}
+              {#if role}
                 <Badge variant="secondary">{role.name}</Badge>
               {/if}
             {/each}
             {#each Array.from(selectedMemberIds) as memberId}
-              {#if membersById.get(memberId) as member}
+              {@const member = membersById.get(memberId)}
+              {#if member}
                 <Badge variant="secondary">{member.name}</Badge>
               {/if}
             {/each}
@@ -3091,7 +3128,7 @@
 {#if showRenameCategoryModal && categoryBeingRenamed}
   <Dialog
     open={showRenameCategoryModal}
-    onOpenChange={(value) => {
+    onOpenChange={(value: boolean) => {
       if (!value) {
         closeRenameCategoryModal();
       }
@@ -3145,7 +3182,7 @@
 {#if showCategoryNotificationsModal && notificationsCategoryId}
   <Dialog
     open={showCategoryNotificationsModal}
-    onOpenChange={(value) => {
+    onOpenChange={(value: boolean) => {
       if (!value) {
         closeCategoryNotificationsModal();
       }
@@ -3209,6 +3246,7 @@
     onclose={() => {
       showCreateCategoryModal = false;
     }}
+    on:categorycreated={triggerServerRefresh}
   />
 {/if}
 

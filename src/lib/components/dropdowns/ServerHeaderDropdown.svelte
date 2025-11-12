@@ -49,7 +49,7 @@
   }>();
 
   function handleAction(action: ServerHeaderDropdownAction) {
-    dispatch("action", { action });
+    dispatch("action", action);
   }
 </script>
 
