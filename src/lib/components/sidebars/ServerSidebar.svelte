@@ -11,6 +11,8 @@
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import ServerSidebarChannelItem from "$lib/components/sidebars/ServerSidebarChannelItem.svelte";
   import PrivateChannelAccessDialog from "$lib/components/sidebars/PrivateChannelAccessDialog.svelte";
+  import RenameCategoryDialog from "$lib/components/sidebars/RenameCategoryDialog.svelte";
+  import CategoryNotificationDialog from "$lib/components/sidebars/CategoryNotificationDialog.svelte";
   import {
     serverStore,
     voiceChannelPresence,
@@ -155,27 +157,6 @@
   let pendingNotificationLevel = $state<CategoryNotificationLevel>(
     DEFAULT_CATEGORY_NOTIFICATION_LEVEL,
   );
-  const CATEGORY_NOTIFICATION_OPTIONS: Array<{
-    value: CategoryNotificationLevel;
-    label: string;
-    description: string;
-  }> = [
-    {
-      value: "all_messages",
-      label: "All Messages",
-      description: "Get notified for every message in this category.",
-    },
-    {
-      value: "mentions_only",
-      label: "Mentions Only",
-      description: "Only notify when you are mentioned or replied to.",
-    },
-    {
-      value: "nothing",
-      label: "Nothing",
-      description: "Silence notifications while keeping the category visible.",
-    },
-  ];
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
@@ -2173,10 +2154,8 @@
                           handleChannelContextMenu(event, channel)}
                       />
                     {/each}
-
                   </div>
                   <div
-                    
                     role="list"
                     class="space-y-1 mt-2"
                     ondragover={(event) =>
@@ -2309,6 +2288,7 @@
     ></button>
   </Sidebar>
 </ServerBackgroundContextMenu>
+
 {#if showCategoryContextMenu}
   <CategoryContextMenu
     x={contextMenuX}
@@ -2506,118 +2486,23 @@
 {/if}
 
 {#if showRenameCategoryModal && categoryBeingRenamed}
-  <Dialog
+  <RenameCategoryDialog
     open={showRenameCategoryModal}
-    onOpenChange={(value: boolean) => {
-      if (!value) {
-        closeRenameCategoryModal();
-      }
-    }}
-  >
-    <DialogContent data-testid="rename-category-modal">
-      <DialogHeader>
-        <DialogTitle>Rename Category</DialogTitle>
-        <DialogDescription>
-          Update the name for {categoryBeingRenamed.name}.
-        </DialogDescription>
-      </DialogHeader>
-      <div class="space-y-4">
-        <div class="space-y-2">
-          <Label
-            for="rename-category-name"
-            class="text-xs font-semibold uppercase text-muted-foreground"
-          >
-            Category Name
-          </Label>
-          <Input
-            id="rename-category-name"
-            placeholder="Operations"
-            bind:value={renameCategoryName}
-            onkeydown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void submitRenameCategory();
-              }
-            }}
-          />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost" onclick={closeRenameCategoryModal}>
-          Cancel
-        </Button>
-        <Button
-          onclick={() => {
-            void submitRenameCategory();
-          }}
-          disabled={!renameCategoryName.trim()}
-        >
-          <Check size={14} class="mr-2" /> Save Changes
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+    bind:renameValue={renameCategoryName}
+    categoryName={categoryBeingRenamed.name}
+    onClose={closeRenameCategoryModal}
+    onSubmit={submitRenameCategory}
+  />
 {/if}
 
 {#if showCategoryNotificationsModal && notificationsCategoryId}
-  <Dialog
+  <CategoryNotificationDialog
     open={showCategoryNotificationsModal}
-    onOpenChange={(value: boolean) => {
-      if (!value) {
-        closeCategoryNotificationsModal();
-      }
-    }}
-  >
-    <DialogContent data-testid="category-notifications-modal">
-      <DialogHeader>
-        <DialogTitle>Category Notifications</DialogTitle>
-        <DialogDescription>
-          Choose how you’d like to be notified about {notificationsCategoryName}.
-        </DialogDescription>
-      </DialogHeader>
-      <div class="space-y-4">
-        <div class="space-y-2">
-          <Label class="text-xs font-semibold uppercase text-muted-foreground">
-            Delivery Preference
-          </Label>
-          <div class="space-y-2">
-            {#each CATEGORY_NOTIFICATION_OPTIONS as option (option.value)}
-              <Button
-                type="button"
-                variant={
-                  pendingNotificationLevel === option.value
-                    ? "secondary"
-                    : "outline"
-                }
-                class="flex w-full flex-col items-start gap-1 text-left"
-                data-testid={`category-notification-option-${option.value}`}
-                onclick={() => {
-                  pendingNotificationLevel = option.value;
-                }}
-              >
-                <span class="text-sm font-medium">{option.label}</span>
-                <span class="text-xs text-muted-foreground">
-                  {option.description}
-                </span>
-              </Button>
-            {/each}
-          </div>
-        </div>
-        <div class="rounded-md border border-border/60 bg-muted/10 p-3 text-xs text-muted-foreground">
-          Muting notifications won’t hide the category, but it will silence
-          pings and sounds from its channels.
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="ghost" onclick={closeCategoryNotificationsModal}>
-          Cancel
-        </Button>
-        <Button onclick={saveCategoryNotificationSettings}>
-          <Check size={14} class="mr-2" /> Save Preference
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+    categoryName={notificationsCategoryName}
+    bind:pendingLevel={pendingNotificationLevel}
+    onClose={closeCategoryNotificationsModal}
+    onSave={saveCategoryNotificationSettings}
+  />
 {/if}
 
 {#if showCreateCategoryModal}
