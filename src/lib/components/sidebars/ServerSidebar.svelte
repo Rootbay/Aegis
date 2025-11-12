@@ -169,8 +169,6 @@ import { Plus, ChevronDown } from "@lucide/svelte";
   let selectedRoleIds = $state(new SvelteSet<string>());
   let selectedMemberIds = $state(new SvelteSet<string>());
   let privateAccessSearchTerm = $state("");
-  let roleSearchTerm = $state("");
-  let memberSearchTerm = $state("");
   let showPrivateChannelAccessDialog = $state(false);
 
   let permissionOverrides = $state<PermissionMatrixState>(
@@ -315,6 +313,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
 
   let collapsedCategoryIds = new SvelteSet<string>();
   let lastCollapsedServerId = $state<string | null>(null);
+  const HIDE_MUTED_PREFERENCE_KEY = "serverSidebar.hideMuted";
   let hideMutedChannels = $state(false);
   let mutedChannelIds = new SvelteSet<string>();
   let mutedCategoryIds = new SvelteSet<string>();
@@ -985,48 +984,11 @@ import { Plus, ChevronDown } from "@lucide/svelte";
 
   onDestroy(() => {
     if (rafId) cancelAnimationFrame(rafId);
+    if (isResizing) {
+      stopResize();
+    }
     unsubscribeChatMetadata();
   });
-
-  function handleServerSettingsClick() {
-    gotoResolved(`/channels/${server.id}/settings`);
-  }
-  function handlePrivacySettings() {
-    gotoResolved("/settings/privacy");
-  }
-  function handleEditProfile() {
-    gotoResolved(`/channels/${server.id}/settings?tab=profile`);
-  }
-  function handleHideMutedChannels() {
-    const key = "serverSidebar.hideMuted";
-    let next = !hideMutedChannels;
-    if (browser) {
-      try {
-        const storedValue = localStorage.getItem(key);
-        if (storedValue !== null) {
-          next = storedValue !== "true";
-        }
-        localStorage.setItem(key, next.toString());
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    hideMutedChannels = next;
-    toasts.addToast(`${next ? "Hiding" : "Showing"} muted channels.`, "info");
-  }
-
-  function handleViewReviews() {
-    if (!server?.id || !openProfileReviewsModal) {
-      return;
-    }
-    closeAllContextMenus();
-    openProfileReviewsModal({
-      subjectType: "server",
-      subjectId: server.id,
-      subjectName: server.name,
-      subjectAvatarUrl: server.iconUrl ?? null,
-    });
-  }
 
   function handleServerHeaderDropdownAction(
     event: CustomEvent<ServerHeaderDropdownAction>,
@@ -1067,6 +1029,49 @@ import { Plus, ChevronDown } from "@lucide/svelte";
         handleViewReviews();
         break;
     }
+  }
+
+  function handleServerSettingsClick() {
+    gotoResolved(`/channels/${server.id}/settings`);
+  }
+  function handlePrivacySettings() {
+    gotoResolved("/settings/privacy");
+  }
+  function handleEditProfile() {
+    gotoResolved(`/channels/${server.id}/settings?tab=profile`);
+  }
+  function toggleHideMutedChannels(): boolean {
+    let next = !hideMutedChannels;
+    if (browser) {
+      try {
+        const storedValue = localStorage.getItem(HIDE_MUTED_PREFERENCE_KEY);
+        if (storedValue !== null) {
+          next = storedValue !== "true";
+        }
+        localStorage.setItem(HIDE_MUTED_PREFERENCE_KEY, next.toString());
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    hideMutedChannels = next;
+    return next;
+  }
+  function handleHideMutedChannels() {
+    const next = toggleHideMutedChannels();
+    toasts.addToast(`${next ? "Hiding" : "Showing"} muted channels.`, "info");
+  }
+
+  function handleViewReviews() {
+    if (!server?.id || !openProfileReviewsModal) {
+      return;
+    }
+    closeAllContextMenus();
+    openProfileReviewsModal({
+      subjectType: "server",
+      subjectId: server.id,
+      subjectName: server.name,
+      subjectAvatarUrl: server.iconUrl ?? null,
+    });
   }
 
   async function handleInviteToServerClick() {
@@ -1648,20 +1653,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
         handleViewReviews();
         break;
       case "hide_muted_channels": {
-        const key = "serverSidebar.hideMuted";
-        let next = !hideMutedChannels;
-        if (browser) {
-          try {
-            const storedValue = localStorage.getItem(key);
-            if (storedValue !== null) {
-              next = storedValue !== "true";
-            }
-            localStorage.setItem(key, next.toString());
-          } catch (e) {
-            console.error(e);
-          }
-        }
-        hideMutedChannels = next;
+        const next = toggleHideMutedChannels();
         toasts.addToast(
           `${next ? "Hiding" : "Showing"} muted channels (local).`,
           "info",
