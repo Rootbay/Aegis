@@ -2,6 +2,8 @@
 
 <script lang="ts">
   import { getContext } from "svelte";
+  import { derived } from "svelte/store";
+  import { page } from "$app/stores";
   import EmptyHeader from "$lib/components/navigation/EmptyHeader.svelte";
   import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
@@ -10,6 +12,7 @@
   import type { User } from "$lib/features/auth/models/User";
   import FriendsNavigationHeader from "$lib/components/navigation/FriendsNavigationHeader.svelte";
   import ChatNavigationHeader from "$lib/components/navigation/ChatNavigationHeader.svelte";
+  import DiscoverNavigationHeader from "$lib/components/navigation/DiscoverNavigationHeader.svelte";
   import { FRIENDS_NAVIGATION_TABS } from "$lib/components/navigation/constants";
 
   let {
@@ -38,6 +41,10 @@
     CREATE_GROUP_CONTEXT_KEY,
   );
   const openUserCardModal = context?.openUserCardModal;
+
+  const isDiscoverPage = derived(page, ($page) =>
+    $page.url.pathname.startsWith("/discover-servers"),
+  );
 </script>
 
 {#if isFriendsOrRootPage}
@@ -55,6 +62,8 @@
     {mobileMemberPanelOpen}
     {onToggleMemberPanel}
   />
+{:else if $isDiscoverPage}
+  <DiscoverNavigationHeader />
 {:else}
   <EmptyHeader />
 {/if}

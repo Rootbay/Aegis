@@ -33,11 +33,15 @@
   const membersStore = controller.members;
   const loadingStore = controller.loading;
   const hasServerStore = controller.hasServer;
+  const serverIdStore = controller.serverId;
 
   const showSidebars = $derived(!$page.url.pathname.includes("/settings"));
 
   $effect(() => {
     const activeServerId = $page.params.serverId ?? null;
+    if (activeServerId === $serverIdStore) {
+      return;
+    }
     controller.setActiveServerId(activeServerId);
   });
 </script>
@@ -50,6 +54,7 @@
       <ServerSidebar
         server={$serverStore}
         onSelectChannel={controller.handleSelectChannel}
+        refreshServerData={controller.refresh}
       />
     {/if}
     <main class="grow flex flex-col bg-muted">

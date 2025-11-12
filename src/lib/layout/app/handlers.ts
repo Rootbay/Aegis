@@ -59,7 +59,16 @@ export function createAppHandlers(modalManager: ModalManager): AppHandlers {
   };
 
   const handleKeydown: AppHandlers["handleKeydown"] = (event) => {
-    const key = event.key.toLowerCase();
+    if (!event) {
+      return;
+    }
+
+    const key =
+      typeof event.key === "string" ? event.key.toLowerCase() : undefined;
+
+    if (!key) {
+      return;
+    }
 
     if ((event.ctrlKey || event.metaKey) && key === "k") {
       event.preventDefault();

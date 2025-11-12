@@ -5,12 +5,15 @@
   import ServerBackgroundContextMenu from "$lib/components/context-menus/ServerBackgroundContextMenu.svelte";
   import CategoryContextMenu from "$lib/components/context-menus/CategoryContextMenu.svelte";
   import ChannelContextMenu from "$lib/components/context-menus/ChannelContextMenu.svelte";
+  import ServerHeaderDropdown from "$lib/components/dropdowns/ServerHeaderDropdown.svelte";
+  import type { ServerHeaderDropdownAction } from "$lib/components/dropdowns/ServerHeaderDropdown.svelte";
   import CreateCategoryModal from "$lib/components/modals/CreateCategoryModal.svelte";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import {
     serverStore,
     voiceChannelPresence,
   } from "$lib/features/servers/stores/serverStore";
+  import type { Role } from "$lib/features/servers/models/Role";
   import {
     chatMetadataByChatId,
     chatStore,
@@ -21,7 +24,6 @@
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
   import {
-    Bell,
     Plus,
     Settings,
     ChevronDown,
@@ -30,12 +32,6 @@
     Check,
     Mic,
     Info,
-    UserPlus,
-    ExternalLink,
-    UserRoundPen,
-    Shield,
-    Square,
-    Calendar,
     Lock,
   } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
@@ -44,13 +40,6 @@
   import { browser } from "$app/environment";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import { v4 as uuidv4 } from "uuid";
-  import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-  } from "$lib/components/ui/dropdown-menu/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge";
   import {
@@ -185,8 +174,8 @@
   let editingChannelId = $state<string | null>(null);
   let selectedRoleIds = $state(new SvelteSet<string>());
   let selectedMemberIds = $state(new SvelteSet<string>());
-  let roleSearchTerm = $state("");
-  let memberSearchTerm = $state("");
+  let privateAccessSearchTerm = $state("");
+  let showPrivateChannelAccessDialog = $state(false);
 
   type PermissionOverrideChoice = "inherit" | "allow" | "deny";
   type PermissionMatrixRow = Record<
@@ -528,7 +517,7 @@
   });
 
   const filteredRoles = $derived.by(() => {
-    const term = roleSearchTerm.trim().toLowerCase();
+    const term = privateAccessSearchTerm.trim().toLowerCase();
     if (!term) return sortedRoles;
     return sortedRoles.filter((role) => role.name.toLowerCase().includes(term));
   });
@@ -552,7 +541,7 @@
   });
 
   const filteredMembers = $derived.by(() => {
-    const term = memberSearchTerm.trim().toLowerCase();
+    const term = privateAccessSearchTerm.trim().toLowerCase();
     if (!term) return sortedMembers;
     return sortedMembers.filter((member) =>
       member.name.toLowerCase().includes(term),
@@ -570,8 +559,7 @@
   function clearAccessSelections() {
     selectedRoleIds = new SvelteSet<string>();
     selectedMemberIds = new SvelteSet<string>();
-    roleSearchTerm = "";
-    memberSearchTerm = "";
+    privateAccessSearchTerm = "";
   }
 
   function toggleRoleSelection(roleId: string | null | undefined) {
@@ -631,6 +619,62 @@
       selectedMemberIds = next;
     }
   }
+
+  function openPrivateChannelAccessDialog() {
+    ensureDefaultPrivateMembers();
+    privateAccessSearchTerm = "";
+    showPrivateChannelAccessDialog = true;
+  }
+
+  function closePrivateChannelAccessDialog() {
+    showPrivateChannelAccessDialog = false;
+    privateAccessSearchTerm = "";
+  }
+
+  function commitPrivateSearchSelection() {
+    const term = privateAccessSearchTerm.trim();
+    if (!term) {
+      return;
+    }
+
+    if (term.startsWith("@")) {
+      const query = term.slice(1).trim().toLowerCase();
+      if (!query) {
+        return;
+      }
+      const match = sortedMembers.find((member) =>
+        member.name.toLowerCase().includes(query),
+      );
+      if (match) {
+        toggleMemberSelection(match.id);
+        privateAccessSearchTerm = "";
+      }
+      return;
+    }
+
+    const normalized = term.toLowerCase();
+    const roleMatch = sortedRoles.find((role) =>
+      role.name.toLowerCase().includes(normalized),
+    );
+    if (roleMatch) {
+      toggleRoleSelection(roleMatch.id);
+      privateAccessSearchTerm = "";
+    }
+  }
+
+  function handlePrivateAccessSearchKeydown(event: KeyboardEvent) {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    commitPrivateSearchSelection();
+  }
+
+  $effect(() => {
+    if (!newChannelPrivate && showPrivateChannelAccessDialog) {
+      closePrivateChannelAccessDialog();
+    }
+  });
 
   function persistCollapsedState(key: string, collapsed: boolean) {
     if (!browser) return;
@@ -1251,6 +1295,47 @@
     });
   }
 
+  function handleServerHeaderDropdownAction(
+    event: CustomEvent<ServerHeaderDropdownAction>,
+  ) {
+    const { action } = event.detail;
+    switch (action) {
+      case "invite_to_server":
+        void handleInviteToServerClick();
+        break;
+      case "server_settings":
+        handleServerSettingsClick();
+        break;
+      case "create_channel":
+        handleCreateChannelClick();
+        break;
+      case "create_category":
+        handleCreateCategory();
+        break;
+      case "create_event":
+        handleCreateEvent();
+        break;
+      case "notification_settings":
+        handleNotificationSettings();
+        break;
+      case "privacy_settings":
+        handlePrivacySettings();
+        break;
+      case "edit_profile":
+        handleEditProfile();
+        break;
+      case "hide_muted_channels":
+        handleHideMutedChannels();
+        break;
+      case "leave_server":
+        handleLeaveServer();
+        break;
+      case "view_reviews":
+        handleViewReviews();
+        break;
+    }
+  }
+
   async function handleInviteToServerClick() {
     try {
       const response = await invoke<ServerInviteResponse>(
@@ -1323,6 +1408,7 @@
     newChannelSlowmode = 0;
     editingChannelId = null;
     clearAccessSelections();
+    showPrivateChannelAccessDialog = false;
     resetPermissionOverrides();
   }
 
@@ -1438,7 +1524,9 @@
       };
 
       if (!permissionOverridesPayload) {
-        delete (updatedChannel as Record<string, unknown>).permission_overrides;
+        delete (
+          updatedChannel as unknown as Record<string, unknown>
+        ).permission_overrides;
       }
 
       try {
@@ -1981,68 +2069,10 @@
   >
     {#if server}
       <SidebarHeader class="px-0 pl-2 shadow-sm">
-        <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button
-              variant="ghost"
-              class="w-full h-full flex items-center justify-between font-bold text-lg truncate px-4 py-2 pr-8 hover:bg-base-400/50 cursor-pointer"
-            >
-              <span class="truncate">{server.name}</span>
-              <ChevronDown size={10} class="mr-2" />
-            </Button>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent
-            align="center"
-            class="w-[218px] *:cursor-pointer"
-          >
-            <DropdownMenuItem onselect={handleInviteToServerClick}>
-              <UserPlus size={12} class="mr-2" /> Invite to Server
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handleServerSettingsClick}>
-              <Settings size={12} class="mr-2" /> Server Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handleCreateChannelClick}>
-              <Plus size={12} class="mr-2" /> Create Channel
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handleCreateCategory}>
-              <Plus size={12} class="mr-2" /> Create Category
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handleCreateEvent}>
-              <Calendar size={12} class="mr-2" /> Create Event
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem onselect={handleNotificationSettings}>
-              <Bell size={12} class="mr-2" /> Notification Settings
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handlePrivacySettings}>
-              <Shield size={12} class="mr-2" /> Privacy Settings
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem onselect={handleEditProfile}>
-              <UserRoundPen size={12} class="mr-2" /> Edit Per-server Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handleHideMutedChannels}>
-              <Square size={12} class="mr-2" /> Hide Muted Channels
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuItem
-              class="text-destructive focus:text-destructive"
-              onselect={handleLeaveServer}
-            >
-              <CircleX size={12} class="mr-2" /> Leave Server
-            </DropdownMenuItem>
-            <DropdownMenuItem onselect={handleViewReviews}>
-              <ExternalLink size={12} class="mr-2" /> View Reviews
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ServerHeaderDropdown
+          {server}
+          on:action={handleServerHeaderDropdownAction}
+        />
         <Button
           variant="ghost"
           size="icon"
@@ -2110,6 +2140,7 @@
                     "voice",
                   )}
                   <div
+                    role="list"
                     class="space-y-1"
                     ondragover={(event) =>
                       handleChannelDragOver(event, category.id, "text")}
@@ -2127,57 +2158,55 @@
                       {@const unreadCount = metadata?.unreadCount ?? 0}
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger>
-                            <div
-                              role="button"
-                              tabindex="0"
-                              draggable
-                              class:opacity-50={draggingChannelId === channel.id}
-                              ondragstart={(event) =>
-                                handleChannelDragStart(event, channel)}
-                              ondragend={handleChannelDragEnd}
-                              ondragover={(event) =>
-                                handleChannelDragOver(
-                                  event,
-                                  category.id,
-                                  "text",
-                                )}
-                              ondrop={(event) =>
-                                handleChannelDrop(
-                                  event,
-                                  category.id,
-                                  "text",
-                                  channel.id,
-                                )}
-                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                            $activeServerChannelId === channel.id
-                              ? "bg-primary/80 text-foreground"
-                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          }`}
-                          onclick={() => handleChannelSelect(channel)}
-                          onkeydown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              handleChannelSelect(channel);
-                            }
-                          }}
-                            oncontextmenu={(e) =>
+                          <TooltipTrigger
+                            role="button"
+                            tabindex="0"
+                            draggable
+                          class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                              $activeServerChannelId === channel.id
+                                ? "bg-primary/80 text-foreground"
+                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            } ${draggingChannelId === channel.id ? "opacity-50" : ""}`}
+                            on:dragstart={(event) =>
+                              handleChannelDragStart(event, channel)}
+                            on:dragend={handleChannelDragEnd}
+                            on:dragover={(event) =>
+                              handleChannelDragOver(
+                                event,
+                                category.id,
+                                "text",
+                              )}
+                            on:drop={(event) =>
+                              handleChannelDrop(
+                                event,
+                                category.id,
+                                "text",
+                                channel.id,
+                              )}
+                            onclick={() => handleChannelSelect(channel)}
+                            on:keydown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                handleChannelSelect(channel);
+                              }
+                            }}
+                            on:contextmenu={(e) =>
                               handleChannelContextMenu(e, channel)}
                             title={channel.topic ?? undefined}
                           >
-                          <div class="flex items-center truncate">
-                            <Hash size={10} class="mr-1" />
-                            <span class="truncate select-none ml-2"
-                              >{channel.name}</span
-                            >
-                            {#if channel.private}
-                              <Badge
-                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                            <div class="flex items-center truncate">
+                              <Hash size={10} class="mr-1" />
+                              <span class="truncate select-none ml-2"
+                                >{channel.name}</span
                               >
-                                <Lock size={10} />
-                                Private
-                              </Badge>
-                            {/if}
-                          </div>
+                              {#if channel.private}
+                                <Badge
+                                  class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                                >
+                                  <Lock size={10} />
+                                  Private
+                                </Badge>
+                              {/if}
+                            </div>
                             <div class="ml-auto flex items-center gap-2">
                               {#if unreadCount > 0}
                                 <Badge
@@ -2211,23 +2240,24 @@
                                 </Button>
                               </div>
                             </div>
-                          </div>
-                        </TooltipTrigger>
-                        {#if channel.topic}
-                          <TooltipContent
-                            side="right"
-                            align="start"
-                            class="max-w-xs text-xs leading-snug"
-                          >
-                            {channel.topic}
-                          </TooltipContent>
-                        {/if}
-                      </Tooltip>
-                    </TooltipProvider>
-                  {/each}
+                          </TooltipTrigger>
+                          {#if channel.topic}
+                            <TooltipContent
+                              side="right"
+                              align="start"
+                              class="max-w-xs text-xs leading-snug"
+                            >
+                              {channel.topic}
+                            </TooltipContent>
+                          {/if}
+                        </Tooltip>
+                      </TooltipProvider>
+                    {/each}
 
                   </div>
                   <div
+                  
+                    role="list"
                     class="space-y-1 mt-2"
                     ondragover={(event) =>
                       handleChannelDragOver(event, category.id, "voice")}
@@ -2245,46 +2275,44 @@
                         activeCall.chatId === channel.id}
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger>
-                            <div
-                              role="button"
-                              tabindex="0"
-                              draggable
-                              class:opacity-50={draggingChannelId === channel.id}
-                              ondragstart={(event) =>
-                                handleChannelDragStart(event, channel)}
-                              ondragend={handleChannelDragEnd}
-                              ondragover={(event) =>
-                                handleChannelDragOver(
-                                  event,
-                                  category.id,
-                                  "voice",
-                                )}
-                              ondrop={(event) =>
-                                handleChannelDrop(
-                                  event,
-                                  category.id,
-                                  "voice",
-                                  channel.id,
-                                )}
-                              class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                                isActiveVoiceChannel
-                                  ? "bg-primary/80 text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                              }`}
-                              data-active={
-                                isActiveVoiceChannel ? "true" : undefined
+                          <TooltipTrigger
+                            role="button"
+                            tabindex="0"
+                            draggable
+                          class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                              isActiveVoiceChannel
+                                ? "bg-primary/80 text-foreground shadow-sm"
+                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            } ${draggingChannelId === channel.id ? "opacity-50" : ""}`}
+                            on:dragstart={(event) =>
+                              handleChannelDragStart(event, channel)}
+                            on:dragend={handleChannelDragEnd}
+                            on:dragover={(event) =>
+                              handleChannelDragOver(
+                                event,
+                                category.id,
+                                "voice",
+                              )}
+                            on:drop={(event) =>
+                              handleChannelDrop(
+                                event,
+                                category.id,
+                                "voice",
+                                channel.id,
+                              )}
+                            data-active={
+                              isActiveVoiceChannel ? "true" : undefined
+                            }
+                            onclick={() => handleVoiceChannelClick(channel)}
+                            on:keydown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                handleVoiceChannelClick(channel);
                               }
-                              onclick={() => handleVoiceChannelClick(channel)}
-                              onkeydown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  handleVoiceChannelClick(channel);
-                                }
-                              }}
-                              oncontextmenu={(e) =>
-                                handleChannelContextMenu(e, channel)}
-                              title={channel.topic ?? undefined}
-                            >
+                            }}
+                            on:contextmenu={(e) =>
+                              handleChannelContextMenu(e, channel)}
+                            title={channel.topic ?? undefined}
+                          >
                             <div class="flex items-center truncate">
                               <Mic size={12} class="mr-1" />
                               <span class="truncate select-none ml-2"
@@ -2323,19 +2351,18 @@
                                 <Settings size={10} />
                               </Button>
                             </div>
-                          </div>
-                        </TooltipTrigger>
-                        {#if channel.topic}
-                          <TooltipContent
-                            side="right"
-                            align="start"
-                            class="max-w-xs text-xs leading-snug"
-                          >
-                            {channel.topic}
-                          </TooltipContent>
-                        {/if}
-                      </Tooltip>
-                    </TooltipProvider>
+                          </TooltipTrigger>
+                          {#if channel.topic}
+                            <TooltipContent
+                              side="right"
+                              align="start"
+                              class="max-w-xs text-xs leading-snug"
+                            >
+                              {channel.topic}
+                            </TooltipContent>
+                          {/if}
+                        </Tooltip>
+                      </TooltipProvider>
                     {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
                     {#if presenceEntry}
                       {@const participantEntries = Array.from(
@@ -2386,6 +2413,7 @@
                       </div>
                     {/if}
                   {/each}
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
             {/each}
@@ -2442,6 +2470,7 @@
                 "text",
               )}
               <div
+                role="list"
                 class="space-y-1"
                 class:opacity-60={textSectionMuted && !hideMutedChannels}
                 ondragover={(event) =>
@@ -2458,79 +2487,77 @@
                   {@const unreadCount = metadata?.unreadCount ?? 0}
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger>
-                        <div
-                          role="button"
-                          tabindex="0"
-                          draggable
-                          class:opacity-50={draggingChannelId === channel.id}
-                          ondragstart={(event) =>
-                            handleChannelDragStart(event, channel)}
-                          ondragend={handleChannelDragEnd}
-                          ondragover={(event) =>
-                            handleChannelDragOver(event, null, "text")}
-                          ondrop={(event) =>
-                            handleChannelDrop(event, null, "text", channel.id)}
-                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                            $activeServerChannelId === channel.id
-                              ? "bg-primary/80 text-foreground"
-                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          }`}
-                          onclick={() => handleChannelSelect(channel)}
-                          onkeydown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              handleChannelSelect(channel);
-                            }
-                          }}
-                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-                          title={channel.topic ?? undefined}
-                        >
-                          <div class="flex items-center truncate">
-                            <Hash size={10} class="mr-1" />
-                            <span class="truncate select-none ml-2"
-                              >{channel.name}</span
+                      <TooltipTrigger
+                        role="button"
+                        tabindex="0"
+                        draggable
+                        class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                          $activeServerChannelId === channel.id
+                            ? "bg-primary/80 text-foreground"
+                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                        } ${draggingChannelId === channel.id ? "opacity-50" : ""}`}
+                        on:dragstart={(event) =>
+                          handleChannelDragStart(event, channel)}
+                        on:dragend={handleChannelDragEnd}
+                        on:dragover={(event) =>
+                          handleChannelDragOver(event, null, "text")}
+                        on:drop={(event) =>
+                          handleChannelDrop(event, null, "text", channel.id)}
+                        onclick={() => handleChannelSelect(channel)}
+                        on:keydown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            handleChannelSelect(channel);
+                          }
+                        }}
+                        on:contextmenu={(e) =>
+                          handleChannelContextMenu(e, channel)}
+                        title={channel.topic ?? undefined}
+                      >
+                        <div class="flex items-center truncate">
+                          <Hash size={10} class="mr-1" />
+                          <span class="truncate select-none ml-2"
+                            >{channel.name}</span
+                          >
+                          {#if channel.private}
+                            <Badge
+                              class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                             >
-                            {#if channel.private}
-                              <Badge
-                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
-                              >
-                                <Lock size={10} />
-                                Private
-                              </Badge>
-                            {/if}
-                          </div>
-                          <div class="ml-auto flex items-center gap-2">
-                            {#if unreadCount > 0}
-                              <Badge
-                                class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
-                              >
-                                {unreadCount > 99 ? "99+" : unreadCount}
-                              </Badge>
-                            {/if}
-                            <div
-                              class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                              <Lock size={10} />
+                              Private
+                            </Badge>
+                          {/if}
+                        </div>
+                        <div class="ml-auto flex items-center gap-2">
+                          {#if unreadCount > 0}
+                            <Badge
+                              class="shrink-0 bg-primary/10 text-primary border border-primary/20 px-2 py-0 text-[11px]"
                             >
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                class="text-muted-foreground hover:text-foreground"
-                                aria-label="Invite to channel"
-                                onclick={(event) =>
-                                  handleInviteToChannelClick(channel, event)}
-                              >
-                                <Plus size={10} />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                class="text-muted-foreground hover:text-foreground"
-                                aria-label="Channel settings"
-                                onclick={(event) =>
-                                  handleChannelSettingsClick(channel, event)}
-                              >
-                                <Settings size={10} />
-                              </Button>
-                            </div>
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </Badge>
+                          {/if}
+                          <div
+                            class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Invite to channel"
+                              onclick={(event) =>
+                                handleInviteToChannelClick(channel, event)}
+                            >
+                              <Plus size={10} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              class="text-muted-foreground hover:text-foreground"
+                              aria-label="Channel settings"
+                              onclick={(event) =>
+                                handleChannelSettingsClick(channel, event)}
+                            >
+                              <Settings size={10} />
+                            </Button>
                           </div>
                         </div>
                       </TooltipTrigger>
@@ -2653,6 +2680,7 @@
                 "voice",
               )}
               <div
+                role="list"
                 class="space-y-1"
                 class:opacity-60={voiceSectionMuted && !hideMutedChannels}
                 ondragover={(event) =>
@@ -2675,72 +2703,70 @@
                     activeCall.chatId === channel.id}
                   <TooltipProvider>
                     <Tooltip>
-                      <TooltipTrigger>
-                        <div
-                          role="button"
-                          tabindex="0"
-                          draggable
-                          class:opacity-50={draggingChannelId === channel.id}
-                          ondragstart={(event) =>
-                            handleChannelDragStart(event, channel)}
-                          ondragend={handleChannelDragEnd}
-                          ondragover={(event) =>
-                            handleChannelDragOver(event, null, "voice")}
-                          ondrop={(event) =>
-                            handleChannelDrop(event, null, "voice", channel.id)}
-                          class={`group w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
-                            isActiveVoiceChannel
-                              ? "bg-primary/80 text-foreground shadow-sm"
-                              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                          }`}
-                          data-active={isActiveVoiceChannel ? "true" : undefined}
-                          onclick={() => handleVoiceChannelClick(channel)}
-                          onkeydown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              handleVoiceChannelClick(channel);
-                            }
-                          }}
-                          oncontextmenu={(e) => handleChannelContextMenu(e, channel)}
-                          title={channel.topic ?? undefined}
-                        >
-                          <div class="flex items-center truncate">
-                            <Mic size={12} class="mr-1" />
-                            <span class="truncate select-none ml-2"
-                              >{channel.name}</span
-                            >
-                            {#if channel.private}
-                              <Badge
-                                class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
-                              >
-                                <Lock size={10} />
-                                Private
-                              </Badge>
-                            {/if}
-                          </div>
-                          <div
-                            class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                      <TooltipTrigger
+                        role="button"
+                        tabindex="0"
+                        draggable
+                        class={`group block w-full h-[34px] text-left py-2 px-2 flex items-center justify-between transition-colors cursor-pointer my-1 rounded-md ${
+                          isActiveVoiceChannel
+                            ? "bg-primary/80 text-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                        } ${draggingChannelId === channel.id ? "opacity-50" : ""}`}
+                        on:dragstart={(event) =>
+                          handleChannelDragStart(event, channel)}
+                        on:dragend={handleChannelDragEnd}
+                        on:dragover={(event) =>
+                          handleChannelDragOver(event, null, "voice")}
+                        on:drop={(event) =>
+                          handleChannelDrop(event, null, "voice", channel.id)}
+                        data-active={isActiveVoiceChannel ? "true" : undefined}
+                        onclick={() => handleVoiceChannelClick(channel)}
+                        on:keydown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            handleVoiceChannelClick(channel);
+                          }
+                        }}
+                        on:contextmenu={(e) =>
+                          handleChannelContextMenu(e, channel)}
+                        title={channel.topic ?? undefined}
+                      >
+                        <div class="flex items-center truncate">
+                          <Mic size={12} class="mr-1" />
+                          <span class="truncate select-none ml-2"
+                            >{channel.name}</span
                           >
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="text-muted-foreground hover:text-foreground"
-                              aria-label="Invite to channel"
-                              onclick={(event) =>
-                                handleInviteToChannelClick(channel, event)}
+                          {#if channel.private}
+                            <Badge
+                              class="ml-2 flex items-center gap-1 border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                             >
-                              <Plus size={10} />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              class="text-muted-foreground hover:text-foreground"
-                              aria-label="Channel settings"
-                              onclick={(event) =>
-                                handleChannelSettingsClick(channel, event)}
-                            >
-                              <Settings size={10} />
-                            </Button>
-                          </div>
+                              <Lock size={10} />
+                              Private
+                            </Badge>
+                          {/if}
+                        </div>
+                        <div
+                          class="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="text-muted-foreground hover:text-foreground"
+                            aria-label="Invite to channel"
+                            onclick={(event) =>
+                              handleInviteToChannelClick(channel, event)}
+                          >
+                            <Plus size={10} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            class="text-muted-foreground hover:text-foreground"
+                            aria-label="Channel settings"
+                            onclick={(event) =>
+                              handleChannelSettingsClick(channel, event)}
+                          >
+                            <Settings size={10} />
+                          </Button>
                         </div>
                       </TooltipTrigger>
                       {#if channel.topic}
@@ -2823,11 +2849,11 @@
         >
           Channel Type
         </Label>
-        <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-3 w-full">
           <Button
             type="button"
             variant={newChannelType === "text" ? "secondary" : "outline"}
-            class="flex items-center gap-3 text-left"
+            class="w-full flex items-center gap-3 justify-start text-left py-4! h-auto!"
             onclick={() => (newChannelType = "text")}
           >
             <Hash size={16} />
@@ -2841,7 +2867,7 @@
           <Button
             type="button"
             variant={newChannelType === "voice" ? "secondary" : "outline"}
-            class="flex items-center gap-3 text-left"
+            class="w-full flex items-center gap-3 justify-start text-left py-4! h-auto!"
             onclick={() => (newChannelType = "voice")}
           >
             <Mic size={16} />
@@ -2867,6 +2893,8 @@
         >
           {#if newChannelType === "text"}
             <span class="text-muted-foreground mr-2">#</span>
+          {:else if newChannelType === "voice"}
+            <Mic size={12} class="text-muted-foreground mr-2" />
           {/if}
           <Input
             id="channel-name"
@@ -2920,347 +2948,145 @@
           aria-label="Private Channel"
         />
       </div>
-
-      {#if newChannelPrivate}
-        <div class="space-y-4 rounded-md border border-border/60 bg-muted/20 p-3">
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold uppercase text-muted-foreground">
-                Allowed Roles
-              </span>
-              <span class="text-[11px] text-muted-foreground">
-                Choose roles that can access this channel
-              </span>
-            </div>
-            <Input
-              type="text"
-              placeholder="Search roles..."
-              bind:value={roleSearchTerm}
-              class="w-full"
-            />
-            <ScrollArea class="max-h-32 pr-1">
-              {#if filteredRoles.length > 0}
-                <div class="space-y-1">
-                  {#each filteredRoles as role (role.id)}
-                    <label
-                      class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
-                    >
-                      <input
-                        type="checkbox"
-                        class="h-3.5 w-3.5 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        checked={selectedRoleIds.has(role.id)}
-                        onchange={() => toggleRoleSelection(role.id)}
-                      />
-                      <span class="truncate">{role.name}</span>
-                    </label>
-                  {/each}
-                </div>
-              {:else}
-                <p class="text-xs text-muted-foreground">
-                  No roles match your search.
-                </p>
-              {/if}
-            </ScrollArea>
-          </div>
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold uppercase text-muted-foreground">
-                Allowed Members
-              </span>
-              <span class="text-[11px] text-muted-foreground">
-                You’re always included.
-              </span>
-            </div>
-            <Input
-              type="text"
-              placeholder="Search members..."
-              bind:value={memberSearchTerm}
-              class="w-full"
-            />
-            <ScrollArea class="max-h-48 pr-1">
-              {#if filteredMembers.length > 0}
-                <div class="space-y-1">
-                  {#each filteredMembers as member (member.id)}
-                    <label
-                      class="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/50"
-                    >
-                      <input
-                        type="checkbox"
-                        class="h-3.5 w-3.5 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        checked={selectedMemberIds.has(member.id)}
-                        onchange={() => toggleMemberSelection(member.id)}
-                      />
-                      <Avatar class="h-6 w-6">
-                        <AvatarImage src={member.avatar} alt={member.name} />
-                        <AvatarFallback class="text-xs font-medium">
-                          {member.name?.[0] ?? "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span class="truncate">{member.name}</span>
-                    </label>
-                  {/each}
-                </div>
-              {:else}
-                <p class="text-xs text-muted-foreground">
-                  No members match your search.
-                </p>
-              {/if}
-            </ScrollArea>
-          </div>
-        </div>
-      {/if}
-
-      <div class="space-y-5 rounded-md border border-border/60 bg-muted/20 p-3">
-        <div class="space-y-3">
-          <div class="flex flex-col gap-1">
-            <span class="text-xs font-semibold uppercase text-muted-foreground">
-              Role Permission Overrides
-            </span>
-            <span class="text-[11px] text-muted-foreground">
-              Fine-tune channel permissions for specific roles.
-            </span>
-          </div>
-
-          {#if availableRoleOverrideOptions.length > 0}
-            <Select
-              type="single"
-              value={pendingRoleOverrideSelection}
-              onValueChange={(value: string) => {
-                if (!value) return;
-                addPermissionOverrideTarget("roles", value);
-                pendingRoleOverrideSelection = "";
-              }}
-            >
-              <SelectTrigger class="w-full justify-between">
-                <span data-slot="select-value" class="flex-1 text-left">
-                  Add role override
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="" disabled>Select a role</SelectItem>
-                {#each availableRoleOverrideOptions as role (role.id)}
-                  <SelectItem value={role.id}>{role.name}</SelectItem>
-                {/each}
-              </SelectContent>
-            </Select>
-          {:else}
-            <p class="text-xs text-muted-foreground">
-              All roles already have overrides configured.
-            </p>
-          {/if}
-
-          {#if Object.keys(permissionOverrides.roles).length > 0}
-            <div class="space-y-3">
-              {#each Object.keys(permissionOverrides.roles) as roleId (roleId)}
-                <div class="overflow-hidden rounded-md border border-border/50 bg-background/40">
-                  <div class="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-                    <span class="text-sm font-medium">
-                      {rolesById.get(roleId)?.name ?? roleId}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      aria-label={`Remove overrides for ${rolesById.get(roleId)?.name ?? roleId}`}
-                      onclick={() => removeOverrideTarget("roles", roleId)}
-                    >
-                      <CircleX size={14} />
-                    </Button>
-                  </div>
-                  <div class="divide-y divide-border/40">
-                    {#each channelPermissionKeys as permission (permission)}
-                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
-                        <span class="text-xs font-medium text-muted-foreground">
-                          {permissionKeyLabels[permission]}
-                        </span>
-                        <div class="flex gap-2">
-                          {#each overrideChoices as choice (choice)}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={
-                                getOverrideChoice("roles", roleId, permission) === choice
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                              aria-label={`${overrideChoiceLabels[choice].label} ${permissionKeyLabels[permission]} for ${rolesById.get(roleId)?.name ?? roleId}`}
-                              onclick={() => setOverrideChoice("roles", roleId, permission, choice)}
-                            >
-                              {overrideChoiceLabels[choice].label}
-                            </Button>
-                          {/each}
-                        </div>
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <p class="text-xs text-muted-foreground">
-              No role overrides configured.
-            </p>
-          {/if}
-        </div>
-
-        <div class="space-y-3">
-          <div class="flex flex-col gap-1">
-            <span class="text-xs font-semibold uppercase text-muted-foreground">
-              Member Permission Overrides
-            </span>
-            <span class="text-[11px] text-muted-foreground">
-              Override permissions for individual members.
-            </span>
-          </div>
-
-          {#if availableMemberOverrideOptions.length > 0}
-            <Select
-              type="single"
-              value={pendingMemberOverrideSelection}
-              onValueChange={(value: string) => {
-                if (!value) return;
-                addPermissionOverrideTarget("users", value);
-                pendingMemberOverrideSelection = "";
-              }}
-            >
-              <SelectTrigger class="w-full justify-between">
-                <span data-slot="select-value" class="flex-1 text-left">
-                  Add member override
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="" disabled>Select a member</SelectItem>
-                {#each availableMemberOverrideOptions as member (member.id)}
-                  <SelectItem value={member.id}>{member.name}</SelectItem>
-                {/each}
-              </SelectContent>
-            </Select>
-          {:else}
-            <p class="text-xs text-muted-foreground">
-              All members already have overrides configured.
-            </p>
-          {/if}
-
-          {#if Object.keys(permissionOverrides.users).length > 0}
-            <div class="space-y-3">
-              {#each Object.keys(permissionOverrides.users) as memberId (memberId)}
-                <div class="overflow-hidden rounded-md border border-border/50 bg-background/40">
-                  <div class="flex items-center justify-between gap-2 border-b border-border/40 px-3 py-2">
-                    <span class="text-sm font-medium">
-                      {membersById.get(memberId)?.name ?? memberId}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      class="h-7 w-7 text-muted-foreground hover:text-foreground"
-                      aria-label={`Remove overrides for ${membersById.get(memberId)?.name ?? memberId}`}
-                      onclick={() => removeOverrideTarget("users", memberId)}
-                    >
-                      <CircleX size={14} />
-                    </Button>
-                  </div>
-                  <div class="divide-y divide-border/40">
-                    {#each channelPermissionKeys as permission (permission)}
-                      <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2">
-                        <span class="text-xs font-medium text-muted-foreground">
-                          {permissionKeyLabels[permission]}
-                        </span>
-                        <div class="flex gap-2">
-                          {#each overrideChoices as choice (choice)}
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={
-                                getOverrideChoice("users", memberId, permission) === choice
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                              aria-label={`${overrideChoiceLabels[choice].label} ${permissionKeyLabels[permission]} for ${membersById.get(memberId)?.name ?? memberId}`}
-                              onclick={() =>
-                                setOverrideChoice("users", memberId, permission, choice)
-                              }
-                            >
-                              {overrideChoiceLabels[choice].label}
-                            </Button>
-                          {/each}
-                        </div>
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <p class="text-xs text-muted-foreground">
-              No member overrides configured.
-            </p>
-          {/if}
-        </div>
-      </div>
-
-      {#if newChannelType === "text"}
-        <div class="space-y-4">
-          <div>
-            <Label
-              for="channel-topic"
-              class="text-xs font-semibold uppercase text-muted-foreground mb-2"
-            >
-              Topic
-            </Label>
-            <Input
-              id="channel-topic"
-              placeholder="What’s this channel about?"
-              class="w-full"
-              bind:value={newChannelTopic}
-            />
-          </div>
-          <div>
-            <Label
-              class="text-xs font-semibold uppercase text-muted-foreground mb-2"
-            >
-              Slowmode
-            </Label>
-            <Select
-              type="single"
-              value={newChannelSlowmode.toString()}
-              onValueChange={(value: string) => {
-                newChannelSlowmode = normalizeSlowmodeValue(value);
-              }}
-            >
-              <SelectTrigger class="w-full justify-between">
-                <span data-slot="select-value" class="flex-1 text-left">
-                  {formatSlowmodeDuration(newChannelSlowmode)}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {#each slowmodeOptions() as option (option.value)}
-                  <SelectItem value={option.value.toString()}>{option.label}</SelectItem>
-                {/each}
-              </SelectContent>
-            </Select>
-            <p class="mt-1 text-xs text-muted-foreground">
-              Limit how often members can send messages. Set to Off to disable.
-            </p>
-          </div>
-        </div>
-      {/if}
     </div>
 
     <DialogFooter>
       <Button variant="ghost" onclick={closeChannelModal}>Cancel</Button>
-      <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
-        {#if editingChannelId}
+      {#if editingChannelId}
+        <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
           <Check size={14} class="mr-2" /> Save Changes
-        {:else}
+        </Button>
+      {:else if newChannelPrivate}
+        <Button
+          onclick={openPrivateChannelAccessDialog}
+          disabled={!newChannelName.trim()}
+        >
+          Next
+        </Button>
+      {:else}
+        <Button onclick={submitChannelForm} disabled={!newChannelName.trim()}>
           <Plus size={14} class="mr-2" /> Create Channel
-        {/if}
-      </Button>
+        </Button>
+      {/if}
     </DialogFooter>
   </DialogContent>
 </Dialog>
+
+{#if showPrivateChannelAccessDialog}
+  <Dialog
+    open={showPrivateChannelAccessDialog}
+    onOpenChange={(value) => {
+      if (!value) {
+        closePrivateChannelAccessDialog();
+      }
+    }}
+  >
+    <DialogContent data-testid="private-channel-access-dialog">
+      <DialogHeader>
+        <DialogTitle>Add members or roles</DialogTitle>
+        <DialogDescription>
+          Search for members by typing @ followed by their name, or type a role to add it to the
+          list below.
+        </DialogDescription>
+      </DialogHeader>
+      <div class="space-y-4">
+        <Input
+          placeholder="Type @member or role name"
+          bind:value={privateAccessSearchTerm}
+          onkeydown={handlePrivateAccessSearchKeydown}
+          class="w-full"
+        />
+        {#if selectedRoleIds.size > 0 || selectedMemberIds.size > 0}
+          <div class="flex flex-wrap gap-2">
+            {#each Array.from(selectedRoleIds) as roleId}
+              {#if rolesById.get(roleId) as role}
+                <Badge variant="secondary">{role.name}</Badge>
+              {/if}
+            {/each}
+            {#each Array.from(selectedMemberIds) as memberId}
+              {#if membersById.get(memberId) as member}
+                <Badge variant="secondary">{member.name}</Badge>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+        <div class="space-y-4">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase text-muted-foreground">
+                Roles
+              </span>
+              <span class="text-xs text-muted-foreground">{filteredRoles.length} available</span>
+            </div>
+            <div class="grid gap-2 max-h-56 overflow-y-auto pb-1">
+              {#if filteredRoles.length === 0}
+                <p class="text-xs text-muted-foreground">No roles found.</p>
+              {:else}
+                {#each filteredRoles as role (role.id)}
+                  <button
+                    type="button"
+                    class={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm transition ${
+                      selectedRoleIds.has(role.id)
+                        ? "border-primary/80 bg-primary/10 text-primary"
+                        : "border-border bg-background text-foreground hover:border-primary/60 hover:bg-muted/40"
+                    }`}
+                    onclick={() => toggleRoleSelection(role.id)}
+                  >
+                    <span class="truncate">{role.name}</span>
+                    {#if selectedRoleIds.has(role.id)}
+                      <Check size={14} />
+                    {/if}
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase text-muted-foreground">
+                Members
+              </span>
+              <span class="text-xs text-muted-foreground">{filteredMembers.length} available</span>
+            </div>
+            <div class="grid gap-2 max-h-56 overflow-y-auto pb-1">
+              {#if filteredMembers.length === 0}
+                <p class="text-xs text-muted-foreground">No members found.</p>
+              {:else}
+                {#each filteredMembers as member (member.id)}
+                  <button
+                    type="button"
+                    class={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm transition ${
+                      selectedMemberIds.has(member.id)
+                        ? "border-primary/80 bg-primary/10 text-primary"
+                        : "border-border bg-background text-foreground hover:border-primary/60 hover:bg-muted/40"
+                    }`}
+                    onclick={() => toggleMemberSelection(member.id)}
+                  >
+                    <span class="truncate">{member.name}</span>
+                    {#if selectedMemberIds.has(member.id)}
+                      <Check size={14} />
+                    {/if}
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          </div>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onclick={closePrivateChannelAccessDialog}>
+          Back
+        </Button>
+        <Button
+          onclick={submitChannelForm}
+          disabled={!newChannelName.trim()}
+        >
+          {selectedRoleIds.size + selectedMemberIds.size > 0 ? "Create Channel" : "Skip"}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+{/if}
 
 {#if showRenameCategoryModal && categoryBeingRenamed}
   <Dialog

@@ -12,6 +12,7 @@
     authPersistenceStore,
   } from "$lib/features/auth/stores/authStore";
   import { toasts } from "$lib/stores/ToastStore";
+  import { Checkbox } from "$lib/components/ui/checkbox/index";
 
   let sessionTimeoutMinutes = $state(
     $authPersistenceStore.sessionTimeoutMinutes ?? 60,
@@ -104,8 +105,7 @@
         </p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer">
-        <input
-          type="checkbox"
+        <Checkbox
           class="sr-only peer"
           bind:checked={requireTotpOnUnlock}
           onchange={toggleTotpRequirement}

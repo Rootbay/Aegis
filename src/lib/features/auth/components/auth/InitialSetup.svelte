@@ -28,12 +28,6 @@
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
-  import {
-    Select,
-    SelectTrigger,
-    SelectContent,
-    SelectItem,
-  } from "$lib/components/ui/select/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
   import {
     Dialog,
@@ -48,13 +42,11 @@
   type OnboardingStep =
     | "username"
     | "phrase"
-    | "confirm"
-    | "password"
-    | "totp"
-    | "security_questions"
-    | "backup_codes";
+  | "confirm"
+  | "password"
+  | "backup_codes"
+  | "totp";
 
-  type SecurityQuestionInput = { question: string; answer: string };
   let username = $state("");
   let onboardingStep = $state<OnboardingStep>("username");
   let confirmationInputs = $state<Record<number, string>>({});
@@ -80,7 +72,6 @@
   });
 
   let showPassword = $state(false);
-  let securityQuestions = $state<SecurityQuestionInput[]>([]);
   let backupCodes = $state<string[]>([]);
   let showRecoveryForm = $state(false);
   type SupportView = "unlock" | "recovery" | "handoff";
@@ -215,24 +206,6 @@
     })(),
   );
 
-  const securityQuestionsReady = $derived(
-    securityQuestions.length >= 3 &&
-      securityQuestions.every(
-        (q) => q.question.trim().length > 0 && q.answer.trim().length >= 3,
-      ),
-  );
-
-  const predefinedQuestions = [
-    "What was your childhood nickname?",
-    "What is your mother's maiden name?",
-    "What was the name of your first pet?",
-    "What city were you born in?",
-    "What was your first school called?",
-    "What is your favorite childhood memory?",
-    "What was the make and model of your first car?",
-    "What is the name of your favorite childhood teacher?",
-  ];
-
   async function handleStartOnboarding(event: Event) {
     event.preventDefault();
     try {
@@ -346,32 +319,10 @@
 
     try {
       authStore.saveOnboardingPassword(passwordInput);
-      onboardingStep = "security_questions";
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to accept password.";
-      toasts.showErrorToast(message);
-    }
-  }
-
-  async function handleSecurityQuestions(event: Event) {
-    event.preventDefault();
-    authStore.clearError();
-
-    try {
-      const normalizedQuestions = securityQuestions.map((item) => ({
-        question: item.question.trim(),
-        answerHash: item.answer.trim().toLowerCase(),
-      }));
-
-      await authStore.configureSecurityQuestions(normalizedQuestions);
-
       onboardingStep = "backup_codes";
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to configure security questions.";
+        error instanceof Error ? error.message : "Unable to accept password.";
       toasts.showErrorToast(message);
     }
   }
@@ -391,16 +342,6 @@
     } catch {
       // handled by store
     }
-  }
-
-  function addSecurityQuestion() {
-    if (securityQuestions.length < 5) {
-      securityQuestions = [...securityQuestions, { question: "", answer: "" }];
-    }
-  }
-
-  function removeSecurityQuestion(index: number) {
-    securityQuestions = securityQuestions.filter((_, i) => i !== index);
   }
 
   function togglePasswordVisibility() {
@@ -568,7 +509,6 @@
     totpCode = "";
     passwordInput = "";
     passwordConfirm = "";
-    securityQuestions = [];
     backupCodes = [];
     showRecoveryForm = false;
     activeView = "unlock";
@@ -626,7 +566,6 @@
     { id: "phrase", label: "Recovery phrase" },
     { id: "confirm", label: "Phrase check" },
     { id: "password", label: "Unlock password" },
-    { id: "security_questions", label: "Security questions" },
     { id: "backup_codes", label: "Backup codes" },
     { id: "totp", label: "Authenticator" },
   ] satisfies { id: OnboardingStep; label: string }[];
@@ -1024,84 +963,10 @@
               type="submit"
               disabled={isLoading || !canSubmitPassword}
             >
-              Continue to security setup
-            </Button>
-          </form>
-        {:else if onboardingStep === "security_questions"}
-          <form class="space-y-5" onsubmit={handleSecurityQuestions}>
-            <h3 class="text-lg font-semibold flex items-center gap-2">
-              <Shield size={18} /> Configure security questions
-            </h3>
-
-            <p class="text-sm text-zinc-400">
-              Choose 3–5 questions only you can answer. These protect you during
-              recovery.
-            </p>
-
-            <div class="space-y-4">
-              {#each securityQuestions as question, index}
-                <div
-                  class="space-y-3 rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4"
-                >
-                  <div class="flex items-center justify-between">
-                    <Label for={`question-${index}`}>Question {index + 1}</Label
-                    >
-
-                    {#if securityQuestions.length > 3}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        class="text-red-400 hover:text-destructive"
-                        onclick={() => removeSecurityQuestion(index)}
-                      >
-                        Remove
-                      </Button>
-                    {/if}
-                  </div>
-
-                  <Select type="single" bind:value={question.question}>
-                    <SelectTrigger placeholder="Choose a question…" />
-
-                    <SelectContent>
-                      {#each predefinedQuestions as q}
-                        <SelectItem value={q}>{q}</SelectItem>
-                      {/each}
-                    </SelectContent>
-                  </Select>
-
-                  <Input
-                    id={`question-${index}`}
-                    type="text"
-                    placeholder="Your answer"
-                    bind:value={question.answer}
-                    minlength={3}
-                    required
-                  />
-                </div>
-              {/each}
-            </div>
-
-            {#if securityQuestions.length < 5}
-              <Button
-                type="button"
-                variant="outline"
-                class="w-full sm:w-auto"
-                onclick={addSecurityQuestion}
-              >
-                Add another question
-              </Button>
-            {/if}
-
-            <Button
-              class="w-full sm:w-auto"
-              type="submit"
-              disabled={!securityQuestionsReady || isLoading}
-            >
               Continue to backup codes
             </Button>
           </form>
-        {:else if onboardingStep === "backup_codes" && backupCodes.length > 0}
+        {:else if onboardingStep === "backup_codes"}
           <div class="space-y-5">
             <h3 class="text-lg font-semibold flex items-center gap-2">
               <ShieldCheck size={18} /> Save your backup codes
@@ -1111,26 +976,47 @@
               Each code works once. Store them offline before continuing.
             </p>
 
-            <div
-              class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4"
-            >
-              <div class="grid grid-cols-2 gap-2 text-sm font-mono">
-                {#each backupCodes as code}
-                  <span
-                    class="rounded-md bg-zinc-900/70 px-3 py-2 text-center text-zinc-100"
-                  >
-                    {code}
-                  </span>
-                {/each}
-              </div>
-            </div>
+            <p class="text-xs text-zinc-500">
+              Security questions are optional; configure them anytime from the
+              Settings screen.
+            </p>
 
-            <Button
-              class="w-full sm:w-auto"
-              onclick={() => (onboardingStep = "totp")}
-            >
-              I have saved my backup codes
-            </Button>
+            {#if backupCodes.length > 0}
+              <div
+                class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4"
+              >
+                <div class="grid grid-cols-2 gap-2 text-sm font-mono">
+                  {#each backupCodes as code}
+                    <span
+                      class="rounded-md bg-zinc-900/70 px-3 py-2 text-center text-zinc-100"
+                    >
+                      {code}
+                    </span>
+                  {/each}
+                </div>
+              </div>
+
+              <Button
+                class="w-full sm:w-auto"
+                onclick={() => (onboardingStep = "totp")}
+              >
+                I have saved my backup codes
+              </Button>
+            {:else}
+              <div
+                class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4 text-sm text-zinc-400"
+              >
+                Backup codes are generated after you finalize the authenticator
+                setup. Jump to the authenticator step to finish onboarding.
+              </div>
+
+              <Button
+                class="w-full sm:w-auto"
+                onclick={() => (onboardingStep = "totp")}
+              >
+                Set up authenticator
+              </Button>
+            {/if}
           </div>
         {:else if onboardingStep === "totp" && $authStore.onboarding}
           <form class="space-y-5" onsubmit={finishOnboarding}>

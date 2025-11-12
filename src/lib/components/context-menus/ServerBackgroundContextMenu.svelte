@@ -2,12 +2,12 @@
 
 <script lang="ts">
   import {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-  } from "$lib/components/ui/dropdown-menu/index.js";
+    ContextMenu,
+    ContextMenuTrigger,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+  } from "$lib/components/ui/context-menu/index.js";
   import {
     Plus,
     UserPlus,
@@ -31,38 +31,38 @@
   }
 </script>
 
-<DropdownMenu>
-  <DropdownMenuTrigger>
+<ContextMenu>
+  <ContextMenuTrigger>
     {@render children?.()}
-  </DropdownMenuTrigger>
+  </ContextMenuTrigger>
 
-  <DropdownMenuContent class="w-48 text-sm">
-    <DropdownMenuItem onselect={() => handleAction("hide_muted_channels")}>
+  <ContextMenuContent class="w-48 text-sm">
+    <ContextMenuItem onSelect={() => handleAction("hide_muted_channels")}>
       <Square class="mr-2 h-4 w-4" /> Hide Muted Channels
-    </DropdownMenuItem>
+    </ContextMenuItem>
 
-    <DropdownMenuSeparator />
+    <ContextMenuSeparator />
 
-    <DropdownMenuItem onselect={() => handleAction("create_channel")}>
+    <ContextMenuItem onSelect={() => handleAction("create_channel")}>
       <Plus class="mr-2 h-4 w-4" /> Create Channel
-    </DropdownMenuItem>
-    <DropdownMenuItem onselect={() => handleAction("create_category")}>
+    </ContextMenuItem>
+    <ContextMenuItem onSelect={() => handleAction("create_category")}>
       <Plus class="mr-2 h-4 w-4" /> Create Category
-    </DropdownMenuItem>
-    <DropdownMenuItem onselect={() => handleAction("invite_people")}>
+    </ContextMenuItem>
+    <ContextMenuItem onSelect={() => handleAction("invite_people")}>
       <UserPlus class="mr-2 h-4 w-4" /> Invite to Server
-    </DropdownMenuItem>
+    </ContextMenuItem>
 
-    <DropdownMenuSeparator />
+    <ContextMenuSeparator />
 
-    <DropdownMenuItem onselect={() => handleAction("view_icon")}>
+    <ContextMenuItem onSelect={() => handleAction("view_icon")}>
       <Image class="mr-2 h-4 w-4" /> View Icon
-    </DropdownMenuItem>
-    <DropdownMenuItem onselect={() => handleAction("view_raw")}>
+    </ContextMenuItem>
+    <ContextMenuItem onSelect={() => handleAction("view_raw")}>
       <Code class="mr-2 h-4 w-4" /> View Raw
-    </DropdownMenuItem>
-    <DropdownMenuItem onselect={() => handleAction("view_reviews")}>
+    </ContextMenuItem>
+    <ContextMenuItem onSelect={() => handleAction("view_reviews")}>
       <ExternalLink class="mr-2 h-4 w-4" /> View Reviews
-    </DropdownMenuItem>
-  </DropdownMenuContent>
-</DropdownMenu>
+    </ContextMenuItem>
+  </ContextMenuContent>
+</ContextMenu>

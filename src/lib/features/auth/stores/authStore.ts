@@ -355,6 +355,11 @@ const completeOnboarding = async ({
 
     await userStore.initialize(password, { username });
 
+    const currentUser = get(userStore).me;
+    if (currentUser && currentUser.name !== username) {
+      await userStore.updateProfile({ ...currentUser, name: username });
+    }
+
     setAuthPersistence({
       username,
       passwordHash,

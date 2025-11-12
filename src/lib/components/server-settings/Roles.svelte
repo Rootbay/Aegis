@@ -1,10 +1,11 @@
 <script lang="ts">
   import RolesManagement from "$lib/features/servers/components/RolesManagement.svelte";
-import type { Role } from "$lib/features/servers/models/Role";
-import { reindexRoles, sortRolesByPosition } from "$lib/features/servers/models/Role";
+  import type { Role } from "$lib/features/servers/models/Role";
+  import { reindexRoles, sortRolesByPosition } from "$lib/features/servers/models/Role";
   import type { User } from "$lib/features/auth/models/User";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { SvelteSet } from "svelte/reactivity";
+  import { Checkbox } from "$lib/components/ui/checkbox";
 
   let activeServerId = $derived($serverStore.activeServerId ?? null);
   let server = $derived(
@@ -210,9 +211,8 @@ import { reindexRoles, sortRolesByPosition } from "$lib/features/servers/models/
                   <label
                     class="inline-flex items-center gap-2 rounded-md border border-border/40 bg-background/70 px-3 py-1 text-sm hover:border-border transition-colors"
                   >
-                    <input
-                      type="checkbox"
-                      class="h-4 w-4 rounded border-border bg-background"
+                    <Checkbox
+                      class="h-4 w-4"
                       checked={isMemberAssigned(member.id, role.id)}
                       disabled={saving}
                       onchange={() =>

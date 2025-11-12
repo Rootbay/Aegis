@@ -17,6 +17,7 @@
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import type { Server } from "$lib/features/servers/models/Server";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
+  import { createEventDispatcher } from "svelte";
 
   type BackendChannelCategory = {
     id: string;
@@ -37,6 +38,10 @@
     open = $bindable(true),
     onclose,
   }: CreateCategoryModalProps = $props();
+
+  const dispatch = createEventDispatcher<{
+    categorycreated: ChannelCategory;
+  }>();
 
   let name = $state("");
   let submitting = $state(false);
@@ -87,6 +92,7 @@
       const mapped = mapCategory(backendCategory);
       serverStore.addCategoryToServer(server.id, mapped);
       toasts.addToast("Category created.", "success");
+      dispatch("categorycreated", mapped);
       closeModal();
     } catch (error) {
       console.error("Failed to create category", error);

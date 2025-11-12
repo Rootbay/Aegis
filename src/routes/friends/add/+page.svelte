@@ -85,7 +85,7 @@
   });
 </script>
 
-<div class="flex h-full flex-col overflow-hidden">
+<div class="flex h-full flex-col bg-card/50 overflow-hidden">
   <ScrollArea class="flex-1 overflow-hidden">
     <div class="space-y-6 p-4">
       <section class="space-y-4">

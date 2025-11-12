@@ -12,6 +12,7 @@
     ArrowUp,
     ArrowDown,
   } from "@lucide/svelte";
+  import { Checkbox } from "$lib/components/ui/checkbox/index";
 
   type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
 
@@ -351,10 +352,9 @@
         </div>
 
         <label class="flex items-center space-x-3">
-          <input
-            type="checkbox"
+          <Checkbox
             bind:checked={editingRoleHoist}
-            class="form-checkbox h-5 w-5 text-highlight-100 bg-muted border-border rounded"
+            class="h-5 w-5"
           />
           <span class="text-muted-foreground"
             >Display role members separately from online members</span
@@ -362,10 +362,9 @@
         </label>
 
         <label class="flex items-center space-x-3">
-          <input
-            type="checkbox"
+          <Checkbox
             bind:checked={editingRoleMentionable}
-            class="form-checkbox h-5 w-5 text-highlight-100 bg-muted border-border rounded"
+            class="h-5 w-5"
           />
           <span class="text-muted-foreground"
             >Allow anyone to @mention this role</span
@@ -382,11 +381,10 @@
                 <label
                   class="inline-flex items-center p-2 rounded-md hover:bg-muted transition-colors"
                 >
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={editingRole.permissions[permissionKey]}
                     onchange={() => togglePermission(permissionKey)}
-                    class="form-checkbox h-5 w-5 text-highlight-100 bg-muted border-border rounded"
+                    class="h-5 w-5"
                   />
                   <span class="ml-3 text-muted-foreground"
                     >{allPermissions[permissionKey]}</span

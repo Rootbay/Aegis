@@ -153,7 +153,7 @@
       </label>
       <select
         class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        on:change={(event) => {
+        onchange={(event) => {
           const target = event.target as HTMLSelectElement;
           newChannelSlowmode = normalizeSlowmodeValue(target.value);
         }}
@@ -228,7 +228,7 @@
               </label>
               <select
                 class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                on:change={(event) => {
+                onchange={(event) => {
                   const target = event.target as HTMLSelectElement;
                   editingChannelSlowmode = normalizeSlowmodeValue(target.value);
                 }}

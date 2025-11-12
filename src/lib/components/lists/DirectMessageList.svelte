@@ -7,7 +7,10 @@
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import { userStore } from "$lib/stores/userStore";
-  import { Plus, Users } from "@lucide/svelte";
+  import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { page } from "$app/stores";
+  import { Plus, Users, Map } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
@@ -94,6 +97,21 @@
   let searchResults = $derived.by(() =>
     computeSearchResults(sortedEntries, searchTerm),
   );
+
+  function focusFriendsPage() {
+    serverStore.setActiveServer(null);
+    chatStore.clearActiveChat();
+    const params = new URLSearchParams($page.url.search);
+    params.set("tab", "All");
+    const query = params.toString();
+    const target = query ? `/?${query}` : "/";
+    if ($friendStore.friends.length > 0) {
+      void goto(target);
+    } else {
+      void goto("/friends/add");
+    }
+    onSelect({ chatId: null });
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -244,26 +262,39 @@
   });
 </script>
 
-<div class="w-80 h-full min-h-0 flex flex-col overflow-hidden bg-card/50 border-r border-border">
-  <header class="h-[55px] px-4 flex items-center border-b border-border">
-    <Button
-      variant="ghost"
-      class="text-xl font-bold px-0 justify-start w-full"
-      onclick={() => onSelect({ chatId: null })}
-    >
-      Friends
-    </Button>
-  </header>
-
-  <div class="p-4 pt-3">
+<div class="w-80 h-full min-h-0 flex flex-col overflow-hidden border-r border-l border-border">
+  <header class="h-auto px-2 flex flex-col items-start gap-2 border-b border-border">
     <Button
       variant="secondary"
-      class="w-full justify-start bg-card text-muted-foreground cursor-pointer"
+      class="w-full justify-start bg-card text-muted-foreground cursor-pointer mt-2"
       onclick={() => (showSearch = true)}
     >
       Search (Ctrl+K)
     </Button>
+    <Separator />
+    <Button
+      variant="ghost"
+      class="w-full justify-start text-sm font-semibold data-[active=true]:bg-muted/50 data-[active=true]:text-foreground"
+      data-active={
+        $page.url.pathname === "/" || $page.url.pathname.startsWith("/friends")
+      }
+      onclick={focusFriendsPage}
+    >
+      <Users size={16} />
+      Friends
+    </Button>
+    <Button
+      variant="ghost"
+      class="w-full justify-start text-sm font-semibold mb-2 data-[active=true]:bg-muted/50 data-[active=true]:text-foreground"
+      data-active={$page.url.pathname.startsWith("/discover-servers")}
+      onclick={() => goto("/discover-servers")}
+    >
+      <Map size={16} />
+      Discover
+    </Button>
+  </header>
 
+  <div class="p-4 pt-3">
     <div class="flex items-center justify-between mt-4 mb-2">
       <h2 class="text-sm font-semibold text-muted-foreground">
         Direct Messages
@@ -278,7 +309,6 @@
         <Plus size={12} />
       </Button>
     </div>
-    <Separator />
   </div>
 
   <ScrollArea class="flex-1 overflow-hidden px-2">

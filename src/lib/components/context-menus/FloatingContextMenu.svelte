@@ -1,31 +1,26 @@
 <svelte:options runes={true} />
 
-<script lang="ts" generics="T">
-  import {
-    ContextMenu,
-    ContextMenuTrigger,
-    ContextMenuContent,
-    ContextMenuItem,
-    ContextMenuSeparator,
-  } from "$lib/components/ui/context-menu";
-
-  type ContextMenuItemConfig<TData> = {
+<script module lang="ts">
+  export type ContextMenuItemConfig<TData> = {
     label?: string;
     action?: string;
     isDestructive?: boolean;
     isSeparator?: boolean;
     disabled?: boolean;
     data?: TData | null;
+    closeOnSelect?: boolean;
   };
 
-  type ContextMenuHandler<TData> = ({
+  export type ContextMenuHandler<TData> = ({
     action,
     itemData,
   }: {
     action: string;
     itemData: TData | null;
   }) => void;
+</script>
 
+<script lang="ts" generics="T">
   let {
     x = 0,
     y = 0,
@@ -33,6 +28,7 @@
     menuItems = [],
     onaction,
     onclose,
+    menuWidth = 220,
   }: {
     x?: number;
     y?: number;
@@ -40,11 +36,18 @@
     menuItems?: ContextMenuItemConfig<T>[];
     onaction?: ContextMenuHandler<T>;
     onclose?: () => void;
+    menuWidth?: number;
   } = $props();
 
   let open = $state(show);
   let prevOpen = $state(show);
-  let contentRef = $state<HTMLElement | null>(null);
+
+  function closeMenu() {
+    if (!open) return;
+    open = false;
+    show = false;
+    onclose?.();
+  }
 
   $effect(() => {
     if (show !== open) {
@@ -56,25 +59,18 @@
     if (open === prevOpen) return;
 
     if (!open && prevOpen) {
-      show = false;
       onclose?.();
-    }
-
-    if (open && !prevOpen) {
-      show = true;
     }
 
     prevOpen = open;
   });
 
-  function closeMenu() {
-    open = false;
-  }
-
   function handleSelect(item: ContextMenuItemConfig<T>) {
     if (item.disabled || !item.action) return;
     onaction?.({ action: item.action, itemData: item.data ?? null });
-    closeMenu();
+    if (item.closeOnSelect ?? true) {
+      closeMenu();
+    }
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -97,60 +93,40 @@
   function stopPropagation(event: Event) {
     event.stopPropagation();
   }
-
-  function updatePosition() {
-    if (!contentRef || typeof window === "undefined") return;
-
-    const { innerWidth, innerHeight } = window;
-    const rect = contentRef.getBoundingClientRect();
-    const offsetX = Math.max(0, Math.min(x, innerWidth - rect.width - 4));
-    const offsetY = Math.max(0, Math.min(y, innerHeight - rect.height - 4));
-
-    contentRef.style.left = `${offsetX}px`;
-    contentRef.style.top = `${offsetY}px`;
-  }
-
-  $effect(() => {
-    updatePosition();
-  });
 </script>
-
-<svelte:window on:resize={updatePosition} />
 
 {#if open}
   <div
-    class="fixed inset-0 z-[10000]"
+    class="fixed inset-0 z-10000"
     role="presentation"
     tabindex="-1"
     onclick={closeMenu}
     oncontextmenu={handleOverlayContextMenu}
     onkeydown={handleKeydown}
   >
-    <ContextMenu bind:open>
-      <ContextMenuTrigger style="display: none" />
-      <ContextMenuContent
-        bind:ref={contentRef}
-        portalProps={{ disabled: true }}
-        class="w-44"
-        style={`position: fixed; left: ${x}px; top: ${y}px;`}
+      <div
+        tabindex="0"
+        class="fixed bg-popover border border-border shadow-lg rounded-md overflow-hidden p-2"
+        role="menu"
+        style={`left: ${x}px; top: ${y}px; width: ${menuWidth}px; min-width: ${menuWidth}px;`}
         onclick={stopPropagation}
-        onkeydown={handleKeydown}
-        oncontextmenu={preventContextMenu}
-      >
-        {#each menuItems as item, index (index)}
-          {#if item.isSeparator}
-            <ContextMenuSeparator />
-          {:else}
-            <ContextMenuItem
-              variant={item.isDestructive ? "destructive" : "default"}
+      onkeydown={handleKeydown}
+      oncontextmenu={preventContextMenu}
+    >
+      {#each menuItems as item, index (index)}
+        {#if item.isSeparator}
+          <div class="h-px bg-border my-1" ></div>
+        {:else}
+            <button
+              type="button"
+              class={`w-full px-3 py-1.5 text-sm text-left outline-none transition-colors cursor-pointer rounded-sm ${item.isDestructive ? "text-destructive hover:bg-destructive/10" : "text-foreground hover:bg-muted/50"}`}
               disabled={item.disabled}
-              onselect={() => handleSelect(item)}
+              onclick={() => handleSelect(item)}
             >
-              {item.label ?? ""}
-            </ContextMenuItem>
-          {/if}
-        {/each}
-      </ContextMenuContent>
-    </ContextMenu>
+            {item.label ?? ""}
+          </button>
+        {/if}
+      {/each}
+    </div>
   </div>
 {/if}

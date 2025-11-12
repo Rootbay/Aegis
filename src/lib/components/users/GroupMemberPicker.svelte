@@ -3,6 +3,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
+  import { Checkbox } from "$lib/components/ui/checkbox/index";
 
   type Props = {
     users?: GroupModalUser[];
@@ -83,11 +84,10 @@
                     <label
                       class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
                     >
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedUserIds.has(user.id)}
                         onchange={() => handleToggle(user.id)}
-                        class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                        class="h-4 w-4"
                       />
                       <img
                         src={user.avatar}
@@ -109,11 +109,10 @@
                   <label
                     class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedUserIds.has(user.id)}
                       onchange={() => handleToggle(user.id)}
-                      class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      class="h-4 w-4"
                     />
                     <img
                       src={user.avatar}
@@ -141,11 +140,10 @@
               <label
                 class="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted cursor-pointer"
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selectedUserIds.has(user.id)}
                   onchange={() => handleToggle(user.id)}
-                  class="h-4 w-4 rounded border-border bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  class="h-4 w-4"
                 />
                 <img
                   src={user.avatar}
