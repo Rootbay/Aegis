@@ -375,11 +375,8 @@
     pushQueryUpdate(tokens, freeText);
     chatSearchStore.open();
     chatSearchStore.executeSearch();
-    chatSearchStore.setDropdownOpen(false);
     const { searching } = get(chatSearchStore);
     chatSearchStore.setMobileResultsOpen(searching);
-    await tick();
-    void focusSearchInput();
   }
 
   $effect(() => {

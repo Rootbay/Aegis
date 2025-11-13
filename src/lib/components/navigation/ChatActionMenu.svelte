@@ -59,7 +59,7 @@
   let renameGroupName = $state("");
   let renameGroupError = $state<string | null>(null);
   let renameGroupInputRef = $state<HTMLInputElement | null>(null);
-  let showChatPreferencesModal = $state(false);
+  let showChatPreferencesDropdown = $state(false);
   let readReceiptsToggle = $state(false);
   let typingIndicatorsToggle = $state(false);
 
@@ -224,17 +224,6 @@
     }
   }
 
-  function openChatPreferences() {
-    if (!chat?.id) {
-      return;
-    }
-    showChatPreferencesModal = true;
-  }
-
-  function closeChatPreferences() {
-    showChatPreferencesModal = false;
-  }
-
   function toggleReadReceiptsPreference() {
     if (!chat?.id) {
       return;
@@ -295,16 +284,18 @@
     >
       <PanelRight class="w-4 h-4" />
     </Button>
-    <Button
-      variant="ghost"
-      class={cn("cursor-pointer", hideMemberNamesActive ? "text-cyan-400" : "")}
-      size="icon"
-      aria-label="Hide Member List"
-      aria-pressed={hideMemberNamesActive ? "true" : "false"}
-      onclick={toggleHideMemberList}
-    >
-      <Users class="w-4 h-4" />
-    </Button>
+    {#if chat?.type === "group"}
+      <Button
+        variant="ghost"
+        class={cn("cursor-pointer", hideMemberNamesActive ? "text-cyan-400" : "")}
+        size="icon"
+        aria-label="Hide Member List"
+        aria-pressed={hideMemberNamesActive ? "true" : "false"}
+        onclick={toggleHideMemberList}
+      >
+        <Users class="w-4 h-4" />
+      </Button>
+    {/if}
     {#if chat?.type === "group"}
       <DropdownMenu>
         <DropdownMenuTrigger>
@@ -397,99 +388,91 @@
     {/if}
   {/if}
 
-  <Button
-    variant="ghost"
-    class="cursor-pointer"
-    size="icon"
-    type="button"
-    aria-label="Chat preferences"
-    disabled={!chat}
-    onclick={openChatPreferences}
-  >
-    <SlidersHorizontal class="w-4 h-4" />
-  </Button>
-
-  <Dialog
-    open={showChatPreferencesModal}
+  <DropdownMenu
+    open={showChatPreferencesDropdown}
     onOpenChange={(value) => {
-      if (!value) {
-        closeChatPreferences();
-      } else {
-        showChatPreferencesModal = value;
-      }
+      showChatPreferencesDropdown = value;
     }}
   >
-    <DialogContent class="sm:max-w-sm">
-      <div class="space-y-5">
-        <DialogHeader class="space-y-1">
-          <DialogTitle>Chat preferences</DialogTitle>
-          <DialogDescription>
-            Override read receipts and typing indicators for this chat.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div class="space-y-4">
-          <div class="flex items-start justify-between gap-4 rounded-md border border-border p-4">
-            <div class="space-y-1">
-              <Label
-                for="chat-preferences-read-receipts"
-                class="font-medium"
-              >
-                Enable read receipts
-              </Label>
-              <p
-                id="chat-preferences-read-receipts-description"
-                class="text-sm text-muted-foreground"
-              >
-                Share read status for messages in this chat.
-              </p>
-            </div>
-            <Switch
-              id="chat-preferences-read-receipts"
-              aria-describedby="chat-preferences-read-receipts-description"
-              bind:checked={readReceiptsToggle}
-              onclick={toggleReadReceiptsPreference}
-            />
-          </div>
-
-          <div class="flex items-start justify-between gap-4 rounded-md border border-border p-4">
-            <div class="space-y-1">
-              <Label
-                for="chat-preferences-typing-indicators"
-                class="font-medium"
-              >
-                Send typing indicators
-              </Label>
-              <p
-                id="chat-preferences-typing-indicators-description"
-                class="text-sm text-muted-foreground"
-              >
-                Let others know when you are typing in this chat.
-              </p>
-            </div>
-            <Switch
-              id="chat-preferences-typing-indicators"
-              aria-describedby="chat-preferences-typing-indicators-description"
-              bind:checked={typingIndicatorsToggle}
-              onclick={toggleTypingIndicatorsPreference}
-            />
-          </div>
-        </div>
-
-        <DialogFooter class="flex items-center justify-between gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onclick={resetChatPreferences}
-            disabled={!hasChatOverrides}
-          >
-            Reset to defaults
-          </Button>
-          <Button type="button" variant="ghost" onclick={closeChatPreferences}>
-            Close
-          </Button>
-        </DialogFooter>
+    <DropdownMenuTrigger>
+      <Button
+        variant="ghost"
+        class="cursor-pointer"
+        size="icon"
+        type="button"
+        aria-label="Chat preferences"
+        disabled={!chat}
+        aria-pressed={showChatPreferencesDropdown ? "true" : "false"}
+      >
+        <SlidersHorizontal class="w-4 h-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent class="sm:max-w-sm space-y-5 p-4">
+      <div class="space-y-1">
+        <p class="text-lg font-semibold">Chat preferences</p>
+        <p class="text-sm text-muted-foreground">
+          Override read receipts and typing indicators for this chat.
+        </p>
       </div>
-    </DialogContent>
-  </Dialog>
+      <div class="space-y-4">
+        <div class="flex items-start justify-between gap-4 rounded-md border border-border p-4">
+          <div class="space-y-1">
+            <Label for="chat-preferences-read-receipts" class="font-medium">
+              Enable read receipts
+            </Label>
+            <p
+              id="chat-preferences-read-receipts-description"
+              class="text-sm text-muted-foreground"
+            >
+              Share read status for messages in this chat.
+            </p>
+          </div>
+          <Switch
+            id="chat-preferences-read-receipts"
+            aria-describedby="chat-preferences-read-receipts-description"
+            bind:checked={readReceiptsToggle}
+            onclick={toggleReadReceiptsPreference}
+          />
+        </div>
+        <div class="flex items-start justify-between gap-4 rounded-md border border-border p-4">
+          <div class="space-y-1">
+            <Label for="chat-preferences-typing-indicators" class="font-medium">
+              Send typing indicators
+            </Label>
+            <p
+              id="chat-preferences-typing-indicators-description"
+              class="text-sm text-muted-foreground"
+            >
+              Let others know when you are typing in this chat.
+            </p>
+          </div>
+          <Switch
+            id="chat-preferences-typing-indicators"
+            aria-describedby="chat-preferences-typing-indicators-description"
+            bind:checked={typingIndicatorsToggle}
+            onclick={toggleTypingIndicatorsPreference}
+          />
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onclick={resetChatPreferences}
+          disabled={!hasChatOverrides}
+        >
+          Reset to defaults
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          onclick={() => {
+            showChatPreferencesDropdown = false;
+          }}
+        >
+          Close
+        </Button>
+      </div>
+    </DropdownMenuContent>
+  </DropdownMenu>
 </div>

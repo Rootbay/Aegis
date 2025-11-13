@@ -89,7 +89,9 @@
         <Users class="h-4 w-4" aria-hidden="true" />
       </Button>
     {/if}
-    <CallControls {chat} />
+    {#if chat.type !== "channel"}
+      <CallControls {chat} />
+    {/if}
     <ChatActionMenu {chat} {applyPinnedFilter} />
     <ChatSearch bind:this={chatSearchRef} {chat} />
   </div>

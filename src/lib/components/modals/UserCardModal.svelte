@@ -10,15 +10,20 @@
     Card,
     CardHeader,
     CardContent,
-    CardFooter,
     CardTitle,
-  } from "$lib/components/ui/card/index.js";
-  import * as Avatar from "$lib/components/ui/avatar/index.js";
-  import { Button } from "$lib/components/ui/button/index.js";
-  import { Input } from "$lib/components/ui/input/index.js";
-  import { Badge } from "$lib/components/ui/badge/index.js";
-  import { Pencil, MapPin } from "@lucide/svelte";
-  import PresenceStatusEditor from "$lib/features/presence/components/PresenceStatusEditor.svelte";
+  } from "$lib/components/ui/card/index";
+  import * as Avatar from "$lib/components/ui/avatar/index";
+  import * as Popover from "$lib/components/ui/popover/index";
+  import { Button } from "$lib/components/ui/button/index";
+  import { Input } from "$lib/components/ui/input/index";
+  import { Badge } from "$lib/components/ui/badge/index";
+  import { Separator } from "$lib/components/ui/separator/index";
+  import {
+    Pencil,
+    ChevronRight,
+    CircleUserRound,
+    Clipboard
+  } from "@lucide/svelte";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
@@ -39,11 +44,64 @@
 
   let showLightbox = $state(false);
   let lightboxImageUrl = $state("");
-
-  let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
   let draftMessage = $state("");
   let isSending = $state(false);
   let messageInputElement = $state<HTMLInputElement | null>(null);
+  const onlineStatusOptions = ["Online", "Idle", "Do Not Disturb", "Invisible"] as const;
+  type OnlineStatusOption = (typeof onlineStatusOptions)[number];
+  const STATUS_COLOR_MAP: Record<OnlineStatusOption, string> = {
+    Online: "bg-green-500",
+    Idle: "bg-yellow-500",
+    "Do Not Disturb": "bg-red-500",
+    Invisible: "bg-gray-500",
+  };
+  let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
+  let headerStatusLabel = $state<string | null>(
+    resolvePresenceStatusLabel(profileUser.statusMessage),
+  );
+  let statusPopoverOpen = $state(false);
+  let accountsPopoverOpen = $state(false);
+
+  let pronounsLabel = $derived(
+    (profileUser as { pronouns?: string }).pronouns ??
+      (profileUser.tag?.includes("#") ? profileUser.tag.split("#")[0] : null)
+  );
+
+  let badgeLabels = $derived(profileUser.roles ?? []);
+
+  let displayAccounts = $derived(
+    $userStore.me
+      ? [
+          {
+            id: $userStore.me.id,
+            label: $userStore.me.name,
+            tag: $userStore.me.tag ?? "",
+            avatar: $userStore.me.pfpUrl ?? $userStore.me.avatar,
+          },
+        ]
+      : []
+  );
+
+  let selectedPresenceOption: OnlineStatusOption =
+    profileUser.online ? "Online" : "Invisible";
+
+  let statusIndicatorColorClass = $state(
+    STATUS_COLOR_MAP[selectedPresenceOption],
+  );
+  let statusDisplayLabel = $state(
+    selectedPresenceOption !== "Invisible"
+      ? selectedPresenceOption
+      : headerStatusLabel ?? "Invisible",
+  );
+
+  $effect(() => {
+    headerStatusLabel = resolvePresenceStatusLabel(profileUser.statusMessage);
+    statusIndicatorColorClass = STATUS_COLOR_MAP[selectedPresenceOption];
+    statusDisplayLabel =
+      selectedPresenceOption !== "Invisible"
+        ? selectedPresenceOption
+        : headerStatusLabel ?? "Invisible";
+  });
 
   function handleOpenDetailedProfile() {
     close?.();
@@ -110,20 +168,69 @@
       isSending = false;
     }
   }
+
+  function handleSelectStatus(status: OnlineStatusOption) {
+    statusPopoverOpen = false;
+    toasts.addToast(`Set status to ${status}.`, "success");
+    selectedPresenceOption = status;
+    statusIndicatorColorClass = STATUS_COLOR_MAP[status];
+    statusDisplayLabel =
+      status !== "Invisible" ? status : headerStatusLabel ?? "Invisible";
+  }
+
+  async function handleCopyUserId() {
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      toasts.addToast("Clipboard is unavailable.", "error");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(profileUser.id);
+      toasts.addToast("User ID copied to clipboard.", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to copy user ID.";
+      toasts.addToast(message, "error");
+    }
+  }
+
+  async function handleManageAccounts() {
+    close?.();
+    try {
+      await goto(resolve("/settings/connected_accounts"));
+    } catch (error) {
+      console.error("Failed to open connected accounts:", error);
+      toasts.addToast("Failed to open account manager.", "error");
+    }
+    accountsPopoverOpen = false;
+  }
+
+  function handleStatusHover(open: boolean) {
+    statusPopoverOpen = open;
+  }
+
+  function handleAccountsHover(open: boolean) {
+    accountsPopoverOpen = open;
+  }
+
+  function handleSwitchAccount(label: string) {
+    accountsPopoverOpen = false;
+    toasts.addToast(`Switched to ${label}.`, "success");
+  }
 </script>
 
-<Card class="w-[340px] border-none shadow-lg">
-  <CardHeader class="relative p-0 shrink-0 h-[100px]">
+<Card class="w-[300px] border-none shadow-lg min-h-[450px] max-h-[518px] pt-0 pb-0">
+  <CardHeader class="relative h-[140px] p-0 overflow-hidden shrink-0">
     <Button
+      class="h-[105px] w-full bg-cover bg-center rounded-t-xl rounded-b-none"
       style={`background-image: url(${profileUser.bannerUrl || ""})`}
       aria-label="View banner image"
       onclick={() =>
         profileUser.bannerUrl && openLightbox(profileUser.bannerUrl)}
     />
     <div
-      class="absolute bottom-0 left-4 right-4 flex items-end justify-between"
+      class="absolute bottom-4 left-4 right-6 flex items-end justify-between"
     >
-      <div class="relative border-4 border-card rounded-full bg-card">
+      <div class="relative border-2 border-card rounded-full bg-card">
         <Button
           class="p-0 border-none bg-none rounded-full cursor-pointer"
           onclick={handleOpenDetailedProfile}
@@ -135,100 +242,239 @@
               alt={`${profileUser.name}'s profile picture`}
             />
             <Avatar.Fallback>
-              {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? "??"}
-            </Avatar.Fallback>
-          </Avatar.Root>
+            {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? "??"}
+          </Avatar.Fallback>
+        </Avatar.Root>
         </Button>
         <span
-          class="absolute bottom-1 right-1 w-4 h-4 rounded-full border-2 border-card"
-          class:bg-green-500={profileUser.online}
-          class:bg-gray-500={!profileUser.online}
+          class={`absolute top-8 right-0 w-5 h-5 rounded-full border-2 border-card ${statusIndicatorColorClass}`}
           title={profileUser.online ? "Online" : "Offline"}
         ></span>
       </div>
     </div>
+    {#if headerStatusLabel}
+      <p class="absolute bottom-2 left-4 text-xs font-medium text-muted-foreground">
+        {headerStatusLabel}
+      </p>
+    {/if}
   </CardHeader>
 
-  <CardContent class="pt-2 pb-4 px-4 grow overflow-y-auto">
-    <CardTitle class="text-xl font-bold">
-      <Button
-        class="p-0 border-none bg-transparent text-inherit font-inherit cursor-pointer hover:underline"
-        onclick={handleOpenDetailedProfile}
-      >
-        {profileUser.name || "Unknown User"}
-      </Button>
-    </CardTitle>
-
-    <div class="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-      <span>{profileUser.tag || ""}</span>
-      <Badge variant="secondary">Aegis Member</Badge>
+  <CardContent class="h-[366px] px-4 pb-4 flex flex-col gap-1 overflow-hidden">
+    <div class="space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <CardTitle class="text-lg font-semibold p-0">
+          <button
+            class="text-inherit font-inherit cursor-pointer hover:underline"
+            onclick={handleOpenDetailedProfile}
+          >
+            {profileUser.name || "Unknown User"}
+          </button>
+        </CardTitle>
+        <span class="text-sm font-medium text-muted-foreground">
+          {profileUser.online ? "Online" : "Offline"}
+        </span>
+      </div>
+      <div class="flex flex-wrap gap-2 text-sm text-muted-foreground">
+        {#if pronounsLabel}
+          <Badge variant="outline">{pronounsLabel}</Badge>
+        {/if}
+        {#if profileUser.tag}
+          <Badge>{profileUser.tag}</Badge>
+        {/if}
+        {#each badgeLabels as badge}
+          <Badge variant="secondary">{badge}</Badge>
+        {/each}
+      </div>
     </div>
 
-    <p class="text-sm mb-4 whitespace-pre-wrap break-word">
-      {profileUser.bio || ""}
-    </p>
-
-    {@const profileStatusLabel =
-      resolvePresenceStatusLabel(profileUser.statusMessage)}
-    {#if profileStatusLabel}
-      <p class="text-sm text-muted-foreground mb-2">
-        {profileStatusLabel}
+    <div class="flex-1 overflow-auto">
+      <p class="text-sm text-muted-foreground whitespace-pre-wrap">
+        {profileUser.bio}
       </p>
-    {/if}
+    </div>
 
-    {#if profileUser.location}
-      <p class="text-sm text-muted-foreground mb-4 flex items-center gap-2">
-        <MapPin class="h-4 w-4" />
-        <span>{profileUser.location}</span>
-      </p>
-    {/if}
-
-    {#if isServerMemberContext}
-      <Button
-        class="mt-4 w-full"
-        variant="secondary"
-        onclick={() => void handleManageRoles()}
-      >
-        Manage roles
-      </Button>
-    {/if}
-  </CardContent>
-
-  <CardFooter class="pt-0 px-4 pb-4 shrink-0">
-    {#if isMyProfile}
-      <div class="flex w-full flex-col gap-2">
-        <Button class="w-full" onclick={editProfile}>
-          <Pencil class="mr-2" size={18} />
-          Edit Profile
-        </Button>
-        <PresenceStatusEditor label="Status" variant="secondary" size="sm" />
+    <div class="flex flex-col gap-3">
+      <div class="rounded-md bg-background/20 p-2">
+        <div class="flex flex-col gap-2">
+          <Button
+            variant="ghost"
+            class="w-full justify-start items-center gap-2 h-8"
+            onclick={editProfile}
+          >
+            <Pencil size={16} />
+            <span class="flex-1 text-left">Edit Profile</span>
+          </Button>
+          <Separator />
+          <Popover.Root
+            open={statusPopoverOpen}
+            onOpenChange={(open) => (statusPopoverOpen = open)}
+          >
+              <div
+                role="list"
+                class="flex flex-col gap-0"
+                onmouseenter={() => handleStatusHover(true)}
+                onmouseleave={() => handleStatusHover(false)}
+              >
+              <Popover.Trigger>
+                <Button
+                  variant="ghost"
+                  class="w-full justify-start items-center gap-2 h-8"
+                  aria-label="Online status selector"
+                >
+                  <span
+                    class={`w-3 h-3 rounded-full inline-block ${statusIndicatorColorClass}`}
+                  ></span>
+                  <span class="flex-1 text-left">
+                    {statusDisplayLabel}
+                  </span>
+                  <span class="ml-auto text-muted-foreground">
+                    <ChevronRight size={16} />
+                  </span>
+                </Button>
+              </Popover.Trigger>
+              <Popover.Content
+                side="left"
+                align="center"
+                class="w-48 p-2 space-y-1"
+                sideOffset={6}
+                onmouseenter={() => handleStatusHover(true)}
+                onmouseleave={() => handleStatusHover(false)}
+              >
+              {#each onlineStatusOptions as option}
+                <Button
+                  class="w-full justify-start items-center gap-2 h-8"
+                  variant="ghost"
+                  onclick={() => handleSelectStatus(option)}
+                >
+                  <span
+                    class={`w-3 h-3 rounded-full inline-block ${STATUS_COLOR_MAP[option]}`}
+                  ></span>
+                  {option}
+                </Button>
+              {/each}
+              </Popover.Content>
+            </div>
+          </Popover.Root>
+        </div>
       </div>
-    {:else}
-      <div class="flex w-full items-center gap-2">
-        <Input
-          class="w-full"
-          type="text"
-          placeholder={`Message @${profileUser.name}`}
-          bind:value={draftMessage}
-          bind:ref={messageInputElement}
-          onkeydown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void sendDirectMessage();
-            }
-          }}
-          disabled={isSending}
-        />
+      <div class="rounded-md bg-background/20 p-2">
+        <div class="flex flex-col gap-2">
+          <Popover.Root
+            open={accountsPopoverOpen}
+            onOpenChange={(open) => (accountsPopoverOpen = open)}
+          >
+            <div
+              role="list"
+              class="flex flex-col gap-0"
+              onmouseenter={() => handleAccountsHover(true)}
+              onmouseleave={() => handleAccountsHover(false)}
+            >
+              <Popover.Trigger>
+                <Button
+                  variant="ghost"
+                  class="w-full justify-start items-center gap-2 mb-2 h-8"
+                  aria-label="Open account switcher"
+                >
+                  <CircleUserRound size={16} />
+                  <span class="flex-1 text-left">Switch Accounts</span>
+                  <span class="ml-auto text-muted-foreground">
+                    <ChevronRight size={16} />
+                  </span>
+                </Button>
+              </Popover.Trigger>
+              <Separator />
+              <Popover.Content
+                side="left"
+                align="start"
+                class="w-56 space-y-2 p-3"
+                sideOffset={6}
+                onmouseenter={() => handleAccountsHover(true)}
+                onmouseleave={() => handleAccountsHover(false)}
+              >
+                <div class="flex flex-col gap-2">
+                  {#if displayAccounts.length === 0}
+                    <p class="text-xs text-muted-foreground">No linked accounts yet.</p>
+                  {/if}
+                {#each displayAccounts as account}
+                  <Button
+                    variant="ghost"
+                    class="w-full justify-start items-center gap-2 h-8"
+                    onclick={() => handleSwitchAccount(account.label)}
+                  >
+                    <Avatar.Root class="h-5 w-5">
+                      <Avatar.Image
+                        src={account.avatar}
+                        alt={`${account.label}'s avatar`}
+                      />
+                      <Avatar.Fallback>
+                        {account.label?.slice(0, 2)?.toUpperCase() ?? "??"}
+                      </Avatar.Fallback>
+                    </Avatar.Root>
+                    <span class="flex-1 text-left">{account.label}</span>
+                    {#if account.tag}
+                      <span class="text-xs text-muted-foreground">{account.tag}</span>
+                    {/if}
+                  </Button>
+                {/each}
+                  <Separator />
+                  <Button
+                    class="w-full justify-start items-center gap-2 h-8"
+                    variant="ghost"
+                    size="sm"
+                    onclick={handleManageAccounts}
+                  >
+                    Manage Accounts
+                  </Button>
+                </div>
+              </Popover.Content>
+            </div>
+          </Popover.Root>
+          <Button
+            class="w-full justify-start items-center gap-2 h-8"
+            variant="ghost"
+            onclick={handleCopyUserId}
+          >
+            <Clipboard size={16} />
+            <span class="flex-1 text-left">Copy User ID</span>
+          </Button>
+        </div>
+      </div>
+      {#if isServerMemberContext}
         <Button
-          class="shrink-0"
-          onclick={() => void sendDirectMessage()}
-          disabled={isSending}
+          class="w-full text-sm"
+          variant="secondary"
+          onclick={() => void handleManageRoles()}
         >
-          Send
+          Manage roles
         </Button>
-      </div>
-    {/if}
-  </CardFooter>
+      {/if}
+      {#if !isMyProfile}
+        <div class="flex w-full gap-2">
+          <Input
+            class="w-full"
+            type="text"
+            placeholder={`Message @${profileUser.name}`}
+            bind:value={draftMessage}
+            bind:ref={messageInputElement}
+            onkeydown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void sendDirectMessage();
+              }
+            }}
+            disabled={isSending}
+          />
+          <Button
+            class="shrink-0"
+            onclick={() => void sendDirectMessage()}
+            disabled={isSending}
+          >
+            Send
+          </Button>
+        </div>
+      {/if}
+    </div>
+  </CardContent>
 </Card>
 
 {#if showLightbox}
