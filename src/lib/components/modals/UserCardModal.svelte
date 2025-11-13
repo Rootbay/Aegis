@@ -4,6 +4,7 @@
   import { toasts } from "$lib/stores/ToastStore";
   import { userStore } from "$lib/stores/userStore";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import EmojiPicker from "$lib/components/emoji/EmojiPicker.svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import type { User } from "$lib/features/auth/models/User";
   import {
@@ -22,7 +23,8 @@
     Pencil,
     ChevronRight,
     CircleUserRound,
-    Clipboard
+    Clipboard,
+    Smile,
   } from "@lucide/svelte";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
   import { tick } from "svelte";
@@ -48,6 +50,7 @@
   let draftMessage = $state("");
   let isSending = $state(false);
   let messageInputElement = $state<HTMLInputElement | null>(null);
+  let showEmojiPicker = $state(false);
   const BIO_PREVIEW_MAX_HEIGHT = 112;
   let bioExpanded = $state(true);
   let bioOverflow = $state(false);
@@ -191,6 +194,20 @@
     }
   }
 
+  function toggleEmojiPicker() {
+    showEmojiPicker = !showEmojiPicker;
+  }
+
+  function closeEmojiPicker() {
+    showEmojiPicker = false;
+  }
+
+  function handleEmojiSelect(emoji: string) {
+    draftMessage += emoji;
+    showEmojiPicker = false;
+    messageInputElement?.focus();
+  }
+
   function handleSelectStatus(status: OnlineStatusOption) {
     statusPopoverOpen = false;
     toasts.addToast(`Set status to ${status}.`, "success");
@@ -240,7 +257,7 @@
   }
 </script>
 
-<Card class="w-[300px] border-none shadow-lg pt-0 pb-0 max-h-[90vh]">
+<Card class="w-[300px] border-none shadow-lg py-0 gap-2 max-h-[60vh]">
   <CardHeader class="relative h-[140px] p-0 overflow-hidden shrink-0">
     <Button
       class="h-[105px] w-full bg-cover bg-center rounded-t-xl rounded-b-none"
@@ -264,9 +281,9 @@
               alt={`${profileUser.name}'s profile picture`}
             />
             <Avatar.Fallback>
-            {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? "??"}
-          </Avatar.Fallback>
-        </Avatar.Root>
+              {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? "??"}
+            </Avatar.Fallback>
+          </Avatar.Root>
         </Button>
         <span
           class={`absolute top-8 right-0 w-5 h-5 rounded-full border-2 border-card ${statusIndicatorColorClass}`}
@@ -281,7 +298,7 @@
     {/if}
   </CardHeader>
 
-  <CardContent class="max-h-[90vh] px-4 pb-4 flex flex-col gap-1 overflow-auto">
+  <CardContent class="max-h-[60vh] px-4 pb-4 flex flex-col gap-1 overflow-auto">
     <div class="space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <CardTitle class="text-lg font-semibold p-0">
@@ -501,13 +518,31 @@
             }}
             disabled={isSending}
           />
-          <Button
-            class="shrink-0"
-            onclick={() => void sendDirectMessage()}
-            disabled={isSending}
-          >
-            Send
-          </Button>
+          <div class="relative shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              class="h-10 w-10 p-0"
+              aria-label="Insert emoji"
+              aria-haspopup="dialog"
+              aria-expanded={showEmojiPicker}
+              aria-controls="user-card-emoji-picker"
+              onclick={toggleEmojiPicker}
+            >
+              <Smile size={20} />
+            </Button>
+            {#if showEmojiPicker}
+              <div
+                class="absolute bottom-full right-0 z-40 mb-2"
+                id="user-card-emoji-picker"
+              >
+                <EmojiPicker
+                  on:select={(event) => handleEmojiSelect(event.detail.emoji)}
+                  on:close={closeEmojiPicker}
+                />
+              </div>
+            {/if}
+          </div>
         </div>
       {/if}
     </div>
