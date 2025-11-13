@@ -25,6 +25,7 @@
     Clipboard
   } from "@lucide/svelte";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
+  import { tick } from "svelte";
 
   type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
@@ -47,6 +48,10 @@
   let draftMessage = $state("");
   let isSending = $state(false);
   let messageInputElement = $state<HTMLInputElement | null>(null);
+  const BIO_PREVIEW_MAX_HEIGHT = 112;
+  let bioExpanded = $state(true);
+  let bioOverflow = $state(false);
+  let bioContainer = $state<HTMLDivElement | null>(null);
   const onlineStatusOptions = ["Online", "Idle", "Do Not Disturb", "Invisible"] as const;
   type OnlineStatusOption = (typeof onlineStatusOptions)[number];
   const STATUS_COLOR_MAP: Record<OnlineStatusOption, string> = {
@@ -101,6 +106,23 @@
       selectedPresenceOption !== "Invisible"
         ? selectedPresenceOption
         : headerStatusLabel ?? "Invisible";
+  });
+
+  $effect(() => {
+    profileUser.bio;
+    const container = bioContainer;
+    if (!container) {
+      bioOverflow = false;
+      bioExpanded = true;
+      return;
+    }
+
+    void (async () => {
+      await tick();
+      const overflow = container.scrollHeight > BIO_PREVIEW_MAX_HEIGHT;
+      bioOverflow = overflow;
+      bioExpanded = !overflow;
+    })();
   });
 
   function handleOpenDetailedProfile() {
@@ -218,7 +240,7 @@
   }
 </script>
 
-<Card class="w-[300px] border-none shadow-lg min-h-[450px] max-h-[518px] pt-0 pb-0">
+<Card class="w-[300px] border-none shadow-lg pt-0 pb-0 max-h-[90vh]">
   <CardHeader class="relative h-[140px] p-0 overflow-hidden shrink-0">
     <Button
       class="h-[105px] w-full bg-cover bg-center rounded-t-xl rounded-b-none"
@@ -228,7 +250,7 @@
         profileUser.bannerUrl && openLightbox(profileUser.bannerUrl)}
     />
     <div
-      class="absolute bottom-4 left-4 right-6 flex items-end justify-between"
+      class="absolute bottom-5 left-4 right-6 flex items-end justify-between"
     >
       <div class="relative border-2 border-card rounded-full bg-card">
         <Button
@@ -259,7 +281,7 @@
     {/if}
   </CardHeader>
 
-  <CardContent class="h-[366px] px-4 pb-4 flex flex-col gap-1 overflow-hidden">
+  <CardContent class="max-h-[90vh] px-4 pb-4 flex flex-col gap-1 overflow-auto">
     <div class="space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <CardTitle class="text-lg font-semibold p-0">
@@ -287,10 +309,25 @@
       </div>
     </div>
 
-    <div class="flex-1 overflow-auto">
-      <p class="text-sm text-muted-foreground whitespace-pre-wrap">
-        {profileUser.bio}
-      </p>
+    <div class="flex flex-col gap-2">
+      <div
+        bind:this={bioContainer}
+        class="text-sm text-muted-foreground whitespace-pre-wrap overflow-hidden transition-[max-height] duration-150 ease-out"
+        style={`max-height:${bioExpanded || !bioOverflow ? "none" : `${BIO_PREVIEW_MAX_HEIGHT}px`};`}
+      >
+        <p class="m-0">{profileUser.bio}</p>
+      </div>
+      {#if bioOverflow}
+        <Button
+          variant="link"
+          size="sm"
+          class="self-start px-0 text-sm"
+          aria-expanded={bioExpanded}
+          onclick={() => (bioExpanded = !bioExpanded)}
+        >
+          {bioExpanded ? "View Less" : "View More"}
+        </Button>
+      {/if}
     </div>
 
     <div class="flex flex-col gap-3">
