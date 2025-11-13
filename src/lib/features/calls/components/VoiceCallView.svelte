@@ -11,15 +11,20 @@
     MonitorUp,
     MonitorStop,
     PhoneOff,
+    Volume2,
+    UserPlus,
+    Ellipsis,
   } from "@lucide/svelte";
-import {
-  callStore,
-  describeCallStatus,
-  type CallParticipant,
-  type ParticipantStatus,
-} from "$lib/features/calls/stores/callStore";
-import type { ChannelChat } from "$lib/features/chat/models/Chat";
-import CallModal from "$lib/features/calls/components/CallModal.svelte";
+  import {
+    callStore,
+    describeCallStatus,
+    type CallParticipant,
+    type ParticipantStatus,
+  } from "$lib/features/calls/stores/callStore";
+  import type { ChannelChat } from "$lib/features/chat/models/Chat";
+  import { toasts } from "$lib/stores/ToastStore";
+  import { userStore } from "$lib/stores/userStore";
+  import { userCache } from "$lib/utils/cache";
 
   let { chat }: { chat: ChannelChat } = $props();
 
@@ -59,7 +64,7 @@ import CallModal from "$lib/features/calls/components/CallModal.svelte";
     );
   });
 
-  const statusLabel = $derived(() => {
+  const statusLabel = $derived.by(() => {
     if (!callForChat) {
       return "Connecting to voice channel…";
     }
@@ -68,6 +73,58 @@ import CallModal from "$lib/features/calls/components/CallModal.svelte";
 
   const localMedia = $derived($callStore.localMedia);
   const isScreenSharing = $derived($callStore.localMedia.screenSharing);
+
+  const FALLBACK_AVATAR = (id: string) =>
+    `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${encodeURIComponent(id)}`;
+
+  let selectedParticipantId = $state<string | null>(null);
+
+  const localUserId = $derived.by(() => $userStore.me?.id ?? null);
+
+  const orderedParticipants = $derived.by<Array<CallParticipant & { userId: string }>>(
+    () => {
+      const currentLocalUserId = localUserId;
+      const sorted = [...participants];
+      sorted.sort((a, b) => {
+        if (a.userId === currentLocalUserId) {
+          return -1;
+        }
+        if (b.userId === currentLocalUserId) {
+          return 1;
+        }
+        const joinedA = a.joinedAt ?? Number.MAX_SAFE_INTEGER;
+        const joinedB = b.joinedAt ?? Number.MAX_SAFE_INTEGER;
+        if (joinedA !== joinedB) {
+          return joinedA - joinedB;
+        }
+        return a.userId.localeCompare(b.userId);
+      });
+      return sorted;
+    },
+  );
+
+  const shouldShowInvitePlaceholder = $derived.by(
+    () => Boolean(callForChat) && orderedParticipants.length === 1,
+  );
+
+  const gridItemCount = $derived.by(
+    () => orderedParticipants.length + (shouldShowInvitePlaceholder ? 1 : 0),
+  );
+
+  const gridColumnsClass = $derived.by(() =>
+    computeGridColumns(gridItemCount),
+  );
+
+  $effect(() => {
+    if (
+      selectedParticipantId &&
+      !orderedParticipants.some(
+        (participant) => participant.userId === selectedParticipantId,
+      )
+    ) {
+      selectedParticipantId = null;
+    }
+  });
 
   let duration = $state(0);
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -144,6 +201,92 @@ import CallModal from "$lib/features/calls/components/CallModal.svelte";
     }
   }
 
+  function getAvatarForUser(userId: string) {
+    const cached = userCache.get(userId);
+    return cached?.avatar ?? FALLBACK_AVATAR(userId);
+  }
+
+  function computeGridColumns(count: number) {
+    if (count <= 1) {
+      return "grid-cols-1";
+    }
+    if (count === 2) {
+      return "grid-cols-1 sm:grid-cols-2";
+    }
+    if (count === 3) {
+      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-2";
+    }
+    if (count === 4) {
+      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-2";
+    }
+    if (count <= 6) {
+      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3";
+    }
+    return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
+  }
+
+  function getParticipantCardClasses(index: number, isSelected: boolean) {
+    const classes = [
+      "relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[30px] border border-border bg-gradient-to-br from-slate-950/70 to-slate-900/60 px-6 py-6 text-center transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer",
+      isSelected
+        ? "scale-105 border-emerald-400/70 shadow-[0_25px_65px_rgba(16,185,129,0.35)]"
+        : "hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(15,23,42,0.45)]",
+    ];
+    if (gridItemCount === 3 && index === 0 && !shouldShowInvitePlaceholder) {
+      classes.push("col-span-2");
+    }
+    return classes.join(" ");
+  }
+
+  function handleSelectParticipant(userId: string) {
+    selectedParticipantId =
+      selectedParticipantId === userId ? null : userId;
+  }
+
+  async function handleInviteFriends() {
+    if (typeof window === "undefined") {
+      toasts.addToast("Unable to share invite right now.", "error");
+      return;
+    }
+    const shareUrl = window.location.href || "https://aegis.app";
+    const shareData = {
+      title: chat.name ?? "Join my voice call",
+      text: chat.name
+        ? `Join my voice call in ${chat.name}.`
+        : "Join my voice call on Aegis.",
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        toasts.addToast("Invite sent!", "success");
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to use native share:", error);
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        toasts.addToast("Invite link copied to clipboard.", "success");
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to copy invite link:", error);
+    }
+
+    toasts.addToast("Copy the link to share with friends.", "info");
+  }
+
+  function handleInviteKey(event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleInviteFriends();
+    }
+  }
+
   function handleMuteToggle() {
     callStore.toggleMute();
   }
@@ -194,10 +337,10 @@ import CallModal from "$lib/features/calls/components/CallModal.svelte";
   <header class="border-b border-border bg-card px-4 py-4">
     <div class="flex items-center justify-between gap-6">
       <div class="[word-wrap:break-word] space-y-1">
-        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-          Voice Channel
-        </p>
-        <h1 class="text-2xl font-semibold text-foreground">#{chat.name}</h1>
+      <h1 class="text-2xl font-semibold text-foreground flex items-center gap-2">
+        <Volume2 />
+        {chat.name}
+      </h1>
         <p class="text-sm text-muted-foreground">
           {statusLabel}
           {#if duration}
@@ -206,11 +349,7 @@ import CallModal from "$lib/features/calls/components/CallModal.svelte";
         </p>
       </div>
       <p class="text-sm font-semibold text-muted-foreground">
-        {#if callForChat}
-          {callForChat.participants.size}
-          {" "}
-          participant{callForChat.participants.size === 1 ? "" : "s"}
-        {:else}
+        {#if !callForChat}
           Starting call…
         {/if}
       </p>
@@ -219,123 +358,141 @@ import CallModal from "$lib/features/calls/components/CallModal.svelte";
 
   <div class="flex flex-1 flex-col overflow-hidden bg-card/60">
     <div class="flex-1 overflow-hidden px-4 py-4">
-      {#if participants.length}
-        <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {#each participants as participant (participant.userId)}
-            <div class="flex flex-col gap-4 rounded-xl border border-border bg-background p-4">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="text-sm font-semibold text-foreground">
-                    {formatParticipantName(participant)}
-                  </p>
-                  <p class="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-                    {formatParticipantStatus(participant.status)}
-                  </p>
-                </div>
-                {#if participant.isScreenSharing}
-                  <span class="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.3em] text-emerald-400">
-                    Sharing screen
-                  </span>
-                {/if}
+      {#if callForChat}
+        <div
+          class={`grid h-full w-full gap-3 auto-rows-[minmax(220px,1fr)] ${gridColumnsClass}`}
+        >
+          {#each orderedParticipants as participant, index (participant.userId)}
+            {@const participantName = formatParticipantName(participant)}
+            <button
+              type="button"
+              class={getParticipantCardClasses(
+                index,
+                selectedParticipantId === participant.userId,
+              )}
+              onclick={() => handleSelectParticipant(participant.userId)}
+              aria-pressed={selectedParticipantId === participant.userId}
+            >
+              <img
+                src={getAvatarForUser(participant.userId)}
+                alt={`${participantName} avatar`}
+                class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
+              />
+              <div class="space-y-1">
+                <p class="text-base font-semibold text-foreground">
+                  {participantName}
+                </p>
+                <p class="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                  {participant.userId === localUserId
+                    ? "You"
+                    : formatParticipantStatus(participant.status)}
+                </p>
               </div>
-              {#if participant.remoteStream}
-                <div class="relative h-32 w-full overflow-hidden rounded-lg bg-slate-950">
-                  <video
-                    use:mediaStream={participant.remoteStream}
-                    autoplay
-                    playsinline
-                    muted
-                    class="h-full w-full object-cover"
-                  ></video>
-                </div>
-              {:else}
-                <div class="flex h-32 w-full items-center justify-center rounded-lg border border-dashed border-border bg-muted/10 text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-                  {participant.isScreenSharing ? "Screen sharing" : "No video"}
-                </div>
-              {/if}
-            </div>
+            </button>
           {/each}
+          {#if shouldShowInvitePlaceholder}
+            <div
+              role="button"
+              tabindex="0"
+              class="group relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[30px] border border-dashed border-border/60 bg-muted/20 px-6 py-6 text-center transition hover:shadow-[0_20px_50px_rgba(15,23,42,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
+              onclick={handleInviteFriends}
+              onkeydown={handleInviteKey}
+              aria-label="Invite friends to the call"
+            >
+              <div class="flex h-24 w-24 items-center justify-center rounded-full border border-border/70 bg-muted/30 transition group-hover:border-border">
+                <UserPlus size={36} class="text-foreground" />
+              </div>
+              <div class="space-y-1">
+                <p class="text-lg font-semibold text-foreground">Invite Friends</p>
+                <p class="text-sm text-muted-foreground">
+                  Bring someone else into the call.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                class="w-full max-w-[220px]"
+                onclick={(event) => {
+                  event.stopPropagation();
+                  handleInviteFriends();
+                }}
+              >
+                Invite Friends
+              </Button>
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="flex h-full min-h-[220px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-          {#if callForChat}
-            <p>Waiting for others to join the call.</p>
-            <p>Only you are connected right now.</p>
-          {:else}
-            <p>Joining voice channel…</p>
-          {/if}
+          <p>Joining voice channel…</p>
         </div>
       {/if}
     </div>
-    <div class="border-t border-border px-4 py-4">
-      <div class="flex flex-wrap justify-center gap-3">
+      <div class="flex flex-wrap gap-x-3 gap-y-2 justify-center gap-3 mb-4">
+        <div class="flex gap-2 bg-card rounded-xl px-2 py-2 border border-border">
+          <Button
+            variant="ghost"
+            class="cursor-pointer"
+            onclick={handleMuteToggle}
+            aria-pressed={localMedia.audioEnabled}
+            aria-label={
+              localMedia.audioEnabled ? "Mute microphone" : "Unmute microphone"
+            }
+            disabled={!callIsActive || !localMedia.audioAvailable}
+          >
+            {#if localMedia.audioEnabled}
+              <Mic size={20} />
+            {:else}
+              <MicOff size={20} />
+            {/if}
+          </Button>
+          <Button
+            variant="ghost"
+            class="cursor-pointer"
+            onclick={handleVideoToggle}
+            aria-pressed={localMedia.videoEnabled}
+            aria-label={localMedia.videoEnabled ? "Disable camera" : "Enable camera"}
+            disabled={!callIsActive || !localMedia.videoAvailable}
+          >
+            {#if localMedia.videoEnabled}
+              <Video size={20} />
+            {:else}
+              <VideoOff size={20} />
+            {/if}
+          </Button>
+        </div>
+        <div class="flex gap-2 bg-card rounded-xl px-2 py-2 border border-border">
+          <Button
+            variant="ghost"
+            class="cursor-pointer"
+            onclick={handleScreenShareToggle}
+            aria-pressed={isScreenSharing}
+            aria-label={
+              isScreenSharing ? "Stop screen sharing" : "Share screen"
+            }
+            disabled={!callIsActive || !localMedia.screenShareAvailable}
+          >
+            {#if isScreenSharing}
+              <MonitorStop size={20} />
+            {:else}
+              <MonitorUp size={20} />
+            {/if}
+          </Button>
+          <Button
+            variant="ghost"
+            class="cursor-pointer"
+            aria-label={"More Options"}
+          >
+            <Ellipsis size={20} />
+          </Button>
+        </div>
         <Button
-          type="button"
-          variant={localMedia.audioEnabled ? "secondary" : "outline"}
-          size="icon"
-          class="cursor-pointer"
-          onclick={handleMuteToggle}
-          aria-pressed={localMedia.audioEnabled}
-          aria-label={
-            localMedia.audioEnabled ? "Mute microphone" : "Unmute microphone"
-          }
-          disabled={!callIsActive || !localMedia.audioAvailable}
-        >
-          {#if localMedia.audioEnabled}
-            <Mic class="h-4 w-4" />
-          {:else}
-            <MicOff class="h-4 w-4" />
-          {/if}
-        </Button>
-        <Button
-          type="button"
-          variant={localMedia.videoEnabled ? "secondary" : "outline"}
-          size="icon"
-          class="cursor-pointer"
-          onclick={handleVideoToggle}
-          aria-pressed={localMedia.videoEnabled}
-          aria-label={localMedia.videoEnabled ? "Disable camera" : "Enable camera"}
-          disabled={!callIsActive || !localMedia.videoAvailable}
-        >
-          {#if localMedia.videoEnabled}
-            <Video class="h-4 w-4" />
-          {:else}
-            <VideoOff class="h-4 w-4" />
-          {/if}
-        </Button>
-        <Button
-          type="button"
-          variant={
-            isScreenSharing ? "secondary" : "outline"
-          }
-          size="icon"
-          class="cursor-pointer"
-          onclick={handleScreenShareToggle}
-          aria-pressed={isScreenSharing}
-          aria-label={
-            isScreenSharing ? "Stop screen sharing" : "Share screen"
-          }
-          disabled={!callIsActive || !localMedia.screenShareAvailable}
-        >
-          {#if isScreenSharing}
-            <MonitorStop class="h-4 w-4" />
-          {:else}
-            <MonitorUp class="h-4 w-4" />
-          {/if}
-        </Button>
-        <Button
-          type="button"
           variant="destructive"
-          class="cursor-pointer px-4"
+          class="w-18 h-auto cursor-pointer py-2"
           onclick={handleLeaveCall}
           disabled={!callForChat}
         >
-          <PhoneOff class="mr-2 h-4 w-4" />
-          End Call
+          <PhoneOff size={20} />
         </Button>
       </div>
-    </div>
   </div>
 </div>
-
-<CallModal />

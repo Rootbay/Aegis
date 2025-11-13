@@ -351,6 +351,12 @@ export async function setWalkieTalkieVoiceMemosEnabled(value: boolean) {
       await invoke("set_voice_memos_enabled", { enabled: value });
     }
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : String(error ?? "unknown error");
+    if (message.includes("State not initialized")) {
+      // Backend isn't ready yet; we'll retry when the user toggles the setting later.
+      return;
+    }
     console.error("Failed to sync voice memo setting with backend", error);
   }
 }

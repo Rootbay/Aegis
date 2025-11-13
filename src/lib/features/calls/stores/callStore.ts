@@ -1019,10 +1019,15 @@ function createCallStore() {
               checking: false,
             },
           }));
+          if (type === "voice") {
+            toasts.addToast(
+              "Microphone access is blocked. You can listen but won't be heard until permission is granted.",
+              "warning",
+            );
+            return new MediaStream();
+          }
           throw new Error(
-            type === "video"
-              ? "Camera and microphone permissions are required to start a video call."
-              : "Microphone permission is required to start a voice call.",
+            "Camera and microphone permissions are required to start a video call.",
           );
         }
         if (error.name === "NotFoundError") {
@@ -1165,7 +1170,9 @@ function createCallStore() {
     await initialize();
     await ensureSignalListener();
 
-    if (!(await ensureInvokeFn())) {
+    const invokeAvailable = await ensureInvokeFn();
+    if (!invokeAvailable) {
+      console.warn("[Voice] joinVoiceChannel ensureInvokeFn returned null");
       toasts.showErrorToast("Call signaling is unavailable.");
       return false;
     }
@@ -1220,6 +1227,11 @@ function createCallStore() {
     activeCallId = callId;
 
     try {
+      console.log(
+        "[Voice] joinVoiceChannel requesting user media for chat",
+        chatId,
+        chatName,
+      );
       const stream = await requestUserMedia("voice");
       activeStream = stream;
       syncLocalMediaState(activeStream);
@@ -1256,6 +1268,7 @@ function createCallStore() {
 
       return true;
     } catch (error) {
+      console.error("[Voice] joinVoiceChannel failed", error);
       const message =
         error instanceof Error
           ? error.message

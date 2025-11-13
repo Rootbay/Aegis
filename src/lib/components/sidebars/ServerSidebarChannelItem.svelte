@@ -7,7 +7,7 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
-  import { Hash, Mic, Lock, Plus, Settings } from "@lucide/svelte";
+  import { Hash, Volume2, Lock, Plus, Settings, MessageCircle } from "@lucide/svelte";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
 
@@ -21,11 +21,13 @@
     primaryAction = (channel: Channel) => {},
     inviteHandler = (channel: Channel, event: MouseEvent) => {},
     settingsHandler = (channel: Channel, event: MouseEvent) => {},
+    messageHandler = (channel: Channel, event: MouseEvent) => {},
     dragStartHandler = (event: DragEvent, channel: Channel) => {},
     dragEndHandler = (event: DragEvent) => {},
     dragOverHandler = (event: DragEvent) => {},
     dropHandler = (event: DragEvent) => {},
     contextMenuHandler = (event: MouseEvent, channel: Channel) => {},
+    voiceActive = false,
     dataActive,
   } = $props<{
     channel: Channel;
@@ -37,11 +39,13 @@
     primaryAction?: (channel: Channel) => void;
     inviteHandler?: (channel: Channel, event: MouseEvent) => void;
     settingsHandler?: (channel: Channel, event: MouseEvent) => void;
+    messageHandler?: (channel: Channel, event: MouseEvent) => void;
     dragStartHandler?: (event: DragEvent, channel: Channel) => void;
     dragEndHandler?: (event: DragEvent) => void;
     dragOverHandler?: (event: DragEvent) => void;
     dropHandler?: (event: DragEvent) => void;
     contextMenuHandler?: (event: MouseEvent, channel: Channel) => void;
+    voiceActive?: boolean;
     dataActive?: string | undefined;
   }>();
 
@@ -91,9 +95,14 @@
     >
       <div class="flex items-center truncate">
         {#if channelType === "text"}
-          <Hash size={10} class="mr-1" />
+          <Hash size={16} />
         {:else}
-          <Mic size={12} class="mr-1" />
+          <Volume2
+            size={16}
+            class={`transition-colors ${
+              voiceActive ? "text-emerald-400" : "text-muted-foreground"
+            }`}
+          />
         {/if}
         <span class="truncate select-none ml-2">{channel.name}</span>
         {#if channel.private}
@@ -123,6 +132,15 @@
           >
             <Plus size={16} />
           </button>
+          {#if channelType === "voice"}
+            <button
+              class="text-muted-foreground hover:text-foreground cursor-pointer mr-1.5"
+              aria-label="Message voice channel"
+              onclick={(event) => messageHandler(channel, event)}
+            >
+              <MessageCircle size={16} />
+            </button>
+          {/if}
           <button
             class="text-muted-foreground hover:text-foreground cursor-pointer"
             aria-label="Channel settings"

@@ -13,6 +13,7 @@ pub async fn run() {
         .manage(AppStateContainer::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             commands::identity::get_peer_id,
             commands::identity::get_public_key,

@@ -11,6 +11,11 @@
   import { Dialog, DialogContent } from "$lib/components/ui/dialog";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
   import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
+  import { callStore } from "$lib/features/calls/stores/callStore";
+  import {
+    hideVoiceCallView,
+    voiceCallViewStore,
+  } from "$lib/features/calls/stores/voiceCallViewStore";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
 
@@ -29,9 +34,25 @@
   const groupOwnerId = $derived(() =>
     chat.type === "group" ? chat.ownerId ?? null : null,
   );
-  const isVoiceChannelCall = $derived(
-    () => chat.type === "channel" && chat.channelType === "voice",
-  );
+  const shouldShowVoiceCallView = $derived(() => {
+    if (chat.type !== "channel" || chat.channelType !== "voice") {
+      return false;
+    }
+    if ($voiceCallViewStore !== chat.id) {
+      return false;
+    }
+    const activeCall = $callStore.activeCall;
+    if (!activeCall) {
+      return false;
+    }
+    return (
+      activeCall.chatType === "channel" &&
+      activeCall.type === "voice" &&
+      activeCall.status !== "ended" &&
+      activeCall.status !== "error" &&
+      activeCall.chatId === chat.id
+    );
+  });
 
   const members = $derived(() =>
     chat.type === "dm" ? [] : (chat.members as MemberWithRoles[]),
@@ -152,9 +173,20 @@
     }
     memberSidebarVisibilityStore.setVisibility(chat.id, open);
   }
+
+  $effect(() => {
+    const activeCall = $callStore.activeCall;
+    if (
+      !activeCall ||
+      activeCall.status === "ended" ||
+      activeCall.status === "error"
+    ) {
+      hideVoiceCallView();
+    }
+  });
 </script>
 
-{#if isVoiceChannelCall()}
+{#if shouldShowVoiceCallView()}
   <div class="flex flex-1 min-h-0 flex-col">
     <VoiceCallView {chat} />
   </div>

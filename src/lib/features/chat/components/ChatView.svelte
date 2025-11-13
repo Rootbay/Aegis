@@ -107,6 +107,7 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
+  import { Skeleton } from "$lib/components/ui/skeleton";
   import {
     aggregateChannelPermissions,
     allowAllChannelPermissions,
@@ -2830,10 +2831,6 @@
     callStore.endCall(reason);
   }
 
-  function reopenCallModal() {
-    callStore.setCallModalOpen(true);
-  }
-
   function dismissCallStatus() {
     callStore.dismissCall();
   }
@@ -3339,7 +3336,6 @@
             call={callForChat}
             onLeave={hangUpCurrentCall}
             onDismiss={dismissCallStatus}
-            onOpenModal={reopenCallModal}
           />
         </div>
       {/if}
@@ -4021,16 +4017,6 @@
                 Edit Channel
               </Button>
             </div>
-          </div>
-        {/if}
-
-        {#if isChatLoading && (currentChatMessages?.length ?? 0) === 0}
-          <div
-            class="absolute inset-0 flex items-center justify-center pointer-events-none"
-          >
-            <span class="text-sm text-muted-foreground"
-              >Loading messages...</span
-            >
           </div>
         {/if}
 

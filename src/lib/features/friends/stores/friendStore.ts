@@ -490,7 +490,10 @@ export function createFriendStore(): FriendStore {
 
       const friendships = await invokeFn<FriendshipBackend[]>(
         "get_friendships",
-        { current_user_id: currentUser.id },
+        {
+          current_user_id: currentUser.id,
+          currentUserId: currentUser.id,
+        },
       );
       const friends = friendships
         .map((fs) => mapFriendshipToFriend(fs, currentUser.id))

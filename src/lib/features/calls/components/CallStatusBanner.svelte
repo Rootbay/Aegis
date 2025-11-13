@@ -3,15 +3,14 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { Button } from "$lib/components/ui/button";
-  import { PhoneCall, PhoneOff } from "@lucide/svelte";
+  import { PhoneOff } from "@lucide/svelte";
   import type { ActiveCall } from "$lib/features/calls/stores/callStore";
   import { describeCallStatus } from "$lib/features/calls/stores/callStore";
 
-  let { call, onLeave, onDismiss, onOpenModal } = $props<{
+  let { call, onLeave, onDismiss } = $props<{
     call: ActiveCall;
     onLeave: () => void;
     onDismiss: () => void;
-    onOpenModal: () => void;
   }>();
 
   let duration = $state(0);
@@ -92,15 +91,6 @@
     {/if}
   </div>
   <div class="flex items-center gap-2">
-    <Button
-      variant="secondary"
-      size="sm"
-      class="cursor-pointer"
-      onclick={onOpenModal}
-    >
-      <PhoneCall class="mr-2 h-3.5 w-3.5" />
-      View
-    </Button>
     {#if isActive}
       <Button
         variant="destructive"

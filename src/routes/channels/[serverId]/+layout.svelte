@@ -2,6 +2,10 @@
   import { lastVisitedServerId } from "$lib/stores/navigationStore";
   import { page } from "$app/stores";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import { callStore } from "$lib/features/calls/stores/callStore";
+  import {
+    voiceCallViewStore,
+  } from "$lib/features/calls/stores/voiceCallViewStore";
   import { goto } from "$app/navigation";
   import type { Snippet } from "svelte";
 
@@ -47,16 +51,47 @@
       !currentPathname.includes("/settings")
     ) {
       const server = $serverStore.servers.find((s) => s.id === serverId);
-      if (server && server.channels) {
-        const textChannel = server.channels.find(
-          (c) => c.channel_type === "text",
-        );
-        if (textChannel) {
-          const targetPath = `/channels/${serverId}/${textChannel.id}`;
-          if (currentPathname !== targetPath) {
-            // eslint-disable-next-line svelte/no-navigation-without-resolve
-            gotoUnsafe(targetPath);
-          }
+      if (!server || !server.channels) {
+        return;
+      }
+
+      const voiceChannelId = $voiceCallViewStore;
+      const activeCall = $callStore.activeCall;
+      const hasRelevantVoiceCall =
+        Boolean(
+          activeCall &&
+            activeCall.chatType === "channel" &&
+            activeCall.type === "voice" &&
+            activeCall.chatId === voiceChannelId &&
+            activeCall.status !== "ended" &&
+            activeCall.status !== "error",
+        ) && Boolean(voiceChannelId);
+      const voiceChannelExists = Boolean(
+        voiceChannelId &&
+          server.channels.some((channel) => channel.id === voiceChannelId),
+      );
+      const voiceChannelPath =
+        voiceChannelId && serverId
+          ? `/channels/${serverId}/${voiceChannelId}`
+          : null;
+
+      if (
+        hasRelevantVoiceCall &&
+        voiceChannelExists &&
+        voiceChannelPath &&
+        currentPathname === voiceChannelPath
+      ) {
+        return;
+      }
+
+      const textChannel = server.channels.find(
+        (c) => c.channel_type === "text",
+      );
+      if (textChannel) {
+        const targetPath = `/channels/${serverId}/${textChannel.id}`;
+        if (currentPathname !== targetPath) {
+          // eslint-disable-next-line svelte/no-navigation-without-resolve
+          gotoUnsafe(targetPath);
         }
       }
     }

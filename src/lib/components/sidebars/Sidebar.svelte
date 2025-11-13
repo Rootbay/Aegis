@@ -378,7 +378,7 @@
               <span
                 aria-hidden="true"
                 class={cn(
-                  "pointer-events-none absolute top-1/2 h-6 -translate-y-1/2 rounded-r bg-primary transition-all duration-200 ease-out",
+                  "pointer-events-none absolute left-0 top-1/2 h-6 -translate-y-1/2 rounded-r bg-white transition-all duration-200 ease-out",
                   $serverStore.activeServerId === server.id
                     ? "w-1 opacity-100"
                     : "w-0 opacity-0 group-hover:w-1 group-hover:opacity-100",

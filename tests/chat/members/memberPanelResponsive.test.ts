@@ -138,10 +138,6 @@ vi.mock("$lib/components/navigation/ChatSearch.svelte", () => ({
   },
 }));
 
-vi.mock("$lib/features/calls/components/CallModal.svelte", async () => ({
-  default: (await import("../../mocks/Passthrough.svelte")).default,
-}));
-
 vi.mock("$lib/components/modals/UserCardModal.svelte", async () => ({
   default: (await import("../../mocks/Passthrough.svelte")).default,
 }));

@@ -1,7 +1,6 @@
 import { render, fireEvent, waitFor } from "@testing-library/svelte";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { get, writable, type Writable } from "svelte/store";
-import CallModalMock from "../mocks/CallModal.svelte";
 
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 
@@ -33,7 +32,7 @@ const { preferencesState, toggleHideMemberNamesMock, setHideMemberNamesMock } =
     };
   });
 
-const { callState, initializeCallMock, startCallMock, setCallModalOpenMock } =
+const { callState, initializeCallMock, startCallMock } =
   vi.hoisted(() => ({
     callState: writable({
       activeCall: null,
@@ -43,7 +42,6 @@ const { callState, initializeCallMock, startCallMock, setCallModalOpenMock } =
     }),
     initializeCallMock: vi.fn(),
     startCallMock: vi.fn(),
-    setCallModalOpenMock: vi.fn(),
   }));
 
 const {
@@ -91,16 +89,11 @@ vi.mock("$app/navigation", () => ({
   goto: gotoMock,
 }));
 
-vi.mock("$lib/features/calls/components/CallModal.svelte", () => ({
-  default: CallModalMock,
-}));
-
 vi.mock("$lib/features/calls/stores/callStore", () => ({
   callStore: {
     subscribe: callState.subscribe,
     initialize: initializeCallMock,
     startCall: startCallMock,
-    setCallModalOpen: setCallModalOpenMock,
   },
 }));
 

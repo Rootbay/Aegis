@@ -5,7 +5,6 @@
   import { derived } from "svelte/store";
   import { page } from "$app/stores";
   import EmptyHeader from "$lib/components/navigation/EmptyHeader.svelte";
-  import CallModal from "$lib/features/calls/components/CallModal.svelte";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
   import type { Chat } from "$lib/features/chat/models/Chat";
@@ -67,5 +66,3 @@
 {:else}
   <EmptyHeader />
 {/if}
-
-<CallModal />

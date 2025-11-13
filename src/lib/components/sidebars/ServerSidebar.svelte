@@ -24,6 +24,10 @@
     chatStore,
   } from "$lib/features/chat/stores/chatStore";
   import { callStore } from "$lib/features/calls/stores/callStore";
+  import {
+    hideVoiceCallView,
+    showVoiceCallView,
+  } from "$lib/features/calls/stores/voiceCallViewStore";
   import { toasts } from "$lib/stores/ToastStore";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
@@ -1130,8 +1134,6 @@ import { Plus, ChevronDown } from "@lucide/svelte";
         : 0;
     selectedRoleIds = new SvelteSet(channel.allowed_role_ids ?? []);
     selectedMemberIds = new SvelteSet(channel.allowed_user_ids ?? []);
-    roleSearchTerm = "";
-    memberSearchTerm = "";
     loadPermissionOverridesFromChannel(channel.permission_overrides ?? null);
     showCreateChannelModal = true;
   }
@@ -1699,16 +1701,57 @@ import { Plus, ChevronDown } from "@lucide/svelte";
     return true;
   }
 
-  function handleVoiceChannelClick(channel: Channel) {
-    const allowed = handleChannelSelect(channel);
-    if (!allowed) {
+  async function handleVoiceChannelClick(channel: Channel) {
+    if (!server?.id) {
       return;
     }
-    void callStore.joinVoiceChannel({
+    const allowed = serverStore.canAccessChannel({
+      serverId: server.id,
+      channel,
+    });
+    if (!allowed) {
+      toasts.addToast("You do not have access to this channel.", "error");
+      return;
+    }
+
+    console.log(
+      "[Voice] handleVoiceChannelClick",
+      channel.id,
+      channel.name,
+      "server",
+      server.id,
+    );
+
+    const activeCall = $callStore.activeCall;
+    const isActiveVoiceCall =
+      Boolean(
+        activeCall &&
+          activeCall.chatType === "channel" &&
+          activeCall.type === "voice" &&
+          activeCall.chatId === channel.id &&
+          activeCall.status !== "ended" &&
+          activeCall.status !== "error",
+      );
+
+    if (isActiveVoiceCall) {
+      showVoiceCallView(channel.id);
+      handleChannelSelect(channel);
+      return;
+    }
+
+    hideVoiceCallView();
+    const joined = await callStore.joinVoiceChannel({
       chatId: channel.id,
       chatName: channel.name,
-      serverId: server?.id ?? null,
+      serverId: server.id,
     });
+
+    console.log("[Voice] joinVoiceChannel result", joined);
+
+    if (joined) {
+      showVoiceCallView(channel.id);
+      handleChannelSelect(channel);
+    }
   }
 </script>
 
@@ -1792,47 +1835,86 @@ import { Plus, ChevronDown } from "@lucide/svelte";
             handleChannelDragOver(event, null, "voice", null)}
           ondrop={(event) => handleChannelDrop(event, null, "voice")}
         >
-              {#each uncategorizedVoiceChannels as channel (channel.id)}
-                {@const metadata = channelMetadataLookup.get(channel.id)}
-                {@const activeCall = $callStore.activeCall}
-                {@const isActiveVoiceChannel = Boolean(
-                  activeCall &&
-                    activeCall.chatType === "channel" &&
-                    activeCall.type === "voice" &&
-                    activeCall.status !== "ended" &&
-                    activeCall.status !== "error" &&
-                    activeCall.chatId === channel.id,
-                )}
-                {#if shouldShowDropIndicator(null, "voice", channel.id)}
-                  <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
+          {#each uncategorizedVoiceChannels as channel (channel.id)}
+            {@const metadata = channelMetadataLookup.get(channel.id)}
+            {@const activeCall = $callStore.activeCall}
+            {@const isActiveVoiceChannel = Boolean(
+              activeCall &&
+                activeCall.chatType === "channel" &&
+                activeCall.type === "voice" &&
+                activeCall.status !== "ended" &&
+                activeCall.status !== "error" &&
+                activeCall.chatId === channel.id,
+            )}
+            {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+            {@const participantEntries = presenceEntry
+              ? Array.from(presenceEntry.participants.values()).sort(
+                (a, b) =>
+                  (a.joinedAt ?? a.lastSeenAt) - (b.joinedAt ?? b.lastSeenAt),
+              )
+              : []}
+            {@const hasVoiceParticipants = participantEntries.length > 0}
+            {#if shouldShowDropIndicator(null, "voice", channel.id)}
+              <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
+            {/if}
+            <ServerSidebarChannelItem
+              {channel}
+              {metadata}
+              channelType="voice"
+              draggingChannelId={draggingChannelId}
+              active={isActiveVoiceChannel}
+              activeClass="bg-primary/80 text-foreground shadow-sm"
+              primaryAction={handleVoiceChannelClick}
+              inviteHandler={(channel, event) =>
+                handleInviteToChannelClick(channel, event)}
+              settingsHandler={(channel, event) =>
+                handleChannelSettingsClick(channel, event)}
+              dragStartHandler={handleChannelDragStart}
+              dragEndHandler={handleChannelDragEnd}
+              dragOverHandler={(event) =>
+                handleChannelDragOver(event, null, "voice", channel.id)}
+              dropHandler={(event) =>
+                handleChannelDrop(event, null, "voice", channel.id)}
+              contextMenuHandler={(event) =>
+                handleChannelContextMenu(event, channel)}
+              dataActive={isActiveVoiceChannel ? "true" : undefined}
+              voiceActive={hasVoiceParticipants}
+            />
+            {#if presenceEntry}
+              <div class="ml-8 mt-1 space-y-1 pb-1">
+                {#if participantEntries.length > 0}
+                  <div class="space-y-1 mt-1">
+                    {#each participantEntries as presence (presence.userId)}
+                      {@const member = membersById.get(presence.userId)}
+                      <div class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-[12px] text-foreground">
+                        <Avatar class="h-6 w-6 border border-border">
+                          <AvatarImage
+                            src={member?.avatar}
+                            alt={member?.name ?? presence.userId}
+                          />
+                          <AvatarFallback class="text-[10px] font-semibold uppercase">
+                            {(member?.name ?? presence.userId)?.[0] ??
+                              presence.userId.slice(0, 1)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span class="truncate">
+                          {member?.name ?? presence.userId}
+                        </span>
+                      </div>
+                    {/each}
+                  </div>
+                {:else}
+                  <p class="text-[11px] text-muted-foreground">
+                    No one connected.
+                  </p>
                 {/if}
-                <ServerSidebarChannelItem
-                  {channel}
-                  {metadata}
-                  channelType="voice"
-                  draggingChannelId={draggingChannelId}
-                  active={isActiveVoiceChannel}
-                  activeClass="bg-primary/80 text-foreground shadow-sm"
-                  primaryAction={handleVoiceChannelClick}
-                  inviteHandler={(channel, event) =>
-                    handleInviteToChannelClick(channel, event)}
-                  settingsHandler={(channel, event) =>
-                    handleChannelSettingsClick(channel, event)}
-                  dragStartHandler={handleChannelDragStart}
-                  dragEndHandler={handleChannelDragEnd}
-                  dragOverHandler={(event) =>
-                    handleChannelDragOver(event, null, "voice", channel.id)}
-                  dropHandler={(event) =>
-                    handleChannelDrop(event, null, "voice", channel.id)}
-                  contextMenuHandler={(event) =>
-                    handleChannelContextMenu(event, channel)}
-                  dataActive={isActiveVoiceChannel ? "true" : undefined}
-                />
-              {/each}
-              {#if shouldShowDropIndicatorAtEnd(null, "voice")}
-                <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
-              {/if}
-            </div>
+              </div>
+            {/if}
+          {/each}
+          {#if shouldShowDropIndicatorAtEnd(null, "voice")}
+            <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
+          {/if}
+        </div>
           </div>
           {@const categories = getSortedCategories()}
           {#if categories.length > 0}
@@ -1869,14 +1951,24 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                       }`}
                     />
                   </CollapsibleTrigger>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Create Channel"
-                    onclick={() => handleCreateChannelClick("text", category.id)}
-                  >
-                    <Plus size={12} />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <button
+                          class="p-1 rounded-md text-muted-foreground hover:text-foreground cursor-pointer"
+                          aria-label="Create Channel"
+                          onclick={() => handleCreateChannelClick("text", category.id)}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <div class="text-xs">
+                          Create channel
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
 
                 <CollapsibleContent>
@@ -1953,6 +2045,15 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                           activeCall.status !== "error" &&
                           activeCall.chatId === channel.id,
                       )}
+                      {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
+                      {@const participantEntries = presenceEntry
+                        ? Array.from(presenceEntry.participants.values()).sort(
+                          (a, b) =>
+                            (a.joinedAt ?? a.lastSeenAt) -
+                            (b.joinedAt ?? b.lastSeenAt),
+                        )
+                        : []}
+                      {@const hasVoiceParticipants = participantEntries.length > 0}
                       {#if shouldShowDropIndicator(category.id, "voice", channel.id)}
                         <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
                       {/if}
@@ -1987,64 +2088,46 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                         contextMenuHandler={(event) =>
                           handleChannelContextMenu(event, channel)}
                         dataActive={isActiveVoiceChannel ? "true" : undefined}
+                        voiceActive={hasVoiceParticipants}
                       />
-                      {@const presenceEntry = $voiceChannelPresence.get(channel.id)}
                       {#if presenceEntry}
-                      {@const participantEntries = Array.from(
-                        presenceEntry.participants.values(),
-                      ).sort(
-                        (a, b) =>
-                          (a.joinedAt ?? a.lastSeenAt) -
-                          (b.joinedAt ?? b.lastSeenAt),
-                      )}
-                      <div class="ml-8 mt-1 space-y-1 pb-1">
-                        <div class="text-[11px] font-medium text-muted-foreground">
-                          {participantEntries.length} connected
-                        </div>
-                        {#if participantEntries.length > 0}
-                          <div class="flex flex-wrap gap-1.5">
-                            {#each participantEntries as presence (presence.userId)}
-                              {@const member = membersById.get(presence.userId)}
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <div class="flex items-center gap-1 rounded-md bg-muted/40 px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">
-                                      <Avatar class="h-5 w-5 border border-border">
-                                        <AvatarImage
-                                          src={member?.avatar}
-                                          alt={member?.name ?? presence.userId}
-                                        />
-                                        <AvatarFallback class="text-[10px] font-semibold uppercase">
-                                          {member?.name?.[0] ?? presence.userId.slice(0, 2).toUpperCase()}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <span class="max-w-24 truncate">
-                                        {member?.name ?? presence.userId}
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="bottom" align="start" class="text-xs">
+                        <div class="ml-8 mt-1 space-y-1 pb-1">
+                          <div class="text-[11px] font-medium text-muted-foreground">
+                            {participantEntries.length} connected
+                          </div>
+                          {#if participantEntries.length > 0}
+                            <div class="space-y-1">
+                              {#each participantEntries as presence (presence.userId)}
+                                {@const member = membersById.get(presence.userId)}
+                                <div class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-[12px] text-foreground">
+                                  <Avatar class="h-6 w-6 border border-border">
+                                    <AvatarImage
+                                      src={member?.avatar}
+                                      alt={member?.name ?? presence.userId}
+                                    />
+                                    <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                      {(member?.name ?? presence.userId)?.[0] ??
+                                        presence.userId.slice(0, 1)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span class="truncate">
                                     {member?.name ?? presence.userId}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                                  </span>
+                                </div>
+                              {/each}
+                            </div>
+                          {:else}
+                            <p class="text-[11px] text-muted-foreground">
+                              No one connected.
+                            </p>
+                          {/if}
+                        </div>
+                      {/if}
                     {/each}
-                    {#if shouldShowDropIndicatorAtEnd(category.id, "text")}
+                    {#if shouldShowDropIndicatorAtEnd(category.id, "voice")}
                       <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
                     {/if}
                   </div>
-                        {:else}
-                          <p class="text-[11px] text-muted-foreground">
-                            No one connected.
-                          </p>
-                        {/if}
-                      </div>
-                    {/if}
-                  {/each}
-                  {#if shouldShowDropIndicatorAtEnd(category.id, "voice")}
-                    <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
-                  {/if}
-                </div>
                 </CollapsibleContent>
               </Collapsible>
             {/each}

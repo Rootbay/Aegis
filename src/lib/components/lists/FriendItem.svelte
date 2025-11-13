@@ -155,9 +155,10 @@
       return null;
     }
     try {
-      const friendships: FriendshipRecord[] = await invoke("get_friendships", {
-        current_user_id: meId,
-      });
+    const friendships: FriendshipRecord[] = await invoke("get_friendships", {
+      current_user_id: meId,
+      currentUserId: meId,
+    });
       const match =
         friendships.find((f) => f.id === friend.friendshipId) ||
         friendships.find(

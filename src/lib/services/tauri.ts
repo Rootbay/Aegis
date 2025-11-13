@@ -15,18 +15,47 @@ declare global {
         listen?: ListenFn;
       };
     };
+    __TAURI_INTERNALS__?: {
+      invoke?: InvokeFn;
+      event?: {
+        listen?: ListenFn;
+      };
+    };
   }
 }
 
 const isBrowser = typeof window !== "undefined";
+
+function resolveInvokeHandle(): InvokeFn | null {
+  if (!isBrowser) {
+    return null;
+  }
+  return (
+    window.__TAURI__?.invoke ??
+    window.__TAURI_INTERNALS__?.invoke ??
+    null
+  );
+}
+
+function resolveListenHandle(): ListenFn | null {
+  if (!isBrowser) {
+    return null;
+  }
+  return (
+    window.__TAURI__?.event?.listen ??
+    window.__TAURI_INTERNALS__?.event?.listen ??
+    null
+  );
+}
 
 export async function getInvoke(): Promise<InvokeFn | null> {
   if (!isBrowser) {
     return null;
   }
 
-  if (window.__TAURI__?.invoke) {
-    return window.__TAURI__.invoke as InvokeFn;
+  const immediate = resolveInvokeHandle();
+  if (immediate) {
+    return immediate;
   }
 
   const pollInterval = 50;
@@ -44,15 +73,15 @@ export async function getInvoke(): Promise<InvokeFn | null> {
     };
 
     intervalId = setInterval(() => {
-      if (window.__TAURI__?.invoke) {
-        resolveSafely(window.__TAURI__.invoke as InvokeFn);
+      const handle = resolveInvokeHandle();
+      if (handle) {
+        resolveSafely(handle);
         return;
       }
 
       attempts += 1;
 
       if (attempts >= maxAttempts) {
-        // Resolve with null when Tauri never initialises so callers can handle fallbacks.
         resolveSafely(null);
       }
     }, pollInterval);
@@ -71,8 +100,9 @@ export async function getListen(): Promise<ListenFn | null> {
     return cachedListen;
   }
 
-  if (window.__TAURI__?.event?.listen) {
-    cachedListen = window.__TAURI__.event.listen as ListenFn;
+  const immediate = resolveListenHandle();
+  if (immediate) {
+    cachedListen = immediate;
     return cachedListen;
   }
 
@@ -92,9 +122,10 @@ export async function getListen(): Promise<ListenFn | null> {
       };
 
       intervalId = setInterval(() => {
-        if (window.__TAURI__?.event?.listen) {
-          cachedListen = window.__TAURI__.event.listen as ListenFn;
-          resolveSafely(cachedListen);
+        const handle = resolveListenHandle();
+        if (handle) {
+          cachedListen = handle;
+          resolveSafely(handle);
           return;
         }
 

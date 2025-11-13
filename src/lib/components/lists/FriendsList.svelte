@@ -1,10 +1,12 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { getContext } from "svelte";
+  import { getContext, onDestroy } from "svelte";
   import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
   import type { FriendsLayoutContext } from "$lib/contextTypes";
   import FriendItem from "$lib/components/lists/FriendItem.svelte";
+  import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import { Skeleton } from "$lib/components/ui/skeleton/index.js";
   import type { Friend } from "$lib/features/friends/models/Friend";
 
   const friendsLayoutContext = getContext<FriendsLayoutContext | undefined>(
@@ -23,8 +25,18 @@
     () => props.friends ?? friendsLayoutContext?.friends ?? [],
   );
 
+  let friendStoreLoading = true;
+  const unsubscribe = friendStore.subscribe(({ loading }) => {
+    friendStoreLoading = loading;
+  });
+  onDestroy(() => unsubscribe());
+
   const loading = $derived.by(
-    () => props.loading ?? friendsLayoutContext?.loading ?? false,
+    () =>
+      props.loading ??
+      friendsLayoutContext?.loading ??
+      friendStoreLoading ??
+      false,
   );
 
   const activeTab = $derived.by(
@@ -79,18 +91,38 @@
   function isHeader(item: FriendsListItem): item is FriendsListHeader {
     return (item as FriendsListHeader).kind === "header";
   }
+
+  const widthPatterns = [
+    { primary: "w-1/8", secondary: "w-1/3" },
+    { primary: "w-3/16", secondary: "w-2/5" },
+    { primary: "w-1/16", secondary: "w-5/12" },
+    { primary: "w-2/16", secondary: "w-7/16" },
+    { primary: "w-4/16", secondary: "w-3/8" },
+  ];
+
+  const skeletonRows = Array.from({ length: 5 }, (_, index) => ({
+    id: index,
+    ...widthPatterns[index % widthPatterns.length],
+  }));
 </script>
 
 <div class="flex flex-col h-full w-full bg-card/50 text-zinc-100 {extraClass}">
   <div class="grow overflow-y-auto px-4 pb-4">
     {#if loading}
-      <div class="flex justify-center mt-8" role="status" aria-live="polite">
-        <span class="sr-only">Loading friends…</span>
-        <div
-          class="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent"
-          data-testid="friends-loading-indicator"
-          aria-hidden="true"
-        ></div>
+      <div class="space-y-3 pt-2" role="status" aria-live="polite">
+        {#each skeletonRows as row (row.id)}
+          <div class="flex items-center gap-3 rounded-lg px-2 py-1">
+            <Skeleton class="h-10 w-10 rounded-full bg-muted-foreground/50" />
+            <div class="flex-1 space-y-2">
+              <Skeleton
+                class={`h-4 ${row.primary} bg-muted-foreground/50`}
+              />
+              <Skeleton
+                class={`h-3 ${row.secondary} bg-muted-foreground/30`}
+              />
+            </div>
+          </div>
+        {/each}
       </div>
     {:else if listItems.length > 0}
       <ul class="space-y-2">

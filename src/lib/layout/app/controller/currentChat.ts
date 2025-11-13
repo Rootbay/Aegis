@@ -3,6 +3,7 @@ import type { User } from "$lib/features/auth/models/User";
 import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Message } from "$lib/features/chat/models/Message";
 import type { Friend } from "$lib/features/friends/models/Friend";
+import type { Channel } from "$lib/features/channels/models/Channel";
 import { userCache } from "$lib/utils/cache";
 import type {
   ActiveChannelIdReadable,
@@ -75,7 +76,12 @@ interface DeriveCurrentChatParams {
     servers: Array<{
       id: string;
       members?: User[];
-      channels?: Array<{ id: string; name: string }>;
+      channels?: Array<{
+        id: string;
+        name: string;
+        topic?: string | null;
+        channel_type: Channel["channel_type"];
+      }>;
     }>;
   };
   groupChats: Map<
@@ -159,6 +165,8 @@ function deriveCurrentChat({
           id: channel.id,
           name: channel.name,
           serverId: server.id,
+          topic: channel.topic ?? null,
+          channelType: channel.channel_type,
           members: server.members ?? [],
           messages: deriveMessagesForChat(messagesByChatId, channel.id),
         } satisfies Chat;

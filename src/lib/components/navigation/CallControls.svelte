@@ -163,7 +163,6 @@
       active.status !== "ended" &&
       active.status !== "error"
     ) {
-      callStore.setCallModalOpen(true);
       return;
     }
     if (chat.type === "channel") {
@@ -194,7 +193,6 @@
       active.status !== "ended" &&
       active.status !== "error"
     ) {
-      callStore.setCallModalOpen(true);
       return;
     }
     await callStore.startCall({
