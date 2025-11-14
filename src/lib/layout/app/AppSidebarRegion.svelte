@@ -76,8 +76,6 @@
     <SidebarUserControls
       onSettingsClick={handleControlsSettingsClick}
       {openDetailedProfileModal}
-      isServerMemberContext={Boolean(activeServer())}
-      serverId={activeServer()?.id ?? null}
     />
   </div>
 {/if}

@@ -350,21 +350,21 @@
             <Button
               variant="outline"
               size="icon"
-              class="h-8 w-8"
+              class="h-6 w-6"
               aria-label="Add roles"
               onclick={onAddRoles}
               disabled={!onAddRoles}
             >
-              <Plus size={16} />
+              <Plus size={12} />
             </Button>
           {:else}
             <Button
               variant="outline"
-              class="flex items-center gap-2"
+              class="flex items-center gap-1 h-6 text-[11px] font-normal"
               onclick={onAddRoles}
               disabled={!onAddRoles}
             >
-              <Plus size={16} />
+              <Plus size={12} />
               Add Roles
             </Button>
           {/if}
@@ -411,6 +411,14 @@
               {/if}
             </div>
           </div>
+        {:else}
+          <Button
+            variant="secondary"
+            onclick={editProfile}
+          >
+            <Pencil/>
+            Edit Profile
+          </Button>
         {/if}
       </div>
     {:else}

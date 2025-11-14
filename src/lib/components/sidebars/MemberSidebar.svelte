@@ -327,19 +327,22 @@
           let:isServerContext
           let:resolvedServerId
         >
-          <UserCardModal
-            profileUser={member}
-            {openDetailedProfileModal}
-            isServerMemberContext={isServerContext}
-            {close}
-            serverId={
-              isServerContext ? (resolvedServerId ?? undefined) : undefined
-            }
-            memberRoles={
-              isServerContext ? getMemberRoleObjects(member) : []
-            }
-            onAddRoles={isServerContext ? handleAddRolesClick : undefined}
-          />
+            {@const serverContextValue = isServerContext()}
+            <UserCardModal
+              profileUser={member}
+              {openDetailedProfileModal}
+              isServerMemberContext={serverContextValue}
+              {close}
+              serverId={
+                serverContextValue ? (resolvedServerId ?? undefined) : undefined
+              }
+              memberRoles={
+                serverContextValue ? getMemberRoleObjects(member) : []
+              }
+              onAddRoles={
+                serverContextValue ? handleAddRolesClick : undefined
+              }
+            />
         </svelte:fragment>
       </MemberListContent>
     {:else}
@@ -364,18 +367,21 @@
           let:isServerContext
           let:resolvedServerId
         >
+            {@const serverContextValue = isServerContext()}
             <UserCardModal
               profileUser={member}
               {openDetailedProfileModal}
-              isServerMemberContext={isServerContext}
+              isServerMemberContext={serverContextValue}
               {close}
               serverId={
-                isServerContext ? (resolvedServerId ?? undefined) : undefined
+                serverContextValue ? (resolvedServerId ?? undefined) : undefined
               }
               memberRoles={
-                isServerContext ? getMemberRoleObjects(member) : []
+                serverContextValue ? getMemberRoleObjects(member) : []
               }
-              onAddRoles={isServerContext ? handleAddRolesClick : undefined}
+              onAddRoles={
+                serverContextValue ? handleAddRolesClick : undefined
+              }
             />
         </svelte:fragment>
       </MemberListContent>
@@ -433,18 +439,21 @@
             let:isServerContext
             let:resolvedServerId
           >
+            {@const serverContextValue = isServerContext()}
             <UserCardModal
               profileUser={member}
               {openDetailedProfileModal}
-              isServerMemberContext={isServerContext}
+              isServerMemberContext={serverContextValue}
               {close}
               serverId={
-                isServerContext ? (resolvedServerId ?? undefined) : undefined
+                serverContextValue ? (resolvedServerId ?? undefined) : undefined
               }
               memberRoles={
-                isServerContext ? getMemberRoleObjects(member) : []
+                serverContextValue ? getMemberRoleObjects(member) : []
               }
-              onAddRoles={isServerContext ? handleAddRolesClick : undefined}
+              onAddRoles={
+                serverContextValue ? handleAddRolesClick : undefined
+              }
             />
           </svelte:fragment>
         </MemberListContent>

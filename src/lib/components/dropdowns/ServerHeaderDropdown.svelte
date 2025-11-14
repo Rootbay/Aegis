@@ -54,10 +54,10 @@
 </script>
 
 <DropdownMenu>
-  <DropdownMenuTrigger>
+  <DropdownMenuTrigger class="w-full h-full">
     <Button
       variant="ghost"
-      class="w-full h-full flex items-center justify-between font-bold text-lg truncate px-4 py-2 pr-8 hover:bg-base-400/50 cursor-pointer"
+      class="w-full h-full flex items-center justify-between font-bold text-lg hover:bg-base-400/50 rounded-none cursor-pointer"
     >
       <span class="truncate">{server.name}</span>
       <ChevronDown size={10} class="mr-2" />

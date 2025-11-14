@@ -13,7 +13,13 @@
   import { userStore } from "$lib/stores/userStore";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { cn } from "$lib/utils";
-  import { Mic, MicOff, Settings, Headphones } from "@lucide/svelte";
+  import {
+    Mic,
+    MicOff,
+    Settings,
+    Headphones,
+    HeadphoneOff
+  } from "@lucide/svelte";
   import type { User } from "$lib/features/auth/models/User";
 
   type OpenProfileHandler = (user: User) => void;
@@ -153,9 +159,9 @@
               onclick={toggleMute}
             >
               {#if localMedia().audioEnabled}
-                <Mic class="size-4" />
+                <Mic size={16} />
               {:else}
-                <MicOff class="size-4" />
+                <MicOff size={16} />
               {/if}
             </Button>
           </TooltipTrigger>
@@ -171,7 +177,11 @@
                 aria-pressed={isDeafened}
                 onclick={toggleDeafen}
               >
-              <Headphones class="size-4" />
+              {#if !isDeafened}
+                <Headphones size={16} />
+              {:else}
+                <HeadphoneOff size={16} />
+              {/if}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{deafTooltip()}</TooltipContent>
@@ -186,7 +196,7 @@
                 onclick={handleSettingsClick}
                 disabled={settingsDisabled()}
               >
-              <Settings class="size-4" />
+              <Settings size={16} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{settingsTooltip}</TooltipContent>

@@ -1797,19 +1797,11 @@
     aria-label="Server sidebar"
   >
     {#if server}
-      <SidebarHeader class="px-0 pl-2 shadow-sm">
+      <SidebarHeader class="px-0">
         <ServerHeaderDropdown
           {server}
           on:action={handleServerHeaderDropdownAction}
         />
-        <Button
-          variant="ghost"
-          size="icon"
-          class="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
-          aria-label="Invite People"
-        >
-          <Plus size={12} />
-        </Button>
       </SidebarHeader>
 
       <SidebarContent class="flex flex-1 flex-col overflow-hidden">
