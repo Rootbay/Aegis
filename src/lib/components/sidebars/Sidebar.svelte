@@ -332,7 +332,7 @@
 <Sidebar
   side="left"
   variant="solid"
-  class="relative flex flex-col w-16 min-w-16 items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
+  class="relative flex flex-col w-16 min-w-16 items-center bg-background px-0 py-4 text-foreground border-0"
   aria-label="Server navigation"
 >
   <TooltipProvider>

@@ -177,7 +177,7 @@
             </p>
           </section>
 
-          <section class="space-y-4 max-h-[250px] overflow-y-auto pr-1">
+          <section class="space-y-4 max-h-[300px] overflow-y-auto pr-1">
             <Button
               variant="outline"
               class="flex h-[52px] w-full items-center justify-between font-semibold text-foreground transition"
@@ -352,6 +352,5 @@
         </div>
       </div>
     {/if}
-    <DialogClose/>
   </DialogContent>
 </Dialog>

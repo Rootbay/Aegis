@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { getContext } from "svelte";
   import FriendsList from "$lib/components/lists/FriendsList.svelte";
-  import { FRIENDS_LAYOUT_DATA_CONTEXT_KEY } from "$lib/contextKeys";
-  import type { FriendsLayoutContext } from "$lib/contextTypes";
+  import { friendStore } from "$lib/features/friends/stores/friendStore";
+  import type { Friend } from "$lib/features/friends/models/Friend";
 
-  const { friends, loading } = getContext<FriendsLayoutContext>(
-    FRIENDS_LAYOUT_DATA_CONTEXT_KEY,
-  );
+  let friends: Friend[] = [];
+  let loading = true;
+
+  $: ({ friends, loading } = $friendStore);
 </script>
 
 <FriendsList {friends} {loading} />

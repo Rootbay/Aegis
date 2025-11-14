@@ -68,7 +68,14 @@
           void chatStore.setActiveChat(chatId, "group");
         }
       }
+      return;
     }
+
+    if (pathname.startsWith("/channels")) {
+      return;
+    }
+
+    chatStore.clearActiveChat();
   });
 </script>
 
