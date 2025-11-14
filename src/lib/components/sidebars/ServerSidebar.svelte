@@ -192,6 +192,33 @@
     CREATE_GROUP_CONTEXT_KEY,
   );
   const openProfileReviewsModal = createGroupContext?.openProfileReviewsModal;
+  const openUserCardModal = createGroupContext?.openUserCardModal;
+
+  function handleVoiceParticipantClick(
+    event: MouseEvent,
+    member: User | undefined,
+    userId: string,
+  ) {
+    const triggerRect = (
+      event.currentTarget as HTMLElement | null
+    )?.getBoundingClientRect?.();
+    const user: User = member ?? {
+      id: userId,
+      name: userId,
+      avatar: "",
+      online: false,
+    };
+    openUserCardModal?.(
+      user,
+      triggerRect?.right ?? event.clientX,
+      event.clientY,
+      Boolean(server?.id),
+      {
+        preferredSide: "right",
+        triggerLeft: triggerRect?.right ?? event.clientX,
+      },
+    );
+  }
 
   let showCreateChannelModal = $state(false);
   let showCreateCategoryModal = $state(false);
@@ -1911,28 +1938,37 @@
                   <div class="space-y-1 mt-1">
                     {#each participantEntries as presence (presence.userId)}
                       {@const member = membersById.get(presence.userId)}
-                                <div class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-[12px] text-foreground">
-                                  <Avatar class="h-6 w-6 border border-border">
-                                    <AvatarImage
-                                      src={member?.avatar}
-                                      alt={member?.name ?? presence.userId}
-                                    />
-                                    <AvatarFallback class="text-[10px] font-semibold uppercase">
-                                      {(member?.name ?? presence.userId)?.[0] ??
-                                        presence.userId.slice(0, 1)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span class="flex flex-1 min-w-0 items-center gap-2">
-                                    <span class="truncate">
-                                      {member?.name ?? presence.userId}
-                                    </span>
-                                    {#if isActiveVoiceChannel && voiceCallDuration > 0}
-                                      <span class="text-[10px] text-muted-foreground whitespace-nowrap">
-                                        {formatDuration(voiceCallDuration)}
-                                      </span>
-                                    {/if}
-                                  </span>
-                                </div>
+                      <Button
+                        variant="ghost"
+                        class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-[12px] text-foreground text-left transition-colors"
+                        onclick={(event) =>
+                          handleVoiceParticipantClick(
+                            event,
+                            member,
+                            presence.userId,
+                          )}
+                      >
+                        <Avatar class="h-6 w-6 border border-border">
+                          <AvatarImage
+                            src={member?.avatar}
+                            alt={member?.name ?? presence.userId}
+                          />
+                          <AvatarFallback class="text-[10px] font-semibold uppercase">
+                            {(member?.name ?? presence.userId)?.[0] ??
+                              presence.userId.slice(0, 1)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span class="flex flex-1 min-w-0">
+                          <span class="truncate">
+                            {member?.name ?? presence.userId}
+                          </span>
+                        </span>
+                        {#if isActiveVoiceChannel && voiceCallDuration > 0}
+                          <span class="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
+                            {formatDuration(voiceCallDuration)}
+                          </span>
+                        {/if}
+                      </Button>
                     {/each}
                   </div>
                 {/if}
@@ -2120,14 +2156,20 @@
                       />
                       {#if presenceEntry}
                         <div class="ml-8 mt-1 space-y-1 pb-1">
-                          <div class="text-[11px] font-medium text-muted-foreground">
-                            {participantEntries.length} connected
-                          </div>
                           {#if participantEntries.length > 0}
                             <div class="space-y-1">
                               {#each participantEntries as presence (presence.userId)}
                                 {@const member = membersById.get(presence.userId)}
-                                <div class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-[12px] text-foreground">
+                                <Button
+                                  variant="ghost"
+                                  class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-[12px] text-foreground text-left transition-colors"
+                                  onclick={(event) =>
+                                    handleVoiceParticipantClick(
+                                      event,
+                                      member,
+                                      presence.userId,
+                                    )}
+                                >
                                   <Avatar class="h-6 w-6 border border-border">
                                     <AvatarImage
                                       src={member?.avatar}
@@ -2138,17 +2180,17 @@
                                         presence.userId.slice(0, 1)}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span class="flex flex-1 min-w-0 items-center gap-2">
+                                  <span class="flex flex-1 min-w-0">
                                     <span class="truncate">
                                       {member?.name ?? presence.userId}
                                     </span>
-                                    {#if isActiveVoiceChannel && voiceCallDuration > 0}
-                                      <span class="text-[10px] text-muted-foreground whitespace-nowrap">
-                                        {formatDuration(voiceCallDuration)}
-                                      </span>
-                                    {/if}
                                   </span>
-                                </div>
+                                  {#if isActiveVoiceChannel && voiceCallDuration > 0}
+                                    <span class="ml-auto text-[10px] text-muted-foreground whitespace-nowrap">
+                                      {formatDuration(voiceCallDuration)}
+                                    </span>
+                                  {/if}
+                                </Button>
                               {/each}
                             </div>
                           {:else}

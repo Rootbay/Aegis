@@ -52,17 +52,28 @@ function computeUserCardPosition(
   const safeX = Number.isFinite(clickX) ? clickX : viewportWidth - CARD_MARGIN;
   const safeY = Number.isFinite(clickY) ? clickY : viewportHeight - CARD_MARGIN;
 
+  const maxX = Math.max(
+    CARD_MARGIN,
+    viewportWidth - CARD_WIDTH - CARD_MARGIN,
+  );
   const defaultX = clamp(
     safeX - CARD_WIDTH / 2,
     CARD_MARGIN,
-    Math.max(CARD_MARGIN, viewportWidth - CARD_WIDTH - CARD_MARGIN),
+    maxX,
   );
   const x =
     options?.preferredSide === "left" && typeof options.triggerLeft === "number"
       ? clamp(
           options.triggerLeft - CARD_WIDTH - CARD_MARGIN,
           CARD_MARGIN,
-          Math.max(CARD_MARGIN, viewportWidth - CARD_WIDTH - CARD_MARGIN),
+          maxX,
+        )
+      : options?.preferredSide === "right" &&
+        typeof options.triggerLeft === "number"
+      ? clamp(
+          options.triggerLeft + CARD_MARGIN,
+          CARD_MARGIN,
+          maxX,
         )
       : defaultX;
 

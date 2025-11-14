@@ -21,12 +21,29 @@
   import { Badge } from "$lib/components/ui/badge/index";
   import { Separator } from "$lib/components/ui/separator/index";
   import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+    DialogClose,
+  } from "$lib/components/ui/dialog";
+  import {
+    Select,
+    SelectTrigger,
+    SelectContent,
+    SelectItem,
+  } from "$lib/components/ui/select";
+  import {
     Pencil,
     ChevronRight,
     CircleUserRound,
     Clipboard,
     Smile,
     Plus,
+    CornerUpRight,
+    Trash2,
   } from "@lucide/svelte";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
   import { tick } from "svelte";
@@ -57,12 +74,19 @@
   let isSending = $state(false);
   let messageInputElement = $state<HTMLInputElement | null>(null);
   let showEmojiPicker = $state(false);
+  let statusLabelHovered = $state(false);
   const BIO_PREVIEW_MAX_HEIGHT = 112;
   let bioExpanded = $state(true);
   let bioOverflow = $state(false);
   let bioContainer = $state<HTMLDivElement | null>(null);
   const onlineStatusOptions = ["Online", "Idle", "Do Not Disturb", "Invisible"] as const;
   type OnlineStatusOption = (typeof onlineStatusOptions)[number];
+  const clearAfterOptions = [
+    { value: "dontClear", label: "Don't Clear" },
+    { value: "4h", label: "4 hours" },
+    { value: "24h", label: "24 hours" },
+  ] as const;
+  type ClearAfterOption = (typeof clearAfterOptions)[number]["value"];
   const STATUS_COLOR_MAP: Record<OnlineStatusOption, string> = {
     Online: "bg-green-500",
     Idle: "bg-yellow-500",
@@ -75,6 +99,11 @@
   );
   let statusPopoverOpen = $state(false);
   let accountsPopoverOpen = $state(false);
+  let showStatusEditDialog = $state(false);
+  let statusEditorEmojiPickerOpen = $state(false);
+  let statusDraftInput = $state("");
+  let clearAfterSelection = $state<ClearAfterOption>("dontClear");
+  let statusOverride = $state<string | null>(null);
 
   let pronounsLabel = $derived(
     (profileUser as { pronouns?: string }).pronouns ??
@@ -109,7 +138,10 @@
   );
 
   $effect(() => {
-    headerStatusLabel = resolvePresenceStatusLabel(profileUser.statusMessage);
+    const resolvedLabel = resolvePresenceStatusLabel(profileUser.statusMessage);
+    const effectiveLabel =
+      statusOverride === "" ? null : statusOverride ?? resolvedLabel;
+    headerStatusLabel = effectiveLabel;
     statusIndicatorColorClass = STATUS_COLOR_MAP[selectedPresenceOption];
     statusDisplayLabel =
       selectedPresenceOption !== "Invisible"
@@ -132,6 +164,12 @@
       bioOverflow = overflow;
       bioExpanded = !overflow;
     })();
+  });
+
+  $effect(() => {
+    if (!showStatusEditDialog) {
+      statusEditorEmojiPickerOpen = false;
+    }
   });
 
   function handleOpenDetailedProfile() {
@@ -202,6 +240,49 @@
       status !== "Invisible" ? status : headerStatusLabel ?? "Invisible";
   }
 
+  function handleSendEmojiQuickAction() {
+    showEmojiPicker = true;
+    messageInputElement?.focus();
+  }
+
+  function handleReplyQuickAction() {
+    messageInputElement?.focus();
+  }
+
+  function openStatusEditorDialog() {
+    statusDraftInput = headerStatusLabel ?? "";
+    clearAfterSelection = "dontClear";
+    showStatusEditDialog = true;
+  }
+
+  function toggleStatusEditorEmojiPicker() {
+    statusEditorEmojiPickerOpen = !statusEditorEmojiPickerOpen;
+  }
+
+  function handleStatusEditorEmojiSelect(emoji: string) {
+    statusDraftInput += emoji;
+    statusEditorEmojiPickerOpen = false;
+  }
+
+  function handleClearStatus() {
+    statusOverride = "";
+    statusDraftInput = "";
+    toasts.addToast("Status cleared.", "success");
+  }
+
+  function saveStatusDraft() {
+    const trimmed = statusDraftInput.trim();
+    statusOverride = trimmed === "" ? "" : trimmed;
+    showStatusEditDialog = false;
+    if (clearAfterSelection !== "dontClear") {
+      const option = clearAfterOptions.find(
+        (item) => item.value === clearAfterSelection,
+      );
+      const label = option?.label ?? "the selected time";
+      toasts.addToast(`Status will clear after ${label}.`, "info");
+    }
+  }
+
   async function handleCopyUserId() {
     if (typeof navigator === "undefined" || !navigator.clipboard) {
       toasts.addToast("Clipboard is unavailable.", "error");
@@ -242,7 +323,7 @@
   }
 </script>
 
-<Card class="w-[300px] border-none shadow-lg py-0 gap-2 max-h-[60vh]">
+<Card class="w-[300px] border-none shadow-lg py-0 gap-2">
   <CardHeader class="relative h-[140px] p-0 overflow-hidden shrink-0">
     <Button
       class="h-[105px] w-full bg-cover bg-center rounded-t-xl rounded-b-none"
@@ -254,7 +335,7 @@
     <div
       class="absolute bottom-5 left-4 right-6 flex items-end justify-between"
     >
-      <div class="relative border-2 border-card rounded-full bg-card">
+      <div class="relative border-none border-card rounded-full bg-card">
         <Button
           class="p-0 border-none bg-none rounded-full cursor-pointer"
           onclick={handleOpenDetailedProfile}
@@ -277,9 +358,65 @@
       </div>
     </div>
     {#if headerStatusLabel}
-      <p class="absolute bottom-2 left-4 text-xs font-medium text-muted-foreground">
-        {headerStatusLabel}
-      </p>
+      <div
+        role="list"
+        class="absolute bottom-2 left-4 flex items-start"
+        onmouseenter={() => (statusLabelHovered = true)}
+        onmouseleave={() => (statusLabelHovered = false)}
+      >
+        <div class="relative">
+          <p class="text-xs font-medium text-muted-foreground bg-muted/70 rounded-xl px-3 py-1">
+            {headerStatusLabel}
+          </p>
+          <div
+            class={`absolute -top-9 right-0 flex items-center gap-1 rounded-full transition-opacity duration-150 ${statusLabelHovered ? "opacity-100" : "opacity-0"}`}
+          >
+            {#if !isMyProfile}
+              <Button
+                class="p-0 text-muted-foreground"
+                variant="ghost"
+                size="icon"
+                title="Send emoji"
+                aria-label="Send emoji"
+                onclick={handleSendEmojiQuickAction}
+              >
+                <Smile size={14} />
+              </Button>
+              <Button
+                class="p-0 text-muted-foreground"
+                variant="ghost"
+                size="icon"
+                title="Reply"
+                aria-label="Reply"
+                onclick={handleReplyQuickAction}
+              >
+                <CornerUpRight size={14} />
+              </Button>
+            {:else}
+              <Button
+                class="p-0 text-muted-foreground"
+                variant="ghost"
+                size="icon"
+                title="Edit status"
+                aria-label="Edit status"
+                onclick={openStatusEditorDialog}
+              >
+                <Pencil size={14} />
+              </Button>
+              <Button
+                class="p-0 text-muted-foreground"
+                variant="ghost"
+                size="icon"
+                title="Clear status"
+                aria-label="Clear status"
+                onclick={handleClearStatus}
+              >
+                <Trash2 size={14} />
+              </Button>
+            {/if}
+          </div>
+        </div>
+      </div>
     {/if}
   </CardHeader>
 
@@ -294,9 +431,6 @@
             {profileUser.name || "Unknown User"}
           </button>
         </CardTitle>
-        <span class="text-sm font-medium text-muted-foreground">
-          {profileUser.online ? "Online" : "Offline"}
-        </span>
       </div>
       <div class="flex flex-wrap gap-2 text-sm text-muted-foreground">
         {#if pronounsLabel}
@@ -615,6 +749,107 @@
     {/if}
   </CardContent>
 </Card>
+
+<Dialog bind:open={showStatusEditDialog}>
+  <DialogContent class="sm:max-w-lg">
+    <DialogHeader class="text-left">
+      <DialogTitle>Set your status</DialogTitle>
+      <DialogDescription>
+        Choose the message that appears on your profile card and let folks know what you’re doing.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div class="space-y-4">
+      <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+        <div class="flex items-center gap-3">
+          <Avatar.Root class="h-10 w-10">
+            <Avatar.Image
+              src={profileUser.pfpUrl}
+              alt={`${profileUser.name}'s avatar`}
+            />
+            <Avatar.Fallback>
+              {profileUser?.name?.slice(0, 2)?.toUpperCase() ?? "??"}
+            </Avatar.Fallback>
+          </Avatar.Root>
+          <div class="flex flex-col">
+            <span class="text-sm font-semibold text-foreground">
+              {profileUser.name || "Unknown User"}
+            </span>
+            <span class="text-xs text-muted-foreground">
+              {profileUser.tag ?? profileUser.id?.slice(0, 8)}
+            </span>
+          </div>
+        </div>
+        <div class="mt-3 rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+          {statusDraftInput.trim() || headerStatusLabel || "No status set"}
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <p class="text-sm font-semibold text-foreground">Status</p>
+        <div class="flex items-center gap-2">
+          <Input
+            class="flex-1"
+            type="text"
+            placeholder="Share what you’re doing..."
+            bind:value={statusDraftInput}
+          />
+          <div class="relative shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              class="h-10 w-10 p-0"
+              aria-haspopup="dialog"
+              aria-expanded={statusEditorEmojiPickerOpen}
+              aria-label="Insert emoji"
+              onclick={toggleStatusEditorEmojiPicker}
+            >
+              <Smile size={18} />
+            </Button>
+            {#if statusEditorEmojiPickerOpen}
+              <div class="absolute bottom-full right-0 z-40 mb-2">
+                <EmojiPicker
+                  on:select={(event) =>
+                    handleStatusEditorEmojiSelect(event.detail.emoji)
+                  }
+                  on:close={() => (statusEditorEmojiPickerOpen = false)}
+                />
+              </div>
+            {/if}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <DialogFooter class="flex flex-col gap-3">
+      <div class="flex justify-end items-center gap-3">
+        <span class="text-sm font-medium text-muted-foreground">Clear After</span>
+        <Select type="single" bind:value={clearAfterSelection}>
+          <SelectTrigger class="w-[150px]">
+            {#if clearAfterOptions.find((option) => option.value === clearAfterSelection)}
+              {clearAfterOptions.find((option) => option.value === clearAfterSelection)?.label}
+            {:else}
+              Don't Clear
+            {/if}
+          </SelectTrigger>
+          <SelectContent>
+            {#each clearAfterOptions as option (option.value)}
+              <SelectItem value={option.value}>{option.label}</SelectItem>
+            {/each}
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="flex justify-end gap-2">
+        <DialogClose>
+          <Button type="button" variant="outline">Cancel</Button>
+        </DialogClose>
+        <Button type="button" onclick={saveStatusDraft}>
+          Save status
+        </Button>
+      </div>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
 {#if showLightbox}
   <ImageLightbox
