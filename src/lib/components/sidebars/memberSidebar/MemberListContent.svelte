@@ -53,6 +53,25 @@
     variant?: "desktop" | "mobile";
     userCard?: Snippet<[MemberWithRoles, boolean, string | null, () => void]>;
   }>();
+
+  function openMemberUserCard(
+    event: MouseEvent,
+    member: MemberWithRoles,
+  ) {
+    const triggerRect = (
+      event.currentTarget as HTMLElement | null
+    )?.getBoundingClientRect?.();
+    openUserCardModal?.(
+      member,
+      event.clientX,
+      event.clientY,
+      Boolean(resolvedServerId),
+      {
+        preferredSide: "left",
+        triggerLeft: triggerRect?.left ?? event.clientX,
+      },
+    );
+  }
 </script>
 
 <SidebarContent
@@ -111,13 +130,10 @@
                           <Popover.Trigger class="flex-1">
                             <SidebarMenuButton
                               class="flex w-full items-center gap-3"
+                              onclick={(event) => openMemberUserCard(event, member)}
                               ondblclick={(event) =>
-                                openUserCardModal?.(
-                                  member,
-                                  event.clientX,
-                                  event.clientY,
-                                  true,
-                                )}
+                                openMemberUserCard(event, member)
+                              }
                             >
                               {@const label = resolvePresenceStatusLabel(member.statusMessage)}
 
@@ -161,7 +177,11 @@
                               </div>
                             </SidebarMenuButton>
                           </Popover.Trigger>
-                          <Popover.Content class="w-auto border-none p-0">
+                          <Popover.Content
+                            side="left"
+                            align="start"
+                            class="w-auto border-none p-0"
+                          >
                             {#if userCard}
                               {@render userCard(member, isServerContext, resolvedServerId, close)}
                             {/if}

@@ -7,6 +7,7 @@
   import EmojiPicker from "$lib/components/emoji/EmojiPicker.svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import type { User } from "$lib/features/auth/models/User";
+  import type { Role } from "$lib/features/servers/models/Role";
   import {
     Card,
     CardHeader,
@@ -25,6 +26,7 @@
     CircleUserRound,
     Clipboard,
     Smile,
+    Plus,
   } from "@lucide/svelte";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
   import { tick } from "svelte";
@@ -37,12 +39,16 @@
     isServerMemberContext = false,
     close,
     serverId = null,
+    memberRoles = [],
+    onAddRoles,
   }: {
     profileUser: User;
     openDetailedProfileModal: OpenDetailedProfileHandler;
     isServerMemberContext?: boolean;
     close?: () => void;
     serverId?: string | null;
+    memberRoles?: Role[];
+    onAddRoles?: () => void;
   } = $props();
 
   let showLightbox = $state(false);
@@ -326,196 +332,279 @@
       {/if}
     </div>
 
-    <div class="flex flex-col gap-3">
-      <div class="rounded-md bg-background/20 p-2">
-        <div class="flex flex-col gap-2">
-          <Button
-            variant="ghost"
-            class="w-full justify-start items-center gap-2 h-8"
-            onclick={editProfile}
-          >
-            <Pencil size={16} />
-            <span class="flex-1 text-left">Edit Profile</span>
-          </Button>
-          <Separator />
-          <Popover.Root
-            open={statusPopoverOpen}
-            onOpenChange={(open) => (statusPopoverOpen = open)}
-          >
+    {#if isServerMemberContext}
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-center gap-2">
+          {#if memberRoles.length > 0}
+            {#each memberRoles as role}
+              <span
+                class="flex items-center gap-2 rounded-full border border-muted/50 bg-muted/60 px-3 py-1 text-xs font-semibold text-foreground"
+              >
+                <span
+                  class="h-2.5 w-2.5 rounded-full border border-border"
+                  style={`background-color: ${role.color ?? "var(--border)"}`}
+                ></span>
+                <span>{role.name}</span>
+              </span>
+            {/each}
+            <Button
+              variant="outline"
+              size="icon"
+              class="h-8 w-8"
+              aria-label="Add roles"
+              onclick={onAddRoles}
+              disabled={!onAddRoles}
+            >
+              <Plus size={16} />
+            </Button>
+          {:else}
+            <Button
+              variant="outline"
+              class="flex items-center gap-2"
+              onclick={onAddRoles}
+              disabled={!onAddRoles}
+            >
+              <Plus size={16} />
+              Add Roles
+            </Button>
+          {/if}
+        </div>
+        {#if !isMyProfile}
+          <div class="flex w-full gap-2">
+            <Input
+              class="w-full"
+              type="text"
+              placeholder={`Message @${profileUser.name}`}
+              bind:value={draftMessage}
+              bind:ref={messageInputElement}
+              onkeydown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void sendDirectMessage();
+                }
+              }}
+              disabled={isSending}
+            />
+            <div class="relative shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                class="h-10 w-10 p-0"
+                aria-label="Insert emoji"
+                aria-haspopup="dialog"
+                aria-expanded={showEmojiPicker}
+                aria-controls="user-card-emoji-picker"
+                onclick={toggleEmojiPicker}
+              >
+                <Smile size={20} />
+              </Button>
+              {#if showEmojiPicker}
+                <div
+                  class="absolute bottom-full right-0 z-40 mb-2"
+                  id="user-card-emoji-picker"
+                >
+                  <EmojiPicker
+                    on:select={(event) => handleEmojiSelect(event.detail.emoji)}
+                    on:close={closeEmojiPicker}
+                  />
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {:else}
+      <div class="flex flex-col gap-3">
+        <div class="rounded-md bg-background/20 p-2">
+          <div class="flex flex-col gap-2">
+            <Button
+              variant="ghost"
+              class="w-full justify-start items-center gap-2 h-8"
+              onclick={editProfile}
+            >
+              <Pencil size={16} />
+              <span class="flex-1 text-left">Edit Profile</span>
+            </Button>
+            <Separator />
+            <Popover.Root
+              open={statusPopoverOpen}
+              onOpenChange={(open) => (statusPopoverOpen = open)}
+            >
+                <div
+                  role="list"
+                  class="flex flex-col gap-0"
+                  onmouseenter={() => handleStatusHover(true)}
+                  onmouseleave={() => handleStatusHover(false)}
+                >
+                <Popover.Trigger>
+                  <Button
+                    variant="ghost"
+                    class="w-full justify-start items-center gap-2 h-8"
+                    aria-label="Online status selector"
+                  >
+                    <span
+                      class={`w-3 h-3 rounded-full inline-block ${statusIndicatorColorClass}`}
+                    ></span>
+                    <span class="flex-1 text-left">
+                      {statusDisplayLabel}
+                    </span>
+                    <span class="ml-auto text-muted-foreground">
+                      <ChevronRight size={16} />
+                    </span>
+                  </Button>
+                </Popover.Trigger>
+                <Popover.Content
+                  side="left"
+                  align="center"
+                  class="w-48 p-2 space-y-1"
+                  sideOffset={6}
+                  onmouseenter={() => handleStatusHover(true)}
+                  onmouseleave={() => handleStatusHover(false)}
+                >
+                {#each onlineStatusOptions as option}
+                  <Button
+                    class="w-full justify-start items-center gap-2 h-8"
+                    variant="ghost"
+                    onclick={() => handleSelectStatus(option)}
+                  >
+                    <span
+                      class={`w-3 h-3 rounded-full inline-block ${STATUS_COLOR_MAP[option]}`}
+                    ></span>
+                    {option}
+                  </Button>
+                {/each}
+                </Popover.Content>
+              </div>
+            </Popover.Root>
+          </div>
+        </div>
+        <div class="rounded-md bg-background/20 p-2">
+          <div class="flex flex-col gap-2">
+            <Popover.Root
+              open={accountsPopoverOpen}
+              onOpenChange={(open) => (accountsPopoverOpen = open)}
+            >
               <div
                 role="list"
                 class="flex flex-col gap-0"
-                onmouseenter={() => handleStatusHover(true)}
-                onmouseleave={() => handleStatusHover(false)}
-              >
-              <Popover.Trigger>
-                <Button
-                  variant="ghost"
-                  class="w-full justify-start items-center gap-2 h-8"
-                  aria-label="Online status selector"
-                >
-                  <span
-                    class={`w-3 h-3 rounded-full inline-block ${statusIndicatorColorClass}`}
-                  ></span>
-                  <span class="flex-1 text-left">
-                    {statusDisplayLabel}
-                  </span>
-                  <span class="ml-auto text-muted-foreground">
-                    <ChevronRight size={16} />
-                  </span>
-                </Button>
-              </Popover.Trigger>
-              <Popover.Content
-                side="left"
-                align="center"
-                class="w-48 p-2 space-y-1"
-                sideOffset={6}
-                onmouseenter={() => handleStatusHover(true)}
-                onmouseleave={() => handleStatusHover(false)}
-              >
-              {#each onlineStatusOptions as option}
-                <Button
-                  class="w-full justify-start items-center gap-2 h-8"
-                  variant="ghost"
-                  onclick={() => handleSelectStatus(option)}
-                >
-                  <span
-                    class={`w-3 h-3 rounded-full inline-block ${STATUS_COLOR_MAP[option]}`}
-                  ></span>
-                  {option}
-                </Button>
-              {/each}
-              </Popover.Content>
-            </div>
-          </Popover.Root>
-        </div>
-      </div>
-      <div class="rounded-md bg-background/20 p-2">
-        <div class="flex flex-col gap-2">
-          <Popover.Root
-            open={accountsPopoverOpen}
-            onOpenChange={(open) => (accountsPopoverOpen = open)}
-          >
-            <div
-              role="list"
-              class="flex flex-col gap-0"
-              onmouseenter={() => handleAccountsHover(true)}
-              onmouseleave={() => handleAccountsHover(false)}
-            >
-              <Popover.Trigger>
-                <Button
-                  variant="ghost"
-                  class="w-full justify-start items-center gap-2 mb-2 h-8"
-                  aria-label="Open account switcher"
-                >
-                  <CircleUserRound size={16} />
-                  <span class="flex-1 text-left">Switch Accounts</span>
-                  <span class="ml-auto text-muted-foreground">
-                    <ChevronRight size={16} />
-                  </span>
-                </Button>
-              </Popover.Trigger>
-              <Separator />
-              <Popover.Content
-                side="left"
-                align="start"
-                class="w-56 space-y-2 p-3"
-                sideOffset={6}
                 onmouseenter={() => handleAccountsHover(true)}
                 onmouseleave={() => handleAccountsHover(false)}
               >
-                <div class="flex flex-col gap-2">
-                  {#if displayAccounts.length === 0}
-                    <p class="text-xs text-muted-foreground">No linked accounts yet.</p>
-                  {/if}
-                {#each displayAccounts as account}
+                <Popover.Trigger>
                   <Button
                     variant="ghost"
-                    class="w-full justify-start items-center gap-2 h-8"
-                    onclick={() => handleSwitchAccount(account.label)}
+                    class="w-full justify-start items-center gap-2 mb-2 h-8"
+                    aria-label="Open account switcher"
                   >
-                    <Avatar.Root class="h-5 w-5">
-                      <Avatar.Image
-                        src={account.avatar}
-                        alt={`${account.label}'s avatar`}
-                      />
-                      <Avatar.Fallback>
-                        {account.label?.slice(0, 2)?.toUpperCase() ?? "??"}
-                      </Avatar.Fallback>
-                    </Avatar.Root>
-                    <span class="flex-1 text-left">{account.label}</span>
-                    {#if account.tag}
-                      <span class="text-xs text-muted-foreground">{account.tag}</span>
+                    <CircleUserRound size={16} />
+                    <span class="flex-1 text-left">Switch Accounts</span>
+                    <span class="ml-auto text-muted-foreground">
+                      <ChevronRight size={16} />
+                    </span>
+                  </Button>
+                </Popover.Trigger>
+                <Separator />
+                <Popover.Content
+                  side="left"
+                  align="start"
+                  class="w-56 space-y-2 p-3"
+                  sideOffset={6}
+                  onmouseenter={() => handleAccountsHover(true)}
+                  onmouseleave={() => handleAccountsHover(false)}
+                >
+                  <div class="flex flex-col gap-2">
+                    {#if displayAccounts.length === 0}
+                      <p class="text-xs text-muted-foreground">No linked accounts yet.</p>
                     {/if}
-                  </Button>
-                {/each}
-                  <Separator />
-                  <Button
-                    class="w-full justify-start items-center gap-2 h-8"
-                    variant="ghost"
-                    size="sm"
-                    onclick={handleManageAccounts}
-                  >
-                    Manage Accounts
-                  </Button>
-                </div>
-              </Popover.Content>
-            </div>
-          </Popover.Root>
-          <Button
-            class="w-full justify-start items-center gap-2 h-8"
-            variant="ghost"
-            onclick={handleCopyUserId}
-          >
-            <Clipboard size={16} />
-            <span class="flex-1 text-left">Copy User ID</span>
-          </Button>
-        </div>
-      </div>
-      {#if !isMyProfile}
-        <div class="flex w-full gap-2">
-          <Input
-            class="w-full"
-            type="text"
-            placeholder={`Message @${profileUser.name}`}
-            bind:value={draftMessage}
-            bind:ref={messageInputElement}
-            onkeydown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void sendDirectMessage();
-              }
-            }}
-            disabled={isSending}
-          />
-          <div class="relative shrink-0">
-            <Button
-              type="button"
-              variant="ghost"
-              class="h-10 w-10 p-0"
-              aria-label="Insert emoji"
-              aria-haspopup="dialog"
-              aria-expanded={showEmojiPicker}
-              aria-controls="user-card-emoji-picker"
-              onclick={toggleEmojiPicker}
-            >
-              <Smile size={20} />
-            </Button>
-            {#if showEmojiPicker}
-              <div
-                class="absolute bottom-full right-0 z-40 mb-2"
-                id="user-card-emoji-picker"
-              >
-                <EmojiPicker
-                  on:select={(event) => handleEmojiSelect(event.detail.emoji)}
-                  on:close={closeEmojiPicker}
-                />
+                  {#each displayAccounts as account}
+                    <Button
+                      variant="ghost"
+                      class="w-full justify-start items-center gap-2 h-8"
+                      onclick={() => handleSwitchAccount(account.label)}
+                    >
+                      <Avatar.Root class="h-5 w-5">
+                        <Avatar.Image
+                          src={account.avatar}
+                          alt={`${account.label}'s avatar`}
+                        />
+                        <Avatar.Fallback>
+                          {account.label?.slice(0, 2)?.toUpperCase() ?? "??"}
+                        </Avatar.Fallback>
+                      </Avatar.Root>
+                      <span class="flex-1 text-left">{account.label}</span>
+                      {#if account.tag}
+                        <span class="text-xs text-muted-foreground">{account.tag}</span>
+                      {/if}
+                    </Button>
+                  {/each}
+                    <Separator />
+                    <Button
+                      class="w-full justify-start items-center gap-2 h-8"
+                      variant="ghost"
+                      size="sm"
+                      onclick={handleManageAccounts}
+                    >
+                      Manage Accounts
+                    </Button>
+                  </div>
+                </Popover.Content>
               </div>
-            {/if}
+            </Popover.Root>
+            <Button
+              class="w-full justify-start items-center gap-2 h-8"
+              variant="ghost"
+              onclick={handleCopyUserId}
+            >
+              <Clipboard size={16} />
+              <span class="flex-1 text-left">Copy User ID</span>
+            </Button>
           </div>
         </div>
-      {/if}
-    </div>
+        {#if !isMyProfile}
+          <div class="flex w-full gap-2">
+            <Input
+              class="w-full"
+              type="text"
+              placeholder={`Message @${profileUser.name}`}
+              bind:value={draftMessage}
+              bind:ref={messageInputElement}
+              onkeydown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void sendDirectMessage();
+                }
+              }}
+              disabled={isSending}
+            />
+            <div class="relative shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                class="h-10 w-10 p-0"
+                aria-label="Insert emoji"
+                aria-haspopup="dialog"
+                aria-expanded={showEmojiPicker}
+                aria-controls="user-card-emoji-picker"
+                onclick={toggleEmojiPicker}
+              >
+                <Smile size={20} />
+              </Button>
+              {#if showEmojiPicker}
+                <div
+                  class="absolute bottom-full right-0 z-40 mb-2"
+                  id="user-card-emoji-picker"
+                >
+                  <EmojiPicker
+                    on:select={(event) => handleEmojiSelect(event.detail.emoji)}
+                    on:close={closeEmojiPicker}
+                  />
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
   </CardContent>
 </Card>
 

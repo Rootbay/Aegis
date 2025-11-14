@@ -18,6 +18,9 @@
   } from "$lib/features/calls/stores/voiceCallViewStore";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
+  import { getContext } from "svelte";
+  import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
+  import type { CreateGroupContext } from "$lib/contextTypes";
 
   type MemberWithRoles = User & Record<string, unknown>;
 
@@ -57,6 +60,11 @@
   const members = $derived(() =>
     chat.type === "dm" ? [] : (chat.members as MemberWithRoles[]),
   );
+
+  const createGroupContext = getContext<CreateGroupContext | undefined>(
+    CREATE_GROUP_CONTEXT_KEY,
+  );
+  const openUserCardModal = createGroupContext?.openUserCardModal;
 
   const shouldShowMemberSidebar = $derived(() => {
     const visibility = $memberSidebarVisibilityStore;
@@ -214,22 +222,24 @@
           context={sidebarContext()}
           groupId={isGroupChat() ? chat.id : undefined}
           groupOwnerId={groupOwnerId() ?? undefined}
+          openUserCardModal={openUserCardModal}
         />
       {/if}
     </div>
   </div>
 
   {#if canShowMembers()}
-    <MemberSidebar
-      members={members()}
-      {openDetailedProfileModal}
-      context={sidebarContext()}
-      groupId={isGroupChat() ? chat.id : undefined}
-      groupOwnerId={groupOwnerId() ?? undefined}
-      variant="mobile"
-      mobileOpen={mobileMemberPanelOpen}
-      onMobileOpenChange={handleMobileMemberPanelOpenChange}
-    />
+        <MemberSidebar
+          members={members()}
+          {openDetailedProfileModal}
+          context={sidebarContext()}
+          groupId={isGroupChat() ? chat.id : undefined}
+          groupOwnerId={groupOwnerId() ?? undefined}
+          variant="mobile"
+          mobileOpen={mobileMemberPanelOpen}
+          onMobileOpenChange={handleMobileMemberPanelOpenChange}
+          openUserCardModal={openUserCardModal}
+        />
   {/if}
 
   <Dialog open={mobileDialogOpen} onOpenChange={handleMobileDialogOpenChange}>

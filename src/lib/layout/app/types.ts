@@ -56,6 +56,10 @@ export type PageState = {
     x: number,
     y: number,
     isServerMemberContext: boolean,
+    options?: {
+      preferredSide?: "left" | "right";
+      triggerLeft?: number;
+    },
   ) => void;
   readonly openDetailedProfileModal: (user: User) => void;
   readonly openProfileReviewsModal: (

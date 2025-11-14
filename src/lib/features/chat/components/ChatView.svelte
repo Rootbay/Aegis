@@ -3389,7 +3389,7 @@
                         displayableUser as User,
                         e.clientX,
                         e.clientY,
-                        chat.type === "channel",
+                        chat.type === "channel" && Boolean(chat.serverId),
                       )}
                     oncontextmenu={(e) =>
                       displayableUser && handleContextMenu(e, displayableUser)}
@@ -3412,11 +3412,11 @@
                       onNameClick={(e) =>
                         displayableUser &&
                         openUserCardModal?.(
-                          displayableUser as User,
-                          e.clientX,
-                          e.clientY,
-                          chat.type === "channel",
-                        )}
+                        displayableUser as User,
+                        e.clientX,
+                        e.clientY,
+                        chat.type === "channel" && Boolean(chat.serverId),
+                      )}
                       onNameContextMenu={(e) =>
                         displayableUser &&
                         handleContextMenu(e, displayableUser)}

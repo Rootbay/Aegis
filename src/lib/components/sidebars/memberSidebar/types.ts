@@ -5,6 +5,10 @@ export type OpenUserCardModalHandler = (
   x: number,
   y: number,
   isServerMemberContext: boolean,
+  options?: {
+    preferredSide?: "left" | "right";
+    triggerLeft?: number;
+  },
 ) => void;
 
 export type OpenDetailedProfileHandler = (user: User) => void;

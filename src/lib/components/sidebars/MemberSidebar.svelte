@@ -3,6 +3,7 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
   import type { Role } from "$lib/features/servers/models/Role";
+  import { goto } from "$app/navigation";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { Separator } from "$lib/components/ui/separator";
   import {
@@ -26,6 +27,7 @@
   import type { Friend } from "$lib/features/friends/models/Friend";
   import {
     groupMembersByRole,
+    extractMemberRoleValues,
     type MemberWithRoles,
   } from "$lib/components/sidebars/memberSidebar/groupMembers";
   import { buildInviteCandidates } from "$lib/components/sidebars/memberSidebar/inviteCandidates";
@@ -87,6 +89,30 @@
           })()
       : [],
   );
+
+  function getMemberRoleObjects(member: MemberWithRoles): Role[] {
+    const identifiers = extractMemberRoleValues(member);
+    if (identifiers.length === 0) {
+      return [];
+    }
+    const normalized = new Set(
+      identifiers.map((value) => value.toLowerCase()),
+    );
+    return resolvedRoles.filter((role) => {
+      if (identifiers.includes(role.id)) {
+        return true;
+      }
+      if (!role.name) {
+        return false;
+      }
+      return normalized.has(role.name.toLowerCase());
+    });
+  }
+
+  function handleAddRolesClick() {
+    if (!resolvedServerId) return;
+    goto(`/channels/${resolvedServerId}/settings?tab=members`);
+  }
 
   const resolvedGroupId = $derived(
     context === "group" ? (providedGroupId ?? null) : null,
@@ -309,6 +335,10 @@
             serverId={
               isServerContext ? (resolvedServerId ?? undefined) : undefined
             }
+            memberRoles={
+              isServerContext ? getMemberRoleObjects(member) : []
+            }
+            onAddRoles={isServerContext ? handleAddRolesClick : undefined}
           />
         </svelte:fragment>
       </MemberListContent>
@@ -334,15 +364,19 @@
           let:isServerContext
           let:resolvedServerId
         >
-          <UserCardModal
-            profileUser={member}
-            {openDetailedProfileModal}
-            isServerMemberContext={isServerContext}
-            {close}
-            serverId={
-              isServerContext ? (resolvedServerId ?? undefined) : undefined
-            }
-          />
+            <UserCardModal
+              profileUser={member}
+              {openDetailedProfileModal}
+              isServerMemberContext={isServerContext}
+              {close}
+              serverId={
+                isServerContext ? (resolvedServerId ?? undefined) : undefined
+              }
+              memberRoles={
+                isServerContext ? getMemberRoleObjects(member) : []
+              }
+              onAddRoles={isServerContext ? handleAddRolesClick : undefined}
+            />
         </svelte:fragment>
       </MemberListContent>
     {/if}
@@ -407,6 +441,10 @@
               serverId={
                 isServerContext ? (resolvedServerId ?? undefined) : undefined
               }
+              memberRoles={
+                isServerContext ? getMemberRoleObjects(member) : []
+              }
+              onAddRoles={isServerContext ? handleAddRolesClick : undefined}
             />
           </svelte:fragment>
         </MemberListContent>

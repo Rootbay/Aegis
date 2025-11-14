@@ -18,6 +18,10 @@ export interface CreateGroupContext {
     x: number,
     y: number,
     isServerMemberContext: boolean,
+    options?: {
+      preferredSide?: "left" | "right";
+      triggerLeft?: number;
+    },
   ) => void;
   openDetailedProfileModal: (user: User) => void;
   openProfileReviewsModal: (options: {

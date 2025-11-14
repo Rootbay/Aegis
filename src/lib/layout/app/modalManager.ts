@@ -7,6 +7,11 @@ const CARD_WIDTH = 300;
 const CARD_HEIGHT = 410;
 const CARD_MARGIN = 16;
 
+type UserCardModalPositionOptions = {
+  preferredSide?: "left" | "right";
+  triggerLeft?: number;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -30,7 +35,11 @@ function withProfileDefaults(user: User) {
   };
 }
 
-function computeUserCardPosition(clickX: number, clickY: number) {
+function computeUserCardPosition(
+  clickX: number,
+  clickY: number,
+  options?: UserCardModalPositionOptions,
+) {
   const viewportWidth =
     typeof window !== "undefined"
       ? window.innerWidth
@@ -43,11 +52,19 @@ function computeUserCardPosition(clickX: number, clickY: number) {
   const safeX = Number.isFinite(clickX) ? clickX : viewportWidth - CARD_MARGIN;
   const safeY = Number.isFinite(clickY) ? clickY : viewportHeight - CARD_MARGIN;
 
-  const x = clamp(
+  const defaultX = clamp(
     safeX - CARD_WIDTH / 2,
     CARD_MARGIN,
     Math.max(CARD_MARGIN, viewportWidth - CARD_WIDTH - CARD_MARGIN),
   );
+  const x =
+    options?.preferredSide === "left" && typeof options.triggerLeft === "number"
+      ? clamp(
+          options.triggerLeft - CARD_WIDTH - CARD_MARGIN,
+          CARD_MARGIN,
+          Math.max(CARD_MARGIN, viewportWidth - CARD_WIDTH - CARD_MARGIN),
+        )
+      : defaultX;
 
   let y = safeY - CARD_HEIGHT - CARD_MARGIN;
   const maxY = Math.max(
@@ -101,14 +118,15 @@ export function createModalManager() {
     });
   };
 
-  const openUserCardModal: PageState["openUserCardModal"] = (
-    user,
-    x,
-    y,
-    isServerMemberContext,
-  ) => {
+const openUserCardModal: PageState["openUserCardModal"] = (
+  user,
+  x,
+  y,
+  isServerMemberContext,
+  options,
+) => {
     const normalizedUser = withProfileDefaults(user);
-    const position = computeUserCardPosition(x, y);
+    const position = computeUserCardPosition(x, y, options);
     openModal("userCard", {
       profileUser: normalizedUser,
       x: position.x,
