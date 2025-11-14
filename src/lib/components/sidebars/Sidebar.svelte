@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { House, Plus, RadioTower, Settings } from "@lucide/svelte";
+  import { House, Plus } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import { page } from "$app/stores";
@@ -30,7 +30,6 @@
     Sidebar,
     SidebarHeader,
     SidebarContent,
-    SidebarFooter,
     SidebarMenu,
     SidebarMenuItem,
   } from "$lib/components/ui/sidebar";
@@ -40,8 +39,6 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip/index.js";
-  import * as Popover from "$lib/components/ui/popover/index.js";
-  import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import { cn } from "$lib/utils";
   import type { User } from "$lib/features/auth/models/User";
@@ -335,7 +332,7 @@
 <Sidebar
   side="left"
   variant="solid"
-  class="flex flex-col w-16 min-w-16 items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
+  class="relative flex flex-col w-16 min-w-16 items-center bg-background px-0 py-4 gap-4 text-foreground border-0"
   aria-label="Server navigation"
 >
   <TooltipProvider>
@@ -366,7 +363,7 @@
     </SidebarHeader>
 
     <SidebarContent class="w-full px-0">
-      <ScrollArea class="h-full w-full">
+      <ScrollArea class="h-full w-full pb-16">
           <SidebarMenu class="items-center gap-2">
           {#each $serverStore.servers as server (server.id)}
             <SidebarMenuItem
@@ -462,65 +459,6 @@
       </ScrollArea>
     </SidebarContent>
 
-    <Separator class="w-10" />
-
-    <SidebarFooter class="w-full border-0 px-0 pt-0 p-0">
-      <div class="flex flex-col items-center gap-3">
-        <Tooltip>
-          <TooltipTrigger>
-            <Button
-              size="icon"
-              variant="ghost"
-              class="rounded-xl cursor-pointer"
-              aria-label="Mesh Explorer"
-              onclick={() => gotoResolved("/settings/network#mesh-explorer")}
-            >
-              <RadioTower class="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Mesh Explorer</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger>
-            <Button
-              size="icon"
-              variant="ghost"
-              class="rounded-xl cursor-pointer"
-              aria-label="Settings"
-              onclick={() => gotoResolved("/settings")}
-            >
-              <Settings class="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Settings</TooltipContent>
-        </Tooltip>
-
-        <Popover.Root>
-          <Popover.Trigger>
-            <Button
-              variant="outline"
-              size="icon"
-              class="size-10 p-0 rounded-full overflow-hidden cursor-pointer"
-              aria-label="Open Profile"
-            >
-              <Avatar class="size-10">
-                <AvatarImage src={$userStore.me?.avatar} alt="User Avatar" />
-                <AvatarFallback class="text-xs">ME</AvatarFallback>
-              </Avatar>
-            </Button>
-          </Popover.Trigger>
-          <Popover.Content side="right" class="w-auto p-0 border-none">
-            {#if $userStore.me}
-              <UserCardModal
-                profileUser={$userStore.me}
-                {openDetailedProfileModal}
-                isServerMemberContext={false}
-              />
-            {/if}
-          </Popover.Content>
-        </Popover.Root>
-      </div>
-    </SidebarFooter>
   </TooltipProvider>
 </Sidebar>
 

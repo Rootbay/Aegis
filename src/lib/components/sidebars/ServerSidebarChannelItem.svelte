@@ -17,7 +17,7 @@
     draggingChannelId = null,
     channelType = "text",
     active = false,
-    activeClass = "bg-primary/80 text-foreground",
+    activeClass = "bg-card/80 text-white",
     primaryAction = (channel: Channel) => {},
     inviteHandler = (channel: Channel, event: MouseEvent) => {},
     settingsHandler = (channel: Channel, event: MouseEvent) => {},

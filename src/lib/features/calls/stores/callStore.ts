@@ -350,6 +350,36 @@ function createCallStore() {
     publishParticipants();
   }
 
+  function ensureLocalParticipant(joinedAt?: number) {
+    const me = get(userStore).me;
+    if (!me?.id) {
+      return;
+    }
+    const timestamp = joinedAt ?? Date.now();
+    mutateParticipant(me.id, (participant) => {
+      if (participant) {
+        participant.name = me.name ?? participant.name;
+        participant.status = "connected";
+        participant.joinedAt = participant.joinedAt ?? timestamp;
+        participant.direction = "outgoing";
+        return participant;
+      }
+      return {
+        userId: me.id,
+        name: me.name ?? me.id,
+        status: "connected",
+        remoteStream: null,
+        screenShareStream: null,
+        isScreenSharing: false,
+        peerConnection: null,
+        error: undefined,
+        joinedAt: timestamp,
+        direction: "outgoing",
+        pendingCandidates: [],
+      };
+    });
+  }
+
   function cleanupParticipant(peerId: string) {
     const existing = participantStates.get(peerId);
     const active = get(store).activeCall;
@@ -1264,6 +1294,7 @@ function createCallStore() {
           joinedAt: connectedAt,
           updatedAt: connectedAt,
         });
+        ensureLocalParticipant(connectedAt);
       }
 
       return true;
@@ -1446,6 +1477,7 @@ function createCallStore() {
       activeStream = stream;
       syncLocalMediaState(activeStream);
       enforcePushToTalkState();
+      ensureLocalParticipant();
 
       update((next) => {
         if (!next.activeCall || next.activeCall.callId !== callId) {
@@ -1750,6 +1782,7 @@ function createCallStore() {
       }
       syncLocalMediaState(activeStream);
       enforcePushToTalkState();
+      ensureLocalParticipant();
 
       mutateParticipant(senderId, (participant) => {
         if (!participant) {

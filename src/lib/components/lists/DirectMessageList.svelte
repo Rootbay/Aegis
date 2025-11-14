@@ -311,7 +311,7 @@
     </div>
   </div>
 
-  <ScrollArea class="flex-1 overflow-hidden px-2">
+  <ScrollArea class="flex-1 overflow-hidden px-2 pb-16">
     {#if sortedEntries.length === 0}
       <div class="text-center p-6 text-muted-foreground">
         <p>No conversations yet.</p>

@@ -17,14 +17,22 @@
     children?: Snippet | null;
   } = $props();
 
-  const { currentChat, isFriendsOrRootPage, handlers, activeTab } = controller;
+  const {
+    currentChat,
+    isFriendsOrRootPage,
+    handlers,
+    activeTab,
+    isAnySettingsPage,
+  } = controller;
   const {
     openDetailedProfileModal,
     handleFriendsTabSelect,
     handleFriendsAddClick,
   } = handlers;
 
-  const shouldRenderFriendsView = $derived(() => $isFriendsOrRootPage);
+  const shouldRenderFriendsView = $derived(
+    () => !$isAnySettingsPage && $isFriendsOrRootPage,
+  );
 
   function decodeSegment(value: string | undefined): string | null {
     if (!value) {
@@ -65,7 +73,11 @@
 </script>
 
 <main class="flex-1 min-h-0 flex flex-col overflow-hidden">
-  {#if shouldRenderFriendsView()}
+  {#if $isAnySettingsPage}
+    {#if children}
+      {@render children()}
+    {/if}
+  {:else if shouldRenderFriendsView()}
     <FriendsContent
       chat={$currentChat}
       {openDetailedProfileModal}

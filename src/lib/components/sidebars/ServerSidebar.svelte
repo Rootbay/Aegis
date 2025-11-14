@@ -32,7 +32,8 @@
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
-import { Plus, ChevronDown } from "@lucide/svelte";
+  import type { User } from "$lib/features/auth/models/User";
+  import { Plus, ChevronDown } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import { getContext, onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
@@ -117,6 +118,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
 
   type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
   type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
+  type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -130,15 +132,55 @@ import { Plus, ChevronDown } from "@lucide/svelte";
     server,
     onSelectChannel,
     refreshServerData,
+    openDetailedProfileModal,
   }: {
     server: Server;
     onSelectChannel: ChannelSelectHandler;
     refreshServerData?: () => Promise<void>;
+    openDetailedProfileModal?: OpenProfileHandler;
   } = $props();
 
   const { activeServerChannelId } = chatStore;
 
   let channelMetadataLookup = $state(new Map<string, ChatMetadata>());
+
+  let voiceCallDuration = $state(0);
+  let voiceCallTimer: ReturnType<typeof setInterval> | null = null;
+
+  function clearVoiceCallTimer() {
+    if (voiceCallTimer) {
+      clearInterval(voiceCallTimer);
+      voiceCallTimer = null;
+    }
+  }
+
+  $effect(() => {
+    const call = $callStore.activeCall;
+    if (call?.status === "in-call" && call.connectedAt) {
+      voiceCallDuration = Date.now() - call.connectedAt;
+      clearVoiceCallTimer();
+      voiceCallTimer = setInterval(() => {
+        voiceCallDuration = Date.now() - (call.connectedAt ?? Date.now());
+      }, 1000);
+      return;
+    }
+    if (call?.connectedAt && call.endedAt) {
+      voiceCallDuration = call.endedAt - call.connectedAt;
+    } else {
+      voiceCallDuration = 0;
+    }
+    clearVoiceCallTimer();
+  });
+
+  function formatDuration(ms: number) {
+    if (!ms) {
+      return "00:00";
+    }
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return `${minutes}:${seconds}`;
+  }
 
   const unsubscribeChatMetadata = chatMetadataByChatId.subscribe(
     (metadataMap) => {
@@ -992,6 +1034,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
       stopResize();
     }
     unsubscribeChatMetadata();
+    clearVoiceCallTimer();
   });
 
   function handleServerHeaderDropdownAction(
@@ -1714,14 +1757,6 @@ import { Plus, ChevronDown } from "@lucide/svelte";
       return;
     }
 
-    console.log(
-      "[Voice] handleVoiceChannelClick",
-      channel.id,
-      channel.name,
-      "server",
-      server.id,
-    );
-
     const activeCall = $callStore.activeCall;
     const isActiveVoiceCall =
       Boolean(
@@ -1745,8 +1780,6 @@ import { Plus, ChevronDown } from "@lucide/svelte";
       chatName: channel.name,
       serverId: server.id,
     });
-
-    console.log("[Voice] joinVoiceChannel result", joined);
 
     if (joined) {
       showVoiceCallView(channel.id);
@@ -1780,7 +1813,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
       </SidebarHeader>
 
       <SidebarContent class="flex flex-1 flex-col overflow-hidden">
-        <ScrollArea class="h-full w-full overflow-hidden px-2">
+        <ScrollArea class="h-full w-full overflow-hidden px-2 pb-16">
           {@const uncategorizedTextChannels = getVisibleChannels(
             null,
             "text",
@@ -1800,7 +1833,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
               {#each uncategorizedTextChannels as channel (channel.id)}
                 {@const metadata = channelMetadataLookup.get(channel.id)}
                 {#if shouldShowDropIndicator(null, "text", channel.id)}
-                  <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-primary/80"></div>
+                  <div class="mx-2 h-0.5 w-[calc(100%-0.5rem)] rounded-full bg-card/80"></div>
                 {/if}
                 <ServerSidebarChannelItem
                   {channel}
@@ -1808,7 +1841,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                   channelType="text"
                   draggingChannelId={draggingChannelId}
                   active={$activeServerChannelId === channel.id}
-                  activeClass="bg-primary/80 text-foreground"
+                  activeClass="bg-card/80 text-white"
                   primaryAction={handleChannelSelect}
                   inviteHandler={(channel, event) =>
                     handleInviteToChannelClick(channel, event)}
@@ -1863,7 +1896,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
               channelType="voice"
               draggingChannelId={draggingChannelId}
               active={isActiveVoiceChannel}
-              activeClass="bg-primary/80 text-foreground shadow-sm"
+              activeClass="bg-card/80 text-white"
               primaryAction={handleVoiceChannelClick}
               inviteHandler={(channel, event) =>
                 handleInviteToChannelClick(channel, event)}
@@ -1886,27 +1919,30 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                   <div class="space-y-1 mt-1">
                     {#each participantEntries as presence (presence.userId)}
                       {@const member = membersById.get(presence.userId)}
-                      <div class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-[12px] text-foreground">
-                        <Avatar class="h-6 w-6 border border-border">
-                          <AvatarImage
-                            src={member?.avatar}
-                            alt={member?.name ?? presence.userId}
-                          />
-                          <AvatarFallback class="text-[10px] font-semibold uppercase">
-                            {(member?.name ?? presence.userId)?.[0] ??
-                              presence.userId.slice(0, 1)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span class="truncate">
-                          {member?.name ?? presence.userId}
-                        </span>
-                      </div>
+                                <div class="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1 text-[12px] text-foreground">
+                                  <Avatar class="h-6 w-6 border border-border">
+                                    <AvatarImage
+                                      src={member?.avatar}
+                                      alt={member?.name ?? presence.userId}
+                                    />
+                                    <AvatarFallback class="text-[10px] font-semibold uppercase">
+                                      {(member?.name ?? presence.userId)?.[0] ??
+                                        presence.userId.slice(0, 1)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span class="flex flex-1 min-w-0 items-center gap-2">
+                                    <span class="truncate">
+                                      {member?.name ?? presence.userId}
+                                    </span>
+                                    {#if isActiveVoiceChannel && voiceCallDuration > 0}
+                                      <span class="text-[10px] text-muted-foreground whitespace-nowrap">
+                                        {formatDuration(voiceCallDuration)}
+                                      </span>
+                                    {/if}
+                                  </span>
+                                </div>
                     {/each}
                   </div>
-                {:else}
-                  <p class="text-[11px] text-muted-foreground">
-                    No one connected.
-                  </p>
                 {/if}
               </div>
             {/if}
@@ -1999,7 +2035,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                         channelType="text"
                         draggingChannelId={draggingChannelId}
                         active={$activeServerChannelId === channel.id}
-                        activeClass="bg-primary/80 text-foreground"
+                        activeClass="bg-card/80 text-white"
                         primaryAction={handleChannelSelect}
                         inviteHandler={(channel, event) =>
                           handleInviteToChannelClick(channel, event)}
@@ -2063,7 +2099,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                         channelType="voice"
                         draggingChannelId={draggingChannelId}
                         active={isActiveVoiceChannel}
-                        activeClass="bg-primary/80 text-foreground shadow-sm"
+                        activeClass="bg-card/80 text-white"
                         primaryAction={handleVoiceChannelClick}
                         inviteHandler={(channel, event) =>
                           handleInviteToChannelClick(channel, event)}
@@ -2110,8 +2146,15 @@ import { Plus, ChevronDown } from "@lucide/svelte";
                                         presence.userId.slice(0, 1)}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span class="truncate">
-                                    {member?.name ?? presence.userId}
+                                  <span class="flex flex-1 min-w-0 items-center gap-2">
+                                    <span class="truncate">
+                                      {member?.name ?? presence.userId}
+                                    </span>
+                                    {#if isActiveVoiceChannel && voiceCallDuration > 0}
+                                      <span class="text-[10px] text-muted-foreground whitespace-nowrap">
+                                        {formatDuration(voiceCallDuration)}
+                                      </span>
+                                    {/if}
                                   </span>
                                 </div>
                               {/each}
@@ -2136,7 +2179,7 @@ import { Plus, ChevronDown } from "@lucide/svelte";
       </SidebarContent>
     {:else}
       <SidebarContent class="flex flex-1 flex-col overflow-hidden">
-        <ScrollArea class="h-full w-full overflow-hidden px-2">
+        <ScrollArea class="h-full w-full overflow-hidden px-2 pb-16">
           <p class="text-xs text-muted-foreground px-2 py-1">
             No server selected.
           </p>

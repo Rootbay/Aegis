@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import {
     Mic,
@@ -14,6 +14,7 @@
     Volume2,
     UserPlus,
     Ellipsis,
+    MessageCircle
   } from "@lucide/svelte";
   import {
     callStore,
@@ -78,6 +79,7 @@
     `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${encodeURIComponent(id)}`;
 
   let selectedParticipantId = $state<string | null>(null);
+  let isCallViewHovered = $state(false);
 
   const localUserId = $derived.by(() => $userStore.me?.id ?? null);
 
@@ -104,7 +106,10 @@
   );
 
   const shouldShowInvitePlaceholder = $derived.by(
-    () => Boolean(callForChat) && orderedParticipants.length === 1,
+    () =>
+      Boolean(callForChat) &&
+      orderedParticipants.length === 1 &&
+      !selectedParticipantId,
   );
 
   const gridItemCount = $derived.by(
@@ -126,55 +131,16 @@
     }
   });
 
-  let duration = $state(0);
-  let timer: ReturnType<typeof setInterval> | null = null;
-
-  function clearTimer() {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-  }
-
-  $effect(() => {
-    const call = callForChat;
-    if (call?.status === "in-call" && call.connectedAt) {
-      duration = Date.now() - call.connectedAt;
-      clearTimer();
-      timer = setInterval(() => {
-        duration = Date.now() - (call.connectedAt ?? Date.now());
-      }, 1000);
-      return;
-    }
-    if (call?.connectedAt && call.endedAt) {
-      duration = call.endedAt - call.connectedAt;
-    } else {
-      duration = 0;
-    }
-    clearTimer();
-  });
-
-  onDestroy(() => {
-    clearTimer();
-  });
-
   onMount(() => {
     void callStore.initialize();
   });
 
-  function formatDuration(ms: number) {
-    if (!ms) {
-      return "00:00";
-    }
-    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
-    const seconds = String(totalSeconds % 60).padStart(2, "0");
-    return `${minutes}:${seconds}`;
-  }
-
   function formatParticipantName(
     participant: CallParticipant & { userId: string },
   ) {
+    if (participant.userId === localUserId) {
+      return "You";
+    }
     const name = participant.name?.trim();
     if (name) {
       return name;
@@ -210,37 +176,60 @@
     if (count <= 1) {
       return "grid-cols-1";
     }
-    if (count === 2) {
-      return "grid-cols-1 sm:grid-cols-2";
-    }
-    if (count === 3) {
-      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-2";
-    }
-    if (count === 4) {
-      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-2";
-    }
-    if (count <= 6) {
-      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3";
-    }
-    return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
+    return "grid-cols-[repeat(auto-fit,minmax(220px,1fr))]";
   }
 
-  function getParticipantCardClasses(index: number, isSelected: boolean) {
+  const PARTICIPANT_CARD_BASE_CLASSES =
+    "relative flex w-full max-w-[min(420px,100%)] min-w-[220px] min-h-[200px] flex-col justify-between overflow-hidden rounded-lg border border-border text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer aspect-[16/9] mx-auto";
+  const PARTICIPANT_CARD_DEFAULT_BACKGROUND =
+    "bg-gradient-to-br from-slate-950/70 to-slate-900/60 text-foreground";
+  const PARTICIPANT_CARD_VIDEO_BACKGROUND =
+    "bg-slate-100/80 border-border/70 text-slate-900 shadow-[0_25px_60px_rgba(15,23,42,0.15)]";
+
+  const INVITE_PLACEHOLDER_CLASSES =
+    `${PARTICIPANT_CARD_BASE_CLASSES} border-dashed border-border/60 bg-muted/20 items-center justify-center text-center hover:shadow-[0_20px_60px_rgba(15,23,42,0.35)]`;
+
+  function getParticipantCardClasses(isSelected: boolean, hasVideo: boolean) {
     const classes = [
-      "relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[30px] border border-border bg-gradient-to-br from-slate-950/70 to-slate-900/60 px-6 py-6 text-center transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer",
+      PARTICIPANT_CARD_BASE_CLASSES,
+      hasVideo
+        ? PARTICIPANT_CARD_VIDEO_BACKGROUND
+        : PARTICIPANT_CARD_DEFAULT_BACKGROUND,
+      "focus-visible:scale-110 focus-visible:shadow-[0_25px_65px_rgba(15,23,42,0.35)]",
       isSelected
-        ? "scale-105 border-emerald-400/70 shadow-[0_25px_65px_rgba(16,185,129,0.35)]"
+        ? "scale-145 border-border/80 shadow-[0_25px_65px_rgba(15,23,42,0.35)] z-10"
         : "hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(15,23,42,0.45)]",
+      "group",
     ];
-    if (gridItemCount === 3 && index === 0 && !shouldShowInvitePlaceholder) {
-      classes.push("col-span-2");
+    if (isSelected) {
+      classes.push("lg:col-span-3 lg:row-span-2");
     }
     return classes.join(" ");
+  }
+
+  function participantHasActiveVideo(
+    participant: CallParticipant & { userId: string },
+  ) {
+    if (participant.userId === localUserId) {
+      return localMedia.videoEnabled;
+    }
+    return Boolean(participant.videoStream || participant.screenShareStream);
+  }
+
+  function handleParticipantKey(event: KeyboardEvent, userId: string) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleSelectParticipant(userId);
+    }
   }
 
   function handleSelectParticipant(userId: string) {
     selectedParticipantId =
       selectedParticipantId === userId ? null : userId;
+  }
+
+  function handleWatchParticipant(userId: string) {
+    selectedParticipantId = userId;
   }
 
   async function handleInviteFriends() {
@@ -333,91 +322,132 @@
   }
 </script>
 
-<div class="flex h-full min-h-0 flex-col">
-  <header class="border-b border-border bg-card px-4 py-4">
-    <div class="flex items-center justify-between gap-6">
-      <div class="[word-wrap:break-word] space-y-1">
+<div
+  role="main"
+  class="flex h-full min-h-0 flex-col bg-card/60"
+  onmouseenter={() => (isCallViewHovered = true)}
+  onmouseleave={() => (isCallViewHovered = false)}
+>
+  <header
+    class={`px-4 py-4 transition-opacity duration-200 ${
+      isCallViewHovered
+        ? "opacity-100 pointer-events-auto"
+        : "opacity-0 pointer-events-none"
+    }`}
+  >
+    <div class="flex items-center justify-between">
       <h1 class="text-2xl font-semibold text-foreground flex items-center gap-2">
         <Volume2 />
         {chat.name}
       </h1>
-        <p class="text-sm text-muted-foreground">
-          {statusLabel}
-          {#if duration}
-            · {formatDuration(duration)}
-          {/if}
-        </p>
-      </div>
-      <p class="text-sm font-semibold text-muted-foreground">
-        {#if !callForChat}
-          Starting call…
-        {/if}
-      </p>
+      <button class="cursor-pointer group">
+        <MessageCircle size={20} class="text-gray-300 group-hover:text-gray-100 transition-colors duration-150" />
+      </button>
     </div>
   </header>
 
-  <div class="flex flex-1 flex-col overflow-hidden bg-card/60">
+  <div class="flex flex-1 flex-col overflow-hidden">
     <div class="flex-1 overflow-hidden px-4 py-4">
       {#if callForChat}
         <div
-          class={`grid h-full w-full gap-3 auto-rows-[minmax(220px,1fr)] ${gridColumnsClass}`}
+          class={`grid h-full w-full gap-3 auto-rows-[minmax(0,auto)] ${gridColumnsClass} items-center justify-items-center`}
         >
-          {#each orderedParticipants as participant, index (participant.userId)}
+          {#each orderedParticipants as participant (participant.userId)}
             {@const participantName = formatParticipantName(participant)}
-            <button
-              type="button"
+            {@const hasActiveVideo = participantHasActiveVideo(participant)}
+            <div
+              role="button"
+              tabindex="0"
               class={getParticipantCardClasses(
-                index,
                 selectedParticipantId === participant.userId,
+                hasActiveVideo,
               )}
               onclick={() => handleSelectParticipant(participant.userId)}
+              onkeydown={(event) =>
+                handleParticipantKey(event, participant.userId)
+              }
               aria-pressed={selectedParticipantId === participant.userId}
             >
-              <img
-                src={getAvatarForUser(participant.userId)}
-                alt={`${participantName} avatar`}
-                class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
-              />
-              <div class="space-y-1">
-                <p class="text-base font-semibold text-foreground">
-                  {participantName}
-                </p>
-                <p class="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-                  {participant.userId === localUserId
-                    ? "You"
-                    : formatParticipantStatus(participant.status)}
-                </p>
+              <div class="flex flex-1 flex-col items-center justify-center gap-4 p-6">
+                {#if participant.userId === localUserId && localMedia.videoEnabled}
+                  <video
+                    use:mediaStream={callStore.getLocalMediaStream()}
+                    autoplay
+                    muted
+                    playsinline
+                    class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
+                  ></video>
+                {:else if participant.videoStream}
+                  <video
+                    use:mediaStream={participant.videoStream}
+                    autoplay
+                    muted
+                    playsinline
+                    class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
+                  ></video>
+                {/if}
+                <img
+                  src={getAvatarForUser(participant.userId)}
+                  alt={`${participantName} avatar`}
+                  class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
+                />
+                {#if hasActiveVideo && participant.userId !== localUserId}
+                  <Button
+                    variant="outline"
+                    class="text-xs font-semibold tracking-wide uppercase px-5 py-1 rounded-full"
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      handleWatchParticipant(participant.userId);
+                    }}
+                  >
+                    Watch
+                  </Button>
+                {/if}
               </div>
-            </button>
+              <div class="absolute inset-x-3 bottom-3 opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="px-2 py-1 rounded-md bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80">
+                    <p class="text-base font-semibold text-foreground">
+                      {participantName}
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    class="h-7 w-7 rounded-md text-muted-foreground"
+                    onclick={(event) => event.stopPropagation()}
+                    aria-label="More options"
+                  >
+                    <Ellipsis size={16} />
+                  </Button>
+                </div>
+              </div>
+            </div>
           {/each}
           {#if shouldShowInvitePlaceholder}
             <div
               role="button"
               tabindex="0"
-              class="group relative flex flex-1 flex-col items-center justify-center gap-4 overflow-hidden rounded-[30px] border border-dashed border-border/60 bg-muted/20 px-6 py-6 text-center transition hover:shadow-[0_20px_50px_rgba(15,23,42,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
+              class={`${INVITE_PLACEHOLDER_CLASSES} group`}
               onclick={handleInviteFriends}
               onkeydown={handleInviteKey}
               aria-label="Invite friends to the call"
             >
-              <div class="flex h-24 w-24 items-center justify-center rounded-full border border-border/70 bg-muted/30 transition group-hover:border-border">
-                <UserPlus size={36} class="text-foreground" />
-              </div>
-              <div class="space-y-1">
+              <div class="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+                <div class="flex h-24 w-24 items-center justify-center rounded-full border border-border/70 bg-muted/30 transition group-hover:border-border">
+                  <UserPlus size={36} class="text-foreground" />
+                </div>
                 <p class="text-lg font-semibold text-foreground">Invite Friends</p>
-                <p class="text-sm text-muted-foreground">
-                  Bring someone else into the call.
-                </p>
+                <Button
+                  variant="outline"
+                  class="w-full max-w-[220px]"
+                  onclick={(event) => {
+                    event.stopPropagation();
+                    handleInviteFriends();
+                  }}
+                >
+                  Invite Friends
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                class="w-full max-w-[220px]"
-                onclick={(event) => {
-                  event.stopPropagation();
-                  handleInviteFriends();
-                }}
-              >
-                Invite Friends
-              </Button>
             </div>
           {/if}
         </div>
@@ -427,7 +457,13 @@
         </div>
       {/if}
     </div>
-      <div class="flex flex-wrap gap-x-3 gap-y-2 justify-center gap-3 mb-4">
+      <div
+        class={`flex flex-wrap gap-x-3 gap-y-2 justify-center gap-3 mb-4 transition-opacity duration-200 ${
+          isCallViewHovered
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
+        }`}
+      >
         <div class="flex gap-2 bg-card rounded-xl px-2 py-2 border border-border">
           <Button
             variant="ghost"
@@ -493,6 +529,6 @@
         >
           <PhoneOff size={20} />
         </Button>
-      </div>
+    </div>
   </div>
 </div>

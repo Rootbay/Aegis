@@ -143,27 +143,6 @@
     }
   }
 
-  async function handleManageRoles() {
-    close?.();
-
-    if (!serverId) {
-      toasts.addToast("Server information unavailable.", "error");
-      return;
-    }
-
-    try {
-      const encodedServerId = encodeURIComponent(serverId);
-      const encodedMemberId = encodeURIComponent(profileUser.id);
-      const target = resolve(
-        `/channels/${encodedServerId}/settings?tab=members&focus=${encodedMemberId}`,
-      );
-      await goto(target);
-    } catch (error) {
-      console.error("Failed to open role management:", error);
-      toasts.addToast("Failed to open role management.", "error");
-    }
-  }
-
   function openLightbox(imageUrl: string) {
     lightboxImageUrl = imageUrl;
     showLightbox = true;
@@ -493,15 +472,6 @@
           </Button>
         </div>
       </div>
-      {#if isServerMemberContext}
-        <Button
-          class="w-full text-sm"
-          variant="secondary"
-          onclick={() => void handleManageRoles()}
-        >
-          Manage roles
-        </Button>
-      {/if}
       {#if !isMyProfile}
         <div class="flex w-full gap-2">
           <Input

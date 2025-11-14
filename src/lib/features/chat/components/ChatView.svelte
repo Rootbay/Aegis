@@ -3344,10 +3344,10 @@
           items={currentChatMessages}
           mode="bottomToTop"
           defaultEstimatedItemHeight={messageDensity === "compact" ? 64 : 80}
-          viewportClass={densityClass(
-            "virtual-list-viewport p-4 chat-viewport",
-            "virtual-list-viewport p-2 chat-viewport",
-          )}
+          viewportClass={`virtual-list-viewport ${densityClass(
+            "p-4",
+            "p-2",
+          )} chat-viewport${(currentChatMessages?.length ?? 0) > 0 ? " chat-has-messages" : ""}`}
           bind:this={listRef}
         >
           {#snippet renderItem(msg, index)}
@@ -3990,10 +3990,10 @@
         </VirtualList>
 
         {#if showEmptyChannelMessage()}
-          <div class="pointer-events-none absolute inset-x-4 bottom-4 flex justify-start">
+          <div class="pointer-events-none absolute bottom-4 flex justify-start">
             <div class="pointer-events-auto max-w-sm p-4 text-sm">
               <div class="mb-3 flex justify-left">
-                <div class="flex h-18 w-18 items-center justify-center rounded-full border border-border bg-muted/80 text-muted-foreground">
+                <div class="flex h-18 w-18 items-center justify-center rounded-full bg-muted/80 text-muted-foreground">
                   {#if chat?.channelType === "voice"}
                     <MessageCircle size={40} />
                   {:else}
@@ -4001,7 +4001,7 @@
                   {/if}
                 </div>
               </div>
-              <h1 class="text-4xl font-bold text-foreground">
+              <h1 class="text-4xl font-bold text-foreground whitespace-nowrap">
                 Welcome to #{chat.name}!
               </h1>
               <p class="text-base text-muted-foreground">
@@ -4402,3 +4402,44 @@
     onaction={handleMessageMenuAction}
   />
 {/if}
+
+<style>
+  :global(.virtual-list-viewport.chat-viewport) {
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  :global(.virtual-list-viewport.chat-viewport.chat-has-messages) {
+    overflow-y: auto;
+  }
+
+  :global(.virtual-list-viewport.chat-viewport.chat-has-messages:hover) {
+    scrollbar-width: thin;
+  }
+
+  :global(.chat-viewport.chat-has-messages) {
+    scrollbar-color: transparent transparent;
+  }
+
+  :global(.chat-viewport.chat-has-messages:hover) {
+    scrollbar-color: rgba(248, 250, 252, 0.6) transparent;
+  }
+
+  :global(.chat-viewport.chat-has-messages::-webkit-scrollbar) {
+    width: 0;
+  }
+
+  :global(.chat-viewport.chat-has-messages:hover::-webkit-scrollbar) {
+    width: 6px;
+  }
+
+  :global(.chat-viewport.chat-has-messages::-webkit-scrollbar-track) {
+    background: transparent;
+  }
+
+  :global(.chat-viewport.chat-has-messages:hover::-webkit-scrollbar-thumb) {
+    background-color: rgba(248, 250, 252, 0.6);
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.3);
+  }
+</style>
