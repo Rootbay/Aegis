@@ -16,11 +16,7 @@ function createMemberSidebarVisibilityStore(): MemberSidebarVisibilityStore {
   const setVisibility = (chatId: string, visible: boolean) => {
     update((state) => {
       const next = new Map(state);
-      if (visible) {
-        next.delete(chatId);
-      } else {
-        next.set(chatId, false);
-      }
+      next.set(chatId, visible);
       return next;
     });
   };
@@ -31,11 +27,7 @@ function createMemberSidebarVisibilityStore(): MemberSidebarVisibilityStore {
       const current = state.get(chatId);
       nextVisible = !(current ?? true);
       const next = new Map(state);
-      if (nextVisible) {
-        next.delete(chatId);
-      } else {
-        next.set(chatId, false);
-      }
+      next.set(chatId, nextVisible);
       return next;
     });
     return nextVisible;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { invoke } from "@tauri-apps/api/core";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
@@ -61,6 +61,17 @@
     onSelect: SelectChatHandler;
     onCreateGroupClick: () => void;
   } = $props();
+
+  const DIRECT_MESSAGE_LIST_MIN_WIDTH = 220;
+  const DIRECT_MESSAGE_LIST_MAX_WIDTH = 420;
+  const DEFAULT_DIRECT_MESSAGE_LIST_WIDTH = 320;
+  const DIRECT_MESSAGE_LIST_WIDTH_STORAGE_KEY = "directMessageListWidth";
+
+  let directMessageListWidth = $state(DEFAULT_DIRECT_MESSAGE_LIST_WIDTH);
+  let initialWidth = DEFAULT_DIRECT_MESSAGE_LIST_WIDTH;
+  let initialX = 0;
+  let isResizing = false;
+  let rafId: number | null = null;
 
   let showSearch = $state(false);
   let searchTerm = $state("");
@@ -131,6 +142,69 @@
     const target = type === "group" ? `/groups/${chatId}` : `/dm/${chatId}`;
     // eslint-disable-next-line svelte/no-navigation-without-resolve
     goto(target);
+  }
+
+  function clampDirectMessageListWidth(value: number) {
+    return Math.max(
+      DIRECT_MESSAGE_LIST_MIN_WIDTH,
+      Math.min(DIRECT_MESSAGE_LIST_MAX_WIDTH, value),
+    );
+  }
+
+  function persistDirectMessageListWidth() {
+    if (!browser) {
+      return;
+    }
+    try {
+      localStorage.setItem(
+        DIRECT_MESSAGE_LIST_WIDTH_STORAGE_KEY,
+        directMessageListWidth.toString(),
+      );
+    } catch (error) {
+      void error;
+    }
+  }
+
+  function startResize(e: MouseEvent) {
+    if (e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    isResizing = true;
+    initialX = e.clientX;
+    initialWidth = directMessageListWidth;
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResize);
+  }
+
+  function resize(e: MouseEvent) {
+    if (!isResizing) {
+      return;
+    }
+    const targetWidth = clampDirectMessageListWidth(
+      initialWidth + (e.clientX - initialX),
+    );
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+    }
+    rafId = requestAnimationFrame(() => {
+      directMessageListWidth = targetWidth;
+      rafId = null;
+    });
+  }
+
+  function stopResize() {
+    if (!isResizing) {
+      return;
+    }
+    isResizing = false;
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    persistDirectMessageListWidth();
+    window.removeEventListener("mousemove", resize);
+    window.removeEventListener("mouseup", stopResize);
   }
 
   function handleFriendContextItem(
@@ -250,19 +324,47 @@
   }
 
   onMount(() => {
-    if (browser) {
-      window.addEventListener("keydown", handleKeydown);
+    if (!browser) {
+      return;
     }
-  });
+    window.addEventListener("keydown", handleKeydown);
 
-  onDestroy(() => {
-    if (browser) {
-      window.removeEventListener("keydown", handleKeydown);
+    try {
+      const storedWidth = localStorage.getItem(
+        DIRECT_MESSAGE_LIST_WIDTH_STORAGE_KEY,
+      );
+      if (storedWidth) {
+        const parsed = Number.parseInt(storedWidth, 10);
+        if (!Number.isNaN(parsed)) {
+          const clamped = clampDirectMessageListWidth(parsed);
+          directMessageListWidth = clamped;
+          initialWidth = clamped;
+        }
+      }
+    } catch (error) {
+      void error;
     }
+
+    return () => {
+      window.removeEventListener("keydown", handleKeydown);
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResize);
+      if (isResizing) {
+        isResizing = false;
+        persistDirectMessageListWidth();
+      }
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    };
   });
 </script>
 
-<div class="w-80 h-full min-h-0 flex flex-col overflow-hidden border-r border-l border-border">
+<div
+  class="relative h-full min-h-0 flex flex-col overflow-hidden border-r border-l border-border"
+  style={`width:${directMessageListWidth}px; min-width:${DIRECT_MESSAGE_LIST_MIN_WIDTH}px; max-width:${DIRECT_MESSAGE_LIST_MAX_WIDTH}px;`}
+>
   <header class="h-auto px-2 flex flex-col items-start gap-2 border-b border-border">
     <Button
       variant="secondary"
@@ -622,4 +724,10 @@
       </div>
     </DialogContent>
   </Dialog>
+  <button
+    type="button"
+    class="absolute top-0 right-0 h-full w-3 translate-x-1/2 cursor-ew-resize rounded-l-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+    aria-label="Resize direct messages list"
+    onmousedown={startResize}
+  ></button>
 </div>

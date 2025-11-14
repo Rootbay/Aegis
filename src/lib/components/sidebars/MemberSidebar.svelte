@@ -4,6 +4,7 @@
   import { X } from "@lucide/svelte";
   import type { Role } from "$lib/features/servers/models/Role";
   import { goto } from "$app/navigation";
+  import { browser } from "$app/environment";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { Separator } from "$lib/components/ui/separator";
   import {
@@ -36,6 +37,7 @@
     OpenDetailedProfileHandler,
     OpenUserCardModalHandler,
   } from "$lib/components/sidebars/memberSidebar/types";
+  import { onMount } from "svelte";
 
   type MemberSidebarProps = {
     members?: MemberWithRoles[];
@@ -66,6 +68,17 @@
     mobileOpen = false,
     onMobileOpenChange = () => {},
   }: MemberSidebarProps = $props();
+
+  const MEMBER_SIDEBAR_MIN_WIDTH = 220;
+  const MEMBER_SIDEBAR_MAX_WIDTH = 420;
+  const DEFAULT_MEMBER_SIDEBAR_WIDTH = 260;
+  const MEMBER_SIDEBAR_WIDTH_STORAGE_KEY = "memberSidebarWidth";
+
+  let sidebarWidth = $state(DEFAULT_MEMBER_SIDEBAR_WIDTH);
+  let initialWidth = DEFAULT_MEMBER_SIDEBAR_WIDTH;
+  let initialX = 0;
+  let isResizing = false;
+  let rafId: number | null = null;
 
   const isServerContext = $derived(context === "server");
 
@@ -289,6 +302,103 @@
     }
   }
 
+  function clampSidebarWidth(value: number) {
+    return Math.max(
+      MEMBER_SIDEBAR_MIN_WIDTH,
+      Math.min(MEMBER_SIDEBAR_MAX_WIDTH, value),
+    );
+  }
+
+  function persistSidebarWidth() {
+    if (!browser) {
+      return;
+    }
+    try {
+      localStorage.setItem(
+        MEMBER_SIDEBAR_WIDTH_STORAGE_KEY,
+        sidebarWidth.toString(),
+      );
+    } catch (error) {
+      void error;
+    }
+  }
+
+  function startResize(e: MouseEvent) {
+    if (e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    isResizing = true;
+    initialX = e.clientX;
+    initialWidth = sidebarWidth;
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResize);
+  }
+
+  function resize(e: MouseEvent) {
+    if (!isResizing) {
+      return;
+    }
+    const targetWidth = clampSidebarWidth(
+      initialWidth - (e.clientX - initialX),
+    );
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+    }
+    rafId = requestAnimationFrame(() => {
+      sidebarWidth = targetWidth;
+      rafId = null;
+    });
+  }
+
+  function stopResize() {
+    if (!isResizing) {
+      return;
+    }
+    isResizing = false;
+    if (rafId) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    persistSidebarWidth();
+    window.removeEventListener("mousemove", resize);
+    window.removeEventListener("mouseup", stopResize);
+  }
+
+  onMount(() => {
+    if (!browser) {
+      return;
+    }
+    try {
+      const storedWidth = localStorage.getItem(
+        MEMBER_SIDEBAR_WIDTH_STORAGE_KEY,
+      );
+      if (storedWidth) {
+        const parsed = Number.parseInt(storedWidth, 10);
+        if (!Number.isNaN(parsed)) {
+          const clamped = clampSidebarWidth(parsed);
+          sidebarWidth = clamped;
+          initialWidth = clamped;
+        }
+      }
+    } catch (error) {
+      void error;
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResize);
+      if (isResizing) {
+        isResizing = false;
+        persistSidebarWidth();
+      }
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    };
+  });
+
   function handleMobileOpenChange(open: boolean) {
     onMobileOpenChange?.(open);
   }
@@ -296,7 +406,8 @@
 
 {#if variant === "desktop"}
   <Sidebar
-    class="hidden lg:flex"
+    class="hidden lg:flex relative"
+    style={`width:${sidebarWidth}px; min-width:${MEMBER_SIDEBAR_MIN_WIDTH}px; max-width:${MEMBER_SIDEBAR_MAX_WIDTH}px;`}
     data-settings-page={isSettingsPage}
     aria-label={sidebarAriaLabel}
     data-testid="desktop-member-sidebar"
@@ -386,6 +497,12 @@
         </svelte:fragment>
       </MemberListContent>
     {/if}
+    <button
+      type="button"
+      class="absolute top-0 left-0 h-full w-3 -translate-x-1/2 cursor-ew-resize rounded-r-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+      aria-label="Resize members panel"
+      onmousedown={startResize}
+    ></button>
   </Sidebar>
 {:else if variant === "mobile"}
   <Dialog open={mobileOpen} onOpenChange={handleMobileOpenChange}>

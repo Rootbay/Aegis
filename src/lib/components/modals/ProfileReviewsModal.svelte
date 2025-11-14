@@ -129,8 +129,8 @@
         subjectType === "user" ? "list_user_reviews" : "list_server_reviews";
       const args =
         subjectType === "user"
-          ? { user_id: subjectId }
-          : { server_id: subjectId };
+          ? { userId: subjectId }
+          : { serverId: subjectId };
       const response = await invoke<ReviewDto[]>(command, args);
       if (token !== loadRequestToken) {
         return;

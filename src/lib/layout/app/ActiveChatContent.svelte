@@ -149,7 +149,12 @@
       return;
     }
 
-    const visible = shouldShowMemberSidebar();
+    const state = $memberSidebarVisibilityStore;
+    const visible = state.get(chat.id);
+    if (visible === undefined) {
+      // Wait for an explicit preference before popping open the mobile panel.
+      return;
+    }
     if (mobileMemberPanelOpen !== visible) {
       mobileMemberPanelOpen = visible;
     }
