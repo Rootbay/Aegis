@@ -28,7 +28,9 @@
     Power,
     Sparkles,
     PhoneCall,
-    BadgeCheck
+    BadgeCheck,
+    Bug,
+    ClipboardCopy
   } from "@lucide/svelte";
   import type { User } from "$lib/features/auth/models/User";
 
@@ -187,6 +189,45 @@
     // placeholder for voice controls
   };
 
+  const voiceStatsSummary = () => {
+    const stats = voiceNetworkOverview();
+    const channelLabel = voiceChannelDescriptor || "Voice channel";
+    return [
+      `Channel: ${channelLabel}`,
+      `Duration: ${voiceCallDuration}`,
+      `Average ping: ${stats.average}ms`,
+      `Latest ping: ${stats.latest}ms`,
+      `Packet loss: ${stats.packetLoss}`,
+      `Jitter: ${stats.jitter}ms`
+    ].join(" • ");
+  };
+
+  const handleVoiceDebug = () => {
+    console.debug("Voice debug", {
+      channel: voiceChannelDescriptor,
+      duration: voiceCallDuration,
+      stats: voiceNetworkOverview()
+    });
+  };
+
+  const handleVoiceCopyStats = async () => {
+    const summary = voiceStatsSummary();
+    const clipboard =
+      typeof navigator !== "undefined" ? navigator.clipboard : undefined;
+
+    if (clipboard?.writeText) {
+      try {
+        await clipboard.writeText(summary);
+        return;
+      } catch (error) {
+        console.error("Unable to copy voice stats", error);
+        return;
+      }
+    }
+
+    console.info("Voice stats summary (clipboard unavailable)", summary);
+  };
+
   const handleCameraToggle = () => {
     callStore.toggleCamera();
   };
@@ -263,7 +304,7 @@
                 <Popover.Content
                   side="bottom"
                   align="start"
-                  class="space-y-3"
+                  class="space-y-4 rounded-2xl border border-border/60 bg-card/90 p-4 shadow-lg"
                 >
                   {@const stats = voiceNetworkOverview()}
                   {@const history = voiceNetworkHistory}
@@ -320,6 +361,39 @@
                         {stats.jitter} ms
                       </p>
                     </div>
+                  </div>
+                  <div class="rounded-lg border border-border/60 bg-muted/70 px-3 py-2 text-[11px] text-muted-foreground">
+                    <p class="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Security
+                    </p>
+                    <p class="text-[12px] font-semibold text-foreground leading-tight">
+                      Voice traffic is protected with end-to-end encryption (E2EE).
+                    </p>
+                    <p class="text-[10px] text-muted-foreground opacity-80">
+                      Session keys rotate inside the Tauri runtime to keep every call private.
+                    </p>
+                  </div>
+                  <div class="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      class="flex-1 items-center justify-center gap-1 rounded-lg border border-border/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide"
+                      onclick={handleVoiceDebug}
+                      aria-label="Log voice debug info"
+                    >
+                      <Bug size={13} />
+                      Debug
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      class="flex-1 items-center justify-center gap-1 rounded-lg border border-border/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide"
+                      onclick={handleVoiceCopyStats}
+                      aria-label="Copy voice stats"
+                    >
+                      <ClipboardCopy size={13} />
+                      Copy stats
+                    </Button>
                   </div>
                 </Popover.Content>
               </Popover.Root>
