@@ -4,11 +4,13 @@
   import FloatingContextMenu, {
     type ContextMenuItemConfig,
   } from "./FloatingContextMenu.svelte";
-
-  type ContextMenuOption = {
-    id: string;
-    label: string;
-  };
+  import type { ContextMenuOption } from "./submenuOptions";
+  import {
+    MUTE_OPTIONS,
+    NOTIFICATION_OPTIONS,
+    buildSubmenuItems,
+    invokeSubmenuOption,
+  } from "./submenuOptions";
 
   type CategoryContextMenuAction =
     | "create_channel"
@@ -53,22 +55,6 @@
     onclose,
   }: CategoryContextMenuProps = $props();
 
-  const MUTE_OPTIONS: ContextMenuOption[] = [
-    { id: "15m", label: "15 Minutes" },
-    { id: "1h", label: "1 Hour" },
-    { id: "8h", label: "8 Hours" },
-    { id: "24h", label: "1 Day" },
-    { id: "3d", label: "3 Days" },
-    { id: "until_unmuted", label: "Until I Unmute" },
-  ];
-
-  const NOTIFICATION_OPTIONS: ContextMenuOption[] = [
-    { id: "all_messages", label: "All Messages" },
-    { id: "mentions_only", label: "Mentions Only" },
-    { id: "nothing", label: "Nothing" },
-    { id: "default", label: "Use Server Default" },
-  ];
-
   const MENU_WIDTH = 260;
 
   function buildBaseMenuItems(): ContextMenuItemConfig<null>[] {
@@ -107,17 +93,15 @@
 
   let baseMenuItems = $state(buildBaseMenuItems());
 
-  const muteSubmenuItems = MUTE_OPTIONS.map((option) => ({
-    label: option.label,
-    action: "mute_category_option",
-    data: option,
-  }));
+  const muteSubmenuItems = buildSubmenuItems(
+    MUTE_OPTIONS,
+    "mute_category_option",
+  );
 
-  const notificationSubmenuItems = NOTIFICATION_OPTIONS.map((option) => ({
-    label: option.label,
-    action: "notification_settings_option",
-    data: option,
-  }));
+  const notificationSubmenuItems = buildSubmenuItems(
+    NOTIFICATION_OPTIONS,
+    "notification_settings_option",
+  );
 
   let showMenu = $state(true);
   let showMuteSubmenu = $state(false);
@@ -199,28 +183,28 @@
     action: string;
     itemData: ContextMenuOption | null;
   }) {
-    const option = detail.itemData;
-    if (!option) return;
-    onaction?.({
-      action: "mute_category",
-      categoryId,
-      option,
+    invokeSubmenuOption(detail, (option) => {
+      onaction?.({
+        action: "mute_category",
+        categoryId,
+        option,
+      });
+      closeAllMenus();
     });
-    closeAllMenus();
   }
 
   function handleNotificationSubmenuAction(detail: {
     action: string;
     itemData: ContextMenuOption | null;
   }) {
-    const option = detail.itemData;
-    if (!option) return;
-    onaction?.({
-      action: "notification_settings",
-      categoryId,
-      option,
+    invokeSubmenuOption(detail, (option) => {
+      onaction?.({
+        action: "notification_settings",
+        categoryId,
+        option,
+      });
+      closeAllMenus();
     });
-    closeAllMenus();
   }
 </script>
 

@@ -5,11 +5,13 @@
     type ContextMenuItemConfig,
   } from "./FloatingContextMenu.svelte";
   import type { Channel } from "$lib/features/channels/models/Channel";
-
-  type ContextMenuOption = {
-    id: string;
-    label: string;
-  };
+  import type { ContextMenuOption } from "./submenuOptions";
+  import {
+    MUTE_OPTIONS,
+    NOTIFICATION_OPTIONS,
+    buildSubmenuItems,
+    invokeSubmenuOption,
+  } from "./submenuOptions";
 
   type ChannelContextMenuAction =
     | "mark_as_read"
@@ -53,67 +55,32 @@
     onclose,
   }: ChannelContextMenuProps = $props();
 
-  const MUTE_OPTIONS: ContextMenuOption[] = [
-    { id: "15m", label: "15 Minutes" },
-    { id: "1h", label: "1 Hour" },
-    { id: "8h", label: "8 Hours" },
-    { id: "24h", label: "1 Day" },
-    { id: "3d", label: "3 Days" },
-    { id: "until_unmuted", label: "Until I Unmute" },
-  ];
-
-  const CHANNEL_NOTIFICATION_OPTIONS: ContextMenuOption[] = [
-    { id: "all_messages", label: "All Messages" },
-    { id: "mentions_only", label: "Mentions Only" },
-    { id: "nothing", label: "Nothing" },
-    { id: "default", label: "Use Server Default" },
-  ];
-
   const MENU_WIDTH = 260;
 
-  const textMenuItems: ContextMenuItemConfig<null>[] = [
-    { label: "Mark As Read", action: "mark_as_read" },
-    { isSeparator: true },
-    { label: "Invite People", action: "invite_people" },
-    { label: "Copy Link", action: "copy_link" },
-    { isSeparator: true },
-    {
-      label: "Mute Channel",
-      action: "mute_channel",
-      closeOnSelect: false,
-    },
-    {
-      label: "Notification Settings",
-      action: "notification_settings",
-      closeOnSelect: false,
-    },
-    { isSeparator: true },
-    { label: "Edit Channel", action: "edit_channel" },
-    { label: "Duplicate Channel", action: "duplicate_channel" },
-    { label: "Create Text Channel", action: "create_text_channel" },
-    {
-      label: "Delete Channel",
-      action: "delete_channel",
-      isDestructive: true,
-    },
-    { isSeparator: true },
-    { label: "View Raw", action: "view_raw" },
-    { label: "Copy Channel ID", action: "copy_channel_id" },
-  ];
+  function buildMenuItems(): ContextMenuItemConfig<null>[] {
+    if (!channel) return [];
 
-  function buildVoiceMenuItems(): ContextMenuItemConfig<null>[] {
-    return [
+    const isVoiceChannel = channel.channel_type === "voice";
+    const items: ContextMenuItemConfig<null>[] = [
       { label: "Mark As Read", action: "mark_as_read" },
       { isSeparator: true },
       { label: "Invite People", action: "invite_people" },
       { label: "Copy Link", action: "copy_link" },
       { isSeparator: true },
-      { label: "Open Chat", action: "open_chat" },
-      {
-        label: hideNamesEnabled ? "Show Names" : "Hide Names",
-        action: "hide_names",
-      },
-      { isSeparator: true },
+    ];
+
+    if (isVoiceChannel) {
+      items.push(
+        { label: "Open Chat", action: "open_chat" },
+        {
+          label: hideNamesEnabled ? "Show Names" : "Hide Names",
+          action: "hide_names",
+        },
+        { isSeparator: true },
+      );
+    }
+
+    items.push(
       {
         label: "Mute Channel",
         action: "mute_channel",
@@ -127,7 +94,10 @@
       { isSeparator: true },
       { label: "Edit Channel", action: "edit_channel" },
       { label: "Duplicate Channel", action: "duplicate_channel" },
-      { label: "Create Voice Channel", action: "create_voice_channel" },
+      {
+        label: isVoiceChannel ? "Create Voice Channel" : "Create Text Channel",
+        action: isVoiceChannel ? "create_voice_channel" : "create_text_channel",
+      },
       {
         label: "Delete Channel",
         action: "delete_channel",
@@ -136,33 +106,25 @@
       { isSeparator: true },
       { label: "View Raw", action: "view_raw" },
       { label: "Copy Channel ID", action: "copy_channel_id" },
-    ];
+    );
+
+    return items;
   }
 
-  let voiceMenuItems = $state(buildVoiceMenuItems());
   let menuItems = $state<ContextMenuItemConfig<null>[]>([]);
 
   $effect(() => {
-    voiceMenuItems = buildVoiceMenuItems();
+    menuItems = buildMenuItems();
   });
 
-  $effect(() => {
-    menuItems =
-      channel.channel_type === "voice" ? voiceMenuItems : textMenuItems;
-  });
+  const muteSubmenuItems = buildSubmenuItems(
+    MUTE_OPTIONS,
+    "mute_channel_option",
+  );
 
-  const muteSubmenuItems = MUTE_OPTIONS.map((option) => ({
-    label: option.label,
-    action: "mute_channel_option",
-    data: option,
-  }));
-
-  const notificationSubmenuItems = CHANNEL_NOTIFICATION_OPTIONS.map(
-    (option) => ({
-      label: option.label,
-      action: "notification_settings_option",
-      data: option,
-    }),
+  const notificationSubmenuItems = buildSubmenuItems(
+    NOTIFICATION_OPTIONS,
+    "notification_settings_option",
   );
 
   let showMenu = $state(true);
@@ -238,28 +200,28 @@
     action: string;
     itemData: ContextMenuOption | null;
   }) {
-    const option = detail.itemData;
-    if (!option) return;
-    onaction?.({
-      action: "mute_channel",
-      channelId: channel.id,
-      option,
+    invokeSubmenuOption(detail, (option) => {
+      onaction?.({
+        action: "mute_channel",
+        channelId: channel.id,
+        option,
+      });
+      closeAllMenus();
     });
-    closeAllMenus();
   }
 
   function handleNotificationSubmenuAction(detail: {
     action: string;
     itemData: ContextMenuOption | null;
   }) {
-    const option = detail.itemData;
-    if (!option) return;
-    onaction?.({
-      action: "notification_settings",
-      channelId: channel.id,
-      option,
+    invokeSubmenuOption(detail, (option) => {
+      onaction?.({
+        action: "notification_settings",
+        channelId: channel.id,
+        option,
+      });
+      closeAllMenus();
     });
-    closeAllMenus();
   }
 </script>
 

@@ -9,7 +9,7 @@
   import { userStore } from "$lib/stores/userStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { Plus, Users, Map } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
@@ -112,7 +112,7 @@
   function focusFriendsPage() {
     serverStore.setActiveServer(null);
     chatStore.clearActiveChat();
-    const params = new URLSearchParams($page.url.search);
+    const params = new URLSearchParams(page.url.search);
     params.set("tab", "All");
     const query = params.toString();
     const target = query ? `/?${query}` : "/";
@@ -378,7 +378,7 @@
       variant="ghost"
       class="w-full justify-start text-sm font-semibold data-[active=true]:bg-muted/50 data-[active=true]:text-foreground"
       data-active={
-        $page.url.pathname === "/" || $page.url.pathname.startsWith("/friends")
+        page.url.pathname === "/" || page.url.pathname.startsWith("/friends")
       }
       onclick={focusFriendsPage}
     >
@@ -388,7 +388,7 @@
     <Button
       variant="ghost"
       class="w-full justify-start text-sm font-semibold mb-2 data-[active=true]:bg-muted/50 data-[active=true]:text-foreground"
-      data-active={$page.url.pathname.startsWith("/discover-servers")}
+      data-active={page.url.pathname.startsWith("/discover-servers")}
       onclick={() => goto("/discover-servers")}
     >
       <Map size={16} />

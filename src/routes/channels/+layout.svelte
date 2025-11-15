@@ -1,7 +1,7 @@
 <script lang="ts">
   import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
   import MemberSidebar from "$lib/components/sidebars/MemberSidebar.svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { toasts } from "$lib/stores/ToastStore";
   import { setContext, getContext } from "svelte";
@@ -11,6 +11,7 @@
   } from "$lib/contextKeys";
   import type { CreateGroupContext, ServerLayoutContext } from "$lib/contextTypes";
   import { createServerLayoutController } from "$lib/layout/server/createServerLayoutController";
+  import { Skeleton } from "$lib/components/ui/skeleton";
 
   let { children } = $props();
 
@@ -35,10 +36,11 @@
   const hasServerStore = controller.hasServer;
   const serverIdStore = controller.serverId;
 
-  const showSidebars = $derived(!$page.url.pathname.includes("/settings"));
+  const showSidebars = $derived(!page.url.pathname.includes("/settings"));
+  const skeletonRows = Array.from({ length: 5 });
 
   $effect(() => {
-    const activeServerId = $page.params.serverId ?? null;
+    const activeServerId = page.params.serverId ?? null;
     if (activeServerId === $serverIdStore) {
       return;
     }
@@ -48,7 +50,37 @@
 
 <div class="flex h-full w-full">
   {#if $loadingStore}
-    <p class="text-muted-foreground text-center mt-8">Loading server data...</p>
+    <div class="flex h-full w-full gap-4">
+      {#if showSidebars}
+        <div class="flex w-60 flex-col gap-3">
+          <Skeleton class="h-10 w-full rounded-2xl" aria-hidden="true" />
+          <div class="space-y-2">
+            {#each skeletonRows as _}
+              <Skeleton class="h-3 w-full rounded-full" aria-hidden="true" />
+            {/each}
+          </div>
+        </div>
+      {/if}
+      <main class="grow flex flex-col gap-4 rounded-3xl bg-muted p-4">
+        <div class="flex gap-3">
+          <Skeleton class="h-12 w-32 rounded-2xl" aria-hidden="true" />
+          <Skeleton class="h-12 w-32 rounded-2xl" aria-hidden="true" />
+        </div>
+        <div class="flex grow gap-3">
+          <Skeleton class="grow rounded-3xl" aria-hidden="true" />
+        </div>
+      </main>
+      {#if showSidebars}
+        <div class="flex w-64 flex-col gap-3">
+          <Skeleton class="h-10 w-full rounded-2xl" aria-hidden="true" />
+          <div class="space-y-2">
+            {#each skeletonRows as _}
+              <Skeleton class="h-3 w-full rounded-full" aria-hidden="true" />
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
   {:else if $hasServerStore && $serverStore}
     {#if showSidebars}
       <ServerSidebar
@@ -66,9 +98,5 @@
         openUserCardModal={openUserCardModal}
       />
     {/if}
-  {:else}
-    <p class="text-muted-foreground text-center mt-8">
-      Server not found or an error occurred.
-    </p>
   {/if}
 </div>
