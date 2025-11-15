@@ -17,7 +17,8 @@
     Users,
     Webhook,
     Clapperboard,
-    Pencil
+    Pencil,
+    Search
   } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { invoke } from "@tauri-apps/api/core";
@@ -36,6 +37,12 @@
   import FloatingContextMenu from "$lib/components/context-menus/FloatingContextMenu.svelte";
   import VirtualList from "@humanspeak/svelte-virtual-list";
   import * as Popover from "$lib/components/ui/popover/index.js";
+  import {
+    Tabs,
+    TabsList,
+    TabsTrigger,
+    TabsContent,
+  } from "$lib/components/ui/tabs";
 
   import { userStore } from "$lib/stores/userStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
@@ -132,7 +139,8 @@
   } from "$lib/features/chat/models/Message";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { Role } from "$lib/features/servers/models/Role";
-  import { Button } from "$lib/components/ui/button";
+  import { Button } from "$lib/components/ui/button/index";
+  import { Input } from "$lib/components/ui/input/index";
 
   type SendServerInviteResult = {
     server_id: string;
@@ -717,8 +725,8 @@
   let listRef: any = $state();
   let fileInput: HTMLInputElement | null = $state(null);
   let textareaRef: HTMLTextAreaElement | null = $state(null);
-  let composerEmojiButton: HTMLButtonElement | null = $state(null);
-  let composerEmojiPickerEl: HTMLDivElement | null = $state(null);
+  let composerPickerTriggerEl: HTMLDivElement | null = $state(null);
+  let composerPickerEl: HTMLDivElement | null = $state(null);
   let viewportEl: HTMLElement | null = null;
   let detachViewportListener: (() => void) | null = null;
   let showMsgMenu = $state(false);
@@ -736,8 +744,12 @@
   let replyTargetMessageId = $state<string | null>(null);
   let replyPreview = $state<ReplyPreview | null>(null);
   const mentionSuggestions = createMentionSuggestionsStore();
-  let showComposerEmojiPicker = $state(false);
-  const composerEmojiPickerId = $derived(
+  type ComposerPickerTab = "emoji" | "gif";
+
+  let showComposerPicker = $state(false);
+  let composerPickerTab = $state<ComposerPickerTab>("emoji");
+  let emojiSearchTerm = $state("");
+  const composerPickerId = $derived(
     () => `chat-composer-emoji-picker-${chat?.id ?? "unknown"}`,
   );
   let defaultEmojiCategories = $state<EmojiCategory[] | null>(null);
@@ -914,11 +926,13 @@
     }, TYPING_IDLE_TIMEOUT_MS);
   };
 
-  const closeComposerEmojiPicker = (options?: { focusComposer?: boolean }) => {
-    if (!showComposerEmojiPicker) {
+  const closeComposerPicker = (options?: { focusComposer?: boolean }) => {
+    if (!showComposerPicker) {
       return;
     }
-    showComposerEmojiPicker = false;
+    showComposerPicker = false;
+    composerPickerTab = "emoji";
+    emojiSearchTerm = "";
     if (options?.focusComposer) {
       queueMicrotask(() => {
         textareaRef?.focus();
@@ -926,15 +940,20 @@
     }
   };
 
-  const toggleComposerEmojiPicker = () => {
-    if (!canUseComposerEmoji()) {
+  const openComposerPicker = (tab: ComposerPickerTab) => {
+    composerPickerTab = tab;
+    showComposerPicker = true;
+  };
+
+  const toggleComposerPicker = (tab: ComposerPickerTab) => {
+    if (tab === "emoji" && !canUseComposerEmoji()) {
       return;
     }
-    if (showComposerEmojiPicker) {
-      closeComposerEmojiPicker();
+    if (showComposerPicker && composerPickerTab === tab) {
+      closeComposerPicker();
       return;
     }
-    showComposerEmojiPicker = true;
+    openComposerPicker(tab);
   };
 
   const insertEmojiIntoComposer = (emoji: string) => {
@@ -971,7 +990,7 @@
       return;
     }
     insertEmojiIntoComposer(emoji);
-    closeComposerEmojiPicker();
+    closeComposerPicker({ focusComposer: true });
   };
 
   const baseModerationPreferences = {
@@ -1344,7 +1363,7 @@
   });
 
   $effect(() => {
-    if (!showComposerEmojiPicker) {
+    if (!showComposerPicker) {
       return;
     }
     if (typeof document === "undefined") {
@@ -1354,12 +1373,12 @@
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (
-        (target && composerEmojiButton?.contains(target)) ||
-        (target && composerEmojiPickerEl?.contains(target))
+        (target && composerPickerTriggerEl?.contains(target)) ||
+        (target && composerPickerEl?.contains(target))
       ) {
         return;
       }
-      closeComposerEmojiPicker();
+      closeComposerPicker();
     };
 
     document.addEventListener("pointerdown", handlePointerDown, true);
@@ -1397,7 +1416,8 @@
     attachedFiles = [];
     replyTargetMessageId = null;
     replyPreview = null;
-    showComposerEmojiPicker = false;
+    showComposerPicker = false;
+    composerPickerTab = "emoji";
 
     void (async () => {
       try {
@@ -4105,7 +4125,7 @@
               <Popover.Content
                 side="top"
                 align="start"
-                sideOffset={6}
+                sideOffset={2}
                 class="w-48 border border-border bg-card p-2"
               >
                 <div class="flex flex-col gap-1 items-start">
@@ -4239,56 +4259,99 @@
               {/if}
             </div>
             <div class="relative ml-1">
-              <button
-                type="button"
-                class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
-                class:hover:text-white={canUseComposerEmoji()}
-                class:cursor-pointer={canUseComposerEmoji()}
-                class:cursor-not-allowed={!canUseComposerEmoji()}
-                class:opacity-50={!canUseComposerEmoji()}
-                aria-label={canUseComposerEmoji()
-                  ? "Insert emoji"
-                  : "Emoji insertion is disabled in this channel"}
-                aria-haspopup="dialog"
-                aria-expanded={showComposerEmojiPicker}
-                aria-controls={composerEmojiPickerId()}
-                onclick={toggleComposerEmojiPicker}
-                bind:this={composerEmojiButton}
-                disabled={!canUseComposerEmoji()}
-                aria-disabled={!canUseComposerEmoji()}
-                title={canUseComposerEmoji()
-                  ? "Insert emoji"
-                  : "You do not have permission to use emojis in this channel."}
-              >
-                <Smile size={20} />
-              </button>
-              {#if showComposerEmojiPicker}
+              <div class="flex items-center gap-2" bind:this={composerPickerTriggerEl}>
+                <button
+                  type="button"
+                  class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors"
+                  class:hover:text-white={canUseComposerEmoji()}
+                  class:cursor-pointer={canUseComposerEmoji()}
+                  class:cursor-not-allowed={!canUseComposerEmoji()}
+                  class:opacity-50={!canUseComposerEmoji()}
+                  aria-label={canUseComposerEmoji()
+                    ? "Insert emoji"
+                    : "Emoji insertion is disabled in this channel"}
+                  aria-haspopup="dialog"
+                  aria-expanded={showComposerPicker}
+                  aria-controls={composerPickerId()}
+                  onclick={() => toggleComposerPicker("emoji")}
+                  disabled={!canUseComposerEmoji()}
+                  aria-disabled={!canUseComposerEmoji()}
+                  title={canUseComposerEmoji()
+                    ? "Insert emoji"
+                    : "You do not have permission to use emojis in this channel."}
+                >
+                  <Smile size={20} />
+                </button>
+                <button
+                  type="button"
+                  class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors hover:text-white cursor-pointer"
+                  aria-label="Open GIFs picker"
+                  aria-haspopup="dialog"
+                  aria-expanded={showComposerPicker}
+                  aria-controls={composerPickerId()}
+                  title="GIFs picker"
+                  onclick={() => toggleComposerPicker("gif")}
+                >
+                  <Clapperboard size={20} />
+                </button>
+              </div>
+              {#if showComposerPicker}
                 <div
-                  class="absolute bottom-full left-0 z-30 mb-2"
-                  id={composerEmojiPickerId()}
-                  bind:this={composerEmojiPickerEl}
+                  class="absolute bottom-full right-0 z-30 mb-4"
+                  id={composerPickerId()}
+                  bind:this={composerPickerEl}
                   role="presentation"
                 >
-                  <EmojiPicker
-                    emojiCategories={emojiPickerCategories() ?? undefined}
-                    fallbackUsed={emojiPickerFallbackUsed()}
-                    on:select={(event) =>
-                      handleComposerEmojiSelect(event.detail.emoji)}
-                    on:close={() =>
-                      closeComposerEmojiPicker({ focusComposer: true })}
-                  />
+                  <div class="w-[496px] h-[468px] overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 shadow-[0_24px_60px_rgba(0,0,0,0.65)]">
+                    <Tabs
+                      value={composerPickerTab}
+                      onValueChange={(value) =>
+                        (composerPickerTab = value as ComposerPickerTab)}
+                      class="h-full gap-0"
+                    >
+                      <div class="flex flex-col gap-2 pt-3 px-3 bg-card/70 pb-3 border border-border">
+                        <TabsList class="self-start space-x-1">
+                          <TabsTrigger value="gif" class="cursor-pointer">GIFs</TabsTrigger>
+                          <TabsTrigger value="emoji" class="cursor-pointer">Emoji</TabsTrigger>
+                        </TabsList>
+                        <div class="relative w-full">
+                          <Input
+                            type="search"
+                            class={`w-full pr-9 disabled:opacity-60 ${composerPickerTab !== "emoji" ? "cursor-not-allowed" : ""}`}
+                            placeholder="Search emojis"
+                            bind:value={emojiSearchTerm}
+                            autocomplete="off"
+                            aria-label="Search emojis"
+                            disabled={composerPickerTab !== "emoji"}
+                          />
+                          <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/60">
+                            <Search size={14} aria-hidden="true" />
+                          </span>
+                        </div>
+                      </div>
+
+                      <TabsContent value="emoji" class="flex flex-col h-full min-h-0">
+                        <EmojiPicker
+                          emojiCategories={emojiPickerCategories() ?? undefined}
+                          fallbackUsed={emojiPickerFallbackUsed()}
+                          searchTerm={emojiSearchTerm}
+                          on:select={(event) =>
+                            handleComposerEmojiSelect(event.detail.emoji)}
+                          on:close={() =>
+                            closeComposerPicker({ focusComposer: true })}
+                        />
+                      </TabsContent>
+
+                      <TabsContent value="gif">
+                        <div class="flex h-32 items-center justify-center rounded-lg border border-dashed border-white/20 bg-white/5 px-3 text-sm text-muted-foreground">
+                          GIF picker coming soon.
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </div>
                 </div>
               {/if}
-
             </div>
-            <button
-              type="button"
-              class="flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors hover:text-white cursor-pointer"
-              aria-label="Open GIFs picker"
-              title="GIFs picker"
-            >
-                <Clapperboard size={20} />
-            </button>
             <button
               type="submit"
               class="flex items-center justify-center ml-2 p-2 text-white disabled:cursor-not-allowed cursor-pointer rounded-full transition-colors"

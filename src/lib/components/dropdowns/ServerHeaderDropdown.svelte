@@ -2,6 +2,8 @@
 
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
+  import type { ComponentType } from "svelte";
+
   import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -42,6 +44,108 @@
     server: Server;
   };
 
+  type IconComponent = ComponentType<{ size?: number; class?: string }>;
+
+  type MenuActionItem = {
+    type: "item";
+    id: string;
+    label: string;
+    action: ServerHeaderDropdownAction;
+    icon: IconComponent;
+    className?: string;
+  };
+
+  type MenuSeparator = {
+    type: "separator";
+    id: string;
+  };
+
+  type MenuEntry = MenuActionItem | MenuSeparator;
+
+  const MENU_ITEMS: MenuEntry[] = [
+    {
+      type: "item",
+      id: "invite",
+      label: "Invite to Server",
+      action: "invite_to_server",
+      icon: UserPlus,
+    },
+    {
+      type: "item",
+      id: "settings",
+      label: "Server Settings",
+      action: "server_settings",
+      icon: Settings,
+    },
+    {
+      type: "item",
+      id: "create-channel",
+      label: "Create Channel",
+      action: "create_channel",
+      icon: Plus,
+    },
+    {
+      type: "item",
+      id: "create-category",
+      label: "Create Category",
+      action: "create_category",
+      icon: Plus,
+    },
+    {
+      type: "item",
+      id: "create-event",
+      label: "Create Event",
+      action: "create_event",
+      icon: Calendar,
+    },
+    { type: "separator", id: "sep-main" },
+    {
+      type: "item",
+      id: "notifications",
+      label: "Notification Settings",
+      action: "notification_settings",
+      icon: Bell,
+    },
+    {
+      type: "item",
+      id: "privacy",
+      label: "Privacy Settings",
+      action: "privacy_settings",
+      icon: Shield,
+    },
+    { type: "separator", id: "sep-options" },
+    {
+      type: "item",
+      id: "edit-profile",
+      label: "Edit Per-server Profile",
+      action: "edit_profile",
+      icon: UserRoundPen,
+    },
+    {
+      type: "item",
+      id: "hide-muted",
+      label: "Hide Muted Channels",
+      action: "hide_muted_channels",
+      icon: Square,
+    },
+    { type: "separator", id: "sep-more" },
+    {
+      type: "item",
+      id: "leave",
+      label: "Leave Server",
+      action: "leave_server",
+      icon: CircleX,
+      className: "text-destructive focus:text-destructive",
+    },
+    {
+      type: "item",
+      id: "reviews",
+      label: "View Reviews",
+      action: "view_reviews",
+      icon: ExternalLink,
+    },
+  ];
+
   let { server }: Props = $props();
 
   const dispatch = createEventDispatcher<{
@@ -68,50 +172,18 @@
     align="center"
     class="w-[218px] *:cursor-pointer"
   >
-    <DropdownMenuItem onSelect={() => handleAction("invite_to_server")}>
-      <UserPlus size={12} class="mr-2" /> Invite to Server
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("server_settings")}>
-      <Settings size={12} class="mr-2" /> Server Settings
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("create_channel")}>
-      <Plus size={12} class="mr-2" /> Create Channel
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("create_category")}>
-      <Plus size={12} class="mr-2" /> Create Category
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("create_event")}>
-      <Calendar size={12} class="mr-2" /> Create Event
-    </DropdownMenuItem>
-
-    <DropdownMenuSeparator />
-
-    <DropdownMenuItem onSelect={() => handleAction("notification_settings")}>
-      <Bell size={12} class="mr-2" /> Notification Settings
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("privacy_settings")}>
-      <Shield size={12} class="mr-2" /> Privacy Settings
-    </DropdownMenuItem>
-
-    <DropdownMenuSeparator />
-
-    <DropdownMenuItem onSelect={() => handleAction("edit_profile")}>
-      <UserRoundPen size={12} class="mr-2" /> Edit Per-server Profile
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("hide_muted_channels")}>
-      <Square size={12} class="mr-2" /> Hide Muted Channels
-    </DropdownMenuItem>
-
-    <DropdownMenuSeparator />
-
-    <DropdownMenuItem
-      class="text-destructive focus:text-destructive"
-      onSelect={() => handleAction("leave_server")}
-    >
-      <CircleX size={12} class="mr-2" /> Leave Server
-    </DropdownMenuItem>
-    <DropdownMenuItem onSelect={() => handleAction("view_reviews")}>
-      <ExternalLink size={12} class="mr-2" /> View Reviews
-    </DropdownMenuItem>
+    {#each MENU_ITEMS as entry (entry.id)}
+      {#if entry.type === "separator"}
+        <DropdownMenuSeparator />
+      {:else}
+        {@const Icon = entry.icon}
+        <DropdownMenuItem
+          class={entry.className}
+          onSelect={() => handleAction(entry.action)}
+        >
+          <Icon size={12} class="mr-2" /> {entry.label}
+        </DropdownMenuItem>
+      {/if}
+    {/each}
   </DropdownMenuContent>
 </DropdownMenu>

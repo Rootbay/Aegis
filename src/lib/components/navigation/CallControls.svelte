@@ -38,8 +38,28 @@
     );
   });
 
+  function getActiveCall() {
+    const active = $callStore.activeCall;
+    if (!active) return null;
+    if (active.status === "ended" || active.status === "error") return null;
+    return active;
+  }
+
+  function hasConflictingActiveCall() {
+    const active = getActiveCall();
+    if (!active) return false;
+    if (!chat?.id) return true;
+    return active.chatId !== chat.id || active.chatType !== chat.type;
+  }
+
+  function isActiveCallForCurrentChat() {
+    const active = getActiveCall();
+    if (!active || !chat?.id) return false;
+    return active.chatId === chat.id && active.chatType === chat.type;
+  }
+
   const voiceButtonDisabled = $derived.by(() => {
-    if (!chat?.id || !isCallEligible) return true;
+    if (!chat?.id || !isCallEligible || hasConflictingActiveCall()) return true;
     const state = $callStore;
     const active = state.activeCall;
     if (
@@ -63,7 +83,7 @@
   });
 
   const videoButtonDisabled = $derived.by(() => {
-    if (!chat?.id || !isCallEligible) return true;
+    if (!chat?.id || !isCallEligible || hasConflictingActiveCall()) return true;
     const state = $callStore;
     const active = state.activeCall;
     if (
@@ -154,17 +174,7 @@
   }
 
   async function startVoiceCall() {
-    if (!chat || !isCallEligible) return;
-    const active = $callStore.activeCall;
-    if (
-      active &&
-      active.chatId === chat.id &&
-      active.chatType === chat.type &&
-      active.status !== "ended" &&
-      active.status !== "error"
-    ) {
-      return;
-    }
+    if (!chat || !isCallEligible || isActiveCallForCurrentChat()) return;
     if (chat.type === "channel") {
       await callStore.joinVoiceChannel({
         chatId: chat.id,
@@ -184,17 +194,7 @@
   }
 
   async function startVideoCall() {
-    if (!chat || !isCallEligible) return;
-    const active = $callStore.activeCall;
-    if (
-      active &&
-      active.chatId === chat.id &&
-      active.chatType === chat.type &&
-      active.status !== "ended" &&
-      active.status !== "error"
-    ) {
-      return;
-    }
+    if (!chat || !isCallEligible || isActiveCallForCurrentChat()) return;
     await callStore.startCall({
       chatId: chat.id,
       chatName: getChatDisplayName(),
