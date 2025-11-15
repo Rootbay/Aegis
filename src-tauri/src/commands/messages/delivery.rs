@@ -14,7 +14,7 @@ use super::helpers::{is_voice_memo_attachment, parse_optional_datetime};
 use super::types::{AttachmentDescriptor, SearchMessagesResponse};
 
 #[derive(Debug, Deserialize, Default)]
-struct SearchMessagesFilters {
+pub struct SearchMessagesFilters {
     pinned: Option<bool>,
     from: Option<Vec<String>>,
     before: Option<i64>,
@@ -22,7 +22,7 @@ struct SearchMessagesFilters {
 }
 
 #[derive(Debug, Deserialize)]
-struct SearchMessagesPayload {
+pub struct SearchMessagesPayload {
     #[serde(alias = "chatId")]
     chat_id: Option<String>,
     query: Option<String>,
