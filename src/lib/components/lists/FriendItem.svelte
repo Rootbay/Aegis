@@ -49,9 +49,15 @@
 
   let { friend } = $props<{ friend: FriendWithMeta }>();
 
-  let actionInProgress = $state<
-    "message" | "accept" | "decline" | "remove" | "block" | "unblock" | null
-  >(null);
+  type FriendActionState =
+    | "message"
+    | "accept"
+    | "decline"
+    | "remove"
+    | "block"
+    | "unblock";
+
+  let actionInProgress = $state<FriendActionState | null>(null);
   let cachedFriendship = $state<FriendshipRecord | null>(null);
   let loadingFriendship = $state(false);
   const friendStatusLabel = $derived(resolvePresenceStatusLabel(friend.statusMessage));
@@ -155,10 +161,9 @@
       return null;
     }
     try {
-    const friendships: FriendshipRecord[] = await invoke("get_friendships", {
-      current_user_id: meId,
-      currentUserId: meId,
-    });
+      const friendships: FriendshipRecord[] = await invoke("get_friendships", {
+        current_user_id: meId,
+      });
       const match =
         friendships.find((f) => f.id === friend.friendshipId) ||
         friendships.find(
@@ -189,127 +194,180 @@
     }
   }
 
-  async function handleMessage() {
-    if (actionInProgress) return;
-    const targetId = getTargetUserId();
-    if (!targetId) {
-      toasts.addToast("Unable to open chat for this friend.", "error");
+  type ToastTone = Parameters<typeof toasts.addToast>[1];
+
+  type FriendActionOptions = {
+    successMessage?: string;
+    successTone?: ToastTone;
+    errorMessage?: string;
+    errorTone?: ToastTone;
+    logPrefix?: string;
+    refresh?: boolean;
+  };
+
+  async function performFriendAction(
+    name: FriendActionState,
+    executor: () => Promise<void | false>,
+    options: FriendActionOptions = {},
+  ) {
+    if (actionInProgress) {
       return;
     }
-    actionInProgress = "message";
+    actionInProgress = name;
     try {
-      await chatStore.setActiveChat(targetId, "dm");
+      const result = await executor();
+      if (result === false) {
+        return;
+      }
+      if (options.successMessage) {
+        toasts.addToast(
+          options.successMessage,
+          options.successTone ?? "success",
+        );
+      }
+      if (options.refresh) {
+        await refreshFriends();
+      }
     } catch (error) {
-      console.error("Failed to open direct messages:", error);
-      toasts.addToast("Failed to open direct messages.", "error");
+      console.error(
+        options.logPrefix ?? `Failed to ${name} friend action:`,
+        error,
+      );
+      toasts.addToast(
+        options.errorMessage ?? `Failed to ${name} friend action.`,
+        options.errorTone ?? "error",
+      );
     } finally {
       actionInProgress = null;
     }
+  }
+
+  async function handleMessage() {
+    await performFriendAction(
+      "message",
+      async () => {
+        const targetId = getTargetUserId();
+        if (!targetId) {
+          toasts.addToast("Unable to open chat for this friend.", "error");
+          return false;
+        }
+        await chatStore.setActiveChat(targetId, "dm");
+      },
+      {
+        logPrefix: "Failed to open direct messages:",
+        errorMessage: "Failed to open direct messages.",
+      },
+    );
   }
 
   async function handleAccept() {
-    if (actionInProgress) return;
-    actionInProgress = "accept";
-    try {
-      const friendship = await ensureFriendship();
-      if (!friendship) return;
-      await invoke("accept_friend_request", { friendship_id: friendship.id });
-      toasts.addToast("Friend request accepted.", "success");
-      await refreshFriends();
-    } catch (error) {
-      console.error("Failed to accept friend request:", error);
-      toasts.addToast("Failed to accept friend request.", "error");
-    } finally {
-      actionInProgress = null;
-    }
+    await performFriendAction(
+      "accept",
+      async () => {
+        const friendship = await ensureFriendship();
+        if (!friendship) {
+          return false;
+        }
+        await invoke("accept_friend_request", { friendship_id: friendship.id });
+      },
+      {
+        successMessage: "Friend request accepted.",
+        refresh: true,
+        errorMessage: "Failed to accept friend request.",
+      },
+    );
   }
 
   async function handleDecline() {
-    if (actionInProgress) return;
-    actionInProgress = "decline";
-    try {
-      const friendship = await ensureFriendship();
-      if (!friendship) return;
-      await invoke("remove_friendship", { friendship_id: friendship.id });
-      toasts.addToast("Friend request declined.", "info");
-      await refreshFriends();
-    } catch (error) {
-      console.error("Failed to decline friend request:", error);
-      toasts.addToast("Failed to decline friend request.", "error");
-    } finally {
-      actionInProgress = null;
-    }
+    await performFriendAction(
+      "decline",
+      async () => {
+        const friendship = await ensureFriendship();
+        if (!friendship) {
+          return false;
+        }
+        await invoke("remove_friendship", { friendship_id: friendship.id });
+      },
+      {
+        successMessage: "Friend request declined.",
+        successTone: "info",
+        refresh: true,
+        errorMessage: "Failed to decline friend request.",
+      },
+    );
   }
 
   async function handleRemove() {
-    if (actionInProgress) return;
-    actionInProgress = "remove";
-    try {
-      const friendship = await ensureFriendship();
-      if (!friendship) return;
-      await invoke("remove_friendship", { friendship_id: friendship.id });
-      toasts.addToast("Friend removed.", "info");
-      await refreshFriends();
-    } catch (error) {
-      console.error("Failed to remove friend:", error);
-      toasts.addToast("Failed to remove friend.", "error");
-    } finally {
-      actionInProgress = null;
-    }
+    await performFriendAction(
+      "remove",
+      async () => {
+        const friendship = await ensureFriendship();
+        if (!friendship) {
+          return false;
+        }
+        await invoke("remove_friendship", { friendship_id: friendship.id });
+      },
+      {
+        successMessage: "Friend removed.",
+        successTone: "info",
+        refresh: true,
+        errorMessage: "Failed to remove friend.",
+      },
+    );
   }
 
   async function handleBlock() {
-    if (actionInProgress) return;
-    const meId = $userStore.me?.id;
-    const targetId = getTargetUserId();
-    if (!meId || !targetId) {
-      toasts.addToast("Unable to block this user.", "error");
-      return;
-    }
-    actionInProgress = "block";
-    try {
-      await invoke("block_user", {
-        current_user_id: meId,
-        target_user_id: targetId,
-      });
-      toasts.addToast("User blocked.", "success");
-      await refreshFriends();
-    } catch (error) {
-      console.error("Failed to block user:", error);
-      toasts.addToast("Failed to block user.", "error");
-    } finally {
-      actionInProgress = null;
-    }
+    await performFriendAction(
+      "block",
+      async () => {
+        const meId = $userStore.me?.id;
+        const targetId = getTargetUserId();
+        if (!meId || !targetId) {
+          toasts.addToast("Unable to block this user.", "error");
+          return false;
+        }
+        await invoke("block_user", {
+          current_user_id: meId,
+          target_user_id: targetId,
+        });
+      },
+      {
+        successMessage: "User blocked.",
+        refresh: true,
+        errorMessage: "Failed to block user.",
+      },
+    );
   }
 
   async function handleUnblock() {
-    if (actionInProgress) return;
-    actionInProgress = "unblock";
-    try {
-      const friendship = await ensureFriendship();
-      if (!friendship) return;
-      const meId = $userStore.me?.id;
-      const status = friendship.status?.toLowerCase?.() ?? "";
-      const isBlocker =
-        status === "blocked" ||
-        (status === "blocked_by_a" && friendship.user_a_id === meId) ||
-        (status === "blocked_by_b" && friendship.user_b_id === meId);
-      if (!isBlocker) {
-        toasts.addToast("This user has blocked you.", "error");
-        return;
-      }
-      await invoke("unblock_user", {
-        current_user_id: meId,
-        friendship_id: friendship.id,
-      });
-      toasts.addToast("User unblocked.", "success");
-      await refreshFriends();
-    } catch (error) {
-      console.error("Failed to unblock user:", error);
-      toasts.addToast("Failed to unblock user.", "error");
-    } finally {
-      actionInProgress = null;
-    }
+    await performFriendAction(
+      "unblock",
+      async () => {
+        const friendship = await ensureFriendship();
+        if (!friendship) {
+          return false;
+        }
+        const meId = $userStore.me?.id;
+        const status = friendship.status?.toLowerCase?.() ?? "";
+        const isBlocker =
+          status === "blocked" ||
+          (status === "blocked_by_a" && friendship.user_a_id === meId) ||
+          (status === "blocked_by_b" && friendship.user_b_id === meId);
+        if (!isBlocker) {
+          toasts.addToast("This user has blocked you.", "error");
+          return false;
+        }
+        await invoke("unblock_user", {
+          current_user_id: meId,
+          friendship_id: friendship.id,
+        });
+      },
+      {
+        successMessage: "User unblocked.",
+        refresh: true,
+        errorMessage: "Failed to unblock user.",
+      },
+    );
   }
 </script>
 

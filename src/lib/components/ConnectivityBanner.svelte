@@ -6,7 +6,10 @@
   import { Alert, AlertDescription } from "$lib/components/ui/alert/index.js";
   import { toasts } from "$lib/stores/ToastStore";
   import { setEnableBridgeMode } from "$lib/features/settings/stores/settings";
-  import type { ConnectivityState } from "$lib/stores/connectivityStore";
+  import type {
+    ConnectivityState,
+    ConnectivityStatus,
+  } from "$lib/stores/connectivityStore";
   import { TriangleAlert, RadioTower, Wifi, WifiOff } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
@@ -28,43 +31,26 @@
 
   const gatewayStatus = $derived(() => connectivityState.gatewayStatus);
 
-  const statusLabel = $derived(() => {
-    switch (connectivityState.status) {
-      case "online":
-        return "Online";
-      case "mesh-only":
-        return "Mesh Only";
-      case "offline":
-        return "Offline";
-      default:
-        return "Connecting";
-    }
-  });
+  type StatusMeta = {
+    label: string;
+    variant: "default" | "secondary" | "destructive" | "outline";
+    icon: typeof Wifi | typeof RadioTower | typeof WifiOff;
+  };
 
-  const statusVariant = $derived(() => {
-    switch (connectivityState.status) {
-      case "online":
-        return "default" as const;
-      case "mesh-only":
-        return "secondary" as const;
-      case "offline":
-        return "destructive" as const;
-      default:
-        return "outline" as const;
-    }
-  });
+  const STATUS_META: Record<ConnectivityStatus, StatusMeta> = {
+    online: { label: "Online", variant: "default", icon: Wifi },
+    "mesh-only": {
+      label: "Mesh Only",
+      variant: "secondary",
+      icon: RadioTower,
+    },
+    offline: { label: "Offline", variant: "destructive", icon: WifiOff },
+    initializing: { label: "Connecting", variant: "outline", icon: RadioTower },
+  };
 
-  const StatusIconComponent = $derived(() => {
-    switch (connectivityState.status) {
-      case "online":
-        return Wifi;
-      case "mesh-only":
-        return RadioTower;
-      case "offline":
-        return WifiOff;
-      default:
-        return RadioTower;
-    }
+  const statusInfo = $derived(() => {
+    const status = connectivityState.status as ConnectivityStatus;
+    return STATUS_META[status] ?? STATUS_META.initializing;
   });
 
   const meshSummary = $derived(() => {
@@ -191,10 +177,13 @@
 >
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex flex-wrap items-center gap-3 text-sm">
-      <Badge variant={statusVariant()} class="flex items-center gap-1">
-        <StatusIconComponent class="size-3" />
-        {statusLabel()}
-      </Badge>
+      {#if statusInfo()}
+        {@const { icon: StatusIcon, label, variant } = statusInfo()}
+        <Badge variant={variant} class="flex items-center gap-1">
+          <StatusIcon class="size-3" />
+          {label}
+        </Badge>
+      {/if}
       <span class="text-muted-foreground">{meshSummary()}</span>
       <Button
         size="sm"
