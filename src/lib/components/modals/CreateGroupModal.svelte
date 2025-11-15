@@ -52,10 +52,6 @@
     return Array.from(map.values());
   }
 
-  let selectedUsers = $derived(
-    getAvailableUsers().filter((user) => selectedUserIds.has(user.id)),
-  );
-
   function toggleUserSelection(userId: string) {
     const next = new SvelteSet(selectedUserIds);
     if (next.has(userId)) {
@@ -66,21 +62,27 @@
     selectedUserIds = next;
   }
 
+  function getSelectedUsers() {
+    const available = getAvailableUsers();
+    return available.filter((user) => selectedUserIds.has(user.id));
+  }
+
   function computeGroupName() {
-    if (selectedUsers.length === 0) {
+    const selected = getSelectedUsers();
+    if (selected.length === 0) {
       return "New Group";
     }
-    if (selectedUsers.length === 1) {
-      return `${selectedUsers[0].name} & You`;
+    if (selected.length === 1) {
+      return `${selected[0].name} & You`;
     }
-    if (selectedUsers.length === 2) {
-      return `${selectedUsers[0].name}, ${selectedUsers[1].name}`;
+    if (selected.length === 2) {
+      return `${selected[0].name}, ${selected[1].name}`;
     }
-    const primary = selectedUsers
+    const primary = selected
       .slice(0, 2)
       .map((user) => user.name)
       .join(", ");
-    return `${primary} +${selectedUsers.length - 2}`;
+    return `${primary} +${selected.length - 2}`;
   }
 
   $effect(() => {
