@@ -2,7 +2,7 @@ use super::{broadcast_join_event, get_initialized_state};
 use crate::commands::state::AppStateContainer;
 use aegis_protocol::{self, AepMessage};
 use aep::database::{self, RedeemServerInviteError, RedeemedServerInvite, ServerInvite};
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use uuid::Uuid;
@@ -108,6 +108,8 @@ pub async fn send_server_invite(
 #[tauri::command]
 pub async fn generate_server_invite(
     server_id: String,
+    expires_after_seconds: Option<i64>,
+    max_uses: Option<i64>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ServerInviteResponse, String> {
     let state = get_initialized_state(&state_container).await?;
@@ -122,6 +124,9 @@ pub async fn generate_server_invite(
 
     let code = Uuid::new_v4().simple().to_string();
     let created_at = Utc::now();
+    let expires_at = expires_after_seconds
+        .filter(|seconds| *seconds > 0)
+        .map(|seconds| Utc::now() + Duration::seconds(seconds));
 
     let invite = database::create_server_invite(
         &state.db_pool,
@@ -129,8 +134,8 @@ pub async fn generate_server_invite(
         &requester_id,
         &code,
         &created_at,
-        None,
-        None,
+        expires_at,
+        max_uses,
     )
     .await
     .map_err(|e| e.to_string())?;

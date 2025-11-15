@@ -18,10 +18,13 @@
     serverStore,
     voiceChannelPresence,
   } from "$lib/features/servers/stores/serverStore";
+  import { friendStore } from "$lib/features/friends/stores/friendStore";
   import type { Role } from "$lib/features/servers/models/Role";
   import {
     chatMetadataByChatId,
     chatStore,
+    groupChats,
+    type GroupChatSummary,
   } from "$lib/features/chat/stores/chatStore";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import {
@@ -29,11 +32,13 @@
     showVoiceCallView,
   } from "$lib/features/calls/stores/voiceCallViewStore";
   import { toasts } from "$lib/stores/ToastStore";
+  import { writeTextToClipboard } from "$lib/utils/clipboard";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
+  import type { Friend } from "$lib/features/friends/models/Friend";
   import type { User } from "$lib/features/auth/models/User";
-  import { Plus, ChevronDown } from "@lucide/svelte";
+  import { Copy, Link2, Plus, ChevronDown, X } from "@lucide/svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import { getContext, onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
@@ -57,6 +62,20 @@
     SidebarHeader,
     SidebarContent,
   } from "$lib/components/ui/sidebar";
+  import {
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    DialogClose,
+  } from "$lib/components/ui/dialog";
+  import {
+    Select,
+    SelectTrigger,
+    SelectContent,
+    SelectItem,
+  } from "$lib/components/ui/select/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
+  import { Input } from "$lib/components/ui/input/index";
   import {
     Tooltip,
     TooltipContent,
@@ -128,6 +147,31 @@
     beforeChannelId: string | null;
   };
 
+  type SendServerInviteResult = {
+    server_id: string;
+    user_id: string;
+    already_member: boolean;
+  };
+
+  type InviteLinkOptions = {
+    expiresAfterSeconds?: number | null;
+    maxUses?: number | null;
+  };
+
+  const inviteExpiryOptions = [
+    { id: "1h", label: "1 hour", seconds: 3600 },
+    { id: "24h", label: "24 hours", seconds: 86400 },
+    { id: "7d", label: "7 days", seconds: 604800 },
+    { id: "never", label: "Never", seconds: 0 },
+  ];
+
+  const inviteMaxUseOptions = [
+    { id: "1", label: "1 use", maxUses: 1 },
+    { id: "5", label: "5 uses", maxUses: 5 },
+    { id: "10", label: "10 uses", maxUses: 10 },
+    { id: "unlimited", label: "Unlimited", maxUses: 0 },
+  ];
+
   let {
     server,
     onSelectChannel,
@@ -194,6 +238,10 @@
   const openProfileReviewsModal = createGroupContext?.openProfileReviewsModal;
   const openUserCardModal = createGroupContext?.openUserCardModal;
 
+  $effect(() => {
+    serverRawJson = JSON.stringify(server ?? {}, null, 2);
+  });
+
   function handleVoiceParticipantClick(
     event: MouseEvent,
     member: User | undefined,
@@ -232,6 +280,40 @@
   let pendingNotificationLevel = $state<CategoryNotificationLevel>(
     DEFAULT_CATEGORY_NOTIFICATION_LEVEL,
   );
+  let showInvitePeopleDialog = $state(false);
+  let inviteSearchQuery = $state("");
+  let inviteLink = $state("");
+  let inviteLinkLoading = $state(false);
+  let inviteLinkExpiresAt = $state<string | null>(null);
+  let inviteLinkMaxUses = $state<number | null>(null);
+  let inviteSettingsDialogOpen = $state(false);
+  let selectedExpiryKey = $state("7d");
+  let selectedMaxUsesKey = $state("unlimited");
+  let temporaryMembershipEnabled = $state(false);
+  let invitePending = $state<Record<string, boolean>>({});
+  let friendList: Friend[] = [];
+  let filteredFriends: Friend[] = [];
+  let groupList: GroupChatSummary[] = [];
+  let filteredGroups: GroupChatSummary[] = [];
+
+  $: friendList = $friendStore.friends ?? [];
+  $: groupList = Array.from($groupChats.values());
+  $: {
+    const query = inviteSearchQuery.trim().toLowerCase();
+    if (query.length === 0) {
+      filteredFriends = friendList;
+      filteredGroups = groupList;
+    } else {
+      filteredFriends = friendList.filter((friend) => {
+        const normalized = friend.name?.toLowerCase() ?? "";
+        const tag = friend.tag?.toLowerCase() ?? "";
+        return normalized.includes(query) || tag.includes(query);
+      });
+      filteredGroups = groupList.filter((group) =>
+        (group.name ?? "").toLowerCase().includes(query),
+      );
+    }
+  }
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);
@@ -249,6 +331,8 @@
   );
   let pendingRoleOverrideSelection = $state("");
   let pendingMemberOverrideSelection = $state("");
+  let showServerRawDialog = $state(false);
+  let serverRawJson = $state("");
 
   function resetPermissionOverrides() {
     permissionOverrides = createEmptyPermissionOverridesState();
@@ -1149,25 +1233,162 @@
   }
 
   async function handleInviteToServerClick() {
+    await openInvitePeopleDialog();
+  }
+
+  async function openInvitePeopleDialog(options?: InviteLinkOptions) {
+    if (!server?.id) return;
+    showInvitePeopleDialog = true;
+    inviteSearchQuery = "";
+    await loadInviteLink(options);
+  }
+
+  function closeInvitePeopleDialog() {
+    showInvitePeopleDialog = false;
+  }
+
+  async function loadInviteLink(options: InviteLinkOptions = {}) {
+    if (!server?.id) return;
+    const expiresAfterSeconds =
+      options.expiresAfterSeconds === undefined || options.expiresAfterSeconds === 0
+        ? null
+        : options.expiresAfterSeconds;
+    const maxUses =
+      options.maxUses === undefined || options.maxUses === 0
+        ? null
+        : options.maxUses;
+    inviteLinkLoading = true;
     try {
       const response = await invoke<ServerInviteResponse>(
         "generate_server_invite",
         {
           server_id: server.id,
+          expires_after_seconds: expiresAfterSeconds,
+          max_uses: maxUses,
         },
       );
       const invite = mapInviteResponse(response);
       serverStore.addInviteToServer(server.id, invite);
-      const link = buildInviteLinkFromCode(invite.code);
-      await navigator.clipboard.writeText(link);
-      toasts.addToast("Invite link copied.", "success");
+      inviteLink = buildInviteLinkFromCode(invite.code);
+      inviteLinkExpiresAt = response.expires_at ?? null;
+      inviteLinkMaxUses = response.max_uses ?? null;
     } catch (error: any) {
       console.error("Failed to generate invite link:", error);
       toasts.addToast(
         error?.message ?? "Failed to generate invite link.",
         "error",
       );
+    } finally {
+      inviteLinkLoading = false;
     }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await writeTextToClipboard(inviteLink);
+      toasts.addToast("Invite link copied.", "success");
+    } catch (error) {
+      console.error("Failed to copy invite link:", error);
+      toasts.addToast("Failed to copy invite link.", "error");
+    }
+  }
+
+  function getInvitePendingKey(type: "friend" | "group", id: string) {
+    return `${type}:${id}`;
+  }
+
+  function markInvitePending(key: string, pending: boolean) {
+    if (pending) {
+      invitePending = { ...invitePending, [key]: true };
+    } else {
+      const next = { ...invitePending };
+      delete next[key];
+      invitePending = next;
+    }
+  }
+
+  async function sendInviteToFriend(friend: Friend) {
+    if (!server?.id) return;
+    const key = getInvitePendingKey("friend", friend.id);
+    markInvitePending(key, true);
+    try {
+      await invoke<SendServerInviteResult>("send_server_invite", {
+        server_id: server.id,
+        user_id: friend.id,
+      });
+      toasts.addToast(`Invite sent to ${friend.name}.`, "success");
+    } catch (error: any) {
+      console.error("Failed to invite friend:", error);
+      toasts.addToast(
+        error?.message ?? `Failed to invite ${friend.name}.`,
+        "error",
+      );
+    } finally {
+      markInvitePending(key, false);
+    }
+  }
+
+  async function sendInviteToGroup(group: GroupChatSummary) {
+    if (!server?.id) return;
+    const memberIds = (group.memberIds ?? []).filter(
+      (id) => id !== $userStore.me?.id,
+    );
+    if (memberIds.length === 0) {
+      toasts.addToast("No members to invite in this group.", "info");
+      return;
+    }
+    const key = getInvitePendingKey("group", group.id);
+    markInvitePending(key, true);
+    let sentCount = 0;
+    for (const memberId of memberIds) {
+      try {
+        const result = await invoke<SendServerInviteResult>(
+          "send_server_invite",
+          {
+            server_id: server.id,
+            user_id: memberId,
+          },
+        );
+        if (!result.already_member) {
+          sentCount += 1;
+        }
+      } catch (error) {
+        console.error("Failed to invite group member:", error);
+      }
+    }
+    markInvitePending(key, false);
+    if (sentCount > 0) {
+      toasts.addToast(
+        `Invites sent to ${group.name}.`,
+        "success",
+      );
+    } else {
+      toasts.addToast(
+        `Members in ${group.name} are already on this server.`,
+        "info",
+      );
+    }
+  }
+
+  function getExpiryOptionById(id: string) {
+    return inviteExpiryOptions.find((option) => option.id === id);
+  }
+
+  function getMaxUseOptionById(id: string) {
+    return inviteMaxUseOptions.find((option) => option.id === id);
+  }
+
+  async function applyInviteSettings() {
+    inviteSettingsDialogOpen = false;
+    await loadInviteLink({
+      expiresAfterSeconds: getExpiryOptionById(selectedExpiryKey)?.seconds ?? 0,
+      maxUses: getMaxUseOptionById(selectedMaxUsesKey)?.maxUses ?? 0,
+    });
+  }
+
+  function closeInviteSettingsDialog() {
+    inviteSettingsDialogOpen = false;
   }
 
   function handleCreateChannelClick(
@@ -1556,6 +1777,26 @@
     return server.channels?.find((c: Channel) => c.id === id);
   }
 
+  function getDefaultChannelName() {
+    if (!server) {
+      return "#general";
+    }
+    const fallbackChannel =
+      server.channels?.find((channel) => channel.channel_type === "text") ??
+      server.channels?.[0];
+    const defaultChannelId =
+      server.default_channel_id ?? fallbackChannel?.id ?? null;
+    if (!defaultChannelId) {
+      return "#general";
+    }
+    const channel = getChannelById(defaultChannelId);
+    if (!channel) {
+      return "#general";
+    }
+    const name = channel.name?.trim() ?? "general";
+    return name.startsWith("#") ? name : `#${name}`;
+  }
+
   async function handleChannelAction({
     action,
     channelId,
@@ -1696,7 +1937,7 @@
           break;
         }
         case "invite_people": {
-          await handleInviteToServerClick();
+          await openInvitePeopleDialog();
           showChannelContextMenu = false;
           break;
         }
@@ -1715,14 +1956,18 @@
         handleCreateChannelClick();
         break;
       case "create_category":
-        gotoServerSettings(server.id, "channels");
-        toasts.addToast("Manage categories from the Channels tab.", "info");
+        handleCreateCategory();
         break;
       case "invite_people":
-        void handleInviteToServerClick();
+        closeAllContextMenus();
+        void openInvitePeopleDialog();
         break;
       case "view_reviews":
         handleViewReviews();
+        break;
+      case "view_raw":
+        serverRawJson = JSON.stringify(server ?? {}, null, 2);
+        showServerRawDialog = true;
         break;
       case "hide_muted_channels": {
         const next = toggleHideMutedChannels();
@@ -2238,6 +2483,77 @@
   />
 {/if}
 
+{#if inviteSettingsDialogOpen}
+  <Dialog bind:open={inviteSettingsDialogOpen}>
+    <DialogContent class="w-[min(100%,420px)] max-w-[420px] space-y-5">
+      <div class="flex items-start justify-between gap-3">
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          Invite Link Settings
+        </DialogTitle>
+        <DialogClose
+          class="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted/60 focus:outline-none"
+          onclick={closeInviteSettingsDialog}
+        >
+          <span class="sr-only">Close invite settings</span>
+          <X class="h-4 w-4" />
+        </DialogClose>
+      </div>
+      <div class="space-y-3">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Expire After
+        </p>
+        <Select type="single" bind:value={selectedExpiryKey}>
+          <SelectTrigger class="w-full justify-between">
+            {getExpiryOptionById(selectedExpiryKey)?.label ?? "7 days"}
+          </SelectTrigger>
+          <SelectContent>
+            {#each inviteExpiryOptions as option (option.id)}
+              <SelectItem value={option.id}>{option.label}</SelectItem>
+            {/each}
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="space-y-3">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Max Uses
+        </p>
+        <Select type="single" bind:value={selectedMaxUsesKey}>
+          <SelectTrigger class="w-full justify-between">
+            {getMaxUseOptionById(selectedMaxUsesKey)?.label ?? "Unlimited"}
+          </SelectTrigger>
+          <SelectContent>
+            {#each inviteMaxUseOptions as option (option.id)}
+              <SelectItem value={option.id}>{option.label}</SelectItem>
+            {/each}
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="flex items-start gap-3">
+        <Switch
+          id="temporary-membership-toggle"
+          bind:checked={temporaryMembershipEnabled}
+        />
+        <div>
+          <p class="text-sm font-semibold text-foreground">
+            Grant temporary membership
+          </p>
+          <p class="text-xs text-muted-foreground">
+            Guests are removed when they disconnect.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center justify-end gap-2">
+        <Button variant="ghost" size="sm" onclick={closeInviteSettingsDialog}>
+          Cancel
+        </Button>
+        <Button size="sm" onclick={applyInviteSettings}>
+          Save
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
+{/if}
+
 {#if showChannelContextMenu && selectedChannelForContextMenu}
   <ChannelContextMenu
     x={channelContextMenuX}
@@ -2328,6 +2644,198 @@
       showServerEventModal = false;
     }}
   />
+{/if}
+
+{#if showInvitePeopleDialog}
+  <Dialog
+    bind:open={showInvitePeopleDialog}
+    onOpenChange={(value) => {
+      if (!value) {
+        inviteLink = "";
+      }
+    }}
+  >
+    <DialogContent class="w-[min(100%,620px)] max-w-[620px] space-y-5">
+      <div class="flex items-start justify-between gap-3">
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          Invite friends to {server?.name ?? "this server"}
+        </DialogTitle>
+        <DialogClose
+          class="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted/60 focus:outline-none"
+          onclick={closeInvitePeopleDialog}
+        >
+        </DialogClose>
+      </div>
+      <p class="text-sm text-muted-foreground">
+        Recipients will land in {getDefaultChannelName()}
+      </p>
+      <div class="space-y-2">
+        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Find friends or groups
+        </p>
+        <Input
+          placeholder="Search friends and groups"
+          bind:value={inviteSearchQuery}
+          class="w-full"
+        />
+      </div>
+      <div class="max-h-[280px] overflow-auto space-y-4 pr-1">
+        {#if filteredFriends.length > 0}
+          <div class="space-y-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              Friends
+            </p>
+            {#each filteredFriends as friend (friend.id)}
+              <div class="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+                <Avatar class="h-10 w-10">
+                  <AvatarImage src={friend.avatar} alt={friend.name} />
+                  <AvatarFallback class="uppercase text-[11px] font-semibold">
+                    {friend.name?.[0] ?? "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-foreground truncate">
+                    {friend.name}
+                  </p>
+                  <p class="text-[11px] text-muted-foreground truncate">
+                    {friend.status ?? "Offline"}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  class="ml-auto"
+                  disabled={
+                    invitePending[getInvitePendingKey("friend", friend.id)] ??
+                    false
+                  }
+                  onclick={() => sendInviteToFriend(friend)}
+                >
+                  {#if invitePending[getInvitePendingKey("friend", friend.id)]}
+                    Inviting...
+                  {:else}
+                    Invite
+                  {/if}
+                </Button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if filteredGroups.length > 0}
+          <div class="space-y-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              Groups
+            </p>
+            {#each filteredGroups as group (group.id)}
+              <div class="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+                <Avatar class="h-10 w-10">
+                  <AvatarFallback class="uppercase text-[11px] font-semibold">
+                    {group.name?.[0] ?? "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-foreground truncate">
+                    {group.name}
+                  </p>
+                  <p class="text-[11px] text-muted-foreground truncate">
+                    {group.memberIds?.length ?? 0} members
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  class="ml-auto"
+                  disabled={
+                    invitePending[getInvitePendingKey("group", group.id)] ?? false
+                  }
+                  onclick={() => sendInviteToGroup(group)}
+                >
+                  {#if invitePending[getInvitePendingKey("group", group.id)]}
+                    Sending...
+                  {:else}
+                    Invite
+                  {/if}
+                </Button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+        {#if filteredFriends.length === 0 && filteredGroups.length === 0}
+          <p class="text-sm text-muted-foreground">
+            Search for a friend or group to invite, or use the invite link below.
+          </p>
+        {/if}
+      </div>
+      <div class="space-y-3">
+        <p class="text-sm font-semibold text-foreground">
+          Or, send a server invite link to a friend
+        </p>
+        <div class="flex items-center gap-2">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/30 text-muted-foreground">
+            <Link2 class="h-4 w-4" />
+          </div>
+          <Input
+            class="flex-1"
+            readonly
+            value={inviteLink}
+            placeholder={inviteLinkLoading ? "Generating invite link…" : "No link yet"}
+          />
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!inviteLink || inviteLinkLoading}
+            onclick={copyInviteLink}
+          >
+            <Copy class="h-4 w-4" />
+            <span>Copy</span>
+          </Button>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Your invite link expires in
+          <span class="font-semibold text-foreground">
+            {getExpiryOptionById(selectedExpiryKey)?.label ?? "7 days"}
+          </span>
+          and is valid for
+          <span class="font-semibold text-foreground">
+            {getMaxUseOptionById(selectedMaxUsesKey)?.label ?? "Unlimited"}
+          </span>
+          .
+          <button
+            type="button"
+            class="ml-1 text-blue-500 font-semibold underline"
+            onclick={() => {
+              inviteSettingsDialogOpen = true;
+            }}
+          >
+            Edit invite link
+          </button>
+        </p>
+      </div>
+    </DialogContent>
+  </Dialog>
+{/if}
+
+{#if showServerRawDialog}
+  <Dialog bind:open={showServerRawDialog}>
+    <DialogContent class="w-[min(100%,580px)] max-w-[580px] space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <DialogTitle class="text-lg font-semibold text-foreground">
+          Raw Server Data
+        </DialogTitle>
+        <DialogClose
+          class="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted/60 focus:outline-none"
+        >
+          <span class="sr-only">Close raw server data</span>
+          <X class="h-4 w-4" />
+        </DialogClose>
+      </div>
+      <div class="max-h-[60vh] overflow-auto rounded-xl border border-border/60 bg-muted px-3 py-3 text-xs font-mono">
+        <pre class="whitespace-pre-wrap wrap-break-word text-xs leading-tight">
+          {serverRawJson}
+        </pre>
+      </div>
+    </DialogContent>
+  </Dialog>
 {/if}
 
 <style>

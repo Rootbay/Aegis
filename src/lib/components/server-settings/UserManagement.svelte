@@ -301,6 +301,8 @@
         "generate_server_invite",
         {
           server_id: serverId,
+          expires_after_seconds: null,
+          max_uses: null,
         },
       );
       const invite = mapInviteResponse(response);

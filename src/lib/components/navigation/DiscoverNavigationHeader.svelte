@@ -17,8 +17,8 @@
 </script>
 
 <header class="relative border-b border-border/70 px-4 pt-4">
-  <div class="flex items-end justify-between gap-4">
-    <div class="flex flex-1 flex-wrap items-end gap-3 overflow-x-auto min-w-0">
+  <div class="flex items-top justify-between gap-4">
+    <div class="flex flex-1 flex-wrap gap-3 overflow-x-auto min-w-0">
       <Tabs
         value={$activeTopic}
         onValueChange={(value) =>
@@ -26,11 +26,11 @@
         }
         class="w-full"
       >
-        <TabsList class="flex w-full flex-wrap gap-2 bg-transparent p-0">
+        <TabsList class="flex w-full flex-wrap gap-2 bg-transparent">
           {#each topics as topic}
             <TabsTrigger
               value={topic}
-              class="px-3 py-1 text-sm font-semibold capitalize"
+              class="px-3 py-1 text-sm font-semibold cursor-pointer"
             >
               {topic === "Home" ? "Home" : topic}
             </TabsTrigger>

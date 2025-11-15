@@ -719,6 +719,8 @@ describe("ServerSidebar context menus", () => {
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith("generate_server_invite", {
         server_id: "server-1",
+        expires_after_seconds: null,
+        max_uses: null,
       });
       expect(addInviteToServerMock).toHaveBeenCalledWith(
         "server-1",

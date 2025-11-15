@@ -32,8 +32,8 @@
   let editingChannelType = $state<"text" | "voice">("text");
   let editingChannelSlowmode = $state(0);
 
-  let newChannelSlowmodeOptions = buildSlowmodeOptions();
-  let editingChannelSlowmodeOptions = buildSlowmodeOptions();
+  let newChannelSlowmodeOptions = $state(buildSlowmodeOptions());
+  let editingChannelSlowmodeOptions = $state(buildSlowmodeOptions());
 
   $effect(() => {
     newChannelSlowmodeOptions = buildSlowmodeOptions([

@@ -238,7 +238,11 @@
         try {
           const response = await invoke<ServerInviteResponse>(
             "generate_server_invite",
-            { server_id: server.id },
+            {
+              server_id: server.id,
+              expires_after_seconds: null,
+              max_uses: null,
+            },
           );
           const invite = mapInviteResponse(response);
           serverStore.addInviteToServer(server.id, invite);
