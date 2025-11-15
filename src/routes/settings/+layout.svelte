@@ -142,6 +142,7 @@
     settingsItems.filter((item) => matchesQuery(item, normalizedQuery)),
   );
   const hasSearchResults = $derived(filteredSearchResults.length > 0);
+  const searchResultCount = $derived(filteredSearchResults.length);
 
   const sectionLabels: Record<SettingsSection, string> = {
     user: "User Settings",
@@ -206,7 +207,12 @@
     >
       <div class="ml-auto w-[238px] space-y-4">
         <div class="relative">
-          <Input placeholder="Search" bind:value={searchQuery} class="pr-10" />
+          <Input
+            placeholder="Search"
+            aria-label="Search settings"
+            bind:value={searchQuery}
+            class="pr-10"
+          />
           <Button
             variant="ghost"
             size="icon"
@@ -222,74 +228,85 @@
           </Button>
         </div>
 
-        {#if isSearching}
-          <div class="space-y-3">
-            <Label
-              class="px-2 text-xs font-bold uppercase text-muted-foreground"
-            >
-              Search Results
-            </Label>
-            {#if hasSearchResults}
-              <SearchResultsList
-                title="Search Results"
-                items={filteredSearchResults}
+        <nav aria-label="Settings navigation" class="space-y-3">
+          {#if isSearching}
+            <div class="space-y-3">
+              <Label
+                class="px-2 text-xs font-bold uppercase text-muted-foreground"
+              >
+                Search Results
+              </Label>
+              {#if hasSearchResults}
+                <p class="sr-only" role="status" aria-live="polite">
+                  {searchResultCount} results for &quot;{searchQuery.trim()}&quot;.
+                </p>
+              {:else}
+                <p class="sr-only" role="status" aria-live="polite">
+                  No settings match &quot;{searchQuery.trim()}&quot;.
+                </p>
+              {/if}
+              {#if hasSearchResults}
+                <SearchResultsList
+                  title="Search Results"
+                  items={filteredSearchResults}
+                  currentPath={$page.url.pathname}
+                  {sectionLabels}
+                  onNavigate={(href) => navigateTo(href)}
+                />
+              {:else}
+                <div
+                  class="flex flex-col items-center justify-center pt-10 text-muted-foreground"
+                >
+                  <Smile class="mb-3 h-10 w-10" />
+                  <p class="text-sm">No search results</p>
+                </div>
+              {/if}
+            </div>
+          {:else}
+            <div class="space-y-3">
+              <SettingsList
+                title="User Settings"
+                items={filteredUserSettingsItems}
                 currentPath={$page.url.pathname}
-                {sectionLabels}
                 onNavigate={(href) => navigateTo(href)}
               />
-            {:else}
-              <div
-                class="flex flex-col items-center justify-center pt-10 text-muted-foreground"
+              <Separator class="my-2" />
+              <SettingsList
+                title="App Settings"
+                items={filteredAppSettingsItems}
+                currentPath={$page.url.pathname}
+                onNavigate={(href) => navigateTo(href)}
+              />
+              <Separator class="my-2" />
+              <SettingsList
+                title="What's New?"
+                items={filteredInfoSettingsItems}
+                currentPath={$page.url.pathname}
+                onNavigate={(href) => navigateTo(href)}
+              />
+              <Separator class="my-2" />
+              <Button
+                variant="destructive"
+                class="w-full justify-start"
+                onclick={handleLogout}
               >
-                <Smile class="mb-3 h-10 w-10" />
-                <p class="text-sm">No search results</p>
-              </div>
-            {/if}
-          </div>
-        {:else}
-          <div class="space-y-3">
-            <SettingsList
-              title="User Settings"
-              items={filteredUserSettingsItems}
-              currentPath={$page.url.pathname}
-              onNavigate={(href) => navigateTo(href)}
-            />
-            <Separator class="my-2" />
-            <SettingsList
-              title="App Settings"
-              items={filteredAppSettingsItems}
-              currentPath={$page.url.pathname}
-              onNavigate={(href) => navigateTo(href)}
-            />
-            <Separator class="my-2" />
-            <SettingsList
-              title="What's New?"
-              items={filteredInfoSettingsItems}
-              currentPath={$page.url.pathname}
-              onNavigate={(href) => navigateTo(href)}
-            />
-            <Separator class="my-2" />
-            <Button
-              variant="destructive"
-              class="w-full justify-start"
-              onclick={handleLogout}
-            >
-              Log Out
-            </Button>
-            <Separator class="my-2" />
-            <Button
-              variant="ghost"
-              class="w-full flex-col items-start font-mono text-xs"
-              onclick={copyAppInfo}
-            >
-              Tauri: 2
-              <br />
-              Svelte: 5.0.0
-              <br />
-              TypeScript: 5.6.2
-            </Button>
-          </div>
-        {/if}
+                Log Out
+              </Button>
+              <Separator class="my-2" />
+              <Button
+                variant="ghost"
+                class="w-full flex-col items-start font-mono text-xs"
+                onclick={copyAppInfo}
+              >
+                Tauri: 2
+                <br />
+                Svelte: 5.0.0
+                <br />
+                TypeScript: 5.6.2
+              </Button>
+            </div>
+          {/if}
+        </nav>
       </div>
     </div>
   </aside>
