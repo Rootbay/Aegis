@@ -239,9 +239,9 @@ async function pushRoutingConfig(config: AerpRoutingConfig) {
     const invoke = await getInvoke();
     if (invoke) {
       await invoke("set_routing_config", {
-        updateIntervalSecs: sanitized.updateIntervalSeconds,
-        minQuality: sanitized.minRouteQuality,
-        maxHops: sanitized.maxHops,
+        update_interval_secs: sanitized.updateIntervalSeconds,
+        min_quality: sanitized.minRouteQuality,
+        max_hops: sanitized.maxHops,
       });
     }
   } catch (error) {

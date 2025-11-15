@@ -1993,9 +1993,7 @@ export function createServerStore(): ServerStore {
 
     try {
       await invoke("ban_server_member", {
-        serverId,
         server_id: serverId,
-        userId: memberId,
         user_id: memberId,
         reason: options.reason,
       });

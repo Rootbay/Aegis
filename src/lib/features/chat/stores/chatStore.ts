@@ -1413,9 +1413,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
     pendingExpiryDeletes.add(key);
     void invoke("delete_message", {
-      chatId,
       chat_id: chatId,
-      messageId,
       message_id: messageId,
     })
       .catch((error) => {
@@ -2194,7 +2192,6 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const loadToken = beginLoadingForChat(targetChatId);
     try {
       const fetched: BackendMessage[] = await invoke("get_messages", {
-        chatId: targetChatId,
         chat_id: targetChatId,
         limit: PAGE_LIMIT,
         offset: persistedCount,
@@ -2536,20 +2533,15 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         if (payload.chatType === "dm") {
           await invoke("send_encrypted_dm", {
             message: backendContent,
-            recipientId: payload.chatId,
             recipient_id: payload.chatId,
-            expiresAt,
             expires_at: expiresAt,
             ...replyPayload,
           });
         } else {
           await invoke("send_encrypted_group_message", {
             message: backendContent,
-            channelId: payload.channelId,
             channel_id: payload.channelId,
-            serverId: payload.chatId,
             server_id: payload.chatId,
-            expiresAt,
             expires_at: expiresAt,
             ...replyPayload,
           });
@@ -2564,20 +2556,15 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           if (payload.chatType === "dm") {
             await invoke("send_direct_message", {
               message: plaintextContent,
-              recipientId: payload.chatId,
               recipient_id: payload.chatId,
-              expiresAt,
               expires_at: expiresAt,
               ...replyPayload,
             });
           } else {
             await invoke("send_message", {
               message: plaintextContent,
-              channelId: payload.channelId,
               channel_id: payload.channelId,
-              serverId: payload.chatId,
               server_id: payload.chatId,
-              expiresAt,
               expires_at: expiresAt,
               ...replyPayload,
             });
@@ -2628,11 +2615,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         try {
           await invoke("send_encrypted_dm_with_attachments", {
             message: contentForSend,
-            recipientId: payload.chatId,
             recipient_id: payload.chatId,
-            expiresAt,
             expires_at: expiresAt,
-            attachments: attachmentsForSend,
+            incoming_attachments: attachmentsForSend,
             ...replyPayload,
           });
         } catch (error) {
@@ -2643,9 +2628,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           );
           await invoke("send_direct_message_with_attachments", {
             message: payload.content,
-            recipientId: payload.chatId,
             recipient_id: payload.chatId,
-            expiresAt,
             expires_at: expiresAt,
             attachments: plaintextAttachments,
             ...replyPayload,
@@ -2655,11 +2638,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         await invoke("send_message_with_attachments", {
           message: contentForSend,
           attachments: attachmentsForSend,
-          channelId: payload.channelId,
           channel_id: payload.channelId,
-          serverId: payload.chatId,
           server_id: payload.chatId,
-          expiresAt,
           expires_at: expiresAt,
           ...replyPayload,
         });
@@ -3019,9 +2999,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await invoke("delete_message", {
-        chatId: targetChatId,
         chat_id: targetChatId,
-        messageId,
         message_id: messageId,
       });
       retryableMessagePayloads.delete(messageId);
@@ -3060,9 +3038,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await invoke("pin_message", {
-        chatId: targetChatId,
         chat_id: targetChatId,
-        messageId,
         message_id: messageId,
       });
     } catch (error) {
@@ -3097,9 +3073,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await invoke("unpin_message", {
-        chatId: targetChatId,
         chat_id: targetChatId,
-        messageId,
         message_id: messageId,
       });
     } catch (error) {
@@ -3164,9 +3138,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await invoke("edit_message", {
-        chatId: targetChatId,
         chat_id: targetChatId,
-        messageId,
         message_id: messageId,
         content: trimmed,
       });
@@ -3186,7 +3158,6 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     const loadToken = beginLoadingForChat(chatId);
     try {
       const fetchedResult = await invoke<BackendMessage[]>("get_messages", {
-        chatId,
         chat_id: chatId,
         limit: PAGE_LIMIT,
         offset: 0,
@@ -3832,11 +3803,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await invoke("send_read_receipt", {
-        chatId: messageChatId,
         chat_id: messageChatId,
-        messageId: lastReadable.id,
         message_id: lastReadable.id,
-        timestamp: lastReadable.timestamp,
       });
     } catch (error) {
       lastDispatchedReceiptByChatId.delete(messageChatId);
@@ -3934,11 +3902,8 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await invoke("send_typing_indicator", {
-        chatId: messageChatId,
         chat_id: messageChatId,
-        isTyping,
         is_typing: isTyping,
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       typingDispatchState.delete(messageChatId);
@@ -4366,9 +4331,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     applyReactionMutation(targetChatId, messageId, emoji, me.id, "add");
     try {
       await invoke("add_reaction", {
-        chatId: targetChatId,
         chat_id: targetChatId,
-        messageId,
         message_id: messageId,
         emoji,
       });
@@ -4387,9 +4350,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     applyReactionMutation(targetChatId, messageId, emoji, me.id, "remove");
     try {
       await invoke("remove_reaction", {
-        chatId: targetChatId,
         chat_id: targetChatId,
-        messageId,
         message_id: messageId,
         emoji,
       });

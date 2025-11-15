@@ -576,8 +576,8 @@ function createCallStore() {
     }
 
     await invoke("send_call_signal", {
-      recipientId: peerId,
-      callId,
+      recipient_id: peerId,
+      call_id: callId,
       signal,
     });
   }

@@ -265,9 +265,7 @@
     markInviteAction(invite.id, true);
     try {
       await invoke("revoke_server_invite", {
-        serverId,
         server_id: serverId,
-        inviteId: invite.id,
         invite_id: invite.id,
       });
       toasts.addToast("Invite revoked.", "success");

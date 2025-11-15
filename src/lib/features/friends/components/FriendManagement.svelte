@@ -79,7 +79,6 @@
       try {
         friendships = await invoke("get_friendships", {
           current_user_id: currentUser.id,
-          currentUserId: currentUser.id,
         });
       } catch (error) {
         console.error("Error loading friendships:", error);

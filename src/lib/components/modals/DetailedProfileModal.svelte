@@ -339,7 +339,6 @@
     try {
       const myFriendships: any[] = await invoke("get_friendships", {
         current_user_id: meId,
-        currentUserId: meId,
       });
       const otherFriendIds = await invoke<string[]>(
         "get_friendships_for_user",
@@ -428,7 +427,6 @@
       if (!meId || !profileUser?.id) return;
       const friendships: any[] = await invoke("get_friendships", {
         current_user_id: meId,
-        currentUserId: meId,
       });
       const fs = friendships.find(
         (f: any) =>
