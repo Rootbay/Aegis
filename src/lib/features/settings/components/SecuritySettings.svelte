@@ -12,7 +12,24 @@
     authPersistenceStore,
   } from "$lib/features/auth/stores/authStore";
   import { toasts } from "$lib/stores/ToastStore";
-  import { Checkbox } from "$lib/components/ui/checkbox/index";
+  import { Button } from "$lib/components/ui/button/index.js";
+  import { Label } from "$lib/components/ui/label/index.js";
+  import { Switch } from "$lib/components/ui/switch/index.js";
+  import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+  } from "$lib/components/ui/select/index.js";
+
+  const sessionTimeoutOptions = [
+    { value: 15, label: "15 minutes" },
+    { value: 30, label: "30 minutes" },
+    { value: 60, label: "1 hour" },
+    { value: 120, label: "2 hours" },
+    { value: 480, label: "8 hours" },
+    { value: 1440, label: "24 hours" },
+  ];
 
   let sessionTimeoutMinutes = $state(
     $authPersistenceStore.sessionTimeoutMinutes ?? 60,
@@ -21,6 +38,20 @@
     $authPersistenceStore.requireTotpOnUnlock ?? false,
   );
   let trustedDevices = $state(authStore.getTrustedDevices());
+
+  const sessionTimeoutLabel = $derived.by(() => {
+    const matchedOption = sessionTimeoutOptions.find(
+      (option) => option.value === sessionTimeoutMinutes,
+    );
+    return matchedOption ? matchedOption.label : `${sessionTimeoutMinutes} minutes`;
+  });
+
+  function handleSessionTimeoutChange(value: string) {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      sessionTimeoutMinutes = numeric;
+    }
+  }
 
   function updateSessionTimeout() {
     authStore.setSessionTimeout(sessionTimeoutMinutes);
@@ -37,6 +68,13 @@
       "success",
     );
   }
+
+  $effect(() => {
+    const persisted = $authPersistenceStore.requireTotpOnUnlock ?? false;
+    if (persisted !== requireTotpOnUnlock) {
+      requireTotpOnUnlock = persisted;
+    }
+  });
 
   function removeTrustedDevice(deviceId: string) {
     authStore.removeTrustedDevice(deviceId);
@@ -68,24 +106,26 @@
     <p class="text-sm text-zinc-400">
       Automatically lock your account after a period of inactivity.
     </p>
-    <div class="flex items-center gap-4">
-      <select
-        class="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-        bind:value={sessionTimeoutMinutes}
+    <div class="flex flex-wrap items-center gap-4">
+      <Select
+        type="single"
+        value={`${sessionTimeoutMinutes}`}
+        onValueChange={handleSessionTimeoutChange}
       >
-        <option value={15}>15 minutes</option>
-        <option value={30}>30 minutes</option>
-        <option value={60}>1 hour</option>
-        <option value={120}>2 hours</option>
-        <option value={480}>8 hours</option>
-        <option value={1440}>24 hours</option>
-      </select>
-      <button
-        class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-primary/80"
-        onclick={updateSessionTimeout}
-      >
+        <SelectTrigger id="session-timeout" class="w-40">
+          <span data-slot="select-value" class="flex-1 text-left">
+            {sessionTimeoutLabel}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          {#each sessionTimeoutOptions as option}
+            <SelectItem value={`${option.value}`}>{option.label}</SelectItem>
+          {/each}
+        </SelectContent>
+      </Select>
+      <Button variant="default" size="sm" onclick={updateSessionTimeout}>
         Update
-      </button>
+      </Button>
     </div>
   </div>
 
@@ -97,23 +137,25 @@
     <p class="text-sm text-zinc-400">
       Require authenticator code when unlocking your account.
     </p>
-    <div class="flex items-center justify-between">
-      <div>
-        <p class="text-sm">Require 2FA on unlock</p>
+    <div class="flex items-center justify-between gap-4">
+      <div class="space-y-1">
+        <Label
+          for="require-totp"
+          class="text-sm font-medium text-zinc-200"
+        >
+          Require 2FA on unlock
+        </Label>
         <p class="text-xs text-zinc-500">
           Authenticator codes will be required even when using your password
         </p>
       </div>
-      <label class="relative inline-flex items-center cursor-pointer">
-        <Checkbox
-          class="sr-only peer"
-          bind:checked={requireTotpOnUnlock}
-          onchange={toggleTotpRequirement}
-        />
-        <div
-          class="w-11 h-6 bg-zinc-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/25 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"
-        ></div>
-      </label>
+      <Switch
+        id="require-totp"
+        class="shrink-0"
+        bind:checked={requireTotpOnUnlock}
+        aria-label="Require two-factor authentication on unlock"
+        onclick={toggleTotpRequirement}
+      />
     </div>
   </div>
 
@@ -145,13 +187,16 @@
                 </p>
               {/if}
             </div>
-            <button
-              class="text-red-400 hover:text-red-300 p-2"
+            <Button
+              variant="ghost"
+              size="icon"
+              class="text-red-400 hover:text-red-300"
               onclick={() => removeTrustedDevice(device.id)}
               title="Remove trusted device"
+              aria-label="Remove trusted device"
             >
               <Trash2 size={14} />
-            </button>
+            </Button>
           </div>
         {/each}
       </div>

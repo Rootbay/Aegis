@@ -7,6 +7,7 @@
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import FriendRequestModal from "$lib/components/modals/FriendRequestModal.svelte";
+  import { Button } from "$lib/components/ui/button/index.js";
 
   let friendships = $state<any[]>([]);
   let showFriendRequestModal = $state(false);
@@ -128,12 +129,9 @@
 <div class="p-4">
   <h2 class="text-xl font-bold mb-4">Friend Management</h2>
 
-  <button
-    class="bg-primary hover:bg-accent text-foreground font-bold py-2 px-4 rounded mb-4"
-    onclick={() => (showFriendRequestModal = true)}
-  >
+  <Button class="mb-4 font-bold" onclick={() => (showFriendRequestModal = true)}>
     Send Friend Request
-  </button>
+  </Button>
 
   {#if flaggedFriends.length > 0}
     <section
@@ -176,18 +174,22 @@
               </ul>
             {/if}
             <div class="mt-3 flex flex-wrap gap-2">
-              <button
-                class="rounded-md bg-success px-3 py-1 text-sm font-semibold text-foreground hover:bg-success/80"
+              <Button
+                variant="ghost"
+                size="sm"
+                class="bg-success px-3 py-1 text-sm font-semibold text-foreground hover:bg-success/80"
                 onclick={() => allowFlaggedFriend(friend)}
               >
                 Allow
-              </button>
-              <button
-                class="rounded-md bg-status-warning px-3 py-1 text-sm font-semibold text-foreground hover:bg-status-warning/80"
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="bg-status-warning px-3 py-1 text-sm font-semibold text-foreground hover:bg-status-warning/80"
                 onclick={() => keepFriendMuted(friend)}
               >
                 Keep Muted
-              </button>
+              </Button>
             </div>
           </li>
         {/each}
@@ -218,24 +220,30 @@
               </span>
             {/if}
           </span>
-          <div>
+          <div class="flex flex-wrap gap-2">
             {#if friendship.status === "pending" && friendship.user_b_id === currentUser?.id}
-              <button
-                class="bg-success hover:bg-green-700 text-foreground font-bold py-1 px-2 rounded mr-2"
+              <Button
+                variant="ghost"
+                size="sm"
+                class="bg-success px-3 py-1 text-sm font-semibold text-foreground hover:bg-success/80"
                 onclick={() => acceptFriendRequest(friendship.id)}
               >
                 Accept
-              </button>
+              </Button>
             {/if}
-            <button
-              class="bg-destructive hover:bg-red-700 text-foreground font-bold py-1 px-2 rounded mr-2"
+            <Button
+              variant="destructive"
+              size="sm"
+              class="px-3 py-1 text-sm font-semibold text-foreground"
               onclick={() => removeFriendship(friendship.id)}
             >
               Remove
-            </button>
+            </Button>
             {#if friendship.status !== "blocked_by_a" && friendship.status !== "blocked_by_b"}
-              <button
-                class="bg-status-warning hover:bg-yellow-700 text-foreground font-bold py-1 px-2 rounded"
+              <Button
+                variant="ghost"
+                size="sm"
+                class="bg-status-warning px-3 py-1 text-sm font-semibold text-foreground hover:bg-status-warning/80"
                 onclick={() =>
                   blockUser(
                     friendship.user_a_id === get(userStore)?.me?.id
@@ -244,7 +252,7 @@
                   )}
               >
                 Block
-              </button>
+              </Button>
             {/if}
           </div>
         </li>
