@@ -179,7 +179,7 @@
     x?: number;
     y?: number;
   }}
-  <div class="fixed inset-0 z-[70]" onclick={closeModal} role="presentation">
+  <div class="fixed inset-0 z-70" onclick={closeModal} role="presentation">
     <div
       class="absolute"
       style={`left: ${userCardProps.x ?? 0}px; top: ${userCardProps.y ?? 0}px;`}

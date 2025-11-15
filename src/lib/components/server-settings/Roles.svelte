@@ -136,7 +136,7 @@
   const sortedRoles = $derived(sortRolesByPosition(roles));
 </script>
 
-<h2 class="text-left text-[12px] font-bold px-2.5 py-1.5 uppercase">
+<h2 class="text-left text-xs font-bold px-2.5 py-1.5 uppercase">
   Roles
 </h2>
 

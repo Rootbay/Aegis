@@ -40,14 +40,14 @@
 
 {#if show && server}
   <div
-    class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[10002]"
+    class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-10002"
   >
     <div
       class="bg-zinc-900 text-white rounded-lg shadow-2xl w-full max-w-4xl h-[80vh] flex"
     >
       <aside class="w-64 bg-card p-4 rounded-l-lg flex flex-col">
         <h2 class="text-lg font-bold mb-6">{server.name} Settings</h2>
-        <div class="grow overflow-y-auto custom-scrollbar pr-2">
+        <div class="grow overflow-y-auto pr-2">
           <nav class="space-y-2">
             <button
               class="w-full text-left px-3 py-2 rounded {activeTab ===
@@ -119,27 +119,3 @@
     </div>
   </div>
 {/if}
-
-<style lang="postcss">
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: transparent;
-    border-radius: 4px;
-    border: 2px solid transparent;
-  }
-
-  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: theme("colors.zinc.700");
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: theme("colors.zinc.600");
-  }
-</style>

@@ -419,7 +419,7 @@
                     {@const CategoryIcon = getCategoryIcon(category)}
                     <Button
                       variant="ghost"
-                      class="flex h-8 w-8 items-center justify-center rounded-sm p-1 mb-[2px] transition"
+                      class="flex h-8 w-8 items-center justify-center rounded-sm p-1 mb-0.5 transition"
                       aria-label={category.label}
                       title={category.label}
                       onclick={() => scrollToCategory(category.id)}

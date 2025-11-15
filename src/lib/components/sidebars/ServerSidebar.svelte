@@ -1940,7 +1940,7 @@
                       {@const member = membersById.get(presence.userId)}
                       <Button
                         variant="ghost"
-                        class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-[12px] text-foreground text-left transition-colors"
+                        class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-foreground text-left transition-colors"
                         onclick={(event) =>
                           handleVoiceParticipantClick(
                             event,
@@ -2162,7 +2162,7 @@
                                 {@const member = membersById.get(presence.userId)}
                                 <Button
                                   variant="ghost"
-                                  class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-[12px] text-foreground text-left transition-colors"
+                                  class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-xs text-foreground text-left transition-colors"
                                   onclick={(event) =>
                                     handleVoiceParticipantClick(
                                       event,

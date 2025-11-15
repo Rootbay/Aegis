@@ -359,14 +359,14 @@
                   </Tooltip>
                   <h2 class="text-base font-semibold text-foreground">{server.name}</h2>
                 </div>
-                <Badge variant="secondary" class="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                <Badge variant="secondary" class="text-xs uppercase text-muted-foreground">
                   {primaryCategory}
                 </Badge>
                 <p class="text-sm text-muted-foreground">
                   {server.description ?? "No description yet."}
                 </p>
               </div>
-              <div class="flex flex-wrap items-center gap-4 text-[12px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              <div class="flex flex-wrap items-center gap-4 text-xs font-semibold uppercase text-muted-foreground">
                 <span class="text-foreground">{channelCount} channels</span>
                 <span class="text-foreground">{memberCount} members</span>
               </div>

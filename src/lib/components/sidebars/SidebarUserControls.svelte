@@ -292,10 +292,10 @@
                     </div>
 
                     <div class="flex flex-col">
-                      <span class="text-[12px] text-muted-foreground truncate">
+                      <span class="text-xs text-muted-foreground truncate">
                         {voiceChannelDescriptor}
                       </span>
-                      <span class="text-[12px] font-mono text-muted-foreground">
+                      <span class="text-xs font-mono text-muted-foreground">
                         {voiceCallDuration}
                       </span>
                     </div>
@@ -328,7 +328,7 @@
                       {/each}
                     </div>
                   </div>
-                  <div class="grid grid-cols-2 gap-2 text-[12px] text-muted-foreground">
+                  <div class="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                     <div>
                       <p class="text-[10px] uppercase tracking-wide text-muted-foreground">
                         Average ping
@@ -366,7 +366,7 @@
                     <p class="text-[10px] uppercase tracking-wide text-muted-foreground">
                       Security
                     </p>
-                    <p class="text-[12px] font-semibold text-foreground leading-tight">
+                    <p class="text-xs font-semibold text-foreground leading-tight">
                       Voice traffic is protected with end-to-end encryption (E2EE).
                     </p>
                     <p class="text-[10px] text-muted-foreground opacity-80">

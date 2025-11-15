@@ -31,7 +31,7 @@
   }
 </script>
 
-<h2 class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase">
+<h2 class="text-left text-xs font-bold px-2.5 py-1.5 uppercase">
   Privacy Settings
 </h2>
 <div class="space-y-6">

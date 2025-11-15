@@ -29,7 +29,7 @@
   <Label class="px-2 text-xs font-bold uppercase text-muted-foreground">
     {title}
   </Label>
-  <ul class="space-y-[2px]">
+  <ul class="space-y-0.5">
     {#each items as item (item.href)}
       <li>
         <Button

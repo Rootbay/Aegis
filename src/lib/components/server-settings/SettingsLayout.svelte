@@ -395,13 +395,13 @@
           </Button>
         </div>
         <h2
-          class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase"
+          class="text-left text-xs font-bold px-2.5 py-1.5 uppercase"
           class:hidden={isSearching}
         >
           {title}
         </h2>
         <h2
-          class="text-left text-[12px] font-bold px-[10px] py-[6px] uppercase"
+          class="text-left text-xs font-bold px-2.5 py-1.5 uppercase"
           class:hidden={!isSearching}
         >
           Search Result
@@ -409,14 +409,14 @@
         <ul>
           {#each filteredSidebarItems as item, index (isSeparator(item) ? `sep-${index}` : item.tab)}
             {#if isSeparator(item)}
-              <Separator class="my-2 mx-[10px]" />
+              <Separator class="my-2 mx-2.5" />
             {:else}
               {@const navItem = item}
               {@const Icon = navItem.icon}
               <li>
                 <Button
                   variant="ghost"
-                  class={`w-full justify-start h-8 px-[10px] gap-2 ${activeTab === navItem.tab ? "bg-zinc-700 text-white hover:bg-zinc-600" : ""}`}
+                  class={`w-full justify-start h-8 px-2.5 gap-2 ${activeTab === navItem.tab ? "bg-zinc-700 text-white hover:bg-zinc-600" : ""}`}
                   onclick={() => (activeTab = navItem.tab)}
                 >
                   <Icon class="w-4 h-4" />
@@ -427,12 +427,12 @@
           {/each}
         </ul>
         {#if !isSearching}
-          <Separator class="my-2 mx-[10px]" />
+          <Separator class="my-2 mx-2.5" />
           <ul>
             <li>
               <Button
                 variant="ghost"
-                class="w-full flex items-center h-8 px-[10px] py-[6px] text-red-400 hover:bg-zinc-700 transition-colors duration-200 mb-[2px]"
+                class="w-full flex items-center h-8 px-2.5 py-1.5 text-red-400 hover:bg-zinc-700 transition-colors duration-200 mb-0.5"
                 onclick={() => (showDeleteServerConfirm = true)}
               >
                 Delete Server
@@ -620,7 +620,7 @@
           </div>
         {/if}
       {/each}
-      <Separator class="my-2 mx-[10px]" />
+      <Separator class="my-2 mx-2.5" />
     </div>
   </main>
   <AlertDialog bind:open={showDeleteServerConfirm}>
@@ -661,25 +661,4 @@
     transition: transform 0.2s ease-in-out;
   }
 
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: transparent;
-    border-radius: 4px;
-    border: 2px solid transparent;
-  }
-
-  .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-    background-color: theme("colors.zinc.700");
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: theme("colors.zinc.600");
-  }
 </style>
