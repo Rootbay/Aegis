@@ -38,6 +38,7 @@ import type { Server } from "$lib/features/servers/models/Server";
 import type { ParsedSearchFilters } from "$lib/features/chat/utils/chatSearch";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import type { Chat } from "$lib/features/chat/models/Chat";
+import { writeTextToClipboard } from "$lib/utils/clipboard";
 import {
   aggregateChannelPermissions,
   buildRolePermissionMap,
@@ -2740,6 +2741,15 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
   });
 
+  const createOptimisticMessageId = () => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `msg-${Date.now().toString()}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+  };
+
   const sendMessage = async (
     content: string,
     options: SendMessageOptions = {},
@@ -2758,7 +2768,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       enforceSlowmodeForChannel(chatId, channelId ?? null);
     }
 
-    const tempId = Date.now().toString();
+    const tempId = createOptimisticMessageId();
     const timestamp = new Date().toISOString();
     const optimisticExpiresAt = computeExpiryForTimestamp(timestamp);
     const newMessage: Message = {
@@ -2850,7 +2860,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       enforceSlowmodeForChannel(chatId, channelId ?? null);
     }
 
-    const tempId = Date.now().toString() + "-a";
+    const tempId = createOptimisticMessageId();
     const timestamp = new Date().toISOString();
 
     const attachmentsCombined = await Promise.all(
@@ -3408,7 +3418,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         : false;
 
     const newMessage: Message = {
-      id: messageIdFromPayload ?? `temp-${Date.now().toString()}`,
+      id: messageIdFromPayload ?? createOptimisticMessageId(),
       chatId: targetChatId,
       senderId: sender,
       content: decoded.content,
@@ -3888,14 +3898,11 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       typeof window !== "undefined" && window.location?.origin
         ? window.location.origin
         : "";
-    const clipboard =
-      typeof navigator === "undefined" ? null : navigator.clipboard;
-    if (!clipboard || typeof clipboard.writeText !== "function") {
-      throw new Error("Clipboard API is not available.");
-    }
-
     const url = `${origin}${path}#message-${messageId}`;
-    await clipboard.writeText(url);
+    const copied = await writeTextToClipboard(url);
+    if (!copied) {
+      throw new Error("Clipboard copy failed");
+    }
     return url;
   };
 

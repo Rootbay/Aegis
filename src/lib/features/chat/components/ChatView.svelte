@@ -94,6 +94,7 @@
     type FormattedMessageSegment,
     mapFriendsById,
   } from "$lib/features/chat/utils/renderMessageContent";
+  import { writeTextToClipboard } from "$lib/utils/clipboard";
   import {
     clearChatDraft,
     loadChatDraft,
@@ -3174,18 +3175,23 @@
 
     switch (action) {
       case "copy_message":
-        navigator.clipboard.writeText(selectedMsg.content || "").then(() => {
-          toasts.addToast("Message copied.", "success");
+        showMsgMenu = false;
+        void writeTextToClipboard(selectedMsg.content ?? "").then((success) => {
+          toasts.addToast(
+            success ? "Message copied." : "Failed to copy message.",
+            success ? "success" : "error",
+          );
         });
         break;
       case "copy_message_link":
+        showMsgMenu = false;
         void chatStore
           .copyMessageLink(selectedMsg.id, selectedMsg.chatId)
           .then(() => {
             toasts.addToast("Message link copied.", "success");
           })
           .catch((error) => {
-            console.error("[ChatView] Failed to copy message link", error);
+            console.error("Failed to copy message link:", error);
             toasts.addToast("Failed to copy message link.", "error");
           });
         break;
