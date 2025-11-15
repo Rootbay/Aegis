@@ -6,7 +6,7 @@ This project is in **early development** and is **far from production ready**. F
 
 > A secure, off-grid messenger built with Tauri v2, Svelte 5, TypeScript, and bun.
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/xeintdm/aegis/build.yml?branch=main&style=for-the-badge)](https://github.com/xeintdm/aegis/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/rootbay/aegis/build.yml?branch=main&style=for-the-badge)](https://github.com/rootbay/aegis/actions)
 [![License](https://img.shields.io/badge/License-MIT%20%2F%20Apache%202.0-blue?style=for-the-badge)](./LICENSE)
 [![Discord](https://img.shields.io/discord/123456789?color=7289DA&label=Join%20Community&logo=discord&logoColor=white&style=for-the-badge)](https://discord.com/users/941268694733041715)
 
@@ -78,7 +78,7 @@ Aegis is a community-driven project. We welcome contributions of all kinds, from
 
 ## 💖 Show Your Support
 
-If you believe in our mission of building a resilient, private, and open communication platform, please consider starring the project on [GitHub](https://github.com/xeintdm/aegis). It helps us gain visibility and attract more contributors.
+If you believe in our mission of building a resilient, private, and open communication platform, please consider starring the project on [GitHub](https://github.com/rootbay/aegis). It helps us gain visibility and attract more contributors.
 
 ---
 
@@ -106,7 +106,7 @@ Before you begin, ensure you have the following installed:
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/xeintdm/aegis.git
+    git clone https://github.com/rootbay/aegis.git
     cd aegis
     ```
 2.  **Install frontend dependencies:**
