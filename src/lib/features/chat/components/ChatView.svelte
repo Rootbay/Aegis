@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import {
+    ArrowLeft,
     Bot,
     CircleAlert,
     Hash,
@@ -29,6 +30,7 @@
   import FileTransferHistory from "$lib/features/chat/components/FileTransferHistory.svelte";
   import CallStatusBanner from "$lib/features/calls/components/CallStatusBanner.svelte";
   import EmojiPicker from "$lib/components/emoji/EmojiPicker.svelte";
+  import GifPicker from "$lib/components/gif/GifPicker.svelte";
   import {
     loadEmojiData,
     type EmojiCategory,
@@ -755,6 +757,8 @@
   let defaultEmojiCategories = $state<EmojiCategory[] | null>(null);
   let defaultEmojiFallbackUsed = $state(false);
   let emojiMetadataLoad: Promise<void> | null = null;
+  let gifPickerSelectedCategoryId = $state<string | null>(null);
+  let gifPickerCategoryLabel = $state<string | null>(null);
 
   const serverEmojiPickerCategories = $derived(
     () => $activeServerEmojiCategories,
@@ -956,20 +960,25 @@
     openComposerPicker(tab);
   };
 
-  const insertEmojiIntoComposer = (emoji: string) => {
+  const handleGifPickerBack = () => {
+    gifPickerSelectedCategoryId = null;
+    gifPickerCategoryLabel = null;
+  };
+
+  const insertTextIntoComposer = (text: string) => {
     const textarea = textareaRef;
     const selectionStart = textarea?.selectionStart ?? messageInput.length;
     const selectionEnd = textarea?.selectionEnd ?? messageInput.length;
     const before = messageInput.slice(0, selectionStart);
     const after = messageInput.slice(selectionEnd);
-    messageInput = `${before}${emoji}${after}`;
+    messageInput = `${before}${text}${after}`;
 
     if (!typingActive) {
       typingActive = true;
       void chatStore.sendTypingIndicator(true);
     }
 
-    const nextCaret = before.length + emoji.length;
+    const nextCaret = before.length + text.length;
 
     queueMicrotask(() => {
       const el = textareaRef;
@@ -989,7 +998,12 @@
     if (!canUseComposerEmoji()) {
       return;
     }
-    insertEmojiIntoComposer(emoji);
+    insertTextIntoComposer(emoji);
+    closeComposerPicker({ focusComposer: true });
+  };
+
+  const handleComposerGifSelect = (gif: { url: string }) => {
+    insertTextIntoComposer(gif.url);
     closeComposerPicker({ focusComposer: true });
   };
 
@@ -4315,18 +4329,34 @@
                           <TabsTrigger value="emoji" class="cursor-pointer">Emoji</TabsTrigger>
                         </TabsList>
                         <div class="relative w-full">
-                          <Input
-                            type="search"
-                            class={`w-full pr-9 disabled:opacity-60 ${composerPickerTab !== "emoji" ? "cursor-not-allowed" : ""}`}
-                            placeholder="Search emojis"
-                            bind:value={emojiSearchTerm}
-                            autocomplete="off"
-                            aria-label="Search emojis"
-                            disabled={composerPickerTab !== "emoji"}
-                          />
-                          <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/60">
-                            <Search size={14} aria-hidden="true" />
-                          </span>
+                          {#if composerPickerTab === "gif" && gifPickerCategoryLabel}
+                            <div class="flex items-center gap-2 rounded-lg border border-border bg-background/70 px-3 py-2 text-sm text-white">
+                              <button
+                                type="button"
+                                class="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-muted/40 text-white/80 transition hover:text-white"
+                                aria-label="Back to GIF categories"
+                                onclick={handleGifPickerBack}
+                              >
+                                <ArrowLeft size={16} />
+                              </button>
+                              <p class="truncate text-sm font-semibold text-white">
+                                {gifPickerCategoryLabel}
+                              </p>
+                            </div>
+                          {:else}
+                            <Input
+                              type="search"
+                              class={`w-full pr-9 disabled:opacity-60 ${composerPickerTab !== "emoji" ? "cursor-not-allowed" : ""}`}
+                              placeholder="Search emojis"
+                              bind:value={emojiSearchTerm}
+                              autocomplete="off"
+                              aria-label="Search emojis"
+                              disabled={composerPickerTab !== "emoji"}
+                            />
+                            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/60">
+                              <Search size={14} aria-hidden="true" />
+                            </span>
+                          {/if}
                         </div>
                       </div>
 
@@ -4342,10 +4372,14 @@
                         />
                       </TabsContent>
 
-                      <TabsContent value="gif">
-                        <div class="flex h-32 items-center justify-center rounded-lg border border-dashed border-white/20 bg-white/5 px-3 text-sm text-muted-foreground">
-                          GIF picker coming soon.
-                        </div>
+                      <TabsContent value="gif" class="flex flex-col h-full min-h-0">
+                        <GifPicker
+                          bind:selectedCategoryId={gifPickerSelectedCategoryId}
+                          on:categoryChange={(event) =>
+                            (gifPickerCategoryLabel = event.detail?.label ?? null)
+                          }
+                          on:select={(event) => handleComposerGifSelect(event.detail.gif)}
+                        />
                       </TabsContent>
                     </Tabs>
                   </div>

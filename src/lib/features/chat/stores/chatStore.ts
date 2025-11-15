@@ -2088,16 +2088,28 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
       const loadToken = beginLoadingForChat(messageChatId);
       try {
-        const fetched: BackendMessage[] = await invoke("get_messages", {
-          chatId: messageChatId,
-          chat_id: messageChatId,
-          limit: PAGE_LIMIT,
-          offset: 0,
-        });
-        if (!isCurrentLoad(messageChatId, loadToken)) {
-          return;
-        }
-        const mapped = (
+      const fetchedResult = await invoke<BackendMessage[]>("get_messages", {
+        chatId: messageChatId,
+        chat_id: messageChatId,
+        limit: PAGE_LIMIT,
+        offset: 0,
+      });
+      const fetched =
+        Array.isArray(fetchedResult) && fetchedResult.length > 0
+          ? fetchedResult.filter(
+              (item): item is BackendMessage => typeof item === "object" && item !== null,
+            )
+          : [];
+      if (!Array.isArray(fetchedResult) || fetchedResult.length === 0) {
+        console.warn(
+          `[chatStore] Received ${typeof fetchedResult} from get_messages; treating as empty list.`,
+          fetchedResult,
+        );
+      }
+      if (!isCurrentLoad(messageChatId, loadToken)) {
+        return;
+      }
+      const mapped = (
           await Promise.all(
             fetched.map((m: BackendMessage) =>
               mapBackendMessage(m, messageChatId),
@@ -3163,12 +3175,25 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const refreshChatMessages = async (chatId: string) => {
     const loadToken = beginLoadingForChat(chatId);
     try {
-      const fetched: BackendMessage[] = await invoke("get_messages", {
+      const fetchedResult = await invoke<BackendMessage[]>("get_messages", {
         chatId,
         chat_id: chatId,
         limit: PAGE_LIMIT,
         offset: 0,
       });
+      const fetched =
+        Array.isArray(fetchedResult) && fetchedResult.length > 0
+          ? fetchedResult.filter(
+              (item): item is BackendMessage =>
+                typeof item === "object" && item !== null,
+            )
+          : [];
+      if (!Array.isArray(fetchedResult) || fetchedResult.length === 0) {
+        console.warn(
+          `[chatStore] Received ${typeof fetchedResult} from get_messages; treating as empty list.`,
+          fetchedResult,
+        );
+      }
       if (!isCurrentLoad(chatId, loadToken)) {
         return;
       }

@@ -73,12 +73,30 @@ type BackendDecryptResponse = {
   was_encrypted?: boolean;
 };
 
-const ensureUint8Array = (input: Uint8Array | ArrayBuffer): Uint8Array => {
+type AttachmentBytePayload = number[] | Uint8Array | ArrayBuffer | undefined;
+
+const attachmentDataToUint8Array = (
+  input: AttachmentBytePayload,
+): Uint8Array => {
   if (input instanceof Uint8Array) {
     return input;
   }
-  return new Uint8Array(input);
+  if (Array.isArray(input)) {
+    return new Uint8Array(input);
+  }
+  if (input instanceof ArrayBuffer) {
+    return new Uint8Array(input);
+  }
+  return new Uint8Array();
 };
+
+const attachmentDataToNumberArray = (
+  input: AttachmentBytePayload,
+): number[] => Array.from(attachmentDataToUint8Array(input));
+
+const ensureUint8Array = (
+  input: AttachmentBytePayload,
+): Uint8Array => attachmentDataToUint8Array(input);
 
 const toSerializableAttachment = (
   attachment: MessageAttachmentPayload,
@@ -150,47 +168,36 @@ export async function decodeIncomingMessagePayload(
     const attachments = params.attachments ?? undefined;
     const serialized =
       attachments && attachments.length > 0
-        ? attachments.map((attachment) => {
-            const bytes = attachment.data;
-            let data: number[] | undefined;
-            if (bytes instanceof Uint8Array) {
-              data = Array.from(bytes);
-            } else if (Array.isArray(bytes)) {
-              data = bytes as number[];
-            } else if (bytes instanceof ArrayBuffer) {
-              data = Array.from(new Uint8Array(bytes));
-            }
-            return {
-              name: attachment.name,
-              type:
-                attachment.content_type ??
-                attachment.contentType ??
-                attachment.type,
-              size: attachment.size,
-              data,
-            };
-          })
+        ? attachments.map((attachment) => ({
+            name: attachment.name,
+            type:
+              attachment.content_type ??
+              attachment.contentType ??
+              attachment.type,
+            size: attachment.size,
+            data: attachmentDataToNumberArray(attachment.data),
+          }))
         : [];
 
-    const response = await invoke<BackendDecryptResponse>(
-      "decrypt_chat_payload",
-      {
+    const response =
+      (await invoke<BackendDecryptResponse>("decrypt_chat_payload", {
         content: params.content,
         attachments: serialized,
-      },
-    );
+      })) ?? {
+        content: params.content,
+        attachments: [],
+        wasEncrypted: false,
+      };
 
     const resultAttachments = (response.attachments ?? []).map(
       (attachment, index) => {
         const original = attachments?.[index];
         const bytes =
           attachment.data && attachment.data.length > 0
-            ? new Uint8Array(attachment.data)
-            : original?.data instanceof Uint8Array
-              ? original.data
-              : original?.data instanceof ArrayBuffer
-                ? new Uint8Array(original.data)
-                : (original?.data as Uint8Array | undefined);
+            ? attachmentDataToUint8Array(attachment.data)
+            : original?.data
+              ? attachmentDataToUint8Array(original.data)
+              : undefined;
         const normalizedType =
           attachment.content_type ??
           attachment.type ??
