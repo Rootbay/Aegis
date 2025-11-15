@@ -2,30 +2,41 @@
 
 <script lang="ts">
   import { Input } from "$lib/components/ui/input/index.js";
+  import {
+    Tabs,
+    TabsList,
+    TabsTrigger,
+  } from "$lib/components/ui/tabs";
   import { Search } from "@lucide/svelte";
   import {
     activeTopic,
     searchTerm,
     topics,
   } from "$lib/features/discover/discoverPanelStore";
+  import type { DiscoverPanelTopic } from "$lib/features/discover/discoverPanelStore";
 </script>
 
 <header class="relative border-b border-border/70 px-4 pt-4">
   <div class="flex items-end justify-between gap-4">
-    <div class="flex flex-1 flex-wrap items-end gap-3 overflow-x-auto">
-      {#each topics as topic}
-        <button
-          type="button"
-          class={`transition-colors duration-200 text-sm font-semibold capitalize pb-5 border-b-2 cursor-pointer ${
-            $activeTopic === topic
-              ? "border-white text-foreground"
-              : "border-transparent text-muted-foreground hover:text-foreground/80"
-          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2`}
-          onclick={() => activeTopic.set(topic)}
-        >
-          {topic === "Home" ? "Home" : topic}
-        </button>
-      {/each}
+    <div class="flex flex-1 flex-wrap items-end gap-3 overflow-x-auto min-w-0">
+      <Tabs
+        value={$activeTopic}
+        onValueChange={(value) =>
+          activeTopic.set(value as DiscoverPanelTopic)
+        }
+        class="w-full"
+      >
+        <TabsList class="flex w-full flex-wrap gap-2 bg-transparent p-0">
+          {#each topics as topic}
+            <TabsTrigger
+              value={topic}
+              class="px-3 py-1 text-sm font-semibold capitalize"
+            >
+              {topic === "Home" ? "Home" : topic}
+            </TabsTrigger>
+          {/each}
+        </TabsList>
+      </Tabs>
     </div>
 
     <div class="flex shrink-0 items-center gap-3 w-full max-w-sm mb-4">
