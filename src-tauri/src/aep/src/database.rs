@@ -114,6 +114,23 @@ pub struct Message {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+struct MessageRow {
+    id: String,
+    chat_id: String,
+    sender_id: String,
+    content: String,
+    timestamp: String,
+    read: bool,
+    pinned: bool,
+    reply_to_message_id: Option<String>,
+    reply_snapshot_author: Option<String>,
+    reply_snapshot_snippet: Option<String>,
+    edited_at: Option<String>,
+    edited_by: Option<String>,
+    expires_at: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct MessageMetadata {
     pub id: String,
@@ -1910,40 +1927,30 @@ pub async fn get_messages_for_chat(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<Message>, sqlx::Error> {
-    #[derive(FromRow)]
-    struct MessageRaw {
-        id: String,
-        chat_id: String,
-        sender_id: String,
-        content: String,
-        timestamp: String,
-        read: bool,
-        pinned: bool,
-        reply_to_message_id: Option<String>,
-        reply_snapshot_author: Option<String>,
-        reply_snapshot_snippet: Option<String>,
-        edited_at: Option<String>,
-        edited_by: Option<String>,
-        expires_at: Option<String>,
-    }
-
-    let messages_raw = sqlx::query_as!(
-        MessageRaw,
+    let messages_rows = sqlx::query_as!(
+        MessageRow,
         "SELECT id, chat_id, sender_id, content, timestamp, read, pinned, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
         chat_id,
         limit,
         offset
     )
-        .fetch_all(pool)
-        .await?;
+    .fetch_all(pool)
+    .await?;
 
-    let mut messages = Vec::with_capacity(messages_raw.len());
-    let mut message_ids: Vec<String> = Vec::with_capacity(messages_raw.len());
-    for m_raw in messages_raw {
-        let timestamp = DateTime::parse_from_rfc3339(&m_raw.timestamp)
+    hydrate_messages_from_rows(pool, messages_rows).await
+}
+
+async fn hydrate_messages_from_rows(
+    pool: &Pool<Sqlite>,
+    message_rows: Vec<MessageRow>,
+) -> Result<Vec<Message>, sqlx::Error> {
+    let mut messages = Vec::with_capacity(message_rows.len());
+    let mut message_ids: Vec<String> = Vec::with_capacity(message_rows.len());
+    for row in message_rows {
+        let timestamp = DateTime::parse_from_rfc3339(&row.timestamp)
             .map(|dt| dt.with_timezone(&Utc))
             .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
-        let edited_at = match m_raw.edited_at {
+        let edited_at = match row.edited_at {
             Some(value) => Some(
                 DateTime::parse_from_rfc3339(&value)
                     .map(|dt| dt.with_timezone(&Utc))
@@ -1955,7 +1962,7 @@ pub async fn get_messages_for_chat(
             ),
             None => None,
         };
-        let expires_at = match m_raw.expires_at {
+        let expires_at = match row.expires_at {
             Some(value) => Some(
                 DateTime::parse_from_rfc3339(&value)
                     .map(|dt| dt.with_timezone(&Utc))
@@ -1967,22 +1974,22 @@ pub async fn get_messages_for_chat(
             ),
             None => None,
         };
-        message_ids.push(m_raw.id.clone());
+        message_ids.push(row.id.clone());
         messages.push(Message {
-            id: m_raw.id,
-            chat_id: m_raw.chat_id,
-            sender_id: m_raw.sender_id,
-            content: m_raw.content,
+            id: row.id,
+            chat_id: row.chat_id,
+            sender_id: row.sender_id,
+            content: row.content,
             timestamp,
-            read: m_raw.read,
-            pinned: m_raw.pinned,
+            read: row.read,
+            pinned: row.pinned,
             attachments: Vec::new(),
             reactions: HashMap::new(),
-            reply_to_message_id: m_raw.reply_to_message_id,
-            reply_snapshot_author: m_raw.reply_snapshot_author,
-            reply_snapshot_snippet: m_raw.reply_snapshot_snippet,
+            reply_to_message_id: row.reply_to_message_id,
+            reply_snapshot_author: row.reply_snapshot_author,
+            reply_snapshot_snippet: row.reply_snapshot_snippet,
             edited_at,
-            edited_by: m_raw.edited_by,
+            edited_by: row.edited_by,
             expires_at,
         });
     }
@@ -2012,7 +2019,6 @@ pub async fn get_messages_for_chat(
             .fetch_all(pool)
             .await?;
 
-        use std::collections::HashMap;
         let mut attachments_map: HashMap<String, Vec<Attachment>> = HashMap::new();
         for row in attachment_rows {
             let size_u64 = if row.size < 0 { 0 } else { row.size as u64 };
@@ -2079,6 +2085,72 @@ pub async fn get_messages_for_chat(
     messages.reverse();
 
     Ok(messages)
+}
+
+pub async fn search_messages(
+    pool: &Pool<Sqlite>,
+    chat_id: &str,
+    query: Option<&str>,
+    limit: i64,
+    offset: i64,
+    pinned: Option<bool>,
+    sender_ids: Option<&[String]>,
+    before: Option<&str>,
+    after: Option<&str>,
+) -> Result<Vec<Message>, sqlx::Error> {
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        "SELECT id, chat_id, sender_id, content, timestamp, read, pinned, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet, edited_at, edited_by, expires_at FROM messages WHERE chat_id = ?");
+    builder.push_bind(chat_id);
+
+    if let Some(pinned) = pinned {
+        builder.push(" AND pinned = ");
+        builder.push_bind(pinned);
+    }
+
+    if let Some(ids) = sender_ids {
+        let valid_sender_ids: Vec<&String> =
+            ids.iter().filter(|value| !value.trim().is_empty()).collect();
+        if !valid_sender_ids.is_empty() {
+            builder.push(" AND sender_id IN (");
+            {
+                let mut separated = builder.separated(", ");
+                for id in valid_sender_ids {
+                    separated.push_bind(id);
+                }
+            }
+            builder.push(")");
+        }
+    }
+
+    if let Some(query) = query {
+        let trimmed = query.trim();
+        if !trimmed.is_empty() {
+            builder.push(" AND LOWER(content) LIKE ");
+            let pattern = format!("%{}%", trimmed.to_lowercase());
+            builder.push_bind(pattern);
+        }
+    }
+
+    if let Some(before) = before {
+        builder.push(" AND timestamp < ");
+        builder.push_bind(before);
+    }
+
+    if let Some(after) = after {
+        builder.push(" AND timestamp > ");
+        builder.push_bind(after);
+    }
+
+    builder.push(" ORDER BY timestamp DESC LIMIT ");
+    builder.push_bind(limit);
+    builder.push(" OFFSET ");
+    builder.push_bind(offset);
+
+    let rows = builder
+        .build_query_as::<MessageRow>()
+        .fetch_all(pool)
+        .await?;
+    hydrate_messages_from_rows(pool, rows).await
 }
 
 pub async fn get_attachment_data(

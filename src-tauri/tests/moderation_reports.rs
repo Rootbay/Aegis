@@ -21,11 +21,12 @@ async fn report_message_command_persists_report_with_context() {
         .await
         .expect("initialize db");
 
-    let applied_migrations: Vec<String> = sqlx::query("SELECT version FROM __sqlx_migrations ORDER BY applied_on")
-        .map(|row: sqlx::sqlite::SqliteRow| row.get("version"))
-        .fetch_all(&pool)
-        .await
-        .expect("fetch migrations");
+    let applied_migrations: Vec<String> =
+        sqlx::query("SELECT version FROM __sqlx_migrations ORDER BY applied_on")
+            .map(|row: sqlx::sqlite::SqliteRow| row.get("version"))
+            .fetch_all(&pool)
+            .await
+            .expect("fetch migrations");
     println!("applied migrations: {:?}", applied_migrations);
 
     let reporter_identity = Identity::generate();

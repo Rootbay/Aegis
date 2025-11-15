@@ -1,3 +1,5 @@
+use aep::database;
+use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,4 +45,29 @@ pub struct DecryptChatPayloadResponse {
     pub attachments: Vec<AttachmentDescriptor>,
     #[serde(rename = "wasEncrypted")]
     pub was_encrypted: bool,
+}
+
+#[derive(Debug)]
+pub struct SearchMessagesResponse {
+    pub messages: Vec<database::Message>,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+    pub cursor: Option<String>,
+}
+
+impl Serialize for SearchMessagesResponse {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("SearchMessagesResponse", 7)?;
+        state.serialize_field("messages", &self.messages)?;
+        state.serialize_field("results", &self.messages)?;
+        state.serialize_field("has_more", &self.has_more)?;
+        state.serialize_field("hasMore", &self.has_more)?;
+        state.serialize_field("next_cursor", &self.next_cursor)?;
+        state.serialize_field("nextCursor", &self.next_cursor)?;
+        state.serialize_field("cursor", &self.cursor)?;
+        state.end()
+    }
 }

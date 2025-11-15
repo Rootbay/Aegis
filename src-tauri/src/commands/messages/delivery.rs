@@ -4,13 +4,118 @@ use std::sync::atomic::Ordering;
 use aegis_protocol::AepMessage;
 use aegis_shared_types::AppState;
 use aep::database;
-use chrono::Utc;
+use chrono::{TimeZone, Utc};
+use serde::Deserialize;
 use tauri::State;
 
 use crate::commands::state::AppStateContainer;
 
 use super::helpers::{is_voice_memo_attachment, parse_optional_datetime};
-use super::types::AttachmentDescriptor;
+use super::types::{AttachmentDescriptor, SearchMessagesResponse};
+
+#[derive(Debug, Deserialize, Default)]
+struct SearchMessagesFilters {
+    pinned: Option<bool>,
+    from: Option<Vec<String>>,
+    before: Option<i64>,
+    after: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchMessagesPayload {
+    #[serde(alias = "chatId")]
+    chat_id: Option<String>,
+    query: Option<String>,
+    limit: Option<i64>,
+    cursor: Option<String>,
+    filters: Option<SearchMessagesFilters>,
+}
+
+fn timestamp_from_millis(millis: i64) -> Option<String> {
+    Utc.timestamp_millis_opt(millis)
+        .single()
+        .map(|dt| dt.to_rfc3339())
+}
+
+#[tauri::command]
+pub async fn search_messages(
+    payload: SearchMessagesPayload,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<SearchMessagesResponse, String> {
+    let chat_id = payload
+        .chat_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "chat_id is required".to_string())?
+        .to_string();
+
+    let filters = payload.filters.unwrap_or_default();
+    let limit = payload.limit.unwrap_or(50).max(1).min(200);
+    let offset = payload
+        .cursor
+        .and_then(|value| value.parse::<i64>().ok())
+        .map(|value| value.max(0))
+        .unwrap_or(0);
+
+    let query = payload
+        .query
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let sender_ids = filters.from.and_then(|values| {
+        let cleaned: Vec<String> = values
+            .into_iter()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .collect();
+        if cleaned.is_empty() {
+            None
+        } else {
+            Some(cleaned)
+        }
+    });
+
+    let before_iso = filters.before.and_then(timestamp_from_millis);
+    let after_iso = filters.after.and_then(timestamp_from_millis);
+
+    let fetch_limit = limit + 1;
+
+    let state = state_container.0.lock().await;
+    let state = state.as_ref().ok_or("State not initialized")?;
+
+    let mut results = database::search_messages(
+        &state.db_pool,
+        &chat_id,
+        query.as_deref(),
+        fetch_limit,
+        offset,
+        filters.pinned,
+        sender_ids.as_deref(),
+        before_iso.as_deref(),
+        after_iso.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let has_more = (results.len() as i64) > limit;
+    if has_more {
+        results.pop();
+    }
+
+    let cursor_value = if has_more {
+        Some((offset + limit).to_string())
+    } else {
+        None
+    };
+
+    Ok(SearchMessagesResponse {
+        messages: results,
+        has_more,
+        next_cursor: cursor_value.clone(),
+        cursor: cursor_value,
+    })
+}
 
 pub(super) async fn persist_and_broadcast_message(
     state: AppState,
