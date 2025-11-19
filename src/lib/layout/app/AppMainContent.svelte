@@ -4,6 +4,7 @@
   import { page } from "$app/stores";
   import { chatStore } from "$lib/features/chat/stores/chatStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
+  import NetworkStatusIndicator from "$lib/components/NetworkStatusIndicator.svelte";
   import ActiveChatContent from "./ActiveChatContent.svelte";
   import FriendsContent from "./FriendsContent.svelte";
   import type { AppController } from "./types";
@@ -23,6 +24,7 @@
     handlers,
     activeTab,
     isAnySettingsPage,
+    connectivity,
   } = controller;
   const {
     openDetailedProfileModal,
@@ -80,6 +82,7 @@
 </script>
 
 <main class="flex-1 min-h-0 flex flex-col overflow-hidden">
+  <NetworkStatusIndicator connectivity={connectivity} />
   {#if $isAnySettingsPage}
     {#if children}
       {@render children()}

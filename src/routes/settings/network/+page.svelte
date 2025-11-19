@@ -7,6 +7,12 @@
   import { Slider } from "$lib/components/ui/slider/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge";
+  import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+  } from "$lib/components/ui/tooltip";
   import { toasts } from "$lib/stores/ToastStore";
   import { connectivityStore } from "$lib/stores/connectivityStore";
   import { relayStore } from "$lib/features/settings/stores/relayStore";
@@ -15,6 +21,7 @@
     setEnableCrossDeviceSync,
     setPreferWifiDirect,
     setEnableBridgeMode,
+    setShareMeshPresence,
     setEnableIntelligentMeshRouting,
     setResilientFileTransferEnabled,
     setRoutingUpdateIntervalSeconds,
@@ -28,10 +35,12 @@
   } from "$lib/features/settings/models/relay";
   import MeshExplorerPanel from "$lib/features/mesh/components/MeshExplorerPanel.svelte";
   import ConnectivityBanner from "$lib/components/ConnectivityBanner.svelte";
+  import { Info } from "@lucide/svelte";
 
   let enableCrossDeviceSync = $state(get(settings).enableCrossDeviceSync);
   let preferWifiDirect = $state(get(settings).preferWifiDirect);
   let enableBridgeMode = $state(get(settings).enableBridgeMode);
+  let shareMeshPresence = $state(get(settings).shareMeshPresence);
   let enableIntelligentMeshRouting = $state(
     get(settings).enableIntelligentMeshRouting,
   );
@@ -46,6 +55,7 @@
   let currentGatewayStatus = $state(get(connectivityStore).gatewayStatus);
   let bridgeSuggested = $state(get(connectivityStore).bridgeSuggested);
   let togglingBridge = $state(false);
+  let togglingPresence = $state(false);
   let relayLabel = $state("");
   let relayUrls = $state("");
   let relayScope = $state<RelayScope>("global");
@@ -192,6 +202,7 @@
       enableCrossDeviceSync = value.enableCrossDeviceSync;
       preferWifiDirect = value.preferWifiDirect;
       enableBridgeMode = value.enableBridgeMode;
+      shareMeshPresence = value.shareMeshPresence;
       enableIntelligentMeshRouting = value.enableIntelligentMeshRouting;
       enableResilientTransfers = value.enableResilientFileTransfer;
       routingUpdateInterval = value.aerpRouteUpdateIntervalSeconds;
@@ -261,6 +272,19 @@
     return "info" as const;
   });
 
+  const bridgeStatusLabel = $derived(() => {
+    if (currentGatewayStatus.forwarding) {
+      return "Bridge active";
+    }
+    if (currentGatewayStatus.bridgeModeEnabled) {
+      return "Bridge enabled";
+    }
+    if (bridgeSuggested) {
+      return "Bridge requested";
+    }
+    return "Bridge off";
+  });
+
   const bridgeStatusDescription = $derived(() => {
     if (currentGatewayStatus.forwarding) {
       const peers = currentGatewayStatus.upstreamPeers;
@@ -319,6 +343,34 @@
       togglingBridge = false;
     }
   }
+
+  async function handlePresenceToggle() {
+    if (togglingPresence) {
+      return;
+    }
+
+    togglingPresence = true;
+    const desired = shareMeshPresence;
+
+    try {
+      await setShareMeshPresence(desired);
+      toasts.addToast(
+        desired
+          ? "Sharing mesh presence. Nearby peers can discover you faster."
+          : "Mesh presence hidden. Discovery may slow, but power use drops.",
+        desired ? "success" : "info",
+      );
+    } catch (error) {
+      console.error("Failed to update mesh presence sharing", error);
+      shareMeshPresence = get(settings).shareMeshPresence;
+      toasts.addToast(
+        "Couldn't update mesh presence sharing. Please try again.",
+        "error",
+      );
+    } finally {
+      togglingPresence = false;
+    }
+  }
 </script>
 
 <h1 class="text-2xl font-semibold text-zinc-50">Network Settings</h1>
@@ -346,32 +398,104 @@
     />
   </section>
 
-  <section
-    class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
-  >
-    <div class="mr-4">
-      <Label for="prefer-wifi-direct" class="text-sm font-medium text-zinc-200">
-        Prefer Wi-Fi Direct
-      </Label>
-      <p class="text-xs text-muted-foreground">
-        Establish faster peer-to-peer links when available.
-      </p>
-    </div>
-    <Switch
-      id="prefer-wifi-direct"
-      class="shrink-0"
-      bind:checked={preferWifiDirect}
-      aria-label="Toggle Wi-Fi Direct preference"
-    />
-  </section>
+  <TooltipProvider delayDuration={150}>
+    <section
+      class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+    >
+      <div class="mr-4 space-y-1">
+        <div class="flex items-center gap-2">
+          <Label
+            for="share-mesh-presence"
+            class="text-sm font-medium text-zinc-200"
+          >
+            Share mesh presence
+          </Label>
+          <Tooltip>
+            <TooltipTrigger class="text-muted-foreground">
+              <Info class="size-4" />
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p class="max-w-xs text-xs">
+                Sharing presence improves discovery for nearby peers but may
+                reveal when you're nearby and use a bit more power.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        <p class="text-xs text-muted-foreground">
+          Advertise your availability to the mesh for faster handshakes.
+        </p>
+      </div>
+      <Switch
+        id="share-mesh-presence"
+        class="shrink-0"
+        bind:checked={shareMeshPresence}
+        aria-label="Toggle mesh presence sharing"
+        disabled={togglingPresence}
+        onCheckedChange={() => {
+          void handlePresenceToggle();
+        }}
+      />
+    </section>
+
+    <section
+      class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
+    >
+      <div class="mr-4">
+        <Label for="prefer-wifi-direct" class="text-sm font-medium text-zinc-200">
+          Prefer Wi-Fi Direct
+        </Label>
+        <p class="text-xs text-muted-foreground">
+          Establish faster peer-to-peer links when available.
+        </p>
+      </div>
+      <Switch
+        id="prefer-wifi-direct"
+        class="shrink-0"
+        bind:checked={preferWifiDirect}
+        aria-label="Toggle Wi-Fi Direct preference"
+        onCheckedChange={() => {
+          void setPreferWifiDirect(preferWifiDirect);
+        }}
+      />
+    </section>
+  </TooltipProvider>
 
   <section
     class="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
   >
-    <div class="mr-4">
-      <Label for="enable-bridge-mode" class="text-sm font-medium text-zinc-200">
-        Enable bridge mode
-      </Label>
+    <div class="mr-4 space-y-1">
+      <div class="flex items-center gap-2">
+        <Badge
+          variant={bridgeStatusTone() === "info" ? "default" : bridgeStatusTone()}
+          class="rounded-full px-3 py-1 text-xs uppercase tracking-wide"
+        >
+          {bridgeStatusLabel()}
+        </Badge>
+        {#if bridgeSuggested}
+          <Badge variant="outline" class="rounded-full px-3 py-1 text-xs uppercase">
+            Requested by peers
+          </Badge>
+        {/if}
+        <Tooltip>
+          <TooltipTrigger class="text-muted-foreground">
+            <Info class="size-4" />
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p class="max-w-xs text-xs">
+              Bridging improves connectivity for isolated nodes but consumes more
+              battery and may expose traffic metadata to your uplink.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      <p class="text-sm text-zinc-200">
+        {#if currentGatewayStatus.forwarding}
+          Acting as a bridge to the internet.
+        {:else}
+          Bridge mode
+        {/if}
+      </p>
       <p
         class="text-xs"
         class:text-emerald-500={bridgeStatusTone() === "success"}
