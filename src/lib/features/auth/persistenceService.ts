@@ -17,6 +17,12 @@ export type SecurityQuestion = {
   answerHash: string;
 };
 
+export type SetupChecklist = {
+  quickstart: boolean;
+  recoverySaved: boolean;
+  totpVerified: boolean;
+};
+
 export type AuthPersistence = {
   username?: string;
   passwordHash?: string;
@@ -36,6 +42,8 @@ export type AuthPersistence = {
   biometricEnabled?: boolean;
   backupCodes?: string[];
   backupCodesUsed?: string[];
+  setupChecklist?: SetupChecklist;
+  temporarySessionKey?: string | null;
 };
 
 export const DEFAULT_SESSION_TIMEOUT = 60;

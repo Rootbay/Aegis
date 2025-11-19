@@ -177,6 +177,23 @@ describe("authStore (integration)", () => {
     expect(state.loading).toBe(false);
   });
 
+  it("starts a quickstart session and gates handoff until hardened", async () => {
+    const mod = await import("$lib/features/auth/stores/authStore");
+    const { authStore } = mod;
+
+    await authStore.beginQuickstart("Nova");
+
+    const state = get(authStore);
+    expect(state.status).toBe("quickstart");
+    expect(state.setupChecklist.quickstart).toBe(true);
+    expect(state.highRiskBlocked).toBe(true);
+
+    await expect(authStore.generateDeviceHandshake("123456")).rejects.toThrow(
+      /Device handoff is blocked/,
+    );
+    expect(createDeviceHandshakeMock).not.toHaveBeenCalled();
+  });
+
   it("authenticates via delegated device handshake", async () => {
     const mod = await import("$lib/features/auth/stores/authStore");
     const { authStore, authPersistenceStore } = mod;

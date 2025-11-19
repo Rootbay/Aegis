@@ -42,10 +42,10 @@
   type OnboardingStep =
     | "username"
     | "phrase"
-  | "confirm"
-  | "password"
-  | "backup_codes"
-  | "totp";
+    | "confirm"
+    | "password"
+    | "backup_codes"
+    | "totp";
 
   let username = $state("");
   let onboardingStep = $state<OnboardingStep>("username");
@@ -80,6 +80,10 @@
   const requireTotpOnUnlock = $derived(
     $authPersistenceStore.requireTotpOnUnlock ?? false,
   );
+
+  const setupChecklist = $derived($authStore.setupChecklist);
+  const temporarySessionKey = $derived($authStore.temporarySessionKey);
+  const highRiskBlocked = $derived($authStore.highRiskBlocked);
 
   const storedSecurityQuestions = $derived(
     ($authPersistenceStore.securityQuestions ?? []) as SecurityQuestion[],
@@ -206,11 +210,35 @@
     })(),
   );
 
-  async function handleStartOnboarding(event: Event) {
+  async function handleQuickstart(event: Event) {
     event.preventDefault();
     try {
       authStore.clearError();
-      authStore.beginOnboarding(username);
+      await authStore.beginQuickstart(username);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to start quick start.";
+      toasts.showErrorToast(message);
+    }
+  }
+
+  async function handleStartOnboarding(event: Event) {
+    event.preventDefault();
+    if (!hasQuickstartSession) {
+      toasts.showErrorToast(
+        "Start the quick session before hardening security.",
+      );
+      return;
+    }
+
+    try {
+      authStore.clearError();
+      const onboardingUsername = (storedUsername ?? username).trim();
+      if (!onboardingUsername) {
+        toasts.showErrorToast("Add a callsign before continuing.");
+        return;
+      }
+      authStore.beginOnboarding(onboardingUsername);
       onboardingStep = "phrase";
     } catch (error) {
       const message =
@@ -518,7 +546,9 @@
   const status = $derived($authStore.status);
   const pendingRecovery = $derived($authStore.pendingRecoveryRotation);
   const inOnboardingFlow = $derived(
-    status === "needs_setup" || status === "setup_in_progress",
+    status === "needs_setup" ||
+      status === "setup_in_progress" ||
+      status === "quickstart",
   );
 
   const hasStoredSecurityQuestions = $derived(
@@ -533,6 +563,10 @@
   const identityLabel = $derived(
     storedUsername ??
       (username.trim().length ? username.trim() : "New identity"),
+  );
+
+  const hasQuickstartSession = $derived(
+    setupChecklist.quickstart || $authStore.status === "quickstart",
   );
 
   const canSubmitPassword = $derived(
@@ -730,6 +764,114 @@
       <section
         class="rounded-2xl border border-zinc-800/70 bg-black/45 p-6 shadow-lg shadow-black/30 backdrop-blur space-y-6"
       >
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4">
+            <div
+              class="flex items-center gap-2 text-sm font-medium text-zinc-200"
+            >
+              <Shield class="h-4 w-4 text-primary" /> Quick start
+            </div>
+
+            {#if hasQuickstartSession}
+              <div class="mt-3 space-y-3 text-sm text-zinc-400">
+                <p>
+                  A temporary session key is active. Finish the secure setup to
+                  unlock high-risk actions.
+                </p>
+
+                {#if temporarySessionKey}
+                  <div class="space-y-1">
+                    <p class="text-xs uppercase text-zinc-500">Session key</p>
+                    <Input
+                      value={temporarySessionKey}
+                      readonly
+                      class="font-mono text-xs"
+                    />
+                  </div>
+                {/if}
+
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Button size="sm" onclick={handleStartOnboarding}>
+                    Continue secure setup
+                  </Button>
+
+                  <p class="text-xs text-zinc-500">
+                    You can pause here, but recovery + 2FA are still required.
+                  </p>
+                </div>
+              </div>
+            {:else}
+              <form class="mt-3 space-y-3" onsubmit={handleQuickstart}>
+                <p class="text-sm text-zinc-400">
+                  Get started with a minimal session and finish hardening later.
+                </p>
+
+                <div class="space-y-1">
+                  <Label for="quickstart-username">Callsign</Label>
+                  <Input
+                    id="quickstart-username"
+                    type="text"
+                    bind:value={username}
+                    placeholder="CipherFox"
+                    autocomplete="username"
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  size="sm"
+                  class="w-full sm:w-auto"
+                  disabled={isLoading}
+                >
+                  Start quick session
+                </Button>
+              </form>
+            {/if}
+          </div>
+
+          <div class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4">
+            <div
+              class="flex items-center gap-2 text-sm font-medium text-zinc-200"
+            >
+              <ShieldCheck class="h-4 w-4 text-primary" /> Secure setup checklist
+            </div>
+
+            <ul class="mt-3 space-y-2 text-sm text-zinc-300">
+              <li class="flex items-center gap-2">
+                <div
+                  class={`h-2 w-2 rounded-full ${setupChecklist.quickstart ? "bg-green-400" : "bg-zinc-600"}`}
+                />
+                Quick start session ready
+              </li>
+              <li class="flex items-center gap-2">
+                <div
+                  class={`h-2 w-2 rounded-full ${setupChecklist.recoverySaved ? "bg-green-400" : "bg-orange-400"}`}
+                />
+                Recovery phrase stored
+              </li>
+              <li class="flex items-center gap-2">
+                <div
+                  class={`h-2 w-2 rounded-full ${setupChecklist.totpVerified ? "bg-green-400" : "bg-orange-400"}`}
+                />
+                Authenticator paired
+              </li>
+            </ul>
+
+            {#if highRiskBlocked}
+              <div
+                class="mt-3 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-xs text-yellow-100"
+              >
+                <TriangleAlert class="h-4 w-4 text-yellow-300" />
+                <span>
+                  High-risk actions stay blocked until you store the recovery
+                  phrase and enable 2FA.
+                </span>
+              </div>
+            {/if}
+          </div>
+        </div>
+
         <div
           class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         >
@@ -791,10 +933,18 @@
             <Button
               class="w-full sm:w-auto"
               type="submit"
-              disabled={isLoading || username.trim().length < 3}
+              disabled={isLoading ||
+                username.trim().length < 3 ||
+                !hasQuickstartSession}
             >
               <ShieldCheck size={16} /> Start guided setup
             </Button>
+
+            {#if !hasQuickstartSession}
+              <p class="text-xs text-yellow-200">
+                Start a quick session first so we can issue a temporary key.
+              </p>
+            {/if}
           </form>
         {:else if onboardingStep === "phrase" && $authStore.onboarding}
           <div class="space-y-4">
@@ -1398,6 +1548,7 @@
                 <Button
                   class="mt-4 w-full sm:w-auto"
                   variant="outline"
+                  disabled={highRiskBlocked}
                   onclick={() => {
                     authStore.clearError();
                     showScanner = true;
@@ -1405,6 +1556,13 @@
                 >
                   Launch camera scanner
                 </Button>
+
+                {#if highRiskBlocked}
+                  <p class="mt-3 text-xs text-yellow-200">
+                    Finish the secure setup to enable device handoff and other
+                    sensitive actions.
+                  </p>
+                {/if}
               </div>
             {/if}
           </div>
