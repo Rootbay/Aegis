@@ -26,6 +26,7 @@ import {
   type AuthPersistence,
   type TrustedDevice,
   type SecurityQuestion,
+  type SetupChecklist,
 } from "../persistenceService";
 import {
   createDeviceHandshake,
@@ -42,6 +43,7 @@ import {
 type AuthStatus =
   | "checking"
   | "needs_setup"
+  | "quickstart"
   | "setup_in_progress"
   | "locked"
   | "recovery_ack_required"
@@ -69,6 +71,8 @@ type AuthState = {
   status: AuthStatus;
   loading: boolean;
   error: string | null;
+  setupChecklist: SetupChecklist;
+  temporarySessionKey: string | null;
   onboarding: OnboardingState | null;
   pendingDeviceLogin: DeviceHandshakePayload | null;
   pendingRecoveryRotation: PendingRecoveryRotation | null;
@@ -80,6 +84,7 @@ type AuthState = {
   sessionTimeoutMinutes: number;
   trustedDevices: TrustedDevice[];
   securityQuestionsConfigured: boolean;
+  highRiskBlocked: boolean;
 };
 
 export const MIN_PASSWORD_LENGTH = 12;
@@ -90,6 +95,12 @@ const initialState: AuthState = {
   status: "checking",
   loading: true,
   error: null,
+  setupChecklist: {
+    quickstart: false,
+    recoverySaved: false,
+    totpVerified: false,
+  },
+  temporarySessionKey: null,
   onboarding: null,
   pendingDeviceLogin: null,
   pendingRecoveryRotation: null,
@@ -101,9 +112,37 @@ const initialState: AuthState = {
   sessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT,
   trustedDevices: [],
   securityQuestionsConfigured: false,
+  highRiskBlocked: true,
 };
 
 const { subscribe, update } = writable<AuthState>(initialState);
+
+const resolveChecklist = (persisted?: AuthPersistence): SetupChecklist => ({
+  quickstart: persisted?.setupChecklist?.quickstart ?? false,
+  recoverySaved:
+    persisted?.setupChecklist?.recoverySaved ??
+    Boolean(persisted?.recoveryEnvelope && persisted?.recoveryHash),
+  totpVerified:
+    persisted?.setupChecklist?.totpVerified ?? Boolean(persisted?.totpSecret),
+});
+
+const computeHighRiskBlocked = (checklist: SetupChecklist) =>
+  !(checklist.recoverySaved && checklist.totpVerified);
+
+const createTemporarySessionKey = () => {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+};
 
 const validatePassword = (
   password: string,
@@ -183,6 +222,9 @@ const bootstrap = async () => {
   try {
     const identityExists = await invoke<boolean>("is_identity_created");
     const persisted = getAuthPersistence();
+    const checklist = resolveChecklist(persisted);
+    const temporarySessionKey = persisted.temporarySessionKey ?? null;
+    const highRiskBlocked = computeHighRiskBlocked(checklist);
     const hasCredentials = Boolean(
       persisted.passwordHash &&
         persisted.recoveryEnvelope &&
@@ -211,15 +253,22 @@ const bootstrap = async () => {
       const passwordPolicy: PasswordPolicy = identityExists
         ? "legacy_allowed"
         : "enhanced";
+      const nextStatus =
+        temporarySessionKey && checklist.quickstart
+          ? "quickstart"
+          : "needs_setup";
       update((state) => ({
         ...state,
-        status: "needs_setup",
+        status: nextStatus,
         loading: false,
         requireTotpOnUnlock: false,
         passwordPolicy,
         accountLocked: false,
         accountLockedUntil: null,
         failedAttempts: 0,
+        setupChecklist: checklist,
+        temporarySessionKey,
+        highRiskBlocked,
       }));
       return;
     }
@@ -235,6 +284,9 @@ const bootstrap = async () => {
       failedAttempts: persisted.failedAttempts ?? 0,
       sessionTimeoutMinutes:
         persisted.sessionTimeoutMinutes ?? DEFAULT_SESSION_TIMEOUT,
+      setupChecklist: checklist,
+      temporarySessionKey,
+      highRiskBlocked,
     }));
   } catch (error) {
     console.error("Failed to bootstrap authentication:", error);
@@ -243,7 +295,66 @@ const bootstrap = async () => {
       loading: false,
       status: "needs_setup",
       error: "Failed to load authentication state.",
+      setupChecklist: initialState.setupChecklist,
+      highRiskBlocked: true,
+      temporarySessionKey: null,
     }));
+  }
+};
+
+const beginQuickstart = async (username: string) => {
+  const trimmed = username.trim();
+  if (!trimmed) {
+    throw new Error("Username is required.");
+  }
+
+  update((state) => ({ ...state, loading: true, error: null }));
+
+  try {
+    const temporarySessionKey = createTemporarySessionKey();
+    const setupChecklist: SetupChecklist = {
+      quickstart: true,
+      recoverySaved: false,
+      totpVerified: false,
+    };
+
+    await userStore.initialize(temporarySessionKey, { username: trimmed });
+
+    setAuthPersistence({
+      username: trimmed,
+      temporarySessionKey,
+      setupChecklist,
+      requireTotpOnUnlock: false,
+      sessionTimeoutMinutes: DEFAULT_SESSION_TIMEOUT,
+      trustedDevices: [],
+    });
+
+    update((state) => ({
+      ...state,
+      status: "quickstart",
+      loading: false,
+      error: null,
+      temporarySessionKey,
+      setupChecklist,
+      onboarding: null,
+      highRiskBlocked: computeHighRiskBlocked(setupChecklist),
+      passwordPolicy:
+        state.passwordPolicy === "legacy_allowed"
+          ? state.passwordPolicy
+          : "enhanced",
+    }));
+
+    toasts.addToast(
+      "Quick start ready. Finish secure setup to unlock everything.",
+      "info",
+    );
+
+    return temporarySessionKey;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to start quick start.";
+    update((state) => ({ ...state, loading: false, error: message }));
+    throw error;
   }
 };
 
@@ -270,6 +381,7 @@ const beginOnboarding = (username: string) => {
       totpUri,
     },
     error: null,
+    highRiskBlocked: true,
   }));
   return { recoveryPhrase, confirmationIndices, totpUri, totpSecret };
 };
@@ -293,11 +405,19 @@ const saveOnboardingPassword = (password: string) => {
 };
 
 const cancelOnboarding = () => {
+  const persisted = getAuthPersistence();
+  const checklist = resolveChecklist(persisted);
+  const temporarySessionKey = persisted.temporarySessionKey ?? null;
+  const status =
+    temporarySessionKey && checklist.quickstart ? "quickstart" : "needs_setup";
   update((state) => ({
     ...state,
     onboarding: null,
-    status: "needs_setup",
+    status,
     error: null,
+    setupChecklist: checklist,
+    temporarySessionKey,
+    highRiskBlocked: computeHighRiskBlocked(checklist),
   }));
 };
 
@@ -353,6 +473,24 @@ const completeOnboarding = async ({
     const recoveryEnvelope = await encryptWithSecret(phraseKey, password);
     const backupCodes = generateBackupCodes(10);
 
+    if (
+      current.temporarySessionKey &&
+      current.temporarySessionKey !== password
+    ) {
+      await invoke("rekey_identity", {
+        old_password: current.temporarySessionKey,
+        new_password: password,
+      });
+    }
+
+    const completedChecklist: SetupChecklist = {
+      quickstart:
+        current.setupChecklist.quickstart ||
+        Boolean(current.temporarySessionKey),
+      recoverySaved: true,
+      totpVerified: true,
+    };
+
     await userStore.initialize(password, { username });
 
     const currentUser = get(userStore).me;
@@ -372,6 +510,8 @@ const completeOnboarding = async ({
       requireTotpOnUnlock: false,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
+      setupChecklist: completedChecklist,
+      temporarySessionKey: null,
     });
 
     update((state) => ({
@@ -383,6 +523,9 @@ const completeOnboarding = async ({
       onboarding: null,
       requireTotpOnUnlock: false,
       passwordPolicy: "unicode_required",
+      setupChecklist: completedChecklist,
+      temporarySessionKey: null,
+      highRiskBlocked: computeHighRiskBlocked(completedChecklist),
     }));
     toasts.addToast("Security setup complete. Welcome to Aegis.", "success");
   } catch (error) {
@@ -479,6 +622,9 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
       trustedDevices: updatedDevices,
     }));
 
+    const currentPersistence = getAuthPersistence();
+    const checklist = resolveChecklist(currentPersistence);
+
     update((state) => ({
       ...state,
       status: "authenticated",
@@ -488,6 +634,9 @@ const loginWithPassword = async (password: string, totpCode?: string) => {
       accountLocked: false,
       accountLockedUntil: null,
       failedAttempts: 0,
+      setupChecklist: checklist,
+      temporarySessionKey: currentPersistence.temporarySessionKey ?? null,
+      highRiskBlocked: computeHighRiskBlocked(checklist),
     }));
     toasts.addToast("Identity unlocked.", "success");
   } catch (error) {
@@ -567,6 +716,12 @@ const loginWithRecovery = async ({
       newPassword,
     );
 
+    const setupChecklist: SetupChecklist = {
+      quickstart: true,
+      recoverySaved: true,
+      totpVerified: Boolean(persisted.totpSecret),
+    };
+
     setAuthPersistence({
       username: persisted.username,
       passwordHash,
@@ -585,7 +740,11 @@ const loginWithRecovery = async ({
       accountLockedUntil: null,
       createdAt: persisted.createdAt ?? new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
+      setupChecklist,
+      temporarySessionKey: null,
     });
+
+    const updatedChecklist = resolveChecklist({ ...persisted, setupChecklist });
 
     update((state) => ({
       ...state,
@@ -598,6 +757,9 @@ const loginWithRecovery = async ({
       accountLocked: false,
       accountLockedUntil: null,
       failedAttempts: 0,
+      setupChecklist: updatedChecklist,
+      temporarySessionKey: null,
+      highRiskBlocked: computeHighRiskBlocked(updatedChecklist),
     }));
     toasts.addToast("Password reset successfully.", "success");
   } catch (error) {
@@ -681,6 +843,23 @@ const completeSecurityQuestionRecovery = async () => {
       username: updatedPersistence.username ?? "",
     });
 
+    const checklist = resolveChecklist({
+      ...updatedPersistence,
+      setupChecklist: {
+        quickstart: true,
+        recoverySaved: true,
+        totpVerified: Boolean(updatedPersistence.totpSecret),
+      },
+    });
+
+    updateAuthPersistence((current) => ({
+      ...current,
+      ...updatedPersistence,
+      setupChecklist: checklist,
+      temporarySessionKey: null,
+      lastLoginAt: new Date().toISOString(),
+    }));
+
     update((state) => ({
       ...state,
       status: "authenticated",
@@ -692,6 +871,9 @@ const completeSecurityQuestionRecovery = async () => {
       accountLockedUntil: null,
       failedAttempts: 0,
       pendingRecoveryRotation: null,
+      setupChecklist: checklist,
+      temporarySessionKey: null,
+      highRiskBlocked: computeHighRiskBlocked(checklist),
     }));
     toasts.addToast(
       "Account recovered successfully. Store your new recovery phrase safely.",
@@ -705,6 +887,15 @@ const completeSecurityQuestionRecovery = async () => {
     console.error("Finalizing security question recovery failed:", error);
     update((state) => ({ ...state, loading: false, error: message }));
     throw error;
+  }
+};
+
+const guardHighRiskAction = (actionLabel: string) => {
+  const { highRiskBlocked } = get({ subscribe });
+  if (highRiskBlocked) {
+    throw new Error(
+      `${actionLabel} is blocked until you finish saving your recovery phrase and enabling 2FA.`,
+    );
   }
 };
 
@@ -735,6 +926,8 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
 
     setAuthPersistence(updatedPersistence);
 
+    const checklist = resolveChecklist(updatedPersistence);
+
     update((state) => ({
       ...state,
       status: "authenticated",
@@ -743,6 +936,9 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
       pendingRecoveryRotation: null,
       pendingDeviceLogin: null,
       requireTotpOnUnlock: totpRequirement,
+      setupChecklist: checklist,
+      temporarySessionKey: updatedPersistence.temporarySessionKey ?? null,
+      highRiskBlocked: computeHighRiskBlocked(checklist),
     }));
     toasts.addToast("Device approved and authenticated.", "success");
   } catch (error) {
@@ -755,11 +951,13 @@ const loginWithDeviceHandshake = async (totpCode: string) => {
 };
 
 const generateDeviceHandshake = async (totpCode: string): Promise<string> => {
+  guardHighRiskAction("Device handoff");
   const persisted = getAuthPersistence();
   return createDeviceHandshake({ totpCode, persisted });
 };
 
 const revealTotpSecret = async (totpCode: string) => {
+  guardHighRiskAction("Revealing the authenticator secret");
   const persisted = getAuthPersistence();
   if (!persisted.totpSecret || !persisted.username) {
     throw new Error("2FA has not been configured yet.");
@@ -788,6 +986,8 @@ const resetForTests = () => {
 };
 
 const logout = () => {
+  const persisted = getAuthPersistence();
+  const checklist = resolveChecklist(persisted);
   userStore.reset();
   update((state) => ({
     ...state,
@@ -796,6 +996,9 @@ const logout = () => {
     pendingDeviceLogin: null,
     pendingRecoveryRotation: null,
     error: null,
+    setupChecklist: checklist,
+    temporarySessionKey: persisted.temporarySessionKey ?? null,
+    highRiskBlocked: computeHighRiskBlocked(checklist),
   }));
   toasts.addToast("Logged out successfully.", "info");
 };
@@ -832,6 +1035,7 @@ const removeTrustedDevice = (deviceId: string) => {
 export const authStore = {
   subscribe,
   bootstrap,
+  beginQuickstart,
   beginOnboarding,
   saveOnboardingPassword,
   cancelOnboarding,
