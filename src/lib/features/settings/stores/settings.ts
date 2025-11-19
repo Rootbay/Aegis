@@ -62,6 +62,7 @@ export interface AppSettings {
   enableSpamPrevention: boolean;
   enableReadReceipts: boolean;
   enableTypingIndicators: boolean;
+  shareMeshPresence: boolean;
   showMessageAvatars: boolean;
   showMessageTimestamps: boolean;
   allowDataCollection: boolean;
@@ -133,6 +134,7 @@ export const defaultSettings: AppSettings = {
   enableSpamPrevention: true,
   enableReadReceipts: false,
   enableTypingIndicators: false,
+  shareMeshPresence: true,
   showMessageAvatars: true,
   showMessageTimestamps: true,
   allowDataCollection: true,
@@ -376,6 +378,26 @@ export const setEnableGroupMessageNotifications = createBooleanSetter(
 export const setEnableCrossDeviceSync = createBooleanSetter(
   "enableCrossDeviceSync",
 );
+export async function setShareMeshPresence(value: boolean) {
+  const previous = get(settings).shareMeshPresence;
+
+  if (previous === value) {
+    return;
+  }
+
+  updateAppSetting("shareMeshPresence", value);
+
+  try {
+    const invoke = await getInvoke();
+    if (invoke) {
+      await invoke("mark_self_presence_local", { isOnline: value });
+    }
+  } catch (error) {
+    console.error("Failed to update mesh presence sharing", error);
+    updateAppSetting("shareMeshPresence", previous);
+    throw error;
+  }
+}
 export async function setPreferWifiDirect(value: boolean) {
   const current = get(settings).preferWifiDirect;
 
