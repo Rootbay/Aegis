@@ -944,6 +944,30 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     typingTimeouts.set(chatId, timers);
   };
 
+  const clearTypingState = (chatId: string | null) => {
+    if (!chatId) {
+      return;
+    }
+
+    const timers = typingTimeouts.get(chatId);
+    if (timers) {
+      timers.forEach((timeout) => clearTimeout(timeout));
+      typingTimeouts.delete(chatId);
+    }
+
+    typingDispatchState.delete(chatId);
+    lastDispatchedReceiptByChatId.delete(chatId);
+
+    typingByChatIdStore.update((map) => {
+      if (!map.has(chatId)) {
+        return map;
+      }
+      const next = new Map(map);
+      next.delete(chatId);
+      return next;
+    });
+  };
+
   const loadServerChannelSelections = (): Map<string, string> => {
     if (typeof localStorage === "undefined") {
       return new Map();
@@ -4089,6 +4113,9 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     }
     const historyId =
       previousChatType === "server" ? previousChannelId : previousChatId;
+    if (historyId) {
+      clearTypingState(historyId);
+    }
     if (historyId) {
       dropChatHistory(historyId);
     }
