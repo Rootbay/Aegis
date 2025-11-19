@@ -3,16 +3,20 @@ import { get } from "svelte/store";
 import { createFriendStore } from "./friendStore";
 import { userCache } from "$lib/utils/cache";
 
-const { invokeMock, getInvokeMock, getUserSpy } = vi.hoisted(() => {
-  const invoke = vi.fn();
-  const getInvoke = vi.fn<() => Promise<typeof invoke | null>>();
-  const getUser = vi.fn();
-  return {
-    invokeMock: invoke,
-    getInvokeMock: getInvoke,
-    getUserSpy: getUser,
-  };
-});
+const { invokeMock, getInvokeMock, getUserSpy, toastShowErrorMock } = vi.hoisted(
+  () => {
+    const invoke = vi.fn();
+    const getInvoke = vi.fn<() => Promise<typeof invoke | null>>();
+    const getUser = vi.fn();
+    const toastShowError = vi.fn();
+    return {
+      invokeMock: invoke,
+      getInvokeMock: getInvoke,
+      getUserSpy: getUser,
+      toastShowErrorMock: toastShowError,
+    };
+  },
+);
 
 vi.mock("$services/tauri", () => ({
   getInvoke: () => getInvokeMock(),
@@ -28,12 +32,20 @@ vi.mock("$lib/stores/userStore", () => ({
   },
 }));
 
+vi.mock("$lib/stores/ToastStore", () => ({
+  toasts: {
+    addToast: vi.fn(),
+    showErrorToast: (message: string) => toastShowErrorMock(message),
+  },
+}));
+
 describe("friendStore.initialize", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     getInvokeMock.mockReset();
     getInvokeMock.mockResolvedValue(invokeMock);
     getUserSpy.mockReset();
+    toastShowErrorMock.mockReset();
     userCache.clear();
   });
 
@@ -87,5 +99,33 @@ describe("friendStore.initialize", () => {
     expect(getUserSpy).not.toHaveBeenCalled();
     expect(userCache.get("friend-1")).toMatchObject({ id: "friend-1" });
     expect(userCache.get("friend-2")).toMatchObject({ id: "friend-2" });
+  });
+
+  it("retains existing friends when initialization fails", async () => {
+    const existingFriend = {
+      id: "friend-existing",
+      name: "Existing Friend",
+      avatar: "https://example.com/friend-existing.png",
+      online: false,
+      status: "Offline",
+      timestamp: new Date().toISOString(),
+      messages: [],
+    };
+
+    getInvokeMock.mockResolvedValue(null);
+
+    const store = createFriendStore();
+    store.handleFriendsUpdate([existingFriend]);
+
+    await store.initialize();
+
+    const state = get(store);
+    expect(state.loading).toBe(false);
+    expect(state.friends).toHaveLength(1);
+    expect(state.friends[0].id).toBe(existingFriend.id);
+    expect(toastShowErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining("backend is unavailable"),
+    );
+    expect(invokeMock).not.toHaveBeenCalled();
   });
 });
