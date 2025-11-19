@@ -7,6 +7,7 @@ import { userStore } from "$lib/stores/userStore";
 import { userCache } from "$lib/utils/cache";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
 import { mutedFriendsStore } from "./mutedFriendsStore";
+import { toasts } from "$lib/stores/ToastStore";
 
 type FriendshipBackend = {
   friendship: {
@@ -477,14 +478,20 @@ export function createFriendStore(): FriendStore {
       const invokeFn: InvokeFn | null = await getInvoke();
       if (!invokeFn) {
         console.warn("Tauri invoke not available, cannot fetch friendships.");
-        set({ friends: [], loading: false });
+        toasts.showErrorToast(
+          "Unable to fetch friendships because the backend is unavailable.",
+        );
+        update((s) => ({ ...s, loading: false }));
         return;
       }
 
       const currentUser = get(userStore).me;
       if (!currentUser) {
         console.warn("User not loaded, cannot fetch friendships.");
-        set({ friends: [], loading: false });
+        toasts.showErrorToast(
+          "Unable to fetch friendships because the user is not loaded.",
+        );
+        update((s) => ({ ...s, loading: false }));
         return;
       }
 
@@ -506,7 +513,8 @@ export function createFriendStore(): FriendStore {
       });
     } catch (error) {
       console.error("Failed to fetch friendships:", error);
-      set({ friends: [], loading: false });
+      toasts.showErrorToast("Failed to fetch friendships. Please try again.");
+      update((s) => ({ ...s, loading: false }));
     }
   };
 
