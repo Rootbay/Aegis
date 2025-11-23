@@ -31,43 +31,57 @@ pub async fn rotate_group_key(
                 .await
                 .map_err(|e| e.to_string())?;
 
-            let mut slots = Vec::new();
-            for member in members {
-                if member.id == state.identity.peer_id().to_base58() {
-                    continue;
+            let identity = state.identity.clone();
+            let server_id_clone = server_id.clone();
+            let channel_id_clone = channel_id.clone();
+            let my_id = identity.peer_id().to_base58();
+
+            let bytes = tokio::task::spawn_blocking(move || {
+                let mut slots = Vec::new();
+                for member in members {
+                    if member.id == my_id {
+                        continue;
+                    }
+
+                    let arc = e2ee::init_global_manager();
+                    let mut mgr = arc.lock();
+                    let pkt = mgr
+                        .encrypt_for(&member.id, &key)
+                        .map_err(|e| format!("E2EE encrypt error: {e}"))?;
+                    slots.push(aegis_protocol::EncryptedDmSlot {
+                        recipient: member.id,
+                        init: pkt.init,
+                        enc_header: pkt.enc_header,
+                        enc_content: pkt.enc_content,
+                    });
                 }
 
-                let arc = e2ee::init_global_manager();
-                let mut mgr = arc.lock();
-                let pkt = mgr
-                    .encrypt_for(&member.id, &key)
-                    .map_err(|e| format!("E2EE encrypt error: {e}"))?;
-                slots.push(aegis_protocol::EncryptedDmSlot {
-                    recipient: member.id,
-                    init: pkt.init,
-                    enc_header: pkt.enc_header,
-                    enc_content: pkt.enc_content,
-                });
-            }
-
-            let issuer_id = state.identity.peer_id().to_base58();
-            let payload =
-                bincode::serialize(&(issuer_id.clone(), &server_id, &channel_id, epoch, &slots))
-                    .map_err(|e| e.to_string())?;
-            let signature = state
-                .identity
-                .keypair()
-                .sign(&payload)
+                let issuer_id = my_id;
+                let payload = bincode::serialize(&(
+                    issuer_id,
+                    &server_id_clone,
+                    &channel_id_clone,
+                    epoch,
+                    &slots,
+                ))
                 .map_err(|e| e.to_string())?;
+                let signature = identity
+                    .keypair()
+                    .sign(&payload)
+                    .map_err(|e| e.to_string())?;
 
-            let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate {
-                server_id,
-                channel_id,
-                epoch,
-                slots,
-                signature: Some(signature),
-            };
-            let bytes = bincode::serialize(&aep_msg).map_err(|e| e.to_string())?;
+                let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+                    server_id: server_id_clone,
+                    channel_id: channel_id_clone,
+                    epoch,
+                    slots,
+                    signature: Some(signature),
+                };
+                bincode::serialize(&aep_msg).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+
             state
                 .network_tx
                 .send(bytes)
@@ -102,40 +116,56 @@ pub async fn send_encrypted_group_message(
                 reply_snapshot_author,
                 reply_snapshot_snippet,
             };
-            let serialized_payload = bincode::serialize(&payload).map_err(|e| e.to_string())?;
 
-            let (epoch, nonce, ciphertext) = {
-                let arc = e2ee::init_global_manager();
-                let mgr = arc.lock();
-                mgr.encrypt_group_message(&server_id, &channel_id, &serialized_payload)
+            let identity = state.identity.clone();
+            let server_id_clone = server_id.clone();
+            let channel_id_clone = channel_id.clone();
+            let my_id = identity.peer_id().to_base58();
+            let my_id_clone = my_id.clone();
+
+            let bytes = tokio::task::spawn_blocking(move || {
+                let serialized_payload = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+
+                let (epoch, nonce, ciphertext) = {
+                    let arc = e2ee::init_global_manager();
+                    let mgr = arc.lock();
+                    mgr.encrypt_group_message(
+                        &server_id_clone,
+                        &channel_id_clone,
+                        &serialized_payload,
+                    )
                     .map_err(|e| format!("Group E2EE: {e}"))?
-            };
+                };
 
-            let payload = bincode::serialize(&(
-                state.identity.peer_id().to_base58(),
-                &server_id,
-                &channel_id,
-                epoch,
-                &nonce,
-                &ciphertext,
-            ))
-            .map_err(|e| e.to_string())?;
-            let sig = state
-                .identity
-                .keypair()
-                .sign(&payload)
+                let payload_bytes = bincode::serialize(&(
+                    my_id_clone.clone(),
+                    &server_id_clone,
+                    &channel_id_clone,
+                    epoch,
+                    &nonce,
+                    &ciphertext,
+                ))
                 .map_err(|e| e.to_string())?;
 
-            let msg = aegis_protocol::AepMessage::EncryptedGroupMessage {
-                sender: state.identity.peer_id().to_base58(),
-                server_id,
-                channel_id,
-                epoch,
-                nonce,
-                ciphertext,
-                signature: Some(sig),
-            };
-            let bytes = bincode::serialize(&msg).map_err(|e| e.to_string())?;
+                let sig = identity
+                    .keypair()
+                    .sign(&payload_bytes)
+                    .map_err(|e| e.to_string())?;
+
+                let msg = aegis_protocol::AepMessage::EncryptedGroupMessage {
+                    sender: my_id_clone,
+                    server_id: server_id_clone,
+                    channel_id: channel_id_clone,
+                    epoch,
+                    nonce,
+                    ciphertext,
+                    signature: Some(sig),
+                };
+                bincode::serialize(&msg).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+
             state
                 .network_tx
                 .send(bytes)

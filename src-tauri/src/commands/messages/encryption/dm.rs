@@ -182,27 +182,38 @@ pub async fn send_encrypted_dm(
                 reply_snapshot_author,
                 reply_snapshot_snippet,
             };
-            let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
 
-            let pkt = {
-                let e2ee_arc = e2ee::init_global_manager();
-                let mut mgr = e2ee_arc.lock();
-                mgr.encrypt_for(&recipient_id, &plaintext)
-                    .map_err(|e| format!("E2EE encrypt error: {e}"))?
-            };
+            let identity = state.identity.clone();
+            let recipient_id_clone = recipient_id.clone();
+            let my_id_clone = my_id.clone();
 
-            let payload_sig_bytes = bincode::serialize(&(
-                my_id.clone(),
-                recipient_id.clone(),
-                &pkt.enc_header,
-                &pkt.enc_content,
-            ))
-            .map_err(|e| e.to_string())?;
-            let signature = state
-                .identity
-                .keypair()
-                .sign(&payload_sig_bytes)
+            let (pkt, signature) = tokio::task::spawn_blocking(move || {
+                let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+
+                let pkt = {
+                    let e2ee_arc = e2ee::init_global_manager();
+                    let mut mgr = e2ee_arc.lock();
+                    mgr.encrypt_for(&recipient_id_clone, &plaintext)
+                        .map_err(|e| format!("E2EE encrypt error: {e}"))?
+                };
+
+                let payload_sig_bytes = bincode::serialize(&(
+                    my_id_clone,
+                    recipient_id_clone,
+                    &pkt.enc_header,
+                    &pkt.enc_content,
+                ))
                 .map_err(|e| e.to_string())?;
+
+                let signature = identity
+                    .keypair()
+                    .sign(&payload_sig_bytes)
+                    .map_err(|e| e.to_string())?;
+
+                Ok::<_, String>((pkt, signature))
+            })
+            .await
+            .map_err(|e| e.to_string())??;
 
             let aep_message = aegis_protocol::AepMessage::EncryptedChatMessage {
                 sender: my_id,
@@ -212,7 +223,13 @@ pub async fn send_encrypted_dm(
                 enc_content: pkt.enc_content,
                 signature: Some(signature),
             };
-            let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+
+            let serialized_message = tokio::task::spawn_blocking(move || {
+                bincode::serialize(&aep_message).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+
             state
                 .network_tx
                 .send(serialized_message)
@@ -311,27 +328,38 @@ pub async fn send_encrypted_dm_with_attachments(
                 reply_snapshot_author,
                 reply_snapshot_snippet,
             };
-            let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
 
-            let pkt = {
-                let e2ee_arc = e2ee::init_global_manager();
-                let mut mgr = e2ee_arc.lock();
-                mgr.encrypt_for(&recipient_id, &plaintext)
-                    .map_err(|e| format!("E2EE encrypt error: {e}"))?
-            };
+            let identity = state.identity.clone();
+            let recipient_id_clone = recipient_id.clone();
+            let my_id_clone = my_id.clone();
 
-            let payload_sig_bytes = bincode::serialize(&(
-                my_id.clone(),
-                recipient_id.clone(),
-                &pkt.enc_header,
-                &pkt.enc_content,
-            ))
-            .map_err(|e| e.to_string())?;
-            let signature = state
-                .identity
-                .keypair()
-                .sign(&payload_sig_bytes)
+            let (pkt, signature) = tokio::task::spawn_blocking(move || {
+                let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+
+                let pkt = {
+                    let e2ee_arc = e2ee::init_global_manager();
+                    let mut mgr = e2ee_arc.lock();
+                    mgr.encrypt_for(&recipient_id_clone, &plaintext)
+                        .map_err(|e| format!("E2EE encrypt error: {e}"))?
+                };
+
+                let payload_sig_bytes = bincode::serialize(&(
+                    my_id_clone,
+                    recipient_id_clone,
+                    &pkt.enc_header,
+                    &pkt.enc_content,
+                ))
                 .map_err(|e| e.to_string())?;
+
+                let signature = identity
+                    .keypair()
+                    .sign(&payload_sig_bytes)
+                    .map_err(|e| e.to_string())?;
+
+                Ok::<_, String>((pkt, signature))
+            })
+            .await
+            .map_err(|e| e.to_string())??;
 
             let aep_message = aegis_protocol::AepMessage::EncryptedChatMessage {
                 sender: my_id,
@@ -341,7 +369,13 @@ pub async fn send_encrypted_dm_with_attachments(
                 enc_content: pkt.enc_content,
                 signature: Some(signature),
             };
-            let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+
+            let serialized_message = tokio::task::spawn_blocking(move || {
+                bincode::serialize(&aep_message).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())??;
+
             state
                 .network_tx
                 .send(serialized_message)

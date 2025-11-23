@@ -84,7 +84,7 @@ pub async fn search_messages(
     let state = state_container.0.lock().await;
     let state = state.as_ref().ok_or("State not initialized")?;
 
-    let mut results = database::search_messages(
+    let mut results = aep::database::search_messages(
         &state.db_pool,
         &chat_id,
         query.as_deref(),
@@ -223,12 +223,19 @@ pub(super) async fn persist_and_broadcast_message(
         reply_snapshot_author: reply_snapshot_author.clone(),
         reply_snapshot_snippet: reply_snapshot_snippet.clone(),
     };
-    let chat_message_bytes = bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
-    let signature = state
-        .identity
-        .keypair()
-        .sign(&chat_message_bytes)
-        .map_err(|e| e.to_string())?;
+
+    let identity = state.identity.clone();
+    let (serialized_message, signature) = tokio::task::spawn_blocking(move || {
+        let chat_message_bytes =
+            bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
+        let signature = identity
+            .keypair()
+            .sign(&chat_message_bytes)
+            .map_err(|e| e.to_string())?;
+        Ok::<_, String>((chat_message_bytes, signature))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
 
     let aep_message = AepMessage::ChatMessage {
         id: message_id,
@@ -245,10 +252,16 @@ pub(super) async fn persist_and_broadcast_message(
         reply_snapshot_snippet,
         signature: Some(signature),
     };
-    let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+
+    let serialized_final = tokio::task::spawn_blocking(move || {
+        bincode::serialize(&aep_message).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
     state
         .network_tx
-        .send(serialized_message)
+        .send(serialized_final)
         .await
         .map_err(|e| e.to_string())
 }
