@@ -213,7 +213,9 @@
     if (participant.userId === localUserId) {
       return localMedia.videoEnabled;
     }
-    return Boolean(participant.videoStream || participant.screenShareStream);
+    return Boolean(
+      participant.remoteStream || participant.screenShareStream,
+    );
   }
 
   function handleParticipantKey(event: KeyboardEvent, userId: string) {
@@ -377,9 +379,17 @@
                     playsinline
                     class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
                   ></video>
-                {:else if participant.videoStream}
+                {:else if participant.remoteStream}
                   <video
-                    use:mediaStream={participant.videoStream}
+                    use:mediaStream={participant.remoteStream}
+                    autoplay
+                    muted
+                    playsinline
+                    class="h-28 w-28 rounded-full border border-border/50 object-cover object-center"
+                  ></video>
+                {:else if participant.screenShareStream}
+                  <video
+                    use:mediaStream={participant.screenShareStream}
                     autoplay
                     muted
                     playsinline

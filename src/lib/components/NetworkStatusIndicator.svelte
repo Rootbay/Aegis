@@ -53,27 +53,32 @@
 
   const state = $derived(() => $connectivityState);
   const statusMessage = $derived(() => $connectivityStatusMessage);
-  const statusMeta = $derived(() => STATUS_META[state.status] ?? STATUS_META.initializing);
+  const statusMeta = $derived(() => {
+    const current = state();
+    return STATUS_META[current.status] ?? STATUS_META.initializing;
+  });
 
   const meshSummary = $derived(() => {
-    const peersLabel = `${state.meshPeers} mesh / ${state.totalPeers} total peers`;
+    const current = state();
+    const peersLabel = `${current.meshPeers} mesh / ${current.totalPeers} total peers`;
     const relayLabel =
-      state.activeRelayCount > 0
-        ? `${state.activeRelayCount} relay${state.activeRelayCount === 1 ? "" : "s"}`
+      current.activeRelayCount > 0
+        ? `${current.activeRelayCount} relay${current.activeRelayCount === 1 ? "" : "s"}`
         : null;
     return [peersLabel, relayLabel].filter(Boolean).join(" • ");
   });
 
   const bridgeBadge = $derived(() => {
-    if (state.gatewayStatus.forwarding) {
-      const peers = state.gatewayStatus.upstreamPeers;
+    const current = state();
+    if (current.gatewayStatus.forwarding) {
+      const peers = current.gatewayStatus.upstreamPeers;
       const label = peers === 1 ? "uplink" : "uplinks";
       return `Bridge active (${peers} ${label})`;
     }
-    if (state.gatewayStatus.bridgeModeEnabled) {
+    if (current.gatewayStatus.bridgeModeEnabled) {
       return "Bridge enabled";
     }
-    if (state.bridgeSuggested) {
+    if (current.bridgeSuggested) {
       return "Bridge requested";
     }
     return null;
@@ -85,23 +90,28 @@
 <TooltipProvider delayDuration={150}>
   <div class="flex flex-col gap-2 border-b border-border/60 bg-muted/40 px-4 py-2">
     <div class="flex flex-wrap items-center gap-2">
-      {@const { icon: StatusIcon, label, tone, description } = statusMeta()}
-      <Badge variant={tone} class="flex items-center gap-1">
-        <StatusIcon class="size-3" />
-        {label}
-      </Badge>
-      {#if bridgeBadge()}
-        <Badge variant="secondary" class="flex items-center gap-1">
-          <Bolt class="size-3" />
-          {bridgeBadge()}
+      {#if true}
+        {@const meta = statusMeta()}
+        {@const StatusIcon = meta.icon}
+        <Badge variant={meta.tone} class="flex items-center gap-1">
+          <StatusIcon class="size-3" />
+          {meta.label}
         </Badge>
+        {#if bridgeBadge()}
+          <Badge variant="secondary" class="flex items-center gap-1">
+            <Bolt class="size-3" />
+            {bridgeBadge()}
+          </Badge>
+        {/if}
+        <Tooltip>
+          <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p class="max-w-xs text-sm text-foreground">
+              {meta.description}
+            </p>
+          </TooltipContent>
+        </Tooltip>
       {/if}
-      <Tooltip>
-        <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p class="max-w-xs text-sm text-foreground">{description}</p>
-        </TooltipContent>
-      </Tooltip>
       <Tooltip>
         <TooltipTrigger class="flex items-center gap-1 text-xs text-muted-foreground">
           <Shield class="size-3" />

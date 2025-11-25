@@ -18,10 +18,7 @@
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import type { Friend } from "$lib/features/friends/models/Friend";
-  import {
-    FriendshipBackend,
-    type FriendshipRecord,
-  } from "$lib/features/friends/models/friendship";
+  import type { FriendshipBackend, FriendshipRecord } from "$lib/features/friends/models/friendship";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type FriendStatus =

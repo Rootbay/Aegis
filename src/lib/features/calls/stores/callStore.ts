@@ -2329,6 +2329,10 @@ function createCallStore() {
     setLocalVideoEnabled(true);
   }
 
+  function getLocalMediaStream(): MediaStream | null {
+    return activeStream;
+  }
+
   function endCall(reason = "Call ended") {
     const state = get(store);
     if (!state.activeCall) {
@@ -2410,6 +2414,7 @@ function createCallStore() {
     disableCamera,
     enableCamera,
     toggleCamera,
+    getLocalMediaStream,
     toggleScreenShare,
     stopScreenShare,
     describeStatus: (call: ActiveCall | null) => describeCallStatus(call),
