@@ -225,14 +225,14 @@ pub(super) async fn persist_and_broadcast_message(
     };
 
     let identity = state.identity.clone();
-    let (serialized_message, signature) = tokio::task::spawn_blocking(move || {
+    let signature = tokio::task::spawn_blocking(move || {
         let chat_message_bytes =
             bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
         let signature = identity
             .keypair()
             .sign(&chat_message_bytes)
             .map_err(|e| e.to_string())?;
-        Ok::<_, String>((chat_message_bytes, signature))
+        Ok::<_, String>(signature)
     })
     .await
     .map_err(|e| e.to_string())??;

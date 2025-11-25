@@ -176,8 +176,7 @@ function buildCounterpartUser(
   const avatar =
     trimmedAvatar.length > 0 ? trimmedAvatar : FALLBACK_AVATAR(counterpartId);
 
-  const statusMessageSource =
-    counterpart?.statusMessage ?? counterpart?.status_message ?? null;
+  const statusMessageSource = counterpart?.statusMessage ?? null;
   const trimmedStatusMessage = statusMessageSource?.trim?.() ?? "";
   const statusMessage =
     trimmedStatusMessage.length > 0 ? trimmedStatusMessage : null;
@@ -187,15 +186,8 @@ function buildCounterpartUser(
   const location =
     trimmedLocation.length > 0 ? trimmedLocation : null;
 
-  const online =
-    counterpart?.online ??
-    counterpart?.is_online ??
-    false;
-
-  const publicKey =
-    counterpart?.publicKey ??
-    counterpart?.public_key ??
-    undefined;
+  const online = counterpart?.online ?? counterpart?.isOnline ?? false;
+  const publicKey = counterpart?.publicKey ?? undefined;
 
   return {
     id: counterpartId,

@@ -15,27 +15,28 @@ export interface FriendshipRecord {
   updated_at?: string;
 }
 
-export type FriendshipCounterpartProfile = Partial<
-  Pick<
-    User,
-    | "id"
-    | "name"
-    | "avatar"
-    | "bio"
-    | "tag"
-    | "statusMessage"
-    | "location"
-    | "publicKey"
-    | "online"
-  >
->;
+export type FriendshipCounterpartProfile = Pick<User, "id"> &
+  Partial<
+    Pick<
+      User,
+      | "name"
+      | "avatar"
+      | "bio"
+      | "tag"
+      | "statusMessage"
+      | "location"
+      | "online"
+    >
+  > & {
+    publicKey?: string | null;
+  };
 
 export interface FriendshipCounterpart
   extends FriendshipCounterpartProfile {
   username?: string | null;
-  status_message?: string | null;
-  public_key?: string | null;
-  is_online?: boolean | null;
+  statusMessage?: string | null;
+  publicKey?: string | null;
+  isOnline?: boolean | null;
   status?: string | null;
 }
 
