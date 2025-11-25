@@ -9,6 +9,7 @@
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
   import type { ConnectivityBindings } from "$lib/layout/app/types";
+  import type { ConnectivityStatus } from "$lib/stores/connectivityStore";
   import { settings } from "$lib/features/settings/stores/settings";
   import { Bolt, RadioTower, Shield, Wifi, WifiOff } from "@lucide/svelte";
 
@@ -21,7 +22,7 @@
     description: string;
   };
 
-  const STATUS_META: Record<string, StatusMeta> = {
+  const STATUS_META = {
     online: {
       label: "Online",
       icon: Wifi,
@@ -46,10 +47,11 @@
       tone: "outline",
       description: "Negotiating transports…",
     },
-  } satisfies Record<string, StatusMeta>;
+  } satisfies Record<ConnectivityStatus, StatusMeta>;
 
   const connectivityState = connectivity.state;
   const connectivityStatusMessage = connectivity.statusMessage;
+  const connectivityFallbackMessage = connectivity.fallbackMessage;
 
   const state = $derived(() => $connectivityState);
   const statusMessage = $derived(() => $connectivityStatusMessage);
@@ -57,6 +59,7 @@
     const current = state();
     return STATUS_META[current.status] ?? STATUS_META.initializing;
   });
+  const fallbackMessage = $derived(() => $connectivityFallbackMessage);
 
   const meshSummary = $derived(() => {
     const current = state();
@@ -90,40 +93,53 @@
 <TooltipProvider delayDuration={150}>
   <div class="flex flex-col gap-2 border-b border-border/60 bg-muted/40 px-4 py-2">
     <div class="flex flex-wrap items-center gap-2">
-      {@const meta = statusMeta()}
-      {@const StatusIcon = meta.icon}
-      <Badge variant={meta.tone} class="flex items-center gap-1">
-        <StatusIcon class="size-3" />
-        {meta.label}
-      </Badge>
-      {#if bridgeBadge()}
-        <Badge variant="secondary" class="flex items-center gap-1">
-          <Bolt class="size-3" />
-          {bridgeBadge()}
+      {#if true}
+        {@const meta = statusMeta()}
+        {@const StatusIcon = meta.icon}
+        <Badge variant={meta.tone} class="flex items-center gap-1">
+          <StatusIcon class="size-3" />
+          {meta.label}
         </Badge>
+        {#if bridgeBadge()}
+          <Badge variant="secondary" class="flex items-center gap-1">
+            <Bolt class="size-3" />
+            {bridgeBadge()}
+          </Badge>
+        {/if}
+        <Tooltip>
+          <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p class="max-w-xs text-sm text-foreground">
+              {meta.description}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger class="flex items-center gap-1 text-xs text-muted-foreground">
+            <Shield class="size-3" />
+            {presenceSharing() ? "Sharing presence" : "Presence hidden"}
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p class="max-w-xs text-sm text-foreground">
+              {presenceSharing()
+                ? "Peers can discover you faster on the mesh."
+                : "Discovery is limited to save power and protect privacy."}
+            </p>
+          </TooltipContent>
+        </Tooltip>
       {/if}
-      <Tooltip>
-        <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p class="max-w-xs text-sm text-foreground">
-            {meta.description}
-          </p>
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger class="flex items-center gap-1 text-xs text-muted-foreground">
-          <Shield class="size-3" />
-          {presenceSharing() ? "Sharing presence" : "Presence hidden"}
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          <p class="max-w-xs text-sm text-foreground">
-            {presenceSharing()
-              ? "Peers can discover you faster on the mesh."
-              : "Discovery is limited to save power and protect privacy."}
-          </p>
-        </TooltipContent>
-      </Tooltip>
     </div>
-    <p class="text-xs text-muted-foreground">{statusMessage()}</p>
+    <p class="text-xs text-muted-foreground" role="status" aria-live="polite">
+      {statusMessage()}
+    </p>
+    {#if fallbackMessage()}
+      <p
+        class="text-[0.65rem] text-amber-300"
+        role="status"
+        aria-live="assertive"
+      >
+        {fallbackMessage()}
+      </p>
+    {/if}
   </div>
 </TooltipProvider>
