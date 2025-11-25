@@ -76,6 +76,7 @@
     matchNormalizedMessages,
     parseSearchQuery,
     type MessageContentCache,
+    type ParsedSearchFilters,
   } from "$lib/features/chat/utils/chatSearch";
   import { mergeAttachments } from "$lib/features/chat/utils/attachments";
   import { callStore } from "$lib/features/calls/stores/callStore";
@@ -2887,10 +2888,17 @@
     manualHandled: number;
   };
   let activeSearchController: RemoteSearchController | null = null;
+  type ChatSearchLifecycleState = {
+    query: string;
+    searching: boolean;
+    searchRequestId: number;
+    loadMoreRequests: number;
+  };
+  let lastSearchLifecycle: ChatSearchLifecycleState | null = null;
+  let lastLifecycleChatId: string | null = null;
 
   const cancelActiveSearch = () => {
     if (activeSearchController) {
-      chatSearchStore.setSearchLoading(activeSearchController.id, false);
       activeSearchController.cancelled = true;
       activeSearchController = null;
     }
@@ -2997,6 +3005,31 @@
     }
   }
 
+  function matchesEqual(a: number[], b: number[]): boolean {
+    if (a === b) return true;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  function hasActiveSearchFilters(filters: ParsedSearchFilters): boolean {
+    return (
+      filters.pinned !== undefined ||
+      (filters.from?.length ?? 0) > 0 ||
+      (filters.mentions?.length ?? 0) > 0 ||
+      (filters.has?.length ?? 0) > 0 ||
+      (filters.in?.length ?? 0) > 0 ||
+      (filters.authorType?.length ?? 0) > 0 ||
+      filters.before !== undefined ||
+      filters.after !== undefined
+    );
+  }
+
+  let prevSearchMatches: number[] = [];
+  let pendingMatchUpdate: number[] | null = null;
+
   let chatSearchMatches = $derived(() => {
     if (!chat?.id) {
       return [];
@@ -3009,30 +3042,91 @@
   });
 
   $effect(() => {
-    chatSearchStore.setMatches(chatSearchMatches());
-  });
+    const trimmedQuery = normalizedQuery.trim();
+    const filters = activeSearchFilters;
+    const searchActive =
+      trimmedQuery.length > 0 || hasActiveSearchFilters(filters);
 
-  $effect(() => {
-    const searchState = $chatSearchStore;
-    const chatId = chat?.id ?? null;
-    if (!chatId) {
-      cancelActiveSearch();
+    if (!searchActive) {
+      if (prevSearchMatches.length === 0) {
+        pendingMatchUpdate = null;
+        return;
+      }
+
+      prevSearchMatches = [];
+      pendingMatchUpdate = [];
+      queueMicrotask(() => {
+        if (!pendingMatchUpdate) {
+          return;
+        }
+        chatSearchStore.setMatches(pendingMatchUpdate);
+        pendingMatchUpdate = null;
+      });
       return;
     }
 
-    const trimmed = searchState.query.trim();
-    if (!searchState.searching || trimmed.length === 0) {
-      const requestId = searchState.searchRequestId;
-      if (searchState.loading) {
-        chatSearchStore.setSearchLoading(requestId, false);
+    const matches = chatSearchMatches();
+    if (matchesEqual(matches, prevSearchMatches)) {
+      return;
+    }
+    const stableMatches = matches.slice();
+    prevSearchMatches = stableMatches;
+    pendingMatchUpdate = stableMatches;
+    queueMicrotask(() => {
+      if (!pendingMatchUpdate) {
+        return;
       }
+      chatSearchStore.setMatches(pendingMatchUpdate);
+      pendingMatchUpdate = null;
+    });
+  });
+
+  $effect(() => {
+    const chatId = chat?.id ?? null;
+    if (!chatId) {
       cancelActiveSearch();
+      lastSearchLifecycle = null;
+      lastLifecycleChatId = null;
+      return;
+    }
+
+    if (chatId !== lastLifecycleChatId) {
+      lastSearchLifecycle = null;
+      lastLifecycleChatId = chatId;
+    }
+
+    const query = $chatSearchStore.query;
+    const searching = $chatSearchStore.searching;
+    const searchRequestId = $chatSearchStore.searchRequestId;
+    const loadMoreRequests = $chatSearchStore.loadMoreRequests;
+    const trimmed = query.trim();
+
+    if (
+      lastSearchLifecycle &&
+      lastSearchLifecycle.query === trimmed &&
+      lastSearchLifecycle.searching === searching &&
+      lastSearchLifecycle.searchRequestId === searchRequestId &&
+      lastSearchLifecycle.loadMoreRequests === loadMoreRequests
+    ) {
+      return;
+    }
+
+    lastSearchLifecycle = {
+      query: trimmed,
+      searching,
+      searchRequestId,
+      loadMoreRequests,
+    };
+
+    if (!searching || trimmed.length === 0) {
+      cancelActiveSearch();
+      lastSearchLifecycle = null;
       return;
     }
 
     if (
       activeSearchController &&
-      activeSearchController.id === searchState.searchRequestId
+      activeSearchController.id === searchRequestId
     ) {
       if (!activeSearchController.cancelled) {
         void fetchSearchPages(activeSearchController, {
@@ -3047,13 +3141,13 @@
     cancelActiveSearch();
 
     const controller: RemoteSearchController = {
-      id: searchState.searchRequestId,
+      id: searchRequestId,
       cancelled: false,
       cursor: null,
       hasMore: true,
       running: false,
       autoRemaining: REMOTE_SEARCH_INITIAL_PAGES,
-      manualHandled: searchState.loadMoreRequests,
+      manualHandled: loadMoreRequests,
     };
     activeSearchController = controller;
     void fetchSearchPages(controller, {

@@ -2219,12 +2219,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         offset: 0,
       });
       const fetched =
-        Array.isArray(fetchedResult) && fetchedResult.length > 0
+        Array.isArray(fetchedResult)
           ? fetchedResult.filter(
-              (item): item is BackendMessage => typeof item === "object" && item !== null,
+              (item): item is BackendMessage =>
+                typeof item === "object" && item !== null,
             )
           : [];
-      if (!Array.isArray(fetchedResult) || fetchedResult.length === 0) {
+      if (!Array.isArray(fetchedResult)) {
         console.warn(
           `[chatStore] Received ${typeof fetchedResult} from get_messages; treating as empty list.`,
           fetchedResult,
@@ -2663,13 +2664,16 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
             ...replyPayload,
           });
         } else {
-          await invoke("send_encrypted_group_message", {
-            message: backendContent,
-            channel_id: payload.channelId,
-            server_id: payload.chatId,
-            expires_at: expiresAt,
-            ...replyPayload,
-          });
+        await invoke("send_encrypted_group_message", {
+          message: backendContent,
+          channelId: payload.channelId,
+          channel_id: payload.channelId,
+          serverId: payload.chatId,
+          server_id: payload.chatId,
+          expiresAt: expiresAt,
+          expires_at: expiresAt,
+          ...replyPayload,
+        });
         }
       } catch (error) {
         encryptedFailed = true;
@@ -3320,13 +3324,13 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         offset: 0,
       });
       const fetched =
-        Array.isArray(fetchedResult) && fetchedResult.length > 0
+        Array.isArray(fetchedResult)
           ? fetchedResult.filter(
               (item): item is BackendMessage =>
                 typeof item === "object" && item !== null,
             )
           : [];
-      if (!Array.isArray(fetchedResult) || fetchedResult.length === 0) {
+      if (!Array.isArray(fetchedResult)) {
         console.warn(
           `[chatStore] Received ${typeof fetchedResult} from get_messages; treating as empty list.`,
           fetchedResult,
