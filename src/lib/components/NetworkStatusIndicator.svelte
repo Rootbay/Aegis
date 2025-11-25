@@ -65,7 +65,7 @@
       current.activeRelayCount > 0
         ? `${current.activeRelayCount} relay${current.activeRelayCount === 1 ? "" : "s"}`
         : null;
-    return [peersLabel, relayLabel].filter(Boolean).join(" • ");
+    return [peersLabel, relayLabel].filter(Boolean).join(" | ");
   });
 
   const bridgeBadge = $derived(() => {
@@ -90,28 +90,26 @@
 <TooltipProvider delayDuration={150}>
   <div class="flex flex-col gap-2 border-b border-border/60 bg-muted/40 px-4 py-2">
     <div class="flex flex-wrap items-center gap-2">
-      {#if true}
-        {@const meta = statusMeta()}
-        {@const StatusIcon = meta.icon}
-        <Badge variant={meta.tone} class="flex items-center gap-1">
-          <StatusIcon class="size-3" />
-          {meta.label}
+      {@const meta = statusMeta()}
+      {@const StatusIcon = meta.icon}
+      <Badge variant={meta.tone} class="flex items-center gap-1">
+        <StatusIcon class="size-3" />
+        {meta.label}
+      </Badge>
+      {#if bridgeBadge()}
+        <Badge variant="secondary" class="flex items-center gap-1">
+          <Bolt class="size-3" />
+          {bridgeBadge()}
         </Badge>
-        {#if bridgeBadge()}
-          <Badge variant="secondary" class="flex items-center gap-1">
-            <Bolt class="size-3" />
-            {bridgeBadge()}
-          </Badge>
-        {/if}
-        <Tooltip>
-          <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p class="max-w-xs text-sm text-foreground">
-              {meta.description}
-            </p>
-          </TooltipContent>
-        </Tooltip>
       {/if}
+      <Tooltip>
+        <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p class="max-w-xs text-sm text-foreground">
+            {meta.description}
+          </p>
+        </TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger class="flex items-center gap-1 text-xs text-muted-foreground">
           <Shield class="size-3" />
