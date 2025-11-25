@@ -28,6 +28,7 @@
     setRoutingQualityThreshold,
     setRoutingMaxHops,
   } from "$lib/features/settings/stores/settings";
+  import { runWithPendingFlag } from "$lib/utils/runWithPendingFlag";
   import type {
     RelayConfig,
     RelayScope,
@@ -47,6 +48,8 @@
   let enableResilientTransfers = $state(
     get(settings).enableResilientFileTransfer,
   );
+  let togglingWifiDirect = $state(false);
+  let togglingIntelligentRouting = $state(false);
   let routingUpdateInterval = $state(
     get(settings).aerpRouteUpdateIntervalSeconds,
   );
@@ -220,14 +223,6 @@
       setEnableCrossDeviceSync(enableCrossDeviceSync);
     }
 
-    if (current.preferWifiDirect !== preferWifiDirect) {
-      void setPreferWifiDirect(preferWifiDirect);
-    }
-
-    if (current.enableIntelligentMeshRouting !== enableIntelligentMeshRouting) {
-      void setEnableIntelligentMeshRouting(enableIntelligentMeshRouting);
-    }
-
     if (current.enableResilientFileTransfer !== enableResilientTransfers) {
       setResilientFileTransferEnabled(enableResilientTransfers);
     }
@@ -270,6 +265,18 @@
       return "warning" as const;
     }
     return "info" as const;
+  });
+
+  const bridgeStatusBadgeVariant = $derived(() => {
+    const tone = bridgeStatusTone();
+    switch (tone) {
+      case "warning":
+        return "secondary" as const;
+      case "info":
+        return "outline" as const;
+      default:
+        return "default" as const;
+    }
   });
 
   const bridgeStatusLabel = $derived(() => {
@@ -316,60 +323,111 @@
   });
 
   async function handleBridgeModeChange() {
-    if (togglingBridge) {
-      return;
-    }
-    togglingBridge = true;
     const desired = enableBridgeMode;
-    try {
-      const status = await setEnableBridgeMode(desired);
-      if (status) {
-        enableBridgeMode = status.bridgeModeEnabled;
-        if (status.lastError && !status.forwarding) {
+    await runWithPendingFlag(
+      () => togglingBridge,
+      (value) => (togglingBridge = value),
+      async () => {
+        try {
+          const status = await setEnableBridgeMode(desired);
+          if (status) {
+            enableBridgeMode = status.bridgeModeEnabled;
+            if (status.lastError && !status.forwarding) {
+              toasts.addToast(
+                `Bridge Mode enabled but encountered an uplink issue: ${status.lastError}`,
+                "warning",
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Failed to update Bridge Mode", error);
+          enableBridgeMode = get(settings).enableBridgeMode;
           toasts.addToast(
-            `Bridge Mode enabled but encountered an uplink issue: ${status.lastError}`,
-            "warning",
+            "Failed to update Bridge Mode. Please try again.",
+            "error",
           );
         }
-      }
-    } catch (error) {
-      console.error("Failed to update Bridge Mode", error);
-      enableBridgeMode = get(settings).enableBridgeMode;
-      toasts.addToast(
-        "Failed to update Bridge Mode. Please try again.",
-        "error",
-      );
-    } finally {
-      togglingBridge = false;
-    }
+      },
+    );
   }
 
   async function handlePresenceToggle() {
-    if (togglingPresence) {
-      return;
-    }
+    await runWithPendingFlag(
+      () => togglingPresence,
+      (value) => (togglingPresence = value),
+      async () => {
+        const desired = shareMeshPresence;
+        try {
+          await setShareMeshPresence(desired);
+          toasts.addToast(
+            desired
+              ? "Sharing mesh presence. Nearby peers can discover you faster."
+              : "Mesh presence hidden. Discovery may slow, but power use drops.",
+            desired ? "success" : "info",
+          );
+        } catch (error) {
+          console.error("Failed to update mesh presence sharing", error);
+          shareMeshPresence = get(settings).shareMeshPresence;
+          toasts.addToast(
+            "Couldn't update mesh presence sharing. Please try again.",
+            "error",
+          );
+        }
+      },
+    );
+  }
 
-    togglingPresence = true;
-    const desired = shareMeshPresence;
+  async function handlePreferWifiDirectToggle() {
+    await runWithPendingFlag(
+      () => togglingWifiDirect,
+      (value) => (togglingWifiDirect = value),
+      async () => {
+        const desired = preferWifiDirect;
+        try {
+          await setPreferWifiDirect(desired);
+          toasts.addToast(
+            desired
+              ? "Wi-Fi Direct prioritized for faster peer links."
+              : "Wi-Fi Direct preference saved; falling back to other transports.",
+            "success",
+          );
+        } catch (error) {
+          console.error("Failed to update Wi-Fi Direct preference", error);
+          preferWifiDirect = get(settings).preferWifiDirect;
+          toasts.addToast(
+            "Unable to save Wi-Fi Direct preference. Please try again.",
+            "error",
+          );
+        }
+      },
+    );
+  }
 
-    try {
-      await setShareMeshPresence(desired);
-      toasts.addToast(
-        desired
-          ? "Sharing mesh presence. Nearby peers can discover you faster."
-          : "Mesh presence hidden. Discovery may slow, but power use drops.",
-        desired ? "success" : "info",
-      );
-    } catch (error) {
-      console.error("Failed to update mesh presence sharing", error);
-      shareMeshPresence = get(settings).shareMeshPresence;
-      toasts.addToast(
-        "Couldn't update mesh presence sharing. Please try again.",
-        "error",
-      );
-    } finally {
-      togglingPresence = false;
-    }
+  async function handleIntelligentMeshRoutingToggle() {
+    await runWithPendingFlag(
+      () => togglingIntelligentRouting,
+      (value) => (togglingIntelligentRouting = value),
+      async () => {
+        const desired = enableIntelligentMeshRouting;
+        try {
+          await setEnableIntelligentMeshRouting(desired);
+          toasts.addToast(
+            desired
+              ? "Intelligent mesh routing enabled."
+              : "Intelligent mesh routing disabled.",
+            "success",
+          );
+        } catch (error) {
+          console.error("Failed to update mesh routing preference", error);
+          enableIntelligentMeshRouting =
+            get(settings).enableIntelligentMeshRouting;
+          toasts.addToast(
+            "Couldn't update mesh routing preference. Please try again.",
+            "error",
+          );
+        }
+      },
+    );
   }
 </script>
 
@@ -454,8 +512,9 @@
         class="shrink-0"
         bind:checked={preferWifiDirect}
         aria-label="Toggle Wi-Fi Direct preference"
+        disabled={togglingWifiDirect}
         onCheckedChange={() => {
-          void setPreferWifiDirect(preferWifiDirect);
+          void handlePreferWifiDirectToggle();
         }}
       />
     </section>
@@ -467,7 +526,7 @@
     <div class="mr-4 space-y-1">
       <div class="flex items-center gap-2">
         <Badge
-          variant={bridgeStatusTone() === "info" ? "default" : bridgeStatusTone()}
+          variant={bridgeStatusBadgeVariant()}
           class="rounded-full px-3 py-1 text-xs uppercase tracking-wide"
         >
           {bridgeStatusLabel()}
@@ -546,6 +605,10 @@
       class="shrink-0"
       bind:checked={enableIntelligentMeshRouting}
       aria-label="Toggle intelligent mesh routing"
+      disabled={togglingIntelligentRouting}
+      onCheckedChange={() => {
+        void handleIntelligentMeshRoutingToggle();
+      }}
     />
   </section>
 
