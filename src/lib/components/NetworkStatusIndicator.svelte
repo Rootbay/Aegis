@@ -8,6 +8,9 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
+  import { Button } from "$lib/components/ui/button";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import type { ConnectivityBindings } from "$lib/layout/app/types";
   import type { ConnectivityStatus } from "$lib/stores/connectivityStore";
   import { settings } from "$lib/features/settings/stores/settings";
@@ -45,13 +48,14 @@
       label: "Connecting",
       icon: RadioTower,
       tone: "outline",
-      description: "Negotiating transports…",
+      description: "Negotiating transports.",
     },
   } satisfies Record<ConnectivityStatus, StatusMeta>;
 
   const connectivityState = connectivity.state;
   const connectivityStatusMessage = connectivity.statusMessage;
   const connectivityFallbackMessage = connectivity.fallbackMessage;
+  const connectivityShowBridgePrompt = connectivity.showBridgePrompt;
 
   const state = $derived(() => $connectivityState);
   const statusMessage = $derived(() => $connectivityStatusMessage);
@@ -88,6 +92,13 @@
   });
 
   const presenceSharing = $derived(() => $settings.shareMeshPresence);
+  const showBridgePrompt = $derived(() => $connectivityShowBridgePrompt);
+
+  const networkSettingsUrl = resolve("/settings/network");
+
+  function openNetworkSettings() {
+    void goto(networkSettingsUrl);
+  }
 </script>
 
 <TooltipProvider delayDuration={150}>
@@ -105,6 +116,16 @@
             <Bolt class="size-3" />
             {bridgeBadge()}
           </Badge>
+        {/if}
+        {#if showBridgePrompt()}
+          <Button
+            variant="ghost"
+            size="sm"
+            class="h-7 px-2 text-xs text-amber-300 hover:text-amber-200 focus-visible:ring-amber-500/50"
+            onclick={openNetworkSettings}
+          >
+            Enable Bridge Mode
+          </Button>
         {/if}
         <Tooltip>
           <TooltipTrigger class="text-xs text-muted-foreground">{meshSummary()}</TooltipTrigger>
