@@ -14,6 +14,10 @@
   import { toasts } from "$lib/stores/ToastStore";
   import type { Server } from "$lib/features/servers/models/Server";
   import type { User } from "$lib/features/auth/models/User";
+  import type {
+    FriendshipBackend,
+    FriendshipRecord,
+  } from "$lib/features/friends/models/friendship";
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { getContext, onDestroy } from "svelte";
@@ -337,7 +341,7 @@
     if (!meId || !otherId) return;
     loadingMutualFriends = true;
     try {
-      const myFriendships: any[] = await invoke("get_friendships", {
+      const myFriendships = await invoke<FriendshipBackend[]>("get_friendships", {
         current_user_id: meId,
       });
       const otherFriendIds = await invoke<string[]>(
@@ -348,11 +352,16 @@
         },
       );
       const myFriendIds = new Set(
-        (myFriendships || []).map((f: any) =>
-          f.user_a_id === meId ? f.user_b_id : f.user_a_id,
-        ),
+        (myFriendships ?? [])
+          .map((entry) => entry.friendship)
+          .filter(
+            (friendship): friendship is FriendshipRecord => Boolean(friendship),
+          )
+          .map((friendship) =>
+            friendship.user_a_id === meId ? friendship.user_b_id : friendship.user_a_id,
+          ),
       );
-      const mutualIds: string[] = (otherFriendIds || []).filter((id) =>
+      const mutualIds: string[] = (otherFriendIds ?? []).filter((id) =>
         myFriendIds.has(id),
       );
       const users = await Promise.all(
@@ -412,12 +421,11 @@
         target_user_id: profileUser.id,
       });
       toasts.addToast("Friend request sent!", "success");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to send friend request:", error);
-      toasts.addToast(
-        error?.message || "Failed to send friend request.",
-        "error",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to send friend request.";
+      toasts.addToast(message, "error");
     }
   }
 
@@ -425,14 +433,19 @@
     try {
       const meId = $userStore.me?.id;
       if (!meId || !profileUser?.id) return;
-      const friendships: any[] = await invoke("get_friendships", {
+      const friendships = await invoke<FriendshipBackend[]>("get_friendships", {
         current_user_id: meId,
       });
-      const fs = friendships.find(
-        (f: any) =>
-          (f.user_a_id === meId && f.user_b_id === profileUser.id) ||
-          (f.user_b_id === meId && f.user_a_id === profileUser.id),
-      );
+      const fs = friendships
+        .map((entry) => entry.friendship)
+        .find(
+          (friendship) =>
+            friendship &&
+            ((friendship.user_a_id === meId &&
+              friendship.user_b_id === profileUser.id) ||
+              (friendship.user_b_id === meId &&
+                friendship.user_a_id === profileUser.id)),
+        );
       if (!fs) {
         toasts.addToast("Friendship not found.", "error");
         return;
@@ -441,9 +454,11 @@
       friendStore.removeFriend(profileUser.id);
       toasts.addToast("Friend removed.", "success");
       await friendStore.initialize();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to remove friend:", error);
-      toasts.addToast(error?.message || "Failed to remove friend.", "error");
+      const message =
+        error instanceof Error ? error.message : "Failed to remove friend.";
+      toasts.addToast(message, "error");
     }
   }
 
@@ -581,9 +596,11 @@
         default:
           console.log("Unhandled action:", action);
       }
-    } catch (e: any) {
-      console.error("User option failed:", action, e);
-      toasts.addToast(e?.message || "Action failed.", "error");
+    } catch (error) {
+      console.error("User option failed:", action, error);
+      const message =
+        error instanceof Error ? error.message : "Action failed.";
+      toasts.addToast(message, "error");
     } finally {
       showUserOptionsMenu = false;
     }
@@ -636,9 +653,13 @@
         : "Invite sent.";
       const tone = result.already_member ? "info" : "success";
       toasts.addToast(message, tone);
-    } catch (e: any) {
-      console.error("Failed to send server invite:", e);
-      toasts.addToast(e?.message || "Failed to send server invite.", "error");
+    } catch (error) {
+      console.error("Failed to send server invite:", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to send server invite.";
+      toasts.addToast(message, "error");
     } finally {
       sendingInvite = false;
       showInvitePicker = false;
@@ -823,7 +844,9 @@
       <div class="flex-1 p-6">
         <Tabs
           value={selectedTab}
-          onValueChange={(v) => (selectedTab = v as any)}
+          onValueChange={(value: "friends" | "servers" | "groups") =>
+            (selectedTab = value)
+          }
         >
           <TabsList>
             <TabsTrigger value="friends">Mutual Friends</TabsTrigger>

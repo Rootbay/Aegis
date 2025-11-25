@@ -18,6 +18,10 @@
   } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import type { Friend } from "$lib/features/friends/models/Friend";
+  import {
+    FriendshipBackend,
+    type FriendshipRecord,
+  } from "$lib/features/friends/models/friendship";
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
 
   type FriendStatus =
@@ -40,12 +44,24 @@
     avatarUrl?: string;
   };
 
-  type FriendshipRecord = {
-    id: string;
-    user_a_id: string;
-    user_b_id: string;
-    status: string;
-  };
+  type FriendshipCache = Map<string, FriendshipRecord>;
+
+  const FRIENDSHIP_PAIR_PREFIX = "friendship-pair:";
+  const friendshipCacheByUser = new Map<string, FriendshipCache>();
+  const friendshipFetchPromisesByUser = new Map<string, Promise<void>>();
+
+  function getFriendshipCache(userId: string): FriendshipCache {
+    let cache = friendshipCacheByUser.get(userId);
+    if (!cache) {
+      cache = new Map();
+      friendshipCacheByUser.set(userId, cache);
+    }
+    return cache;
+  }
+
+  function buildPairKey(a: string, b: string) {
+    return `${FRIENDSHIP_PAIR_PREFIX}${a}:${b}`;
+  }
 
   let { friend } = $props<{ friend: FriendWithMeta }>();
 
@@ -150,6 +166,26 @@
     }
   }
 
+  async function refreshFriendshipCache(userId: string) {
+    const cache = getFriendshipCache(userId);
+    const friendships = await invoke<FriendshipBackend[]>("get_friendships", {
+      current_user_id: userId,
+    });
+    for (const record of friendships ?? []) {
+      const friendship = record?.friendship;
+      if (!friendship?.id) {
+        continue;
+      }
+      cache.set(friendship.id, friendship);
+      const counterpartId =
+        friendship.user_a_id === userId ? friendship.user_b_id : friendship.user_a_id;
+      if (counterpartId) {
+        cache.set(buildPairKey(userId, counterpartId), friendship);
+        cache.set(buildPairKey(counterpartId, userId), friendship);
+      }
+    }
+  }
+
   async function ensureFriendship(): Promise<FriendshipRecord | null> {
     if (cachedFriendship?.id) {
       return cachedFriendship;
@@ -160,21 +196,37 @@
       toasts.addToast("Unable to resolve friendship details.", "error");
       return null;
     }
+    const cache = getFriendshipCache(meId);
+    const pairKey = buildPairKey(meId, targetId);
+
+    const cached =
+      (friend.friendshipId && cache.get(friend.friendshipId)) ?? cache.get(pairKey);
+    if (cached) {
+      cachedFriendship = cached;
+      return cached;
+    }
+
     try {
-      const friendships: FriendshipRecord[] = await invoke("get_friendships", {
-        current_user_id: meId,
-      });
-      const match =
-        friendships.find((f) => f.id === friend.friendshipId) ||
-        friendships.find(
-          (f) =>
-            (f.user_a_id === meId && f.user_b_id === targetId) ||
-            (f.user_b_id === meId && f.user_a_id === targetId),
-        );
-      if (match) {
-        cachedFriendship = match;
-        return match;
+      let fetchPromise = friendshipFetchPromisesByUser.get(meId);
+      if (!fetchPromise) {
+        fetchPromise = (async () => {
+          try {
+            await refreshFriendshipCache(meId);
+          } finally {
+            friendshipFetchPromisesByUser.delete(meId);
+          }
+        })();
+        friendshipFetchPromisesByUser.set(meId, fetchPromise);
       }
+      await fetchPromise;
+
+      const refreshed =
+        (friend.friendshipId && cache.get(friend.friendshipId)) ?? cache.get(pairKey);
+      if (refreshed) {
+        cachedFriendship = refreshed;
+        return refreshed;
+      }
+
       toasts.addToast("Friendship not found.", "error");
       return null;
     } catch (error) {
