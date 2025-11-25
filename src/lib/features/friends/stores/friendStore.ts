@@ -1,6 +1,7 @@
 import { writable, type Readable, get } from "svelte/store";
 import type { Friend, FriendStatus } from "$lib/features/friends/models/Friend";
 import type { User } from "$lib/features/auth/models/User";
+import { persistentStore } from "$lib/stores/persistentStore";
 import { getInvoke } from "$services/tauri";
 import type { InvokeFn } from "$services/tauri";
 import { userStore } from "$lib/stores/userStore";
@@ -226,6 +227,41 @@ function buildSpamTextForFriend(friend: Friend): string {
   return deduped.join(" ");
 }
 
+const FRIENDS_CACHE_KEY = "friends-cache-v1";
+const friendsCacheStore = persistentStore<Friend[]>(FRIENDS_CACHE_KEY, []);
+let cachedFriendsSnapshot: Friend[] = [];
+friendsCacheStore.subscribe((value) => {
+  cachedFriendsSnapshot = Array.isArray(value) ? value : [];
+});
+let persistenceEnabled = false;
+let lastPersistedSnapshot = "";
+
+function persistFriendsList(friends: Friend[]) {
+  if (!persistenceEnabled && friends.length === 0) {
+    return;
+  }
+
+  let payload: string;
+  try {
+    payload = JSON.stringify(friends);
+  } catch (error) {
+    console.warn("Failed to serialize friends cache payload", error);
+    return;
+  }
+
+  if (persistenceEnabled && payload === lastPersistedSnapshot) {
+    return;
+  }
+
+  try {
+    friendsCacheStore.set(friends);
+    persistenceEnabled = true;
+    lastPersistedSnapshot = payload;
+  } catch (error) {
+    console.warn("Failed to persist friends cache", error);
+  }
+}
+
 export function createFriendStore(): FriendStore {
   const { subscribe, set, update } = writable<FriendStoreState>({
     friends: [],
@@ -363,6 +399,7 @@ export function createFriendStore(): FriendStore {
       )
       .map((friend) => normalizeFriend(friend));
     set({ friends: normalized, loading: false });
+    persistFriendsList(normalized);
     void applySpamAnnotations(normalized);
   };
 
@@ -413,23 +450,24 @@ export function createFriendStore(): FriendStore {
       } else {
         next.push(normalized);
       }
+      persistFriendsList(next);
       return { ...s, friends: next };
     });
     void applySpamAnnotations([normalized]);
   };
 
   const removeFriend = (friendId: string) => {
-    update((s) => ({
-      ...s,
-      friends: s.friends.filter((f) => f.id !== friendId),
-    }));
+    update((s) => {
+      const next = s.friends.filter((f) => f.id !== friendId);
+      persistFriendsList(next);
+      return { ...s, friends: next };
+    });
   };
 
   const markFriendAsTrusted = (friendId: string) => {
     if (!friendId) return;
-    update((s) => ({
-      ...s,
-      friends: s.friends.map((friend) =>
+    update((s) => {
+      const next = s.friends.map((friend) =>
         friend.id === friendId
           ? normalizeFriend({
               ...friend,
@@ -438,8 +476,10 @@ export function createFriendStore(): FriendStore {
               spamDecision: "allowed",
             })
           : friend,
-      ),
-    }));
+      );
+      persistFriendsList(next);
+      return { ...s, friends: next };
+    });
   };
 
   const markFriendAsSpam = (
@@ -447,9 +487,8 @@ export function createFriendStore(): FriendStore {
     options: { score?: number; reasons?: string[] } = {},
   ) => {
     if (!friendId) return;
-    update((s) => ({
-      ...s,
-      friends: s.friends.map((friend) =>
+    update((s) => {
+      const next = s.friends.map((friend) =>
         friend.id === friendId
           ? normalizeFriend({
               ...friend,
@@ -463,12 +502,18 @@ export function createFriendStore(): FriendStore {
               spamReasons: options.reasons ?? friend.spamReasons,
             })
           : friend,
-      ),
-    }));
+      );
+      persistFriendsList(next);
+      return { ...s, friends: next };
+    });
   };
 
   const initialize = async () => {
-    update((s) => ({ ...s, loading: true }));
+    if (cachedFriendsSnapshot.length > 0) {
+      set({ friends: cachedFriendsSnapshot, loading: true });
+    } else {
+      update((s) => ({ ...s, loading: true }));
+    }
 
     try {
       const invokeFn: InvokeFn | null = await getInvoke();
@@ -503,6 +548,7 @@ export function createFriendStore(): FriendStore {
         .filter((friend): friend is Friend => friend !== null);
 
       set({ friends, loading: false });
+      persistFriendsList(friends);
       await applySpamAnnotations(friends, {
         invokeFn,
         currentUserId: currentUser.id,

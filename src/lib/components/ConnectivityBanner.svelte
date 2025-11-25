@@ -73,7 +73,7 @@
         )}%`,
       );
     }
-    return parts.join(" • ");
+    return parts.join(" · ");
   });
 
   const bridgeTone = $derived(() => {
