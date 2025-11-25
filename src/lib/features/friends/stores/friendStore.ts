@@ -235,6 +235,9 @@ friendsCacheStore.subscribe((value) => {
 });
 let persistenceEnabled = false;
 let lastPersistedSnapshot = "";
+let friendsVersion = 0;
+
+const bumpFriendsVersion = () => ++friendsVersion;
 
 function persistFriendsList(friends: Friend[]) {
   if (!persistenceEnabled && friends.length === 0) {
@@ -361,6 +364,8 @@ export function createFriendStore(): FriendStore {
       return;
     }
 
+    const requestVersion = friendsVersion;
+
     const currentUserId =
       options.currentUserId ?? get(userStore).me?.id ?? null;
 
@@ -380,16 +385,23 @@ export function createFriendStore(): FriendStore {
       ),
     );
 
+    if (requestVersion !== friendsVersion) {
+      return;
+    }
+
     const annotatedById = new Map(
       annotated.map((friend) => [friend.id, friend]),
     );
 
-    update((state) => ({
-      ...state,
-      friends: state.friends.map(
+    let nextFriends: Friend[] = [];
+    update((state) => {
+      nextFriends = state.friends.map(
         (existing) => annotatedById.get(existing.id) ?? existing,
-      ),
-    }));
+      );
+      return { ...state, friends: nextFriends };
+    });
+    persistFriendsList(nextFriends);
+    bumpFriendsVersion();
   };
 
   const handleFriendsUpdate = (updatedFriends: Friend[]) => {
@@ -400,6 +412,7 @@ export function createFriendStore(): FriendStore {
       .map((friend) => normalizeFriend(friend));
     set({ friends: normalized, loading: false });
     persistFriendsList(normalized);
+    bumpFriendsVersion();
     void applySpamAnnotations(normalized);
   };
 
@@ -438,6 +451,7 @@ export function createFriendStore(): FriendStore {
           : friend,
       ),
     }));
+    bumpFriendsVersion();
   };
 
   const addFriend = (friend: Friend | (Partial<Friend> & { id: string })) => {
@@ -453,6 +467,7 @@ export function createFriendStore(): FriendStore {
       persistFriendsList(next);
       return { ...s, friends: next };
     });
+    bumpFriendsVersion();
     void applySpamAnnotations([normalized]);
   };
 
@@ -462,6 +477,7 @@ export function createFriendStore(): FriendStore {
       persistFriendsList(next);
       return { ...s, friends: next };
     });
+    bumpFriendsVersion();
   };
 
   const markFriendAsTrusted = (friendId: string) => {
@@ -480,6 +496,7 @@ export function createFriendStore(): FriendStore {
       persistFriendsList(next);
       return { ...s, friends: next };
     });
+    bumpFriendsVersion();
   };
 
   const markFriendAsSpam = (
@@ -506,6 +523,7 @@ export function createFriendStore(): FriendStore {
       persistFriendsList(next);
       return { ...s, friends: next };
     });
+    bumpFriendsVersion();
   };
 
   const initialize = async () => {
@@ -549,6 +567,7 @@ export function createFriendStore(): FriendStore {
 
       set({ friends, loading: false });
       persistFriendsList(friends);
+      bumpFriendsVersion();
       await applySpamAnnotations(friends, {
         invokeFn,
         currentUserId: currentUser.id,
