@@ -8,7 +8,10 @@ import { userCache } from "$lib/utils/cache";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
 import { mutedFriendsStore } from "./mutedFriendsStore";
 import { toasts } from "$lib/stores/ToastStore";
-import type { FriendshipBackend } from "../models/friendship";
+import type {
+  FriendshipBackend,
+  FriendshipCounterpart,
+} from "../models/friendship";
 
 interface FriendStoreState {
   friends: Friend[];
@@ -146,35 +149,7 @@ function mapFriendshipToFriend(
     return null;
   }
 
-  const nameFromBackend = counterpart?.username ?? "";
-  const trimmedName = nameFromBackend.trim();
-  const name =
-    trimmedName.length > 0 ? trimmedName : `User-${counterpartId.slice(0, 4)}`;
-
-  const avatarFromBackend = counterpart?.avatar ?? "";
-  const trimmedAvatar = avatarFromBackend.trim();
-  const avatar =
-    trimmedAvatar.length > 0 ? trimmedAvatar : FALLBACK_AVATAR(counterpartId);
-  const counterpartStatusRaw = counterpart?.status_message ?? null;
-  const trimmedCounterpartStatus = counterpartStatusRaw?.trim?.() ?? "";
-  const counterpartStatus =
-    trimmedCounterpartStatus.length > 0 ? trimmedCounterpartStatus : null;
-  const counterpartLocationRaw = counterpart?.location ?? null;
-  const trimmedCounterpartLocation = counterpartLocationRaw?.trim?.() ?? "";
-  const counterpartLocation =
-    trimmedCounterpartLocation.length > 0 ? trimmedCounterpartLocation : null;
-
-  const baseUser: User = {
-    id: counterpartId,
-    name,
-    avatar,
-    online: counterpart?.is_online ?? false,
-    publicKey: counterpart?.public_key ?? undefined,
-    bio: counterpart?.bio ?? undefined,
-    tag: counterpart?.tag ?? undefined,
-    statusMessage: counterpartStatus,
-    location: counterpartLocation,
-  };
+  const baseUser = buildCounterpartUser(counterpart, counterpartId);
 
   userCache.set(baseUser.id, baseUser);
 
@@ -185,6 +160,54 @@ function mapFriendshipToFriend(
     messages: [],
     timestamp: new Date().toISOString(),
   });
+}
+
+function buildCounterpartUser(
+  counterpart: FriendshipCounterpart | null | undefined,
+  counterpartId: string,
+): User {
+  const nameSource = counterpart?.name ?? counterpart?.username ?? "";
+  const trimmedName = nameSource?.trim?.() ?? "";
+  const name =
+    trimmedName.length > 0 ? trimmedName : `User-${counterpartId.slice(0, 4)}`;
+
+  const avatarSource = counterpart?.avatar ?? "";
+  const trimmedAvatar = avatarSource?.trim?.() ?? "";
+  const avatar =
+    trimmedAvatar.length > 0 ? trimmedAvatar : FALLBACK_AVATAR(counterpartId);
+
+  const statusMessageSource =
+    counterpart?.statusMessage ?? counterpart?.status_message ?? null;
+  const trimmedStatusMessage = statusMessageSource?.trim?.() ?? "";
+  const statusMessage =
+    trimmedStatusMessage.length > 0 ? trimmedStatusMessage : null;
+
+  const locationSource = counterpart?.location ?? null;
+  const trimmedLocation = locationSource?.trim?.() ?? "";
+  const location =
+    trimmedLocation.length > 0 ? trimmedLocation : null;
+
+  const online =
+    counterpart?.online ??
+    counterpart?.is_online ??
+    false;
+
+  const publicKey =
+    counterpart?.publicKey ??
+    counterpart?.public_key ??
+    undefined;
+
+  return {
+    id: counterpartId,
+    name,
+    avatar,
+    online,
+    publicKey,
+    bio: counterpart?.bio ?? undefined,
+    tag: counterpart?.tag ?? undefined,
+    statusMessage,
+    location,
+  };
 }
 
 function buildSpamTextForFriend(friend: Friend): string {

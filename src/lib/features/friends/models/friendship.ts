@@ -1,22 +1,41 @@
+import type { User } from "$lib/features/auth/models/User";
+
+export type FriendshipStatus =
+  | "pending"
+  | "accepted"
+  | "blocked_by_a"
+  | "blocked_by_b";
+
 export interface FriendshipRecord {
   id: string;
   user_a_id: string;
   user_b_id: string;
-  status: string;
+  status: FriendshipStatus;
   created_at?: string;
   updated_at?: string;
 }
 
-export interface FriendshipCounterpart {
-  id?: string;
+export type FriendshipCounterpartProfile = Partial<
+  Pick<
+    User,
+    | "id"
+    | "name"
+    | "avatar"
+    | "bio"
+    | "tag"
+    | "statusMessage"
+    | "location"
+    | "publicKey"
+    | "online"
+  >
+>;
+
+export interface FriendshipCounterpart
+  extends FriendshipCounterpartProfile {
   username?: string | null;
-  avatar?: string | null;
-  is_online?: boolean | null;
-  public_key?: string | null;
-  bio?: string | null;
-  tag?: string | null;
   status_message?: string | null;
-  location?: string | null;
+  public_key?: string | null;
+  is_online?: boolean | null;
   status?: string | null;
 }
 
