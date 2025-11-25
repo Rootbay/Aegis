@@ -292,13 +292,19 @@
   let temporaryMembershipEnabled = $state(false);
   let invitePending = $state<Record<string, boolean>>({});
   let friendList: Friend[] = [];
-  let filteredFriends: Friend[] = [];
+  let filteredFriends = $state<Friend[]>([]);
   let groupList: GroupChatSummary[] = [];
-  let filteredGroups: GroupChatSummary[] = [];
+  let filteredGroups = $state<GroupChatSummary[]>([]);
 
-  $: friendList = $friendStore.friends ?? [];
-  $: groupList = Array.from($groupChats.values());
-  $: {
+  $effect(() => {
+    friendList = $friendStore.friends ?? [];
+  });
+
+  $effect(() => {
+    groupList = Array.from($groupChats.values());
+  });
+
+  $effect(() => {
     const query = inviteSearchQuery.trim().toLowerCase();
     if (query.length === 0) {
       filteredFriends = friendList;
@@ -313,7 +319,7 @@
         (group.name ?? "").toLowerCase().includes(query),
       );
     }
-  }
+  });
   let newChannelName = $state("");
   let newChannelType = $state<"text" | "voice">("text");
   let newChannelPrivate = $state(false);

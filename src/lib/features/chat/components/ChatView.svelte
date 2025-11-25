@@ -3410,7 +3410,10 @@
               </div>
             {/if}
             <div
-              class={densityClass("space-y-6", "space-y-3")}
+              class={`transition-colors duration-150 ${densityClass(
+                "space-y-6 px-4 py-3 rounded-2xl",
+                "space-y-3 px-3 py-2 rounded-xl",
+              )} hover:bg-zinc-900/60`}
               use:captureViewport
               id={`message-${msg.id}`}
             >
@@ -3444,6 +3447,49 @@
                 {/if}
                 <div class="flex flex-col {isMe ? 'items-end' : ''}">
                   <div class="flex items-center gap-2 mb-1">
+                    {#if msg.expiresAt}
+                      {@const expiryTimestamp = Date.parse(msg.expiresAt)}
+                      {#if !Number.isNaN(expiryTimestamp)}
+                        {@const remainingMs = expiryTimestamp - expiryNow}
+                        {@const expiryLabel = formatExpiryLabel(remainingMs)}
+                        {@const expiryTone = resolveExpiryTone(remainingMs)}
+                        {@const expiryAriaLabel =
+                          expiryLabel === "Expired"
+                            ? "Message expired"
+                            : `Message ${expiryLabel.toLowerCase()}`}
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <span
+                                class={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide ${expiryIndicatorToneClasses[expiryTone]}`}
+                                aria-live="polite"
+                                aria-label={expiryAriaLabel}
+                              >
+                                <Timer class="h-3 w-3" aria-hidden="true" />
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <div class="space-y-0.5">
+                                <p class="text-xs font-semibold text-white leading-none">
+                                  {expiryLabel}
+                                </p>
+                                <p class="text-[0.65rem] text-muted-foreground leading-none">
+                                  {formatExpiryTooltip(expiryTimestamp, remainingMs)}
+                                </p>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      {/if}
+                    {/if}
+                    {#if showMessageTimestamps}
+                      <p class="text-xs text-muted-foreground">
+                        {new Date(msg.timestamp).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    {/if}
                     <MessageAuthorName
                       chatType={chat.type}
                       channelId={chat.type === "channel" ? chat.id : null}
@@ -3490,44 +3536,12 @@
                         </TooltipProvider>
                       {/if}
                     {/if}
-                    {#if showMessageTimestamps}
-                      <p class="text-xs text-muted-foreground">
-                        {new Date(msg.timestamp).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    {/if}
                     {#if msg.editedAt}
                       <span
                         class="text-[0.625rem] uppercase tracking-wide text-muted-foreground/80"
                       >
                         (edited)
                       </span>
-                    {/if}
-                    {#if msg.expiresAt}
-                      {@const expiryTimestamp = Date.parse(msg.expiresAt)}
-                      {#if !Number.isNaN(expiryTimestamp)}
-                        {@const remainingMs = expiryTimestamp - expiryNow}
-                        {@const expiryLabel = formatExpiryLabel(remainingMs)}
-                        {@const expiryTone = resolveExpiryTone(remainingMs)}
-                        {@const expiryAriaLabel =
-                          expiryLabel === "Expired"
-                            ? "Message expired"
-                            : `Message ${expiryLabel.toLowerCase()}`}
-                        <span
-                          class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wide ${expiryIndicatorToneClasses[expiryTone]}`}
-                          title={formatExpiryTooltip(
-                            expiryTimestamp,
-                            remainingMs,
-                          )}
-                          aria-live="polite"
-                          aria-label={expiryAriaLabel}
-                        >
-                          <Timer class="h-3 w-3" aria-hidden="true" />
-                          {expiryLabel}
-                        </span>
-                      {/if}
                     {/if}
                   </div>
                   {#if msg.isSpamFlagged && msg.spamDecision !== "allowed"}
@@ -3588,9 +3602,7 @@
                     </div>
                   {:else if msg.content}
                     <div
-                      class="max-w-md p-3 rounded-lg {isMe
-                        ? 'bg-cyan-600 text-white rounded-tr-none'
-                        : 'bg-zinc-700 rounded-tl-none'}"
+                      class="max-w-md p-3 text-white"
                       role="button"
                       tabindex="0"
                       aria-label="Message options"
@@ -4062,7 +4074,7 @@
 
         {#if unseenCount > 0}
           <button
-            class="absolute right-4 bottom-4 bg-cyan-600 hover:bg-cyan-700 text-white text-sm px-3 py-2 rounded-full shadow-lg cursor-pointer"
+            class="absolute right-4 bottom-4 bg-zinc-900/90 text-white text-xs px-3 py-1.5 rounded-full shadow-lg shadow-black/60 hover:bg-zinc-800/80 transition-colors focus-visible:outline-none focus-visible:ring focus-visible:ring-cyan-500/70 cursor-pointer"
             onclick={scrollToBottom}
             aria-live="polite"
           >

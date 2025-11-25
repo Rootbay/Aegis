@@ -841,19 +841,19 @@
               <li class="flex items-center gap-2">
                 <div
                   class={`h-2 w-2 rounded-full ${setupChecklist.quickstart ? "bg-green-400" : "bg-zinc-600"}`}
-                />
+                ></div>
                 Quick start session ready
               </li>
               <li class="flex items-center gap-2">
                 <div
                   class={`h-2 w-2 rounded-full ${setupChecklist.recoverySaved ? "bg-green-400" : "bg-orange-400"}`}
-                />
+                ></div>
                 Recovery phrase stored
               </li>
               <li class="flex items-center gap-2">
                 <div
                   class={`h-2 w-2 rounded-full ${setupChecklist.totpVerified ? "bg-green-400" : "bg-orange-400"}`}
-                />
+                ></div>
                 Authenticator paired
               </li>
             </ul>

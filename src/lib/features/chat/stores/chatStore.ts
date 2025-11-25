@@ -158,6 +158,25 @@ type RetryableMessagePayload = {
   options?: SendMessageOptions;
 };
 
+type SerializedAttachmentPayload = {
+  name: string;
+  type?: string;
+  size: number;
+  data?: number[];
+};
+
+type SerializedRetryableMessagePayload = Omit<
+  RetryableMessagePayload,
+  "attachments"
+> & {
+  attachments?: SerializedAttachmentPayload[];
+};
+
+type SerializedRetryablePayloadEntry = {
+  messageId: string;
+  payload: SerializedRetryableMessagePayload;
+};
+
 export class SlowmodeError extends Error {
   readonly remainingSeconds: number;
   readonly cooldownSeconds: number;
@@ -1162,6 +1181,52 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
     return Uint8Array.from(input);
   };
 
+  const attachmentDataToNumberArray = (
+    input?: number[] | Uint8Array | ArrayBuffer,
+  ): number[] | undefined => {
+    const bytes = ensureUint8Array(input);
+    if (!bytes) {
+      return undefined;
+    }
+    return Array.from(bytes);
+  };
+
+  const numberArrayToUint8Array = (input?: number[]): Uint8Array | undefined =>
+    input ? new Uint8Array(input) : undefined;
+
+  const serializeAttachmentPayload = (
+    attachment: MessageAttachmentPayload,
+  ): SerializedAttachmentPayload => ({
+    name: attachment.name,
+    type: attachment.type,
+    size: attachment.size,
+    data: attachmentDataToNumberArray(attachment.data),
+  });
+
+  const deserializeAttachmentPayload = (
+    attachment: SerializedAttachmentPayload,
+  ): MessageAttachmentPayload => ({
+    name: attachment.name,
+    type: attachment.type,
+    size: attachment.size,
+    data: numberArrayToUint8Array(attachment.data) ?? new Uint8Array(),
+  });
+
+  const serializeRetryableMessagePayload = (
+    payload: RetryableMessagePayload,
+  ): SerializedRetryableMessagePayload => ({
+    ...payload,
+    attachments: payload.attachments?.map(serializeAttachmentPayload),
+  });
+
+  const deserializeRetryableMessagePayload = (
+    payload: SerializedRetryableMessagePayload,
+  ): RetryableMessagePayload => ({
+    ...payload,
+    attachments:
+      payload.attachments?.map(deserializeAttachmentPayload) ?? undefined,
+  });
+
   const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
     const { buffer, byteOffset, byteLength } = bytes;
     if (buffer instanceof ArrayBuffer) {
@@ -1174,6 +1239,42 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
   const activeAttachmentUrls = new Set<string>();
   const retryableMessagePayloads = new Map<string, RetryableMessagePayload>();
   const pendingAttachmentFetches = new Map<string, Promise<string>>();
+  const RETRYABLE_PAYLOADS_STORAGE_KEY = "retryable-message-payloads-v1";
+  const persistedRetryablePayloads = persistentStore<
+    SerializedRetryablePayloadEntry[]
+  >(RETRYABLE_PAYLOADS_STORAGE_KEY, []);
+
+  const buildSerializedRetryableQueue = (): SerializedRetryablePayloadEntry[] =>
+    Array.from(retryableMessagePayloads.entries()).map(
+      ([messageId, payload]) => ({
+        messageId,
+        payload: serializeRetryableMessagePayload(payload),
+      }),
+    );
+
+  let lastSerializedRetryablePayloadSnapshot = JSON.stringify(
+    buildSerializedRetryableQueue(),
+  );
+
+  const persistRetryablePayloads = () => {
+    const serialized = buildSerializedRetryableQueue();
+    lastSerializedRetryablePayloadSnapshot = JSON.stringify(serialized);
+    persistedRetryablePayloads.set(serialized);
+  };
+
+  const enqueueRetryableMessagePayload = (
+    messageId: string,
+    payload: RetryableMessagePayload,
+  ) => {
+    retryableMessagePayloads.set(messageId, payload);
+    persistRetryablePayloads();
+  };
+
+  const removeRetryableMessagePayload = (messageId: string) => {
+    if (retryableMessagePayloads.delete(messageId)) {
+      persistRetryablePayloads();
+    }
+  };
 
   let connectivityStatus: ConnectivityStatus = get(connectivityStore).status;
   let isFlushingQueuedMessages = false;
@@ -1534,7 +1635,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       const nextIds = new Set(next.map((message) => message.id));
       for (const message of existing) {
         if (!nextIds.has(message.id)) {
-          retryableMessagePayloads.delete(message.id);
+          removeRetryableMessagePayload(message.id);
         }
       }
 
@@ -2659,14 +2760,30 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
           });
         }
       } else {
-        await invoke("send_message_with_attachments", {
-          message: contentForSend,
-          attachments: attachmentsForSend,
-          channel_id: payload.channelId,
-          server_id: payload.chatId,
-          expires_at: expiresAt,
-          ...replyPayload,
-        });
+        try {
+          await invoke("send_message_with_attachments", {
+            message: contentForSend,
+            attachments: attachmentsForSend,
+            channel_id: payload.channelId,
+            server_id: payload.chatId,
+            expires_at: expiresAt,
+            ...replyPayload,
+          });
+        } catch (error) {
+          encryptedFailed = true;
+          console.warn(
+            "Encrypted attachment send failed, attempting plaintext fallback",
+            error,
+          );
+          await invoke("send_message_with_attachments", {
+            message: payload.content,
+            attachments: plaintextAttachments,
+            channel_id: payload.channelId,
+            server_id: payload.chatId,
+            expires_at: expiresAt,
+            ...replyPayload,
+          });
+        }
       }
     } catch (error) {
       throw error instanceof Error ? error : new Error(String(error));
@@ -2701,12 +2818,12 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         );
 
         if (!optimistic) {
-          retryableMessagePayloads.delete(messageId);
+          removeRetryableMessagePayload(messageId);
           continue;
         }
 
         if (!optimistic.pending) {
-          retryableMessagePayloads.delete(messageId);
+          removeRetryableMessagePayload(messageId);
           continue;
         }
 
@@ -2717,7 +2834,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         try {
           markMessageAsSending(payload.messageChatId, messageId);
           await transmitMessagePayload(payload);
-          retryableMessagePayloads.delete(messageId);
+          removeRetryableMessagePayload(messageId);
         } catch (error) {
           const reason = extractErrorMessage(error);
           markMessageAsFailed(payload.messageChatId, messageId, reason);
@@ -2733,6 +2850,22 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       void flushQueuedMessages();
     }
   };
+
+  persistedRetryablePayloads.subscribe((entries) => {
+    const serializedEntries = JSON.stringify(entries ?? []);
+    if (serializedEntries === lastSerializedRetryablePayloadSnapshot) {
+      return;
+    }
+    lastSerializedRetryablePayloadSnapshot = serializedEntries;
+    retryableMessagePayloads.clear();
+    for (const { messageId, payload } of entries ?? []) {
+      retryableMessagePayloads.set(
+        messageId,
+        deserializeRetryableMessagePayload(payload),
+      );
+    }
+    scheduleQueuedMessageFlush();
+  });
 
   connectivityStore.subscribe((state) => {
     const previousStatus = connectivityStatus;
@@ -2806,7 +2939,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       options: cloneSendOptions(options),
     };
 
-    retryableMessagePayloads.set(tempId, payload);
+    enqueueRetryableMessagePayload(tempId, payload);
 
     if (!canAttemptTransmission()) {
       scheduleQueuedMessageFlush();
@@ -2815,7 +2948,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await transmitMessagePayload(payload);
-      retryableMessagePayloads.delete(tempId);
+      removeRetryableMessagePayload(tempId);
     } catch (error) {
       const reason = extractErrorMessage(error);
       markMessageAsFailed(messageChatId, tempId, reason);
@@ -2945,7 +3078,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       options: cloneSendOptions(options),
     };
 
-    retryableMessagePayloads.set(tempId, payload);
+    enqueueRetryableMessagePayload(tempId, payload);
 
     if (!canAttemptTransmission()) {
       scheduleQueuedMessageFlush();
@@ -2954,7 +3087,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await transmitMessagePayload(payload);
-      retryableMessagePayloads.delete(tempId);
+      removeRetryableMessagePayload(tempId);
     } catch (error) {
       const reason = extractErrorMessage(error);
       markMessageAsFailed(messageChatId, tempId, reason);
@@ -2980,7 +3113,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
 
     try {
       await transmitMessagePayload(payload);
-      retryableMessagePayloads.delete(messageId);
+      removeRetryableMessagePayload(messageId);
     } catch (error) {
       const reason = extractErrorMessage(error);
       markMessageAsFailed(targetChatId, messageId, reason);
@@ -3026,7 +3159,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
         chat_id: targetChatId,
         message_id: messageId,
       });
-      retryableMessagePayloads.delete(messageId);
+      removeRetryableMessagePayload(messageId);
       if (showTombstone && previous) {
         revokeAttachmentsForMessages([previous]);
       }
@@ -3946,7 +4079,7 @@ function createChatStore(options: ChatStoreOptions = {}): ChatStore {
       return;
     }
 
-    retryableMessagePayloads.delete(messageId);
+  removeRetryableMessagePayload(messageId);
 
     const preferences = resolveModerationForChat(chatId);
     if (preferences.deletedMessageDisplay === "tombstone") {
