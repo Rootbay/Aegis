@@ -1,10 +1,10 @@
 use super::{ensure_server_owner, get_initialized_state, parse_schedule, sanitize_optional_string};
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 use aep::database::{self, ServerEvent, ServerEventPatch};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerEventResponse {
@@ -85,7 +85,7 @@ async fn create_server_event_internal(
     let scheduled_for = parse_schedule(&request.scheduled_for)?;
     let current_user = state.identity.peer_id().to_base58();
     let event = ServerEvent {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         server_id: request.server_id.clone(),
         title: title.to_string(),
         description: sanitize_optional_string(request.description),

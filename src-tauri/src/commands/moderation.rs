@@ -3,7 +3,7 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::State;
-use uuid::Uuid;
+use scu128::Scu128;
 
 #[derive(Debug, Deserialize)]
 pub struct SubmitUserReportPayload {
@@ -81,7 +81,7 @@ pub async fn submit_user_report(
     }
 
     let now = Utc::now().to_rfc3339();
-    let report_id = Uuid::new_v4().to_string();
+    let report_id = Scu128::new().to_string();
 
     let chat_context = if source_chat_id.is_some() || normalized_chat_type.is_some() {
         Some(
@@ -208,7 +208,7 @@ pub async fn report_message_internal(
     };
 
     let now = Utc::now().to_rfc3339();
-    let report_id = Uuid::new_v4().to_string();
+    let report_id = Scu128::new().to_string();
 
     let mut context_map = serde_json::Map::<String, Value>::new();
     if let Some(ref ids) = surrounding_message_ids {

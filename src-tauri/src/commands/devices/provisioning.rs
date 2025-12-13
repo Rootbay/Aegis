@@ -3,7 +3,7 @@ use base64::{engine::general_purpose, Engine as _};
 use tauri::State;
 
 use crate::commands::state::AppStateContainer;
-use uuid::Uuid;
+use scu128::Scu128;
 
 use super::{create_bundle, generate_code_phrase, get_app_state, normalize_phrase, CommandResult};
 
@@ -14,7 +14,7 @@ pub async fn initiate_device_provisioning(
 ) -> CommandResult<DeviceProvisioningState> {
     let state = get_app_state(state_container).await?;
 
-    let bundle_id = Uuid::new_v4().to_string();
+    let bundle_id = Scu128::new().to_string();
     let code_phrase = generate_code_phrase();
     let bundle = create_bundle(&bundle_id, &code_phrase);
     let normalized_code = normalize_phrase(&code_phrase);

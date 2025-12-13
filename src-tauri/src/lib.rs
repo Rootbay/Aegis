@@ -2,6 +2,7 @@ pub mod bootstrap;
 pub mod commands;
 pub mod connectivity;
 pub mod settings_store;
+pub mod scu128;
 
 pub use network;
 

@@ -1,10 +1,10 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use scu128::Scu128;
 use aegis_protocol::{AepMessage, CreateGroupChatData};
 use aegis_shared_types::AppState;
 use aep::database::{self, GroupChat, GroupChatMember};
 use chrono::Utc;
 use tauri::State;
-use uuid::Uuid;
 
 use super::helpers::{normalize_group_name, GroupChatPayload};
 
@@ -45,7 +45,7 @@ async fn create_group_dm_internal(
         return Err("Please select at least one additional member.".to_string());
     }
 
-    let group_id = Uuid::new_v4().to_string();
+    let group_id = Scu128::new().to_string();
     let created_at = Utc::now();
     let normalized_name = normalize_group_name(name, &group_id);
 

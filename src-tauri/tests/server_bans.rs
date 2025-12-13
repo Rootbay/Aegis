@@ -13,7 +13,7 @@ use std::time::Duration;
 use tauri::{test::mock_app, Listener, Manager};
 use tempfile::tempdir;
 use tokio::sync::Mutex as AsyncMutex;
-use uuid::Uuid;
+use scu128::Scu128;
 
 #[tokio::test]
 async fn ban_command_persists_ban_and_emits_event() {
@@ -25,8 +25,8 @@ async fn ban_command_persists_ban_and_emits_event() {
 
     let identity = Identity::generate();
     let owner_id = identity.peer_id().to_base58();
-    let target_id = Uuid::new_v4().to_string();
-    let server_id = Uuid::new_v4().to_string();
+    let target_id = Scu128::new().to_string();
+    let server_id = Scu128::new().to_string();
 
     sqlx::query!(
         "INSERT INTO users (id, username, avatar, is_online, public_key, bio, tag) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -176,8 +176,8 @@ async fn unban_command_removes_ban_and_emits_event() {
 
     let identity = Identity::generate();
     let owner_id = identity.peer_id().to_base58();
-    let banned_id = Uuid::new_v4().to_string();
-    let server_id = Uuid::new_v4().to_string();
+    let banned_id = Scu128::new().to_string();
+    let server_id = Scu128::new().to_string();
 
     sqlx::query!(
         "INSERT INTO users (id, username, avatar, is_online, public_key, bio, tag) VALUES (?, ?, ?, ?, ?, ?, ?)",

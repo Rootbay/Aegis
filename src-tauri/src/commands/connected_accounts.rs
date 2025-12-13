@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
-use uuid::Uuid;
+use scu128::Scu128;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -64,7 +64,7 @@ pub async fn link_external_account(
     }
 
     let mut accounts = load_accounts(&app)?;
-    let id = Uuid::new_v4().to_string();
+    let id = Scu128::new().to_string();
     let account = ExternalAccount {
         id,
         provider: normalized_provider.to_string(),

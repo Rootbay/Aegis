@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::{atomic::AtomicBool, Arc};
 use tempfile::tempdir;
 use tokio::sync::Mutex as AsyncMutex;
-use uuid::Uuid;
+use scu128::Scu128;
 
 #[tokio::test]
 async fn report_message_command_persists_report_with_context() {
@@ -31,9 +31,9 @@ async fn report_message_command_persists_report_with_context() {
 
     let reporter_identity = Identity::generate();
     let reporter_id = reporter_identity.peer_id().to_base58();
-    let author_id = Uuid::new_v4().to_string();
-    let message_id = Uuid::new_v4().to_string();
-    let chat_id = Uuid::new_v4().to_string();
+    let author_id = Scu128::new().to_string();
+    let message_id = Scu128::new().to_string();
+    let chat_id = Scu128::new().to_string();
     let message_timestamp = Utc::now().to_rfc3339();
 
     sqlx::query!(
@@ -97,7 +97,7 @@ async fn report_message_command_persists_report_with_context() {
 
     let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));
 
-    let surrounding_ids = vec![Uuid::new_v4().to_string(), Uuid::new_v4().to_string()];
+        let surrounding_ids = vec![Scu128::new().to_string(), Scu128::new().to_string()];
 
     report_message_internal(
         ReportMessagePayload {

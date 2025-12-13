@@ -9,6 +9,7 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 
 use super::helpers::{is_voice_memo_attachment, parse_optional_datetime};
 use super::types::{AttachmentDescriptor, SearchMessagesResponse};
@@ -139,7 +140,7 @@ pub(super) async fn persist_and_broadcast_message(
 
     let payload_conversation_id = Some(chat_id_local.clone());
 
-    let message_id = uuid::Uuid::new_v4().to_string();
+    let message_id = Scu128::new().to_string();
     let timestamp = chrono::Utc::now();
 
     let mut db_attachments = Vec::new();
@@ -161,7 +162,7 @@ pub(super) async fn persist_and_broadcast_message(
             return Err(format!("Attachment '{name}' is missing binary data"));
         }
 
-        let attachment_id = uuid::Uuid::new_v4().to_string();
+        let attachment_id = Scu128::new().to_string();
         let data_len = data.len() as u64;
         let effective_size = if size == 0 { data_len } else { size };
         let sanitized_size = if effective_size == data_len {

@@ -2,7 +2,7 @@ use aep::database;
 use chrono::Utc;
 use std::collections::HashMap;
 use tempfile::tempdir;
-use uuid::Uuid;
+use scu128::Scu128;
 
 #[tokio::test]
 async fn message_with_attachments_round_trips() {
@@ -11,14 +11,14 @@ async fn message_with_attachments_round_trips() {
 
     let pool = database::initialize_db(db_path).await.expect("init db");
 
-    let message_id = Uuid::new_v4().to_string();
+    let message_id = Scu128::new().to_string();
     let chat_id = "chat-room".to_string();
     let sender_id = "sender-1".to_string();
     let content = "hello with files".to_string();
     let attachment_bytes: Vec<u8> = b"file-bytes".to_vec();
 
     let attachment = database::Attachment {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         message_id: message_id.clone(),
         name: "greeting.txt".to_string(),
         content_type: Some("text/plain".to_string()),
@@ -79,10 +79,10 @@ async fn message_reply_snapshot_round_trips() {
 
     let pool = database::initialize_db(db_path).await.expect("init db");
 
-    let message_id = Uuid::new_v4().to_string();
+    let message_id = Scu128::new().to_string();
     let chat_id = "chat-reply".to_string();
     let sender_id = "replier".to_string();
-    let reply_target = Uuid::new_v4().to_string();
+    let reply_target = Scu128::new().to_string();
 
     let message = database::Message {
         id: message_id.clone(),

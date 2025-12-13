@@ -2,6 +2,7 @@ use super::{
     ensure_server_owner, get_initialized_state, sanitize_optional_string, sanitize_required_string,
 };
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 use aep::database::{self, ServerWebhook, ServerWebhookPatch};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -80,7 +81,7 @@ async fn create_server_webhook_internal(
     let creator = state.identity.peer_id().to_base58();
     let now = Utc::now();
     let webhook = ServerWebhook {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         server_id: request.server_id.clone(),
         name,
         url,
@@ -263,7 +264,7 @@ mod tests {
 
     async fn seed_server(db_pool: &sqlx::SqlitePool, owner_id: &str) -> Server {
         let server = Server {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             name: "Test Server".into(),
             owner_id: owner_id.to_string(),
             created_at: Utc::now(),
@@ -335,7 +336,7 @@ mod tests {
         let server = seed_server(&db_pool, &owner_id).await;
 
         let channel = Channel {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             server_id: server.id.clone(),
             name: "alerts".into(),
             channel_type: "text".into(),

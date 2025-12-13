@@ -55,6 +55,7 @@ dependencies = [
  "reqwest",
  "rstest",
  "scraper",
+ "scu128",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -67,7 +68,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -135,10 +135,10 @@ dependencies = [
  "crypto",
  "dirs 5.0.1",
  "libp2p",
+ "scu128",
  "serde",
  "serde_json",
  "sqlx",
- "uuid",
 ]
 
 [[package]]
@@ -6010,6 +6010,10 @@ dependencies = [
  "ring 0.16.20",
  "untrusted 0.7.1",
 ]
+
+[[package]]
+name = "scu128"
+version = "0.1.0"
 
 [[package]]
 name = "selectors"

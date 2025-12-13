@@ -8,7 +8,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono", "time"] }
 chrono = { version = "0.4", features = ["serde"] }
-uuid = { version = "1.8.0", features = ["v4"] }
+scu128 = { version = "0.1.0", path = "../scu128" }
 dirs = "5.0"
 libp2p = { version = "0.40", features = ["gossipsub", "tcp-tokio", "noise", "mplex", "identify"] }
 bincode = "1.3"

@@ -1,10 +1,10 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use scu128::Scu128;
 use aegis_protocol::{AepMessage, FriendRequestData};
 use aegis_shared_types::AppState;
 use aep::database::{self, Friendship, FriendshipStatus};
 use chrono::Utc;
 use tauri::State;
-use uuid::Uuid;
 
 use super::models::CommandResult;
 use super::utils::{ensure_caller_identity, send_friend_request_response, serialize};
@@ -21,7 +21,7 @@ pub async fn send_friend_request(
             let my_id = ensure_caller_identity(&state, &current_user_id)?;
             let now = Utc::now();
             let friendship = Friendship {
-                id: Uuid::new_v4().to_string(),
+                id: Scu128::new().to_string(),
                 user_a_id: my_id.clone(),
                 user_b_id: target_user_id.clone(),
                 status: FriendshipStatus::Pending.to_string(),

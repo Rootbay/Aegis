@@ -1,10 +1,10 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use scu128::Scu128;
 use aegis_protocol::{AepMessage, BlockUserData, UnblockUserData};
 use aegis_shared_types::AppState;
 use aep::database::{self, Friendship, FriendshipStatus};
 use chrono::Utc;
 use tauri::State;
-use uuid::Uuid;
 
 use super::models::{
     BlockUserResult, CommandResult, IgnoreUserResult, MuteUserResult, UnblockUserResult,
@@ -59,7 +59,7 @@ pub(super) async fn block_user_internal(
         (friendship.id, false)
     } else {
         let friendship = Friendship {
-            id: Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             user_a_id: my_id.clone(),
             user_b_id: target_user_id.clone(),
             status: FriendshipStatus::BlockedByA.to_string(),

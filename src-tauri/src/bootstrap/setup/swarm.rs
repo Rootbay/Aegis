@@ -23,6 +23,8 @@ use crate::connectivity::{
     note_bridge_forward_failure, note_bridge_forward_success,
 };
 
+use scu128::Scu128;
+
 pub(super) fn spawn_swarm_processing<R: Runtime>(
     app: AppHandle<R>,
     network: NetworkResources,
@@ -490,7 +492,7 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                             };
                                                             if let Some(plaintext) = plaintext_opt {
                                                                 let chat_id = sender.clone();
-                                                                let message_id = uuid::Uuid::new_v4().to_string();
+                                                                let message_id = Scu128::new().to_string();
                                                                 let timestamp = chrono::Utc::now();
                                                                 let mut db_attachments = Vec::new();
                                                                 let (content, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet) =
@@ -506,7 +508,7 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                             } else {
                                                                                 data_len
                                                                             };
-                                                                            let attachment_id = uuid::Uuid::new_v4().to_string();
+                                                                            let attachment_id = Scu128::new().to_string();
                                                                             db_attachments.push(aep::database::Attachment {
                                                                                 id: attachment_id,
                                                                                 message_id: message_id.clone(),
@@ -780,23 +782,23 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                         None,
                                                                     )
                                                                 };
-                                                            let new_message = aep::database::Message {
-                                                                id: uuid::Uuid::new_v4().to_string(),
-                                                                chat_id,
-                                                                sender_id: sender.clone(),
-                                                                content,
-                                                                timestamp: chrono::Utc::now(),
-                                                                read: false,
-                                                                pinned: false,
-                                                                attachments: Vec::new(),
-                                                                reactions: std::collections::HashMap::new(),
-                                                                reply_to_message_id,
-                                                                reply_snapshot_author,
-                                                                reply_snapshot_snippet,
-                                                                edited_at: None,
-                                                                edited_by: None,
-                                                                expires_at: None,
-                                                            };
+                                                                let new_message = aep::database::Message {
+                                                                    id: Scu128::new().to_string(),
+                                                                    chat_id,
+                                                                    sender_id: sender.clone(),
+                                                                    content,
+                                                                    timestamp: chrono::Utc::now(),
+                                                                    read: false,
+                                                                    pinned: false,
+                                                                    attachments: Vec::new(),
+                                                                    reactions: std::collections::HashMap::new(),
+                                                                    reply_to_message_id,
+                                                                    reply_snapshot_author,
+                                                                    reply_snapshot_snippet,
+                                                                    edited_at: None,
+                                                                    edited_by: None,
+                                                                    expires_at: None,
+                                                                };
                                                             if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
                                                         }
                                                     }

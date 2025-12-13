@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt;
 
+use scu128::Scu128;
+
 pub use aegis_shared_types::{Channel, ChannelCategory, Role, Server, ServerInvite, User};
 
 // Define migrations for the database schema
@@ -2719,7 +2721,7 @@ pub async fn create_server_invite(
     expires_at: Option<DateTime<Utc>>,
     max_uses: Option<i64>,
 ) -> Result<ServerInvite, sqlx::Error> {
-    let invite_id = uuid::Uuid::new_v4().to_string();
+    let invite_id = Scu128::new().to_string();
     let created_at_str = created_at.to_rfc3339();
     let expires_at_str = expires_at.map(|dt| dt.to_rfc3339());
 

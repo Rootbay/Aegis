@@ -6,6 +6,7 @@ use chrono::Utc;
 use tauri::State;
 
 use crate::commands::state::{with_state_async, AppStateContainer};
+use scu128::Scu128;
 
 use super::super::helpers::{is_voice_memo_attachment, parse_optional_datetime};
 use super::super::types::{
@@ -155,7 +156,7 @@ pub async fn send_encrypted_dm(
             let expires_at = parse_optional_datetime(expires_at)?;
 
             let new_local_message = database::Message {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: Scu128::new().to_string(),
                 chat_id: recipient_id.clone(),
                 sender_id: my_id.clone(),
                 content: message.clone(),
@@ -264,7 +265,7 @@ pub async fn send_encrypted_dm_with_attachments(
                 return Err("Voice memo attachments are disabled by your settings.".to_string());
             }
 
-            let message_id = uuid::Uuid::new_v4().to_string();
+            let message_id = Scu128::new().to_string();
             let timestamp = Utc::now();
             let mut db_attachments = Vec::with_capacity(attachments.len());
             let mut payload_attachments = Vec::with_capacity(attachments.len());
@@ -282,7 +283,7 @@ pub async fn send_encrypted_dm_with_attachments(
                 }
 
                 let sanitized_size = normalize_size(size, data.len());
-                let attachment_id = uuid::Uuid::new_v4().to_string();
+                let attachment_id = Scu128::new().to_string();
                 db_attachments.push(database::Attachment {
                     id: attachment_id,
                     message_id: message_id.clone(),

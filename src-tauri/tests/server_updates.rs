@@ -3,7 +3,7 @@ use aep::database::{Channel, Role, ServerMetadataUpdate, ServerModerationUpdate}
 use chrono::Utc;
 use std::collections::HashMap;
 use tempfile::tempdir;
-use uuid::Uuid;
+use scu128::Scu128;
 
 async fn seed_user(pool: &sqlx::Pool<sqlx::Sqlite>, user_id: &str) {
     sqlx::query!(
@@ -23,7 +23,7 @@ async fn seed_user(pool: &sqlx::Pool<sqlx::Sqlite>, user_id: &str) {
 
 fn build_server(owner_id: &str) -> database::Server {
     database::Server {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         name: "Test Server".to_string(),
         owner_id: owner_id.to_string(),
         created_at: Utc::now(),
@@ -50,7 +50,7 @@ async fn server_metadata_update_persists_columns() {
     let db_path = dir.path().join("metadata.db");
     let pool = database::initialize_db(db_path).await.expect("init db");
 
-    let owner_id = Uuid::new_v4().to_string();
+    let owner_id = Scu128::new().to_string();
     seed_user(&pool, &owner_id).await;
 
     let server = build_server(&owner_id);
@@ -59,7 +59,7 @@ async fn server_metadata_update_persists_columns() {
         .expect("insert server");
 
     let channel = Channel {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         server_id: server.id.clone(),
         name: "general".to_string(),
         channel_type: "text".to_string(),
@@ -105,7 +105,7 @@ async fn server_roles_replace_round_trip() {
     let db_path = dir.path().join("roles.db");
     let pool = database::initialize_db(db_path).await.expect("init db");
 
-    let owner_id = Uuid::new_v4().to_string();
+    let owner_id = Scu128::new().to_string();
     seed_user(&pool, &owner_id).await;
 
     let server = build_server(&owner_id);
@@ -122,7 +122,7 @@ async fn server_roles_replace_round_trip() {
 
     let roles = vec![
         Role {
-            id: Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             name: "Admin".to_string(),
             color: "#ffffff".to_string(),
             hoist: true,
@@ -131,7 +131,7 @@ async fn server_roles_replace_round_trip() {
             member_ids: Vec::new(),
         },
         Role {
-            id: Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             name: "Moderator".to_string(),
             color: "#888888".to_string(),
             hoist: false,
@@ -162,7 +162,7 @@ async fn server_channels_replace_round_trip() {
     let db_path = dir.path().join("channels.db");
     let pool = database::initialize_db(db_path).await.expect("init db");
 
-    let owner_id = Uuid::new_v4().to_string();
+    let owner_id = Scu128::new().to_string();
     seed_user(&pool, &owner_id).await;
 
     let server = build_server(&owner_id);
@@ -172,7 +172,7 @@ async fn server_channels_replace_round_trip() {
 
     let channels = vec![
         Channel {
-            id: Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             server_id: server.id.clone(),
             name: "general".to_string(),
             channel_type: "text".to_string(),
@@ -180,7 +180,7 @@ async fn server_channels_replace_round_trip() {
             category_id: None,
         },
         Channel {
-            id: Uuid::new_v4().to_string(),
+            id: Scu128::new().to_string(),
             server_id: server.id.clone(),
             name: "voice".to_string(),
             channel_type: "voice".to_string(),
@@ -208,7 +208,7 @@ async fn server_moderation_update_persists_flags() {
     let db_path = dir.path().join("moderation.db");
     let pool = database::initialize_db(db_path).await.expect("init db");
 
-    let owner_id = Uuid::new_v4().to_string();
+    let owner_id = Scu128::new().to_string();
     seed_user(&pool, &owner_id).await;
 
     let server = build_server(&owner_id);

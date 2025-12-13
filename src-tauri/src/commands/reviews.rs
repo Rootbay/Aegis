@@ -1,9 +1,9 @@
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 use aep::database::{self, NewReview, Review, ReviewSubject};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -161,7 +161,7 @@ pub async fn submit_review(
         return Err("You cannot review your own profile.".to_string());
     }
 
-    let review_id = Uuid::new_v4().to_string();
+    let review_id = Scu128::new().to_string();
     let new_review = NewReview {
         id: review_id.clone(),
         subject: subject_type,

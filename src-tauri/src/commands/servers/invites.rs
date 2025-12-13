@@ -1,11 +1,11 @@
 use super::{broadcast_join_event, get_initialized_state};
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 use aegis_protocol::{self, AepMessage};
 use aep::database::{self, RedeemServerInviteError, RedeemedServerInvite, ServerInvite};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendServerInviteResult {
@@ -122,7 +122,7 @@ pub async fn generate_server_invite(
         return Err("Only server owners can generate invites.".into());
     }
 
-    let code = Uuid::new_v4().simple().to_string();
+    let code = Scu128::new().to_string();
     let created_at = Utc::now();
     let expires_at = expires_after_seconds
         .filter(|seconds| *seconds > 0)

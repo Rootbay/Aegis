@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tempfile::tempdir;
 use tokio::sync::Mutex;
-use uuid::Uuid;
+use scu128::Scu128;
 
 fn build_app_state(identity: Identity, db_pool: sqlx::Pool<sqlx::Sqlite>) -> AppState {
     let (network_tx, _network_rx) = tokio::sync::mpsc::channel(8);
@@ -214,7 +214,7 @@ async fn delete_message_is_broadcast_and_applied() {
         .await
         .expect("insert user");
 
-    let message_id = Uuid::new_v4().to_string();
+    let message_id = Scu128::new().to_string();
     let chat_id = "chat-123".to_string();
 
     let message = database::Message {
@@ -374,7 +374,7 @@ async fn edit_message_is_persisted_and_broadcast() {
         .await
         .expect("insert user");
 
-    let message_id = Uuid::new_v4().to_string();
+    let message_id = Scu128::new().to_string();
     let chat_id = "chat-456".to_string();
 
     let message = database::Message {

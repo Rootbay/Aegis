@@ -17,7 +17,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use tempfile::tempdir;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
-use uuid::Uuid;
+use scu128::Scu128;
 
 fn build_app_state(
     identity: Identity,
@@ -65,7 +65,7 @@ async fn block_and_unblock_friend_flow_updates_status() {
     let identity = Identity::generate();
     let my_id = identity.peer_id().to_base58();
     let public_key = bs58::encode(identity.keypair().public().to_protobuf_encoding()).into_string();
-    let target_id = Uuid::new_v4().to_string();
+    let target_id = Scu128::new().to_string();
 
     let me = User {
         id: my_id.clone(),
@@ -138,7 +138,7 @@ async fn mute_user_internal_validates_identity() {
 
     let identity = Identity::generate();
     let my_id = identity.peer_id().to_base58();
-    let target_id = Uuid::new_v4().to_string();
+    let target_id = Scu128::new().to_string();
 
     let (app_state, _rx) = build_app_state(identity.clone(), db_pool);
 
@@ -160,7 +160,7 @@ async fn ignore_user_internal_validates_identity() {
 
     let identity = Identity::generate();
     let my_id = identity.peer_id().to_base58();
-    let target_id = Uuid::new_v4().to_string();
+    let target_id = Scu128::new().to_string();
 
     let (app_state, _rx) = build_app_state(identity.clone(), db_pool);
 
@@ -181,14 +181,14 @@ async fn get_friendships_for_user_internal_returns_sanitized_ids() {
 
     let identity = Identity::generate();
     let my_id = identity.peer_id().to_base58();
-    let target_id = Uuid::new_v4().to_string();
-    let mutual_friend_id = Uuid::new_v4().to_string();
-    let pending_friend_id = Uuid::new_v4().to_string();
+    let target_id = Scu128::new().to_string();
+    let mutual_friend_id = Scu128::new().to_string();
+    let pending_friend_id = Scu128::new().to_string();
 
     let now = Utc::now();
 
     let mutual_friendship = database::Friendship {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         user_a_id: target_id.clone(),
         user_b_id: mutual_friend_id.clone(),
         status: FriendshipStatus::Accepted.to_string(),
@@ -197,7 +197,7 @@ async fn get_friendships_for_user_internal_returns_sanitized_ids() {
     };
 
     let pending_friendship = database::Friendship {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         user_a_id: target_id.clone(),
         user_b_id: pending_friend_id,
         status: FriendshipStatus::Pending.to_string(),
@@ -206,7 +206,7 @@ async fn get_friendships_for_user_internal_returns_sanitized_ids() {
     };
 
     let direct_friendship = database::Friendship {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         user_a_id: my_id.clone(),
         user_b_id: target_id.clone(),
         status: FriendshipStatus::Accepted.to_string(),
@@ -242,11 +242,11 @@ async fn get_friendships_for_user_internal_requires_accepted_friendship() {
 
     let identity = Identity::generate();
     let my_id = identity.peer_id().to_base58();
-    let target_id = Uuid::new_v4().to_string();
+    let target_id = Scu128::new().to_string();
     let now = Utc::now();
 
     let pending_friendship = database::Friendship {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         user_a_id: my_id.clone(),
         user_b_id: target_id.clone(),
         status: FriendshipStatus::Pending.to_string(),

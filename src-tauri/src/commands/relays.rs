@@ -5,7 +5,7 @@ use aegis_shared_types::{FileAclPolicy, RelayConfig, RelayHealth, RelayRecord, R
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use uuid::Uuid;
+use scu128::Scu128;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +60,7 @@ pub async fn register_relay(
     }
 
     if config.id.trim().is_empty() {
-        config.id = Uuid::new_v4().to_string();
+        config.id = Scu128::new().to_string();
     }
 
     config.urls = config

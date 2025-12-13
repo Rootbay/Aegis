@@ -1,11 +1,11 @@
 use super::{broadcast_join_event, ensure_server_owner, get_initialized_state};
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 use aegis_protocol::{self, AepMessage};
 use aep::{database, user_service};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Runtime, State};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerBanUpdate {
@@ -75,7 +75,7 @@ pub async fn create_server(
         .map_err(|e| e.to_string())?;
 
     let default_channel = database::Channel {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         server_id: server.id.clone(),
         name: "general".to_string(),
         channel_type: "text".to_string(),

@@ -18,6 +18,8 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::sync::{Once, OnceLock};
 
+use scu128::Scu128;
+
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
 const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
 const MAX_UNAPPROVED_BUFFER_BYTES: u64 = 8_388_608; // 8 MiB
@@ -811,7 +813,7 @@ pub async fn handle_aep_message(
             // Logic to store the friend request in the database for the target user
             let now = chrono::Utc::now();
             let friendship = database::Friendship {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: Scu128::new().to_string(),
                 user_a_id: sender_id.clone(),
                 user_b_id: target_id.clone(),
                 status: database::FriendshipStatus::Pending.to_string(),
@@ -927,14 +929,14 @@ pub async fn handle_aep_message(
                 };
                 database::update_friendship_status(db_pool, &friendship.id, new_status).await?;
             } else {
-                let friendship = database::Friendship {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    user_a_id: blocker_id.clone(),
-                    user_b_id: blocked_id.clone(),
-                    status: database::FriendshipStatus::BlockedByA.to_string(), // Assuming blocker_id is user_a
-                    created_at: now,
-                    updated_at: now,
-                };
+            let friendship = database::Friendship {
+                id: Scu128::new().to_string(),
+                user_a_id: blocker_id.clone(),
+                user_b_id: blocked_id.clone(),
+                status: database::FriendshipStatus::BlockedByA.to_string(), // Assuming blocker_id is user_a
+                created_at: now,
+                updated_at: now,
+            };
                 database::insert_friendship(db_pool, &friendship).await?;
             }
         }
@@ -1273,7 +1275,7 @@ pub async fn handle_aep_message(
             database::insert_server(db_pool, &server).await?;
             database::add_server_member(db_pool, &server.id, &server.owner_id).await?;
             let default_channel = database::Channel {
-                id: uuid::Uuid::new_v4().to_string(),
+                id: Scu128::new().to_string(),
                 server_id: server.id.clone(),
                 name: "general".to_string(),
                 channel_type: "text".to_string(),

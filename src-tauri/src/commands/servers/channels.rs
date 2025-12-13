@@ -1,11 +1,11 @@
 use super::{ensure_server_owner, get_initialized_state, sanitize_required_string};
 use crate::commands::state::AppStateContainer;
+use scu128::Scu128;
 use aegis_protocol::{self, AepMessage};
 use aep::database::{self, Channel, ChannelCategory, ChannelDisplayPreference};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelDisplayPreferenceResponse {
@@ -81,7 +81,7 @@ async fn create_channel_category_internal(
     };
 
     let category = ChannelCategory {
-        id: Uuid::new_v4().to_string(),
+        id: Scu128::new().to_string(),
         server_id: request.server_id,
         name,
         position,
