@@ -54,14 +54,12 @@ pub async fn send_presence_update(
         signature: Some(signature),
     };
     let serialized_message = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-    // Broadcast to the network
     state
         .network_tx
         .send(serialized_message)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Also update local DB for immediate UI feedback
     user_service::update_user_presence(
         &state.db_pool,
         &peer_id,

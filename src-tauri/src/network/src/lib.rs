@@ -16,7 +16,6 @@ use libp2p::{
     Transport,
 };
 use std::error::Error;
-// Derive macro re-exported at crate root for this libp2p version
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use libp2p::request_response::{
     self, ProtocolName, RequestResponse, RequestResponseCodec, RequestResponseConfig,

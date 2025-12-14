@@ -39,7 +39,6 @@ pub async fn handle_message<R: Runtime>(
             }
         }
         _ => {
-            // Existing generic handler
             let _ = aep::handle_aep_message(message.clone(), &ctx.db_pool, ctx.app_state.clone()).await;
         }
     }

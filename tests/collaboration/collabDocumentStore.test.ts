@@ -26,15 +26,12 @@ describe("collaborationStore", () => {
     const localText = localDoc.getText("content");
     const remoteText = remoteDoc.getText("content");
 
-    // Sync initial state between docs.
     const bootstrapUpdate = Y.encodeStateAsUpdate(localDoc);
     Y.applyUpdate(remoteDoc, bootstrapUpdate);
 
-    // Local peer writes some text.
     session.updateContent("Hello from peer A");
     await waitForMicrotask();
 
-    // Remote peer applies local state and performs an edit.
     Y.applyUpdate(remoteDoc, Y.encodeStateAsUpdate(localDoc));
     remoteDoc.transact(() => {
       if (remoteText.length > 0) {

@@ -89,11 +89,8 @@ impl Manager {
         let id_keys = self.account.identity_keys();
         let otks = self.account.one_time_keys();
 
-        let signed_prekey = id_keys.curve25519;
-        
-        // Vodozemac sign() expects a string (usually the base64 representation of the key)
+        let signed_prekey = id_keys.curve25519;        
         let signature = self.account.sign(&signed_prekey.to_base64());
-
         let one_time_key = otks.values().next().map(|k| k.to_base64());
 
         let bundle = PrekeyBundle {
@@ -150,12 +147,18 @@ impl Manager {
         }
     }
 
-    pub fn decrypt_direct(&mut self, peer_id: &str, packet: &EncryptedPacket) -> Result<Vec<u8>> {
-        // If we don't have a session, this MUST be a PreKeyMessage (initiation).
-        // However, we cannot create a session purely from the message; we need the peer's Identity Key.
-        // In a real app, you fetch this from your contact list/server based on `peer_id`.
+    pub fn decrypt_direct(&mut self, peer_id: &str, packet: &EncryptedPacket, peer_identity_key: Option<&str>) -> Result<Vec<u8>> {
         if !self.sessions.contains_key(peer_id) {
-             return Err(anyhow!("No session exists for {}. You must call 'create_inbound_session_from_packet' first with their Identity Key.", peer_id));
+            if let Some(identity_key) = peer_identity_key {
+                if let Some(init_bytes) = &packet.init {
+                    let packet_body = std::str::from_utf8(init_bytes).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
+                    self.create_inbound_session_from_packet(peer_id, identity_key, packet_body)?;
+                } else {
+                    return Err(anyhow!("No session exists for {} and no initiation packet provided.", peer_id));
+                }
+            } else {
+                return Err(anyhow!("No session exists for {}. Provide peer identity key to create session.", peer_id));
+            }
         }
 
         let session = self.sessions.get_mut(peer_id).unwrap();
@@ -175,9 +178,6 @@ impl Manager {
     pub fn create_inbound_session_from_packet(&mut self, peer_id: &str, peer_identity_key_b64: &str, packet_body: &str) -> Result<String> {
         let peer_key = Curve25519PublicKey::from_base64(peer_identity_key_b64)?;
         let prekey_msg = PreKeyMessage::from_base64(packet_body)?;
-        
-        // create_inbound_session returns an InboundCreationResult struct
-        // containing { session, plaintext }
         let result = self.account.create_inbound_session(peer_key, &prekey_msg)?;
         
         self.sessions.insert(peer_id.to_string(), result.session);
@@ -198,8 +198,6 @@ impl Manager {
 
     pub fn add_inbound_group_session(&mut self, session_key_b64: &str) -> Result<()> {
         let key = SessionKey::from_base64(session_key_b64)?;
-        
-        // InboundGroupSession::new returns Self (not Result) in this version
         let session = InboundGroupSession::new(&key, MegolmSessionConfig::default());
         
         let session_id = session.session_id();
@@ -213,7 +211,6 @@ impl Manager {
         group_id: &str,
         plaintext: &str,
     ) -> Result<EncryptedGroupPacket> {
-        // Block to limit mutable borrow scope
         let (session_id, ciphertext) = {
             let session = self
                 .outbound_group
@@ -300,7 +297,7 @@ impl Manager {
     }
 
     pub fn decrypt_from(&mut self, peer_id: &str, packet: &EncryptedPacket) -> Result<Vec<u8>> {
-        self.decrypt_direct(peer_id, packet)
+        self.decrypt_direct(peer_id, packet, None)
     }
 
     pub fn decrypt_group_message(&mut self, server_id: &str, channel_id: &Option<String>, ciphertext: &[u8]) -> Result<Vec<u8>> {

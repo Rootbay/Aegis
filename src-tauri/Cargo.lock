@@ -77,10 +77,13 @@ dependencies = [
 name = "aegis-core"
 version = "0.1.0"
 dependencies = [
+ "aegis-protocol",
  "aegis-shared-types",
  "aes-gcm 0.10.3",
+ "base64 0.22.1",
  "bincode",
  "crypto",
+ "e2ee",
  "libp2p",
  "rand 0.8.5",
  "serde",

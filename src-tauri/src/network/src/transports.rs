@@ -82,7 +82,6 @@ impl TransportManager {
                 if !enabled {
                     guard.bluetooth_peers.clear();
                 } else if let Some(local) = guard.local_peer_id.clone() {
-                    // Track the local peer so UI components can reflect advertising state.
                     guard.bluetooth_peers.insert(local);
                 }
 

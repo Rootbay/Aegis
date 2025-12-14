@@ -182,7 +182,6 @@ describe("CreateGroupModal", () => {
       "Recent DMs",
     );
 
-    // Ensure both contacts are selectable and rendered in their respective sections
     const friendCheckbox = getByLabelText("Alpha") as HTMLInputElement;
     const dmCheckbox = getByLabelText("Delta") as HTMLInputElement;
 

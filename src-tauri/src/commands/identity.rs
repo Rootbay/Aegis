@@ -158,7 +158,6 @@ pub async fn unlock_identity<R: Runtime>(
     crate::bootstrap::initialize_app_state(app, password, state_container).await
 }
 
-// Helper used by initialization
 pub(crate) fn get_or_create_identity<R: Runtime>(
     app: &tauri::AppHandle<R>,
     password: &str,

@@ -1,7 +1,10 @@
+use aegis_protocol;
 use aegis_shared_types::AppState;
 use aes_gcm::aead::Aead;
 use aes_gcm::KeyInit;
 use aes_gcm::{Aes256Gcm, Key, Nonce};
+use base64::{Engine as _, engine::general_purpose};
+use e2ee;
 use libp2p::PeerId;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -11,7 +14,7 @@ use std::io::Read;
 use std::path::Path;
 use typenum::U12;
 
-const CHUNK_SIZE: usize = 1024 * 1024; // 1MB
+const CHUNK_SIZE: usize = 1024 * 1024;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FileMetadata {
@@ -64,13 +67,29 @@ pub async fn send_file(
 
     let (key, nonce) = generate_symmetric_key();
 
-    // For the purpose of this example, we will send the key unencrypted.
-    // In a real application, this would be a major security vulnerability.
-    let _encrypted_key = key.to_vec();
+    let key_b64 = general_purpose::STANDARD.encode(&key);
+
+    let e2ee_mgr = e2ee::init_global_manager();
+    let mut mgr = e2ee_mgr.lock().await;
+    let encrypted_packet = mgr.encrypt_for(&_recipient_peer_id.to_base58(), key_b64.as_bytes())
+        .map_err(|e| format!("Failed to encrypt symmetric key: {}", e))?;
+    let encrypted_key_bytes = bincode::serialize(&encrypted_packet)
+        .map_err(|e| format!("Failed to serialize encrypted key: {}", e))?;
+
+    let mut request_message: aegis_protocol::AepMessage = bincode::deserialize(&request_message_bytes)
+        .map_err(|e| format!("Failed to deserialize request message: {}", e))?;
+    if let aegis_protocol::AepMessage::FileTransferRequest { ref mut encrypted_key, ref mut nonce, .. } = request_message {
+        *encrypted_key = encrypted_key_bytes;
+        *nonce = nonce.to_vec();
+    } else {
+        return Err("Invalid request message type".to_string());
+    }
+    let updated_request_bytes = bincode::serialize(&request_message)
+        .map_err(|e| format!("Failed to serialize updated request message: {}", e))?;
 
     state
         .network_tx
-        .send(request_message_bytes)
+        .send(updated_request_bytes)
         .await
         .map_err(|e| e.to_string())?;
 

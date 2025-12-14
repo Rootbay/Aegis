@@ -27,7 +27,7 @@ pub(super) fn spawn_group_key_rotation(
     tokio::spawn(async move {
         let mut last_rotated: std::collections::HashMap<String, i64> =
             std::collections::HashMap::new();
-        let rotation_interval_secs: i64 = 12 * 60 * 60; // 12h
+        let rotation_interval_secs: i64 = 12 * 60 * 60;
         let retry_interval_secs: i64 = 60;
 
         struct Pending {

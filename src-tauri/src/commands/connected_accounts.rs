@@ -5,8 +5,9 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use scu128::Scu128;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[archive(check_bytes)]
 pub struct ExternalAccount {
     pub id: String,
     pub provider: String,
@@ -31,14 +32,14 @@ fn load_accounts(app: &AppHandle) -> Result<Vec<ExternalAccount>, String> {
 
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     let accounts: Vec<ExternalAccount> =
-        serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        rkyv::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {:?}", e))?;
     Ok(accounts)
 }
 
-fn persist_accounts(app: &AppHandle, accounts: &[ExternalAccount]) -> Result<(), String> {
+fn persist_accounts(app: &AppHandle, accounts: &Vec<ExternalAccount>) -> Result<(), String> {
     let path = get_accounts_path(app)?;
-    let json = serde_json::to_vec_pretty(accounts).map_err(|e| e.to_string())?;
-    fs::write(path, json).map_err(|e| e.to_string())?;
+    let bytes = rkyv::to_bytes::<_, 1024>(accounts).map_err(|e| format!("Serialization error: {:?}", e))?;
+    fs::write(path, &bytes).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -73,7 +74,6 @@ pub async fn link_external_account(
         scopes: vec!["basic".into()],
     };
 
-    // Replace any previous entry for the same provider/username pair.
     accounts.retain(|existing| {
         !(existing.provider == account.provider && existing.username == account.username)
     });

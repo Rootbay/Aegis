@@ -119,7 +119,8 @@ pub async fn reject_file_transfer(
     Ok(())
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Default)]
+#[archive(check_bytes)]
 struct IncomingResilientMetadata {
     file_size: u64,
     chunk_size: usize,
@@ -137,7 +138,7 @@ fn load_resilient_incoming_from_disk(
 
     let bytes = std::fs::read(metadata_path).map_err(|e| e.to_string())?;
     let metadata: IncomingResilientMetadata =
-        serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        rkyv::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {:?}", e))?;
     let chunk_size = if metadata.chunk_size == 0 {
         DEFAULT_CHUNK_SIZE
     } else {
@@ -161,8 +162,8 @@ fn persist_incoming_metadata_file(
     metadata_path: &Path,
     metadata: &IncomingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    std::fs::write(metadata_path, bytes).map_err(|e| e.to_string())
+    let bytes = rkyv::to_bytes::<_, 1024>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    std::fs::write(metadata_path, &bytes).map_err(|e| e.to_string())
 }
 
 fn sanitize_filename(input: &str) -> String {

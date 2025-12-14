@@ -19,7 +19,6 @@ pub enum AepMessage {
         reply_snapshot_snippet: Option<String>,
         signature: Option<Vec<u8>>,
     },
-    // Signal-style E2EE payload for direct messages
     EncryptedChatMessage {
         sender: String,
         recipient: String,
@@ -28,13 +27,11 @@ pub enum AepMessage {
         enc_content: Vec<u8>,
         signature: Option<Vec<u8>>,
     },
-    // Distribution of X3DH prekey bundle
     PrekeyBundle {
         user_id: String,
         bundle: Vec<u8>,
         signature: Option<Vec<u8>>,
     },
-    // Group-key distribution: each slot is an individually E2EE-encrypted blob for a member
     GroupKeyUpdate {
         server_id: String,
         channel_id: Option<String>,
@@ -42,7 +39,6 @@ pub enum AepMessage {
         slots: Vec<EncryptedDmSlot>,
         signature: Option<Vec<u8>>,
     },
-    // Encrypted group chat content using a symmetric group key
     EncryptedGroupMessage {
         sender: String,
         server_id: String,
@@ -496,7 +492,6 @@ pub struct FileTransferErrorData {
     pub error: String,
 }
 
-// Re-exporting types from aegis_types for convenience
 pub use aegis_shared_types::{Channel, Server, User};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Archive, RkyvSerialize, RkyvDeserialize)]

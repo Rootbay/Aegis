@@ -20,12 +20,9 @@ pub mod scu128 {
                 .as_millis();
 
             let counter = self.counter.fetch_add(1, Ordering::SeqCst);
-
-            // Combine timestamp and counter into a 128-bit ID
             let high_bits = timestamp;
             let low_bits = counter;
 
-            // Format as a 32-character hex string
             format!("{:016x}{:016x}", high_bits, low_bits)
         }
 

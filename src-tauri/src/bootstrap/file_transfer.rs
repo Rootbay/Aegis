@@ -7,7 +7,8 @@ use aegis_shared_types::FileTransferMode;
 
 use super::constants::DEFAULT_CHUNK_SIZE;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Default)]
+#[archive(check_bytes)]
 pub(crate) struct OutgoingResilientMetadata {
     pub next_index: u64,
     pub bytes_sent: u64,
@@ -16,7 +17,8 @@ pub(crate) struct OutgoingResilientMetadata {
     pub safe_filename: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Default)]
+#[archive(check_bytes)]
 pub(crate) struct IncomingResilientMetadata {
     pub file_size: u64,
     pub chunk_size: usize,
@@ -33,15 +35,15 @@ pub(crate) fn mode_to_str(mode: FileTransferMode) -> &'static str {
 
 pub(crate) fn load_outgoing_metadata(path: &Path) -> Result<OutgoingResilientMetadata, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+    rkyv::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {:?}", e))
 }
 
 pub(crate) fn persist_outgoing_metadata(
     path: &Path,
     metadata: &OutgoingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    std::fs::write(path, bytes).map_err(|e| e.to_string())
+    let bytes = rkyv::to_bytes::<_, 1024>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    std::fs::write(path, &bytes).map_err(|e| e.to_string())
 }
 
 #[allow(dead_code)]
@@ -55,7 +57,7 @@ pub(crate) fn load_incoming_resilient_chunks(
 
     let bytes = std::fs::read(meta_path).map_err(|e| e.to_string())?;
     let metadata: IncomingResilientMetadata =
-        serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        rkyv::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {:?}", e))?;
     let chunk_size = if metadata.chunk_size == 0 {
         DEFAULT_CHUNK_SIZE
     } else {
@@ -80,8 +82,8 @@ pub(crate) fn persist_incoming_metadata(
     path: &Path,
     metadata: &IncomingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = serde_json::to_vec(metadata).map_err(|e| e.to_string())?;
-    std::fs::write(path, bytes).map_err(|e| e.to_string())
+    let bytes = rkyv::to_bytes::<_, 1024>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    std::fs::write(path, &bytes).map_err(|e| e.to_string())
 }
 
 pub(crate) fn write_incoming_chunk(path: &Path, index: u64, data: &[u8]) -> Result<(), String> {

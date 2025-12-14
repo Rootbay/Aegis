@@ -181,7 +181,6 @@ pub async fn submit_review(
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "Review was not found after creation.".to_string())?;
 
-    // Ensure the subject type string casing matches the normalized value used during insertion.
     let mut response = ReviewResponse::from(review);
     response.subject_type = subject_type_string;
     Ok(response)

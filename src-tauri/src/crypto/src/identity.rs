@@ -90,12 +90,10 @@ impl Identity {
         self.keypair.public().to_peer_id()
     }
 
-    /// Returns the libp2p PeerId (base58) derived from the public key
     pub fn peer_id_base58(&self) -> String {
         self.keypair.public().to_peer_id().to_base58()
     }
 
-    /// Returns the public key in libp2p protobuf encoding (raw bytes)
     pub fn public_key_protobuf_bytes(&self) -> Vec<u8> {
         self.keypair.public().to_protobuf_encoding()
     }

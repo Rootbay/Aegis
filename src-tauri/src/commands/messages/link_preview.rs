@@ -73,9 +73,9 @@ static ICON_SELECTOR: Lazy<Selector> =
 static APPLE_ICON_SELECTOR: Lazy<Selector> =
     Lazy::new(|| Selector::parse(r#"link[rel="apple-touch-icon"]"#).unwrap());
 
-/// Metadata describing a resolved link preview in the format expected by the frontend.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, rkyv::Archive, rkyv::Deserialize, rkyv::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[archive(check_bytes)]
 pub struct LinkPreviewMetadata {
     pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -105,13 +105,13 @@ async fn ensure_link_preview_cache_loaded(cache_path: Option<PathBuf>) {
 }
 
 async fn load_link_preview_cache(path: &Path) -> HashMap<String, Option<LinkPreviewMetadata>> {
-    match fs::read_to_string(path).await {
-        Ok(content) => {
-            match serde_json::from_str::<HashMap<String, Option<LinkPreviewMetadata>>>(&content) {
+    match fs::read(path).await {
+        Ok(bytes) => {
+            match rkyv::from_bytes::<HashMap<String, Option<LinkPreviewMetadata>>>(&bytes) {
                 Ok(cache) => cache,
                 Err(error) => {
                     warn!(
-                        "[link_previews] Failed to parse cache at {}: {}",
+                        "[link_previews] Failed to parse cache at {}: {:?}",
                         path.display(),
                         error
                     );
@@ -142,10 +142,10 @@ async fn persist_link_preview_cache(
             .map_err(|error| format!("failed to prepare cache directory: {error}"))?;
     }
 
-    let payload = serde_json::to_string_pretty(cache)
-        .map_err(|error| format!("failed to serialize link preview cache: {error}"))?;
+    let bytes = rkyv::to_bytes::<_, 1024>(cache)
+        .map_err(|error| format!("failed to serialize link preview cache: {:?}", error))?;
 
-    fs::write(path, payload)
+    fs::write(path, &bytes)
         .await
         .map_err(|error| format!("failed to write link preview cache: {error}"))
 }
@@ -326,7 +326,6 @@ async fn fetch_link_preview(url: &Url) -> Result<Option<LinkPreviewMetadata>, St
     Ok(Some(metadata))
 }
 
-/// Resolve rich preview metadata for a HTTP(S) link.
 #[tauri::command]
 pub async fn resolve_link_preview(
     app: AppHandle,

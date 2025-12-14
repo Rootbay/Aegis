@@ -26,7 +26,6 @@ impl From<String> for AegisError {
     }
 }
 
-// Implement From for tauri::Error if needed for command results
 impl From<AegisError> for String {
     fn from(error: AegisError) -> Self {
         error.to_string()
