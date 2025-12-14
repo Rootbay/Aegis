@@ -36,6 +36,7 @@ dependencies = [
  "aegis-shared-types",
  "aegis_types",
  "aep",
+ "anyhow",
  "argon2",
  "assert_cmd",
  "base64 0.22.1",
@@ -1761,6 +1762,7 @@ dependencies = [
  "rand 0.8.5",
  "rkyv",
  "serde",
+ "tokio",
  "vodozemac",
 ]
 

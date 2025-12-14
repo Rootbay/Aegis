@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use crypto::identity::Identity;
 use network::{AerpRouter, Behaviour, Topic};
 
+#[derive(Clone)]
 pub(super) struct NetworkResources {
     pub shared_swarm: Arc<Mutex<Swarm<Behaviour>>>,
     pub router: Arc<Mutex<AerpRouter>>,

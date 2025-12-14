@@ -8,7 +8,7 @@ use aegis_shared_types::FileTransferMode;
 use super::constants::DEFAULT_CHUNK_SIZE;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub(super) struct OutgoingResilientMetadata {
+pub(crate) struct OutgoingResilientMetadata {
     pub next_index: u64,
     pub bytes_sent: u64,
     pub chunk_size: usize,
@@ -17,26 +17,26 @@ pub(super) struct OutgoingResilientMetadata {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
-pub(super) struct IncomingResilientMetadata {
+pub(crate) struct IncomingResilientMetadata {
     pub file_size: u64,
     pub chunk_size: usize,
     pub chunks: HashMap<u64, usize>,
     pub safe_filename: String,
 }
 
-pub(super) fn mode_to_str(mode: FileTransferMode) -> &'static str {
+pub(crate) fn mode_to_str(mode: FileTransferMode) -> &'static str {
     match mode {
         FileTransferMode::Basic => "basic",
         FileTransferMode::Resilient => "resilient",
     }
 }
 
-pub(super) fn load_outgoing_metadata(path: &Path) -> Result<OutgoingResilientMetadata, String> {
+pub(crate) fn load_outgoing_metadata(path: &Path) -> Result<OutgoingResilientMetadata, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     serde_json::from_slice(&bytes).map_err(|e| e.to_string())
 }
 
-pub(super) fn persist_outgoing_metadata(
+pub(crate) fn persist_outgoing_metadata(
     path: &Path,
     metadata: &OutgoingResilientMetadata,
 ) -> Result<(), String> {
@@ -45,7 +45,7 @@ pub(super) fn persist_outgoing_metadata(
 }
 
 #[allow(dead_code)]
-pub(super) fn load_incoming_resilient_chunks(
+pub(crate) fn load_incoming_resilient_chunks(
     meta_path: &Path,
     data_path: &Path,
 ) -> Result<(IncomingResilientMetadata, HashMap<u64, Vec<u8>>), String> {
@@ -76,7 +76,7 @@ pub(super) fn load_incoming_resilient_chunks(
     Ok((metadata, chunks))
 }
 
-pub(super) fn persist_incoming_metadata(
+pub(crate) fn persist_incoming_metadata(
     path: &Path,
     metadata: &IncomingResilientMetadata,
 ) -> Result<(), String> {
@@ -84,7 +84,7 @@ pub(super) fn persist_incoming_metadata(
     std::fs::write(path, bytes).map_err(|e| e.to_string())
 }
 
-pub(super) fn write_incoming_chunk(path: &Path, index: u64, data: &[u8]) -> Result<(), String> {
+pub(crate) fn write_incoming_chunk(path: &Path, index: u64, data: &[u8]) -> Result<(), String> {
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -96,7 +96,7 @@ pub(super) fn write_incoming_chunk(path: &Path, index: u64, data: &[u8]) -> Resu
     file.write_all(data).map_err(|e| e.to_string())
 }
 
-pub(super) fn cleanup_incoming_state(
+pub(crate) fn cleanup_incoming_state(
     staging_path: &Option<PathBuf>,
     metadata_path: &Option<PathBuf>,
 ) {
@@ -112,7 +112,7 @@ pub(super) fn cleanup_incoming_state(
     }
 }
 
-pub(super) fn sanitize_filename(input: &str) -> String {
+pub(crate) fn sanitize_filename(input: &str) -> String {
     let candidate = Path::new(input)
         .file_name()
         .and_then(|s| s.to_str())

@@ -1,5 +1,7 @@
 mod app;
+mod context;
 mod directories;
+mod handlers;
 mod identity;
 mod network;
 mod state;

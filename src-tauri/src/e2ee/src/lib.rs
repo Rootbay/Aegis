@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use once_cell::sync::OnceCell;
-use parking_lot::Mutex;
+use tokio::sync::Mutex as TokioMutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -361,9 +361,9 @@ impl Manager {
     }
 }
 
-static GLOBAL: OnceCell<Arc<Mutex<Manager>>> = OnceCell::new();
+static GLOBAL: OnceCell<Arc<TokioMutex<Manager>>> = OnceCell::new();
 
-pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<Mutex<Manager>> {
+pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
     let dir = path.as_ref().to_path_buf();
     let state_file = dir.join("state.e2ee");
 
@@ -424,9 +424,9 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<Mutex<Manager>> {
         Manager::new()
     };
 
-    let wrapper = Arc::new(Mutex::new(manager));
+    let wrapper = Arc::new(TokioMutex::new(manager));
     {
-        let mut g = wrapper.lock();
+        let mut g = wrapper.try_lock().unwrap();
         g.set_storage_dir(dir);
         let _ = g.save_all();
     }
@@ -435,10 +435,10 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<Mutex<Manager>> {
     wrapper
 }
 
-pub fn global() -> Option<Arc<Mutex<Manager>>> {
+pub fn global() -> Option<Arc<TokioMutex<Manager>>> {
     GLOBAL.get().cloned()
 }
 
-pub fn init_global_manager() -> Arc<Mutex<Manager>> {
+pub fn init_global_manager() -> Arc<TokioMutex<Manager>> {
     global().expect("e2ee not initialized")
 }

@@ -12,7 +12,7 @@ pub(super) async fn broadcast_group_key_update(
 ) -> Result<(), String> {
     let (epoch, key_bytes) = {
         let arc = e2ee::init_global_manager();
-        let mgr = arc.lock();
+        let mgr = arc.lock().await;
         mgr.get_group_key(server_id, channel_id)
             .ok_or_else(|| "Missing group key for broadcast".to_string())?
     };
@@ -27,7 +27,7 @@ pub(super) async fn broadcast_group_key_update(
             continue;
         }
         let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock();
+        let mut mgr = arc.lock().await;
         if let Ok(pkt) = mgr.encrypt_for(&m.id, &key_bytes) {
             slots.push(EncryptedDmSlot {
                 recipient: m.id,
@@ -65,7 +65,7 @@ pub(super) async fn rotate_and_broadcast_group_key(
 ) -> Result<(), String> {
     let key = {
         let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock();
+        let mut mgr = arc.lock().await;
         mgr.generate_and_set_group_key(server_id, channel_id, epoch)
     };
     let issuer_id = identity.peer_id().to_base58();
@@ -79,7 +79,7 @@ pub(super) async fn rotate_and_broadcast_group_key(
             continue;
         }
         let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock();
+        let mut mgr = arc.lock().await;
         if let Ok(pkt) = mgr.encrypt_for(&m.id, &key) {
             slots.push(EncryptedDmSlot {
                 recipient: m.id,

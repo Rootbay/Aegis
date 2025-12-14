@@ -23,7 +23,7 @@ pub async fn rotate_group_key(
 
             {
                 let arc = e2ee::init_global_manager();
-                let mut mgr = arc.lock();
+                let mut mgr = arc.lock().await;
                 mgr.set_group_key(&server_id, &channel_id, epoch, &key);
             }
 
@@ -31,32 +31,32 @@ pub async fn rotate_group_key(
                 .await
                 .map_err(|e| e.to_string())?;
 
+            let my_id = state.identity.peer_id().to_base58();
+            let mut slots = Vec::new();
+            for member in members {
+                if member.id == my_id {
+                    continue;
+                }
+
+                let arc = e2ee::init_global_manager();
+                let mut mgr = arc.lock().await;
+                let pkt = mgr
+                    .encrypt_for(&member.id, &key)
+                    .map_err(|e| format!("E2EE encrypt error: {e}"))?;
+                slots.push(aegis_protocol::EncryptedDmSlot {
+                    recipient: member.id,
+                    init: pkt.init,
+                    enc_header: pkt.enc_header,
+                    enc_content: pkt.enc_content,
+                });
+            }
+
             let identity = state.identity.clone();
             let server_id_clone = server_id.clone();
             let channel_id_clone = channel_id.clone();
-            let my_id = identity.peer_id().to_base58();
+            let issuer_id = my_id;
 
             let bytes = tokio::task::spawn_blocking(move || {
-                let mut slots = Vec::new();
-                for member in members {
-                    if member.id == my_id {
-                        continue;
-                    }
-
-                    let arc = e2ee::init_global_manager();
-                    let mut mgr = arc.lock();
-                    let pkt = mgr
-                        .encrypt_for(&member.id, &key)
-                        .map_err(|e| format!("E2EE encrypt error: {e}"))?;
-                    slots.push(aegis_protocol::EncryptedDmSlot {
-                        recipient: member.id,
-                        init: pkt.init,
-                        enc_header: pkt.enc_header,
-                        enc_content: pkt.enc_content,
-                    });
-                }
-
-                let issuer_id = my_id;
                 let payload = bincode::serialize(&(
                     issuer_id,
                     &server_id_clone,
@@ -123,20 +123,20 @@ pub async fn send_encrypted_group_message(
             let my_id = identity.peer_id().to_base58();
             let my_id_clone = my_id.clone();
 
+            let serialized_payload = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+
+            let (epoch, nonce, ciphertext) = {
+                let arc = e2ee::init_global_manager();
+                let mut mgr = arc.lock().await;
+                mgr.encrypt_group_message(
+                    &server_id_clone,
+                    &channel_id_clone,
+                    &serialized_payload,
+                )
+                .map_err(|e| format!("Group E2EE: {e}"))?
+            };
+
             let bytes = tokio::task::spawn_blocking(move || {
-                let serialized_payload = bincode::serialize(&payload).map_err(|e| e.to_string())?;
-
-                let (epoch, nonce, ciphertext) = {
-                    let arc = e2ee::init_global_manager();
-                    let mut mgr = arc.lock();
-                    mgr.encrypt_group_message(
-                        &server_id_clone,
-                        &channel_id_clone,
-                        &serialized_payload,
-                    )
-                    .map_err(|e| format!("Group E2EE: {e}"))?
-                };
-
                 let payload_bytes = bincode::serialize(&(
                     my_id_clone.clone(),
                     &server_id_clone,

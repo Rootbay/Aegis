@@ -188,12 +188,12 @@ pub async fn send_encrypted_dm(
             let recipient_id_clone = recipient_id.clone();
             let my_id_clone = my_id.clone();
 
-            let (pkt, signature) = tokio::task::spawn_blocking(move || {
+            let (pkt, signature) = tokio::spawn(async move {
                 let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
 
                 let pkt = {
                     let e2ee_arc = e2ee::init_global_manager();
-                    let mut mgr = e2ee_arc.lock();
+                    let mut mgr = e2ee_arc.lock().await;
                     mgr.encrypt_for(&recipient_id_clone, &plaintext)
                         .map_err(|e| format!("E2EE encrypt error: {e}"))?
                 };
@@ -339,12 +339,12 @@ pub async fn send_encrypted_dm_with_attachments(
             let recipient_id_clone = recipient_id.clone();
             let my_id_clone = my_id.clone();
 
-            let (pkt, signature) = tokio::task::spawn_blocking(move || {
+            let (pkt, signature) = tokio::spawn(async move {
                 let plaintext = bincode::serialize(&payload).map_err(|e| e.to_string())?;
 
                 let pkt = {
                     let e2ee_arc = e2ee::init_global_manager();
-                    let mut mgr = e2ee_arc.lock();
+                    let mut mgr = e2ee_arc.lock().await;
                     mgr.encrypt_for(&recipient_id_clone, &plaintext)
                         .map_err(|e| format!("E2EE encrypt error: {e}"))?
                 };

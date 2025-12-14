@@ -29,6 +29,7 @@ bleasy = "0.3.1"
 futures = "0.3"
 once_cell = "1.19"
 tracing = "0.1"
+anyhow = "1.0"
 
 aegis-shared-types = { path = "./src/aegis-shared-types" }
 aegis-protocol = { path = "./src/aegis-protocol" }

@@ -86,7 +86,7 @@ async fn broadcast_prekey_bundle(
     }
     let mgr_arc = e2ee::init_with_dir(&e2ee_dir);
     let bundle_bytes = {
-        let mut mgr = mgr_arc.lock();
+        let mut mgr = mgr_arc.lock().await;
         let bundle = mgr.generate_prekey_bundle(8).map_err(|e| e.to_string())?;
         bincode::serialize(&bundle).map_err(|e| e.to_string())?
     };
