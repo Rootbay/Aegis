@@ -23,7 +23,7 @@ use scu128::Scu128;
 mod rkyv_utils;
 use rkyv_utils::serialize;
 
-
+use crate::database::messages::AttachmentWithData;
 
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
 const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
@@ -225,6 +225,7 @@ pub async fn handle_aep_message(
             };
 
             let mut attachments_for_db = Vec::new();
+            let mut attachment_data = Vec::new();
             for attachment in &attachments {
                 let data_len = attachment.data.len() as u64;
                 let sanitized_size = if attachment.size == 0 {
@@ -235,13 +236,19 @@ pub async fn handle_aep_message(
                     attachment.size
                 };
 
-                attachments_for_db.push(database::Attachment {
+                let metadata = database::Attachment {
                     id: attachment.id.clone(),
                     message_id: id.clone(),
                     name: attachment.name.clone(),
                     content_type: attachment.content_type.clone(),
-                    size: sanitized_size,
-                    data: Some(attachment.data.clone()),
+                    size: sanitized_size
+                };
+
+                attachments_for_db.push(metadata.clone());
+
+                attachment_data.push(AttachmentWithData {
+                    metadata,
+                    data: attachment.data.clone(),
                 });
             }
 
@@ -262,7 +269,7 @@ pub async fn handle_aep_message(
                 edited_by: None,
                 expires_at,
             };
-            database::insert_message(db_pool, &new_message).await?;
+            database::insert_message(db_pool, &new_message, &attachment_data).await?;
         }
         AepMessage::MessageReaction {
             message_id,
