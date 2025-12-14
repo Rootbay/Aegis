@@ -144,6 +144,7 @@ pub(super) async fn persist_and_broadcast_message(
     let timestamp = chrono::Utc::now();
 
     let mut db_attachments = Vec::new();
+    let mut attachment_data = Vec::new();
     let mut protocol_attachments = Vec::new();
 
     let voice_memos_enabled = state.voice_memos_enabled.load(Ordering::Relaxed);
@@ -171,13 +172,17 @@ pub(super) async fn persist_and_broadcast_message(
             data_len
         };
 
-        db_attachments.push(database::Attachment {
+        let attachment = database::Attachment {
             id: attachment_id.clone(),
             message_id: message_id.clone(),
             name: name.clone(),
             content_type: content_type.clone(),
             size: sanitized_size,
-            data: Some(data.clone()),
+        };
+        db_attachments.push(attachment.clone());
+        attachment_data.push(database::AttachmentWithData {
+            metadata: attachment,
+            data: data.clone(),
         });
 
         protocol_attachments.push(aegis_protocol::AttachmentPayload {
@@ -206,7 +211,7 @@ pub(super) async fn persist_and_broadcast_message(
         edited_by: None,
         expires_at: expires_at.clone(),
     };
-    database::insert_message(&state.db_pool, &new_local_message)
+    database::insert_message(&state.db_pool, &new_local_message, &attachment_data)
         .await
         .map_err(|e| e.to_string())?;
 

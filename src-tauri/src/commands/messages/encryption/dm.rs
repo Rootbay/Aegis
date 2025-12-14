@@ -172,7 +172,7 @@ pub async fn send_encrypted_dm(
                 edited_by: None,
                 expires_at,
             };
-            database::insert_message(&state.db_pool, &new_local_message)
+            database::insert_message(&state.db_pool, &new_local_message, &[])
                 .await
                 .map_err(|e| e.to_string())?;
 
@@ -268,6 +268,7 @@ pub async fn send_encrypted_dm_with_attachments(
             let message_id = Scu128::new().to_string();
             let timestamp = Utc::now();
             let mut db_attachments = Vec::with_capacity(attachments.len());
+            let mut attachment_data = Vec::with_capacity(attachments.len());
             let mut payload_attachments = Vec::with_capacity(attachments.len());
 
             for descriptor in attachments.drain(..) {
@@ -284,13 +285,17 @@ pub async fn send_encrypted_dm_with_attachments(
 
                 let sanitized_size = normalize_size(size, data.len());
                 let attachment_id = Scu128::new().to_string();
-                db_attachments.push(database::Attachment {
+                let attachment = database::Attachment {
                     id: attachment_id,
                     message_id: message_id.clone(),
                     name: name.clone(),
                     content_type: content_type.clone(),
                     size: sanitized_size,
-                    data: Some(data.clone()),
+                };
+                db_attachments.push(attachment.clone());
+                attachment_data.push(database::AttachmentWithData {
+                    metadata: attachment,
+                    data: data.clone(),
                 });
 
                 payload_attachments.push(AttachmentDescriptor {
@@ -318,7 +323,7 @@ pub async fn send_encrypted_dm_with_attachments(
                 edited_by: None,
                 expires_at,
             };
-            database::insert_message(&state.db_pool, &new_local_message)
+            database::insert_message(&state.db_pool, &new_local_message, &attachment_data)
                 .await
                 .map_err(|e| e.to_string())?;
 

@@ -17,13 +17,18 @@ async fn message_with_attachments_round_trips() {
     let content = "hello with files".to_string();
     let attachment_bytes: Vec<u8> = b"file-bytes".to_vec();
 
+    let attachment_id = Scu128::new().to_string();
     let attachment = database::Attachment {
-        id: Scu128::new().to_string(),
+        id: attachment_id.clone(),
         message_id: message_id.clone(),
         name: "greeting.txt".to_string(),
         content_type: Some("text/plain".to_string()),
         size: attachment_bytes.len() as u64,
-        data: Some(attachment_bytes.clone()),
+    };
+
+    let attachment_with_data = database::AttachmentWithData {
+        metadata: attachment.clone(),
+        data: attachment_bytes.clone(),
     };
 
     let message = database::Message {
@@ -44,7 +49,7 @@ async fn message_with_attachments_round_trips() {
         expires_at: None,
     };
 
-    database::insert_message(&pool, &message)
+    database::insert_message(&pool, &message, &[attachment_with_data])
         .await
         .expect("insert message");
 
@@ -64,7 +69,6 @@ async fn message_with_attachments_round_trips() {
     assert_eq!(fetched_attachment.name, attachment.name);
     assert_eq!(fetched_attachment.content_type, attachment.content_type);
     assert_eq!(fetched_attachment.size, attachment_bytes.len() as u64);
-    assert!(fetched_attachment.data.is_none());
 
     let fetched_bytes = database::get_attachment_data(&pool, &attachment.id)
         .await
@@ -102,7 +106,7 @@ async fn message_reply_snapshot_round_trips() {
         expires_at: None,
     };
 
-    database::insert_message(&pool, &message)
+    database::insert_message(&pool, &message, &[])
         .await
         .expect("insert reply message");
 

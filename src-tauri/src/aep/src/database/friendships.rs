@@ -287,7 +287,3 @@ pub async fn get_friendship_by_id(
     .await?;
     Ok(friendship)
 }
-
-fn bool_from_i64(value: i64) -> bool {
-    value != 0
-}

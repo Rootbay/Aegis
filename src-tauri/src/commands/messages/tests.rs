@@ -234,7 +234,7 @@ async fn delete_message_is_broadcast_and_applied() {
         edited_by: None,
         expires_at: None,
     };
-    database::insert_message(&local_db, &message)
+    database::insert_message(&local_db, &message, &[])
         .await
         .expect("insert message");
 
@@ -289,7 +289,7 @@ async fn delete_message_is_broadcast_and_applied() {
         .await
         .expect("insert remote user");
 
-    database::insert_message(&remote_db, &message)
+    database::insert_message(&remote_db, &message, &[])
         .await
         .expect("insert remote message");
 
@@ -394,7 +394,7 @@ async fn edit_message_is_persisted_and_broadcast() {
         edited_by: None,
         expires_at: None,
     };
-    database::insert_message(&local_db, &message)
+    database::insert_message(&local_db, &message, &[])
         .await
         .expect("insert message");
 
@@ -454,7 +454,7 @@ async fn edit_message_is_persisted_and_broadcast() {
         .await
         .expect("insert remote user");
 
-    database::insert_message(&remote_db, &message)
+    database::insert_message(&remote_db, &message, &[])
         .await
         .expect("insert remote message");
 

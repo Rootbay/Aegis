@@ -495,6 +495,7 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                 let message_id = Scu128::new().to_string();
                                                                 let timestamp = chrono::Utc::now();
                                                                 let mut db_attachments = Vec::new();
+                                                                let mut attachment_data = Vec::new();
                                                                 let (content, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet) =
                                                                     if let Ok(payload) = bincode::deserialize::<crate::commands::messages::EncryptedDmPayload>(&plaintext) {
                                                                         for descriptor in payload.attachments.into_iter() {
@@ -509,13 +510,17 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                                 data_len
                                                                             };
                                                                             let attachment_id = Scu128::new().to_string();
-                                                                            db_attachments.push(aep::database::Attachment {
+                                                                            let attachment = aep::database::Attachment {
                                                                                 id: attachment_id,
                                                                                 message_id: message_id.clone(),
                                                                                 name: descriptor.name.clone(),
                                                                                 content_type: descriptor.content_type.clone(),
                                                                                 size: sanitized_size,
-                                                                                data: Some(descriptor.data),
+                                                                            };
+                                                                            db_attachments.push(attachment.clone());
+                                                                            attachment_data.push(aep::database::AttachmentWithData {
+                                                                                metadata: attachment,
+                                                                                data: descriptor.data,
                                                                             });
                                                                         }
                                                                         (
@@ -553,7 +558,7 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                     edited_by: None,
                                                                     expires_at: None,
                                                                 };
-                                                                if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
+                                                                if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message, &attachment_data).await { eprintln!("DB insert error: {}", e); }
                                                             }
                                                         }
                                                     }
@@ -799,7 +804,7 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                     edited_by: None,
                                                                     expires_at: None,
                                                                 };
-                                                            if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message).await { eprintln!("DB insert error: {}", e); }
+                                                            if let Err(e) = aep::database::insert_message(&db_pool_clone, &new_message, &[]).await { eprintln!("DB insert error: {}", e); }
                                                         }
                                                     }
                                                 }
