@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use crypto::identity::Identity;
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
 use std::collections::HashMap;
@@ -226,7 +227,8 @@ impl RelayRecord {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize)]
+#[archive_attr(derive(Debug, PartialEq, Eq))]
 pub struct User {
     pub id: String,
     pub username: String,
@@ -301,7 +303,8 @@ pub struct Role {
     pub member_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Archive, RkyvSerialize, RkyvDeserialize, sqlx::FromRow)]
+#[archive_attr(derive(Debug, PartialEq, Eq))]
 pub struct Channel {
     pub id: String,
     pub server_id: String,

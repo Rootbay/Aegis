@@ -226,7 +226,7 @@ pub async fn search_users(
             let relationship = match row.relationship_status.as_deref() {
                 Some(status) if status.eq_ignore_ascii_case("accepted") => "friend",
                 Some(status) if status.eq_ignore_ascii_case("pending") => {
-                    if row.friendship_sender_id.as_deref() == Some(&my_id) {
+                    if row.friendship_sender_id.as_ref() == Some(&my_id) {
                         "outgoing"
                     } else {
                         "incoming"

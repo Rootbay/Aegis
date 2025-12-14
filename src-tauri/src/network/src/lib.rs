@@ -25,6 +25,9 @@ use libp2p::request_response::{
 use libp2p::NetworkBehaviour;
 use std::io;
 
+mod rkyv_utils;
+use rkyv_utils::{serialize, deserialize};
+
 pub use aerp::{
     AerpConfig, AerpRouter, LinkQuality, RouteMetrics, RouteSnapshot, RoutedEnvelope, RoutedFrame,
     RouterSnapshot,
@@ -82,7 +85,10 @@ impl ProtocolName for FileTransferProtocol {
 #[derive(Debug, Clone)]
 pub struct FileTransferCodec;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+use rkyv::{Archive, Serialize, Deserialize};
+
+#[derive(Debug, Clone, Archive, Serialize, Deserialize, serde::Serialize, serde::Deserialize)]
+#[archive(check_bytes)]
 pub enum FileTransferRequest {
     Init {
         filename: String,
@@ -98,7 +104,8 @@ pub enum FileTransferRequest {
     },
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Archive, Serialize, Deserialize, serde::Serialize, serde::Deserialize)]
+#[archive(check_bytes)]
 pub enum FileTransferResponse {
     Ack,
     Error(String),
@@ -120,7 +127,7 @@ impl RequestResponseCodec for FileTransferCodec {
     {
         let mut buf = Vec::new();
         AsyncReadExt::read_to_end(io, &mut buf).await?;
-        bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        deserialize(&buf)
     }
 
     async fn read_response<T>(
@@ -133,7 +140,7 @@ impl RequestResponseCodec for FileTransferCodec {
     {
         let mut buf = Vec::new();
         AsyncReadExt::read_to_end(io, &mut buf).await?;
-        bincode::deserialize(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        deserialize(&buf)
     }
 
     async fn write_request<T>(
@@ -145,8 +152,7 @@ impl RequestResponseCodec for FileTransferCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        let bytes =
-            bincode::serialize(&req).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let bytes = serialize(&req)?;
         AsyncWriteExt::write_all(io, &bytes).await
     }
 
@@ -159,8 +165,7 @@ impl RequestResponseCodec for FileTransferCodec {
     where
         T: AsyncWrite + Unpin + Send,
     {
-        let bytes =
-            bincode::serialize(&res).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let bytes = serialize(&res)?;
         AsyncWriteExt::write_all(io, &bytes).await
     }
 }
@@ -231,7 +236,7 @@ pub async fn send_data(
             origin,
             payload: data,
         };
-        let bytes = bincode::serialize(&frame)?;
+        let bytes = serialize(&frame)?;
         match swarm
             .behaviour_mut()
             .gossipsub
@@ -256,7 +261,7 @@ pub async fn send_data(
             payload: data.clone(),
         };
         let frame = RoutedFrame::Routed { envelope };
-        let bytes = bincode::serialize(&frame)?;
+        let bytes = serialize(&frame)?;
         match swarm
             .behaviour_mut()
             .gossipsub
@@ -275,7 +280,7 @@ pub async fn send_data(
             origin,
             payload: data,
         };
-        let bytes = bincode::serialize(&fallback)?;
+        let bytes = serialize(&fallback)?;
         match swarm
             .behaviour_mut()
             .gossipsub

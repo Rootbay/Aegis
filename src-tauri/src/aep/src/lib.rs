@@ -20,6 +20,11 @@ use std::sync::{Once, OnceLock};
 
 use scu128::Scu128;
 
+mod rkyv_utils;
+use rkyv_utils::serialize;
+
+
+
 const MAX_FILE_SIZE_BYTES: u64 = 1_073_741_824; // 1 GiB
 const MAX_INFLIGHT_FILE_BYTES: u64 = 536_870_912; // 512 MiB
 const MAX_UNAPPROVED_BUFFER_BYTES: u64 = 8_388_608; // 8 MiB
@@ -186,8 +191,7 @@ pub async fn handle_aep_message(
                 reply_snapshot_author: reply_snapshot_author.clone(),
                 reply_snapshot_snippet: reply_snapshot_snippet.clone(),
             };
-            let chat_message_bytes =
-                bincode::serialize(&chat_message_data).map_err(|e| AegisError::Serialization(e))?;
+            let chat_message_bytes = serialize(&chat_message_data)?;
             let public_key = fetch_public_key_for_user(db_pool, &sender).await?;
 
             if let Some(sig) = signature {
@@ -276,7 +280,7 @@ pub async fn handle_aep_message(
                 action: action.clone(),
             };
             let reaction_bytes =
-                bincode::serialize(&reaction_data).map_err(AegisError::Serialization)?;
+                serialize(&reaction_data).map_err(AegisError::Serialization)?;
             let public_key = fetch_public_key_for_user(db_pool, &user_id).await?;
 
             let signature = signature.ok_or_else(|| {
@@ -318,7 +322,7 @@ pub async fn handle_aep_message(
                 scope: scope.clone(),
             };
             let deletion_bytes =
-                bincode::serialize(&deletion_data).map_err(AegisError::Serialization)?;
+                serialize(&deletion_data).map_err(AegisError::Serialization)?;
             let public_key = fetch_public_key_for_user(db_pool, &initiator_id).await?;
 
             let signature = signature.ok_or_else(|| {
@@ -388,7 +392,7 @@ pub async fn handle_aep_message(
                 new_content: new_content.clone(),
                 edited_at,
             };
-            let edit_bytes = bincode::serialize(&edit_data).map_err(AegisError::Serialization)?;
+            let edit_bytes = serialize(&edit_data).map_err(AegisError::Serialization)?;
             let public_key = fetch_public_key_for_user(db_pool, &editor_id).await?;
 
             let signature = signature.ok_or_else(|| {
@@ -458,7 +462,7 @@ pub async fn handle_aep_message(
                 peer_id: peer_id.clone(),
                 address: address.clone(),
             };
-            let peer_discovery_bytes = bincode::serialize(&peer_discovery_data)
+            let peer_discovery_bytes = serialize(&peer_discovery_data)
                 .map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &peer_id).await?;
 
@@ -496,7 +500,7 @@ pub async fn handle_aep_message(
                 status_message: status_message.clone(),
                 location: location.clone(),
             };
-            let presence_update_bytes = bincode::serialize(&presence_update_data)
+            let presence_update_bytes = serialize(&presence_update_data)
                 .map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &user_id).await?;
 
@@ -552,7 +556,7 @@ pub async fn handle_aep_message(
             };
 
             let user_data_bytes =
-                bincode::serialize(&user).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&user).map_err(|e| AegisError::Serialization(e))?;
 
             if public_key.verify(&user_data_bytes, signature.as_ref().unwrap()) {
                 user_service::insert_user(db_pool, &user).await?;
@@ -782,7 +786,7 @@ pub async fn handle_aep_message(
                 sender_id: sender_id.clone(),
                 target_id: target_id.clone(),
             };
-            let friend_request_bytes = bincode::serialize(&friend_request_data)
+            let friend_request_bytes = serialize(&friend_request_data)
                 .map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &sender_id).await?;
 
@@ -833,7 +837,7 @@ pub async fn handle_aep_message(
                 target_id: target_id.clone(),
                 accepted,
             };
-            let friend_request_response_bytes = bincode::serialize(&friend_request_response_data)
+            let friend_request_response_bytes = serialize(&friend_request_response_data)
                 .map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &sender_id).await?;
 
@@ -891,7 +895,7 @@ pub async fn handle_aep_message(
                 blocked_id: blocked_id.clone(),
             };
             let block_user_bytes =
-                bincode::serialize(&block_user_data).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&block_user_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &blocker_id).await?;
 
             if let Some(sig) = signature {
@@ -950,7 +954,7 @@ pub async fn handle_aep_message(
                 unblocked_id: unblocked_id.clone(),
             };
             let unblock_user_bytes =
-                bincode::serialize(&unblock_user_data).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&unblock_user_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &unblocker_id).await?;
 
             if let Some(sig) = signature {
@@ -992,7 +996,7 @@ pub async fn handle_aep_message(
                 remover_id: remover_id.clone(),
                 removed_id: removed_id.clone(),
             };
-            let remove_friendship_bytes = bincode::serialize(&remove_friendship_data)
+            let remove_friendship_bytes = serialize(&remove_friendship_data)
                 .map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &remover_id).await?;
 
@@ -1042,7 +1046,7 @@ pub async fn handle_aep_message(
                 created_at: created_at.clone(),
             };
             let payload_bytes =
-                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &creator_id).await?;
 
             if let Some(sig) = signature {
@@ -1097,7 +1101,7 @@ pub async fn handle_aep_message(
                 member_id: member_id.clone(),
             };
             let payload_bytes =
-                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &member_id).await?;
 
             if let Some(sig) = signature {
@@ -1142,7 +1146,7 @@ pub async fn handle_aep_message(
                 adder_id: adder_id.clone(),
             };
             let payload_bytes =
-                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &adder_id).await?;
 
             if let Some(sig) = signature {
@@ -1181,7 +1185,7 @@ pub async fn handle_aep_message(
                 remover_id: remover_id.clone(),
             };
             let payload_bytes =
-                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &remover_id).await?;
 
             if let Some(sig) = signature {
@@ -1218,7 +1222,7 @@ pub async fn handle_aep_message(
                 updater_id: updater_id.clone(),
             };
             let payload_bytes =
-                bincode::serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&payload).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &updater_id).await?;
 
             if let Some(sig) = signature {
@@ -1247,7 +1251,7 @@ pub async fn handle_aep_message(
             let create_server_data = CreateServerData {
                 server: server.clone(),
             };
-            let create_server_bytes = bincode::serialize(&create_server_data)
+            let create_server_bytes = serialize(&create_server_data)
                 .map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &server.owner_id).await?;
 
@@ -1294,7 +1298,7 @@ pub async fn handle_aep_message(
                 user_id: user_id.clone(),
             };
             let join_server_bytes =
-                bincode::serialize(&join_server_data).map_err(|e| AegisError::Serialization(e))?;
+                serialize(&join_server_data).map_err(|e| AegisError::Serialization(e))?;
             let public_key = fetch_public_key_for_user(db_pool, &user_id).await?;
 
             if let Some(sig) = signature {
@@ -1327,7 +1331,7 @@ pub async fn handle_aep_message(
             let create_channel_data = CreateChannelData {
                 channel: channel.clone(),
             };
-            let create_channel_bytes = bincode::serialize(&create_channel_data)
+            let create_channel_bytes = serialize(&create_channel_data)
                 .map_err(|e| AegisError::Serialization(e))?;
 
             // Authorize via server owner's key
@@ -1367,7 +1371,7 @@ pub async fn handle_aep_message(
             let delete_channel_data = DeleteChannelData {
                 channel_id: channel_id.clone(),
             };
-            let delete_channel_bytes = bincode::serialize(&delete_channel_data)
+            let delete_channel_bytes = serialize(&delete_channel_data)
                 .map_err(|e| AegisError::Serialization(e))?;
 
             // Reconstruct server context from channel to verify via server owner
@@ -1408,7 +1412,7 @@ pub async fn handle_aep_message(
             let delete_server_data = DeleteServerData {
                 server_id: server_id.clone(),
             };
-            let delete_server_bytes = bincode::serialize(&delete_server_data)
+            let delete_server_bytes = serialize(&delete_server_data)
                 .map_err(|e| AegisError::Serialization(e))?;
 
             // Authorize via server owner's key
@@ -1447,7 +1451,7 @@ pub async fn handle_aep_message(
                 server_id: server_id.clone(),
                 user_id: user_id.clone(),
             };
-            let send_server_invite_bytes = bincode::serialize(&send_server_invite_data)
+            let send_server_invite_bytes = serialize(&send_server_invite_data)
                 .map_err(|e| AegisError::Serialization(e))?;
 
             // Authorize via server owner's key

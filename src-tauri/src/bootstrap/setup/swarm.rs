@@ -461,7 +461,7 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                                             let arc = e2ee::init_global_manager();
                                                                             {
                                                                                 let mut mgr = arc.lock();
-                                                                                let _ = mgr.add_remote_bundle(user_id.clone(), bundle_obj);
+                   let _ = mgr.add_remote_bundle(&user_id, bundle_obj);
                                                                             }
                                                                         }
                                                                     }
@@ -761,8 +761,8 @@ pub(super) fn spawn_swarm_processing<R: Runtime>(
                                                     if ok_sig {
                                                         let plaintext_opt = {
                                                             let arc = e2ee::init_global_manager();
-                                                            let mgr = arc.lock();
-                                                            mgr.decrypt_group_message(&server_id, &channel_id, epoch, &nonce, &ciphertext).ok()
+                                                            let mut mgr = arc.lock();
+                                                            mgr.decrypt_group_message(&server_id, &channel_id, &ciphertext).ok()
                                                         };
                                                         if let Some(plaintext) = plaintext_opt {
                                                             let chat_id = channel_id.clone().unwrap_or_else(|| server_id.clone());

@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
 
 use libp2p::PeerId;
-use serde::{Deserialize, Serialize};
+use rkyv::{Archive, Serialize as RkyvSerialize, Deserialize as RkyvDeserialize};
+use serde::{Serialize as SerdeSerialize, Deserialize as SerdeDeserialize};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, SerdeSerialize, SerdeDeserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AerpConfig {
     pub update_interval_secs: u64,
@@ -28,8 +29,9 @@ impl Default for AerpConfig {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, SerdeSerialize, SerdeDeserialize, Archive, RkyvSerialize, RkyvDeserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[archive_attr(derive(Debug))]
 pub struct RouteMetrics {
     pub hop_count: u32,
     pub total_latency_ms: f64,
@@ -49,8 +51,9 @@ impl RouteMetrics {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, SerdeSerialize, SerdeDeserialize, Archive, RkyvSerialize, RkyvDeserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+#[archive_attr(derive(Debug))]
 pub struct LinkQuality {
     pub latency_ms: f64,
     pub reliability: f64,
@@ -344,8 +347,9 @@ impl AerpRouter {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Archive, RkyvSerialize, RkyvDeserialize, SerdeSerialize, SerdeDeserialize)]
 #[serde(rename_all = "camelCase")]
+#[archive_attr(derive(Debug))]
 pub struct RoutedEnvelope {
     pub origin: String,
     pub destination: String,
@@ -354,8 +358,9 @@ pub struct RoutedEnvelope {
     pub payload: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Archive, RkyvSerialize, RkyvDeserialize, SerdeSerialize, SerdeDeserialize)]
 #[serde(rename_all = "camelCase")]
+#[archive_attr(derive(Debug))]
 pub enum RoutedFrame {
     Broadcast { origin: String, payload: Vec<u8> },
     Routed { envelope: RoutedEnvelope },

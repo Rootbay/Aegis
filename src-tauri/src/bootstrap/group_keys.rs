@@ -38,8 +38,7 @@ pub(super) async fn broadcast_group_key_update(
         }
     }
 
-    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots))
-        .map_err(|e| e.to_string())?;
+    let payload = rkyv::to_bytes::<_, 1024>(&(issuer_id.clone(), server_id.to_string(), channel_id.clone(), epoch, slots.clone())).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
     let signature = identity
         .keypair()
         .sign(&payload)
@@ -91,8 +90,7 @@ pub(super) async fn rotate_and_broadcast_group_key(
         }
     }
 
-    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots))
-        .map_err(|e| e.to_string())?;
+    let payload = rkyv::to_bytes::<_, 1024>(&(issuer_id.clone(), server_id.to_string(), channel_id.clone(), epoch, slots.clone())).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
     let signature = identity
         .keypair()
         .sign(&payload)

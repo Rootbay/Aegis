@@ -128,7 +128,7 @@ pub async fn send_encrypted_group_message(
 
                 let (epoch, nonce, ciphertext) = {
                     let arc = e2ee::init_global_manager();
-                    let mgr = arc.lock();
+                    let mut mgr = arc.lock();
                     mgr.encrypt_group_message(
                         &server_id_clone,
                         &channel_id_clone,

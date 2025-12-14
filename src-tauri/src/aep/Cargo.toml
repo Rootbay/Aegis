@@ -12,6 +12,8 @@ scu128 = { version = "0.1.0", path = "../scu128" }
 dirs = "5.0"
 libp2p = { version = "0.40", features = ["gossipsub", "tcp-tokio", "noise", "mplex", "identify"] }
 bincode = "1.3"
+rkyv = { version = "0.7", features = ["validation"] }
+bytecheck = "0.6"
 bs58 = "0.4"
 aegis-shared-types = { path = "../aegis-shared-types" }
 aegis-protocol = { path = "../aegis-protocol" }

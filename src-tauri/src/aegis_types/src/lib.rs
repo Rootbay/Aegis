@@ -6,6 +6,8 @@ pub enum AegisError {
     Database(#[from] sqlx::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] bincode::Error),
+    #[error("Rkyv serialization error: {0}")]
+    RkyvSerialization(String),
     #[error("Network error: {0}")]
     Network(String),
     #[error("User not found")]

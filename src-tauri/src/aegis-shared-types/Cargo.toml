@@ -11,3 +11,4 @@ uuid = { version = "1.8.0", features = ["v4"] }
 libp2p = { version = "0.40", features = ["gossipsub", "tcp-tokio", "noise", "mplex", "identify"] }
 tokio = { version = "1.0", features = ["full"] }
 crypto = { path = "../../src/crypto" }
+rkyv = { version = "0.7", features = ["validation"] }

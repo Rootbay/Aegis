@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -229,8 +230,9 @@ pub enum AepMessage {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
 #[serde(rename_all = "lowercase")]
+#[archive_attr(derive(Debug))]
 pub enum CollaborationKind {
     Document,
     Whiteboard,
@@ -282,8 +284,9 @@ pub struct SendServerInviteData {
     pub user_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
+#[archive_attr(derive(Debug))]
 pub enum MessageDeletionScope {
     Everyone,
     SpecificUsers { user_ids: Vec<String> },
@@ -356,8 +359,9 @@ pub struct AttachmentPayload {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
+#[archive_attr(derive(Debug))]
 pub enum CallSignalPayload {
     Offer {
         sdp: String,
@@ -380,8 +384,9 @@ pub enum CallSignalPayload {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Archive, RkyvSerialize, RkyvDeserialize)]
 #[serde(rename_all = "lowercase")]
+#[archive_attr(derive(Debug, PartialEq, Eq))]
 pub enum ReactionAction {
     Add,
     Remove,
@@ -494,7 +499,8 @@ pub struct FileTransferErrorData {
 // Re-exporting types from aegis_types for convenience
 pub use aegis_shared_types::{Channel, Server, User};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Archive, RkyvSerialize, RkyvDeserialize)]
+#[archive_attr(derive(Debug))]
 pub struct EncryptedDmSlot {
     pub recipient: String,
     pub init: Option<Vec<u8>>,

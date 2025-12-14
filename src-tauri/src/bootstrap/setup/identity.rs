@@ -32,7 +32,7 @@ pub(super) async fn initialize_identity_state(
     if let Ok(existing) = user_service::get_user(db_pool, &my_peer_id).await {
         match existing {
             Some(mut user) => {
-                if user.public_key.as_deref() != Some(&my_pubkey_b58) {
+                if user.public_key.as_ref() != Some(&my_pubkey_b58) {
                     user.public_key = Some(my_pubkey_b58.clone());
                     user_service::insert_user(db_pool, &user)
                         .await
@@ -59,7 +59,7 @@ async fn broadcast_profile(
     user: &aegis_shared_types::User,
     network_tx: &TokioSender<Vec<u8>>,
 ) -> Result<(), String> {
-    let user_bytes = bincode::serialize(user).map_err(|e| e.to_string())?;
+    let user_bytes = rkyv::to_bytes::<_, 1024>(user).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
     let signature = identity
         .keypair()
         .sign(&user_bytes)
@@ -87,7 +87,7 @@ async fn broadcast_prekey_bundle(
     let mgr_arc = e2ee::init_with_dir(&e2ee_dir);
     let bundle_bytes = {
         let mut mgr = mgr_arc.lock();
-        let bundle = mgr.generate_prekey_bundle(8);
+        let bundle = mgr.generate_prekey_bundle(8).map_err(|e| e.to_string())?;
         bincode::serialize(&bundle).map_err(|e| e.to_string())?
     };
 
