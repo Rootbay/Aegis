@@ -102,17 +102,19 @@ function sanitizeCategory(candidate: unknown): EmojiCategory {
     };
   }
 
+  const candidateObj = candidate as Record<string, unknown>;
   const id =
     getStringProperty(candidate, "id") ||
     getStringProperty(candidate, "label") ||
     "category";
   const label = getStringProperty(candidate, "label") || id;
-  const emojis = Array.isArray((candidate as any).emojis)
+  const emojisRaw = candidateObj.emojis;
+  const emojis = Array.isArray(emojisRaw)
     ? mapUnicode(
-        (candidate as any).emojis.filter(
+        (emojisRaw as unknown[]).filter(
           (emoji: unknown) =>
             typeof emoji === "string" && emoji.trim().length > 0,
-        ),
+        ) as string[],
       )
     : [];
 

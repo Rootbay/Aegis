@@ -20,15 +20,16 @@
     handleSelectDirectMessage,
   } = handlers;
 
-  const gotoResolved = (path: string) => goto(path);
+  // eslint-disable-next-line svelte/no-navigation-without-resolve
+  const gotoResolved = async (path: string) => await goto(path);
 
-  function handleControlsSettingsClick() {
+  async function handleControlsSettingsClick() {
     const server = activeServer();
     if (server?.id) {
-      gotoResolved(`/channels/${server.id}/settings`);
+      await gotoResolved(`/channels/${server.id}/settings`);
       return;
     }
-    gotoResolved("/settings");
+    await gotoResolved("/settings");
   }
 
   const activeServer = $derived(() => {
@@ -62,7 +63,6 @@
       <ServerSidebar
         server={activeServer()!}
         onSelectChannel={handleSelectChannel}
-        {openDetailedProfileModal}
       />
     {:else}
       <DirectMessageList

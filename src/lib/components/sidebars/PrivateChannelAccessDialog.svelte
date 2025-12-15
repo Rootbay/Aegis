@@ -14,12 +14,11 @@
   import type { Server } from "$lib/features/servers/models/Server";
   import type { Role } from "$lib/features/servers/models/Role";
 
-  const {
+  let {
     open = false,
-    searchTerm = "",
+    searchTerm = $bindable(""),
     submitDisabled = false,
     submitLabel = "Create Channel",
-    onSearchTermChange = (value: string) => {},
     onSearchKeydown = (event: KeyboardEvent) => {},
     selectedRoleIds = [],
     selectedMemberIds = [],
@@ -36,7 +35,6 @@
     searchTerm?: string;
     submitDisabled?: boolean;
     submitLabel?: string;
-    onSearchTermChange?: (value: string) => void;
     onSearchKeydown?: (event: KeyboardEvent) => void;
     selectedRoleIds?: string[];
     selectedMemberIds?: string[];
@@ -52,11 +50,6 @@
 
   const selectedRoleSet = $derived(new Set(selectedRoleIds));
   const selectedMemberSet = $derived(new Set(selectedMemberIds));
-
-  function handleInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    onSearchTermChange(target.value);
-  }
 </script>
 
 <Dialog
@@ -78,8 +71,7 @@
     <div class="space-y-4">
       <Input
         placeholder="Type @member or role name"
-        value={searchTerm}
-        oninput={handleInput}
+        bind:value={searchTerm}
         onkeydown={onSearchKeydown}
         class="w-full"
       />

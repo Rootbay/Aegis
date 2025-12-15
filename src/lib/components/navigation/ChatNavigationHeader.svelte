@@ -15,13 +15,6 @@
   import type { User } from "$lib/features/auth/models/User";
   import type { Component } from "svelte";
 
-  type OpenUserCardModal = (
-    user: User,
-    x: number,
-    y: number,
-    isServerMemberContext: boolean,
-  ) => void;
-
   let {
     chat,
     openUserCardModal,
@@ -31,7 +24,9 @@
     onToggleMemberPanel = () => {},
   } = $props<{
     chat: Chat;
-    openUserCardModal?: OpenUserCardModal;
+    // eslint-disable-next-line no-unused-vars
+    openUserCardModal?: (user: User, x: number, y: number, isServerMemberContext: boolean) => void;
+    // eslint-disable-next-line no-unused-vars
     onOpenDetailedProfile: (user: User) => void;
     showMemberPanelToggle?: boolean;
     mobileMemberPanelOpen?: boolean;
@@ -48,11 +43,11 @@
   );
 
   function handleAvatarClick(event: MouseEvent, user: User) {
-    openUserCardModal?.(user, event.clientX, event.clientY, false);
+    openUserCardModal && openUserCardModal(user, event.clientX, event.clientY, false);
   }
 
   function handleNameClick(event: MouseEvent, user: User) {
-    openUserCardModal?.(user, event.clientX, event.clientY, false);
+    openUserCardModal && openUserCardModal(user, event.clientX, event.clientY, false);
   }
 
   function handleNameDoubleClick(user: User) {

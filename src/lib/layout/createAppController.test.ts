@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor } from "@testing-library/svelte";
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 
 const { commandPaletteOpenMock, commandPaletteCloseMock, commandPaletteState } =
   vi.hoisted(() => {
-    const { writable } = require("svelte/store");
     const state = writable(false);
     return {
       commandPaletteState: state,

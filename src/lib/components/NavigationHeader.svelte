@@ -26,9 +26,11 @@
     onToggleMemberPanel = () => {},
   } = $props<{
     chat: Chat | null;
+    // eslint-disable-next-line no-unused-vars
     onOpenDetailedProfile: (user: User) => void;
     isFriendsOrRootPage?: boolean;
     friendsActiveTab?: string;
+    // eslint-disable-next-line no-unused-vars
     onFriendsTabSelect?: (tab: string) => void;
     onFriendsAddClick?: () => void;
     showMemberPanelToggle?: boolean;

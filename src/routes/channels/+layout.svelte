@@ -21,6 +21,7 @@
   const { openUserCardModal } = createGroupContext;
 
   const controller = createServerLayoutController({
+    // eslint-disable-next-line svelte/no-navigation-without-resolve
     navigate: (value) => goto(value),
     notifyError: (message) => toasts.addToast(message, "error"),
   });
@@ -37,7 +38,7 @@
   const serverIdStore = controller.serverId;
 
   const showSidebars = $derived(!page.url.pathname.includes("/settings"));
-  const skeletonRows = Array.from({ length: 5 });
+  const skeletonRows = [0, 1, 2, 3, 4];
 
   $effect(() => {
     const activeServerId = page.params.serverId ?? null;
@@ -55,7 +56,7 @@
         <div class="flex w-60 flex-col gap-3">
           <Skeleton class="h-10 w-full rounded-2xl" aria-hidden="true" />
           <div class="space-y-2">
-            {#each skeletonRows as _}
+            {#each skeletonRows as item (item)}
               <Skeleton class="h-3 w-full rounded-full" aria-hidden="true" />
             {/each}
           </div>
@@ -74,7 +75,7 @@
         <div class="flex w-64 flex-col gap-3">
           <Skeleton class="h-10 w-full rounded-2xl" aria-hidden="true" />
           <div class="space-y-2">
-            {#each skeletonRows as _}
+            {#each skeletonRows as item (item)}
               <Skeleton class="h-3 w-full rounded-full" aria-hidden="true" />
             {/each}
           </div>

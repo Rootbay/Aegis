@@ -15,9 +15,9 @@
     children,
   }: {
     chat: Chat | null;
-    openDetailedProfileModal: (user: User) => void;
+    openDetailedProfileModal: (_user: User) => void;
     friendsActiveTab: string;
-    onFriendsTabSelect: (tab: string) => void;
+    onFriendsTabSelect: (_tab: string) => void;
     onFriendsAddClick: () => void;
     children?: Snippet | null;
   } = $props();

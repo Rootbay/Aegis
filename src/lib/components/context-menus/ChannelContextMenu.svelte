@@ -35,6 +35,7 @@
     option?: ContextMenuOption;
   };
 
+  // eslint-disable-next-line no-unused-vars
   type ChannelContextMenuHandler = (detail: ChannelContextMenuDetail) => void;
 
   type ChannelContextMenuProps = {

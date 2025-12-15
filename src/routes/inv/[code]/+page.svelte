@@ -49,6 +49,7 @@
       );
       const server = serverStore.upsertServerFromBackend(response.server);
       serverStore.setActiveServer(server.id);
+      // eslint-disable-next-line svelte/no-navigation-without-resolve
       await goto(`/channels/${server.id}`);
     } catch (error) {
       console.error("Failed to redeem invite:", error);
@@ -61,8 +62,8 @@
     }
   }
 
-  function goHome() {
-    void goto("/");
+  async function goHome() {
+    await goto("/");
   }
 </script>
 
@@ -95,7 +96,7 @@
         </Button>
         <Button
           type="button"
-          onclick={() => goto("/channels")}
+          onclick={async () => await goto("/channels")}
           variant="secondary"
         >
           Browse servers

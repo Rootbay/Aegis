@@ -3,7 +3,6 @@
     Dialog,
     DialogContent,
     DialogTitle,
-    DialogClose,
   } from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
@@ -17,8 +16,6 @@
     Music3,
     Coffee,
     ArrowRight,
-    X,
-    Plus,
     Pen,
     Upload,
   } from "@lucide/svelte";
@@ -30,6 +27,7 @@
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import { serverInvitesStore } from "$lib/features/servers/stores/serverInvitesStore";
 
+  // eslint-disable-next-line no-unused-vars
   type UnaryHandler<T> = (value: T) => void;
 
   type ServerManagementModalProps = {
@@ -253,16 +251,7 @@
     }
   }
 
-  async function acceptInvite(inviteId: string) {
-    const server = await invites.acceptInvite(inviteId);
-    if (server) {
-      onserverJoined?.(server);
-    }
-  }
 
-  async function declineInvite(inviteId: string) {
-    await invites.declineInvite(inviteId);
-  }
 
   async function joinServer(serverId: string) {
     const server = await invites.joinServer(serverId);

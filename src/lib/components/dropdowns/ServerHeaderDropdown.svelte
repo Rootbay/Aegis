@@ -2,7 +2,6 @@
 
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
-  import type { ComponentType } from "svelte";
 
   import {
     DropdownMenu,

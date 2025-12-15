@@ -12,7 +12,6 @@ import type {
   GroupChatSummary,
   messagesByChatId,
 } from "$lib/features/chat/stores/chatStore";
-import type { Friend } from "$lib/features/friends/models/Friend";
 import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 import type { ModalManager } from "./modalManager";
 import type { PageState } from "./types";

@@ -39,6 +39,7 @@
   } from "$lib/components/sidebars/memberSidebar/types";
   import { onMount } from "svelte";
 
+  /* eslint-disable no-unused-vars */
   type MemberSidebarProps = {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
@@ -51,8 +52,9 @@
     groupOwnerId?: string | null;
     variant?: "desktop" | "mobile";
     mobileOpen?: boolean;
-    onMobileOpenChange?: (open: boolean) => void;
+    onMobileOpenChange?: (arg0: boolean) => void;
   };
+  /* eslint-enable no-unused-vars */
 
   let {
     members = [],
@@ -409,7 +411,6 @@
     profileUser={member}
     {openDetailedProfileModal}
     isServerMemberContext={isServerContext}
-    serverId={isServerContext ? (resolvedServerId ?? undefined) : undefined}
     memberRoles={isServerContext ? getMemberRoleObjects(member) : []}
     onAddRoles={isServerContext ? handleAddRolesClick : undefined}
   />

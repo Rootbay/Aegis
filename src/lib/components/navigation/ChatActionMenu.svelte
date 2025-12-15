@@ -44,6 +44,7 @@
   import { settings } from "$lib/features/settings/stores/settings";
   import type { Chat } from "$lib/features/chat/models/Chat";
 
+  // eslint-disable-next-line no-unused-vars
   type NavigationFn = (..._args: [string | URL]) => void;
 
   let { chat, applyPinnedFilter } = $props<{

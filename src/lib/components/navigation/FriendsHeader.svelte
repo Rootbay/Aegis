@@ -12,7 +12,8 @@
   let { tabs, activeTab, onTabSelect, onAddFriend } = $props<{
     tabs: readonly string[];
     activeTab: string;
-    onTabSelect: (tab: string) => void;
+    // eslint-disable-next-line no-unused-vars
+    onTabSelect: (value: string) => void;
     onAddFriend: () => void;
   }>();
 </script>

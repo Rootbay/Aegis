@@ -17,9 +17,12 @@
     $props<{
       chat: Chat;
       typingStatus: string;
-      onAvatarClick: (event: MouseEvent, user: User) => void;
-      onNameClick: (event: MouseEvent, user: User) => void;
-      onNameDoubleClick: (user: User) => void;
+      // eslint-disable-next-line no-unused-vars
+      onAvatarClick?: (event: MouseEvent, user: User) => void;
+      // eslint-disable-next-line no-unused-vars
+      onNameClick?: (event: MouseEvent, user: User) => void;
+      // eslint-disable-next-line no-unused-vars
+      onNameDoubleClick?: (user: User) => void;
     }>();
 
   const fallbackAvatar = (id: string) =>

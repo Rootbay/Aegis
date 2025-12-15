@@ -21,11 +21,14 @@ beforeEach(() => {
   vi.resetModules();
 
   diskStore = {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     get: vi.fn(async (_key: string) => null),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     set: vi.fn(async (_key: string, _value: unknown) => {}),
     save: vi.fn(async () => {}),
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   loadSpy = vi.fn(async (_path: string) => diskStore);
 
   vi.doMock("@tauri-apps/plugin-store", () => ({

@@ -6,7 +6,7 @@
     type AppController,
   } from "../createAppController";
 
-  export let onReady: (controller: AppController) => void = () => {};
+  export let onReady: (controller: AppController) => void = (controller) => {};
 
   const controller = createAppController();
 

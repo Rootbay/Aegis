@@ -17,6 +17,7 @@
     Code,
   } from "@lucide/svelte";
 
+  // eslint-disable-next-line no-unused-vars
   type ServerBackgroundActionHandler = ({ action }: { action: string }) => void;
 
   type ServerBackgroundContextMenuProps = {

@@ -11,10 +11,8 @@
     closeOnSelect?: boolean;
   };
 
-  export type ContextMenuHandler<TData> = ({
-    action,
-    itemData,
-  }: {
+  // eslint-disable-next-line no-unused-vars
+  export type ContextMenuHandler<TData> = (detail: {
     action: string;
     itemData: TData | null;
   }) => void;

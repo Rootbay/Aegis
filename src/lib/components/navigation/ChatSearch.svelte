@@ -12,7 +12,6 @@
   } from "$lib/components/ui/avatar";
   import { Badge } from "$lib/components/ui/badge";
   import { Separator } from "$lib/components/ui/separator";
-  import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
   import {
     Popover,

@@ -35,7 +35,7 @@
   import { writeTextToClipboard } from "$lib/utils/clipboard";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
-  import type { ServerInvite } from "$lib/features/servers/models/ServerInvite";
+
   import type { Friend } from "$lib/features/friends/models/Friend";
   import type { User } from "$lib/features/auth/models/User";
   import { Copy, Link2, Plus, ChevronDown, X } from "@lucide/svelte";
@@ -176,12 +176,10 @@
     server,
     onSelectChannel,
     refreshServerData,
-    openDetailedProfileModal,
   }: {
     server: Server;
     onSelectChannel: ChannelSelectHandler;
     refreshServerData?: () => Promise<void>;
-    openDetailedProfileModal?: OpenProfileHandler;
   } = $props();
 
   const { activeServerChannelId } = chatStore;
@@ -284,7 +282,7 @@
   let inviteSearchQuery = $state("");
   let inviteLink = $state("");
   let inviteLinkLoading = $state(false);
-  let inviteLinkExpiresAt = $state<string | null>(null);
+  let inviteLinkExpiresAt = $state<number | null>(null);
   let inviteLinkMaxUses = $state<number | null>(null);
   let inviteSettingsDialogOpen = $state(false);
   let selectedExpiryKey = $state("7d");
@@ -1276,7 +1274,7 @@
       const invite = mapInviteResponse(response);
       serverStore.addInviteToServer(server.id, invite);
       inviteLink = buildInviteLinkFromCode(invite.code);
-      inviteLinkExpiresAt = response.expires_at ?? null;
+      inviteLinkExpiresAt = response.expires_at ? Number(response.expires_at) : null;
       inviteLinkMaxUses = response.max_uses ?? null;
     } catch (error: any) {
       console.error("Failed to generate invite link:", error);
@@ -2589,10 +2587,7 @@
 {#if showPrivateChannelAccessDialog}
   <PrivateChannelAccessDialog
     open={showPrivateChannelAccessDialog}
-    searchTerm={privateAccessSearchTerm}
-    onSearchTermChange={(value) => {
-      privateAccessSearchTerm = value;
-    }}
+    bind:searchTerm={privateAccessSearchTerm}
     onSearchKeydown={handlePrivateAccessSearchKeydown}
     selectedRoleIds={Array.from(selectedRoleIds)}
     selectedMemberIds={Array.from(selectedMemberIds)}
@@ -2799,11 +2794,22 @@
         <p class="text-xs text-muted-foreground">
           Your invite link expires in
           <span class="font-semibold text-foreground">
-            {getExpiryOptionById(selectedExpiryKey)?.label ?? "7 days"}
+            {inviteLinkExpiresAt ? (() => {
+              const now = Date.now();
+              const expires = inviteLinkExpiresAt * 1000;
+              const diff = expires - now;
+              if (diff <= 0) return 'Expired';
+              const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+              if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
+              const hours = Math.floor(diff / (1000 * 60 * 60));
+              if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+              const minutes = Math.floor(diff / (1000 * 60));
+              return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+            })() : getExpiryOptionById(selectedExpiryKey)?.label ?? "7 days"}
           </span>
           and is valid for
           <span class="font-semibold text-foreground">
-            {getMaxUseOptionById(selectedMaxUsesKey)?.label ?? "Unlimited"}
+            {inviteLinkMaxUses !== null ? inviteLinkMaxUses.toString() : getMaxUseOptionById(selectedMaxUsesKey)?.label ?? "Unlimited"}
           </span>
           .
           <button

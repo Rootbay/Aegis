@@ -29,7 +29,7 @@
     openDetailedProfileModal,
   }: {
     chat: Chat;
-    openDetailedProfileModal: (user: User) => void;
+    openDetailedProfileModal: (_user: User) => void;
   } = $props();
 
   const isGroupChat = $derived(() => chat.type === "group");

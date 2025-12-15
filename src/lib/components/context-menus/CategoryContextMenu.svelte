@@ -31,11 +31,8 @@
     option?: ContextMenuOption;
   };
 
-  type CategoryContextMenuHandler = ({
-    action,
-    categoryId,
-    option,
-  }: CategoryContextMenuDetail) => void;
+  // eslint-disable-next-line no-unused-vars
+  type CategoryContextMenuHandler = (detail: CategoryContextMenuDetail) => void;
 
   type CategoryContextMenuProps = {
     x: number;

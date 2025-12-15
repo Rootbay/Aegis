@@ -55,7 +55,6 @@
     openDetailedProfileModal,
     isServerMemberContext = false,
     close,
-    serverId = null,
     memberRoles = [],
     onAddRoles,
   }: {
@@ -63,7 +62,6 @@
     openDetailedProfileModal: OpenDetailedProfileHandler;
     isServerMemberContext?: boolean;
     close?: () => void;
-    serverId?: string | null;
     memberRoles?: Role[];
     onAddRoles?: () => void;
   } = $props();
