@@ -8,7 +8,7 @@
     class: className = "",
     children,
   }: {
-    tag?: keyof HTMLElementTagNameMap;
+    tag?: string;
     class?: string;
     children?: Snippet;
   } = $props();

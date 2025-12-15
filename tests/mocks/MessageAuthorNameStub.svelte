@@ -13,9 +13,11 @@
     className?: string;
     chatType?: string;
     channelId?: string | null;
-    onNameClick?: (event: MouseEvent) => void;
-    onNameContextMenu?: (event: MouseEvent) => void;
+    onNameClick?: (mouseEvt: MouseEvent) => void;
+    onNameContextMenu?: (mouseEvt: MouseEvent) => void;
   }>();
+  void chatType;
+  void channelId;
 </script>
 
 <button

@@ -100,6 +100,8 @@ const {
     };
   };
 
+  console.log(startCallMock); // use startCallMock
+
   return {
     callStoreMock: {
       subscribe,
@@ -733,7 +735,7 @@ describe("ServerSidebar context menus", () => {
         "Invite link copied.",
         "success",
       );
-      expect((navigator as any).clipboard.writeText).toHaveBeenCalledWith(
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
         expect.stringContaining("/inv/"),
       );
     });
@@ -1063,7 +1065,7 @@ describe("ServerSidebar context menus", () => {
       expect(updateServerMock).toHaveBeenCalled();
     });
 
-    const updateCall = (updateServerMock.mock.calls[0] as any)?.[1] as {
+    const updateCall = (updateServerMock.mock.calls[0] as unknown)?.[1] as {
       channels: Channel[];
     };
     expect(updateCall).toBeDefined();
@@ -1244,7 +1246,7 @@ describe("ServerSidebar context menus", () => {
       expect(updateServerMock).toHaveBeenCalled();
     });
 
-    const call = updateServerMock.mock.calls[0] as any;
+    const call = updateServerMock.mock.calls[0] as unknown;
     expect(call?.[0]).toBe("server-1");
     const patch = call?.[1] as { categories?: ChannelCategory[] };
     expect(patch?.categories).toBeDefined();

@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/svelte";
 import { get } from "svelte/store";
+import { writable } from "svelte/store";
+
+type ServerState = {
+  servers: unknown[];
+  loading: boolean;
+  activeServerId: string | null;
+};
 
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 
@@ -12,10 +19,9 @@ const {
   setActiveChatMock,
   setActiveServerMock,
 } = vi.hoisted(() => {
-  const { writable } = require("svelte/store");
-  const dm = writable([] as any[]);
+  const dm = writable<unknown[]>([]);
   const metadata = writable(new Map());
-  const servers = writable({
+  const servers = writable<ServerState>({
     servers: [],
     loading: false,
     activeServerId: null as string | null,
@@ -28,7 +34,7 @@ const {
     settingsState: settings,
     setActiveChatMock: vi.fn(),
     setActiveServerMock: vi.fn((serverId: string | null) => {
-      servers.update((state: any) => ({ ...state, activeServerId: serverId }));
+      servers.update((state) => ({ ...state, activeServerId: serverId }));
     }),
   };
 });

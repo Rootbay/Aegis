@@ -17,8 +17,9 @@
     dialogContextKey,
   );
 
-  function close(value?: boolean) {
-    dialog?.close(value);
+  function close(val?: boolean) {
+    dialog?.close(val);
+    console.log(val);
   }
 </script>
 

@@ -11,7 +11,7 @@
     children,
   }: {
     open?: boolean;
-    onOpenChange?: (value: boolean) => void;
+    onOpenChange?: (isOpen: boolean) => void;
     children?: Snippet;
   } = $props();
 

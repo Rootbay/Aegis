@@ -1,8 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  type ActionDetail = { action: string };
-  type ActionHandler = (detail: ActionDetail) => void;
+  type ActionHandler = (act: string) => void;
   type ChildrenRenderer = () => any;
 
   let {
@@ -19,14 +18,14 @@
   <button
     type="button"
     data-testid="server-background-create-category"
-    onclick={() => onaction?.({ action: "create_category" })}
+    onclick={() => onaction?.("create_category")}
   >
     Create Category
   </button>
   <button
     type="button"
     data-testid="server-background-invite"
-    onclick={() => onaction?.({ action: "invite_people" })}
+    onclick={() => onaction?.("invite_people")}
   >
     Invite People
   </button>

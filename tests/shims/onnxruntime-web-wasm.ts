@@ -18,7 +18,8 @@ export class Tensor<T = number> {
 }
 
 export class InferenceSession {
-  static async create(_buffer: ArrayBuffer, _options?: unknown) {
+  static async create(buffer: ArrayBuffer, options?: unknown) {
+    console.log(buffer, options);
     return new InferenceSession();
   }
 

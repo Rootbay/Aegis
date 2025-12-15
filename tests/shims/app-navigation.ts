@@ -1,1 +1,3 @@
-export const goto = async (_target: string) => {};
+export const goto = async (target: string) => {
+  console.log(target);
+};

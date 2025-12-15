@@ -3,8 +3,7 @@
 <script lang="ts">
   import type { Channel } from "$lib/features/channels/models/Channel";
 
-  type ChannelActionDetail = { action: string; channelId: string };
-  type ChannelActionHandler = (detail: ChannelActionDetail) => void;
+  type ChannelActionHandler = (act: string, chanId: string) => void;
   type CloseHandler = () => void;
 
   let {
@@ -22,16 +21,14 @@
   <button
     type="button"
     data-testid="channel-context-invite"
-    onclick={() =>
-      onaction?.({ action: "invite_people", channelId: channel.id })}
+    onclick={() => onaction?.("invite_people", channel.id)}
   >
     Invite People
   </button>
   <button
     type="button"
     data-testid="channel-context-mute"
-    onclick={() =>
-      onaction?.({ action: "mute_channel", channelId: channel.id })}
+    onclick={() => onaction?.("mute_channel", channel.id)}
   >
     Toggle Mute
   </button>

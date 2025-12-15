@@ -2,7 +2,7 @@ import { vi } from "vitest";
 
 type InvokeArgs = Record<string, unknown> | undefined;
 
-type InvokeHandler = <T>(cmd: string, args?: InvokeArgs) => Promise<T>;
+type InvokeHandler = (cmd: string, args?: InvokeArgs) => Promise<unknown>;
 
 type Listener = (payload: unknown) => void;
 

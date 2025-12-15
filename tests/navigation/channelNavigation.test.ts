@@ -1,6 +1,7 @@
 import { render } from "@testing-library/svelte";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { tick } from "svelte";
+import { writable } from "svelte/store";
 
 import { createAppHandlers } from "$lib/layout/app/handlers";
 import ChannelPage from "../../src/routes/channels/[serverId]/[channelId]/+page.svelte";
@@ -94,9 +95,6 @@ const { serverStoreMock, setServerState } = vi.hoisted(() => {
 
 const { activeChatIdStore, activeChatTypeStore, activeServerChannelIdStore, messagesByChatIdStore } =
   vi.hoisted(() => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { writable } = require("svelte/store") as typeof import("svelte/store");
-
     return {
       activeChatIdStore: writable<string | null>(null),
       activeChatTypeStore: writable<"dm" | "server" | "group" | null>(null),

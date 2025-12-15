@@ -5,7 +5,10 @@ import {
   PRESENCE_STATUS_OPTIONS,
 } from "../../src/lib/features/presence/statusPresets";
 
-const invokeMock = vi.fn(async (..._args: unknown[]) => null);
+const invokeMock = vi.fn(async (...args: unknown[]) => {
+  console.log(args);
+  return null;
+});
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),

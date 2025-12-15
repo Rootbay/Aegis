@@ -17,7 +17,7 @@
       data?: unknown;
     }>;
     show?: boolean;
-    onaction?: (detail: { action?: string; itemData?: unknown }) => void;
+    onaction?: (actionDetail: { action?: string; itemData?: unknown }) => void;
   } = $props();
   type ContextMenuEntry = {
     trigger: (action: string) => void;
@@ -35,6 +35,7 @@
       const detail = { action: target.action, itemData: target.data };
       dispatch("action", detail);
       onaction?.(detail);
+      console.log(detail);
     },
     hasAction(action: string) {
       return menuItems.some((item) => item?.action === action);

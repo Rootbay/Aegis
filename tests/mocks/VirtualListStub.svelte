@@ -7,7 +7,7 @@
     keyProp,
   } = $props<{
     items?: T[];
-    renderItem?: (item: T, index: number) => any;
+    renderItem?: (datum: T, pos: number) => any;
     keyProp?: string;
   }>();
 </script>

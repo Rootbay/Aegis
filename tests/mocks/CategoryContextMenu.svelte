@@ -1,8 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  type ActionDetail = { action: string; categoryId: string };
-  type ActionHandler = (detail: ActionDetail) => void;
+  type ActionHandler = (act: string, catId: string) => void;
   type CloseHandler = () => void;
 
   let {
@@ -16,7 +15,7 @@
   } = $props();
 
   function trigger(action: string) {
-    onaction?.({ action, categoryId });
+    onaction?.(action, categoryId);
   }
 </script>
 

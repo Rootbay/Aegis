@@ -28,7 +28,9 @@ const { mockUser, userState, updateProfile, authPersistenceState } = vi.hoisted(
       state = value;
       subscribers.forEach((run) => run(state));
     };
-    const update = vi.fn(async (_user: User) => {});
+    const update = vi.fn(async (user: User) => {
+      console.log(user);
+    });
     type PersistenceState = {
       requireTotpOnUnlock: boolean;
       createdAt: string | null;
@@ -103,7 +105,8 @@ class FileReaderMock {
   public onloadstart: FileReader["onloadstart"] = null;
   public onprogress: FileReader["onprogress"] = null;
 
-  readAsDataURL(_file: Blob) {
+  readAsDataURL(file: Blob) {
+    console.log(file);
     this.result = "data:image/png;base64,uploaded-avatar";
     const handler = this.onload;
     if (handler) {

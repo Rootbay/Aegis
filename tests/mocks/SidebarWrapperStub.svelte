@@ -3,7 +3,7 @@
 <script lang="ts">
   let { class: className = "", as = "div", dataTestId, children } = $props<{
     class?: string;
-    as?: keyof HTMLElementTagNameMap;
+    as?: string;
     dataTestId?: string;
     children?: () => unknown;
   }>();

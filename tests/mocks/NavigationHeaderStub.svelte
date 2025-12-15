@@ -9,7 +9,7 @@
     onToggleMemberPanel = () => {},
   } = $props<{
     chat: unknown;
-    onOpenDetailedProfile?: (value: unknown) => void;
+    onOpenDetailedProfile?: (prof: unknown) => void;
     showMemberPanelToggle?: boolean;
     mobileMemberPanelOpen?: boolean;
     onToggleMemberPanel?: () => void;
