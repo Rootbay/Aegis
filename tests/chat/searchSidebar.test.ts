@@ -71,7 +71,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   },
 }));
 
-const { messagesStore, userState, serverState } = storeMocks;
+const { messagesStore } = storeMocks;
 
 const friend: Friend = {
   id: "friend-1",
@@ -102,7 +102,7 @@ describe("SearchSidebar", () => {
 
     vi.stubGlobal(
       "requestAnimationFrame",
-      (cb: FrameRequestCallback): number => {
+      (cb: (time: number) => void): number => {
         return setTimeout(() => cb(performance.now()), 0) as unknown as number;
       },
     );

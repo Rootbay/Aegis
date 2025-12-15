@@ -46,12 +46,12 @@ const encryptionMocks = vi.hoisted(() => {
   const encryptMock = vi.fn(
     async (params: { content: string; attachments: unknown[] }) => ({
       content: `cipher:${params.content}`,
-      attachments: params.attachments.map((attachment: any) => {
-        const bytes = toUint8Array(attachment.data);
+      attachments: params.attachments.map((attachment: unknown) => {
+        const bytes = toUint8Array((attachment as { data: unknown }).data);
         const mutated = new Uint8Array(bytes.length);
         mutated.set(bytes.map((value) => value ^ 0xff));
         return {
-          ...attachment,
+          ...(attachment as object),
           data: mutated,
         };
       }),
@@ -146,7 +146,7 @@ describe("chatStore encrypted messaging", () => {
 
   const setupDmStore = async () => {
     const store = createChatStore();
-    invokeMock.mockImplementation(async (command, payload) => {
+    invokeMock.mockImplementation(async (command) => {
       if (command === "get_messages") {
         return [];
       }
@@ -251,12 +251,12 @@ describe("chatStore encrypted messaging", () => {
       ([command]) => command === "send_encrypted_dm_with_attachments",
     );
     expect(attachmentCall).toBeTruthy();
-    const payload = attachmentCall?.[1] as {
+    const callPayload = attachmentCall?.[1] as {
       message: string;
       attachments: Array<{ data: Uint8Array }>;
     };
-    expect(payload.message).toBe("cipher:Encrypted file");
-    expect(Array.from(payload.attachments[0].data)).not.toEqual(
+    expect(callPayload.message).toBe("cipher:Encrypted file");
+    expect(Array.from(callPayload.attachments[0].data)).not.toEqual(
       Array.from(originalBytes),
     );
   });

@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  type ActionHandler = (act: string, catId: string) => void;
+  type ActionHandler = (action: string, categoryId: string) => void;
   type CloseHandler = () => void;
 
   let {

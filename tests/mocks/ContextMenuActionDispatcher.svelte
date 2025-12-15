@@ -17,7 +17,7 @@
       data?: unknown;
     }>;
     show?: boolean;
-    onaction?: (actionDetail: { action?: string; itemData?: unknown }) => void;
+    onaction?: (detail: { action?: string; itemData?: unknown }) => void;
   } = $props();
   type ContextMenuEntry = {
     trigger: (action: string) => void;

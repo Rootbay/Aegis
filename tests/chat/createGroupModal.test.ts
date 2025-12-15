@@ -1,6 +1,8 @@
 import { render, fireEvent, waitFor } from "@testing-library/svelte";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
+type ResizeObserverCallback = (entries: ResizeObserverEntry[], observer: ResizeObserver) => void;
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));

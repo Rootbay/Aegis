@@ -8,6 +8,8 @@ import { compile } from "svelte/compiler";
 import { tick } from "svelte";
 import { afterEach, describe, expect, it } from "vitest";
 
+type FrameRequestCallback = (time: number) => void;
+
 const dom = new JSDOM("<!doctype html><html><body></body></html>");
 globalThis.window = dom.window as unknown as typeof globalThis.window;
 globalThis.document = dom.window.document;

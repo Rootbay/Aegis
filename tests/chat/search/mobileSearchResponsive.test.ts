@@ -69,7 +69,7 @@ vi.mock("$lib/features/security/spamModelInference", () => ({
   inferSpamProbability: vi.fn().mockResolvedValue(0),
 }));
 
-const { messagesStore, userState, serverState } = storeMocks;
+const { messagesStore } = storeMocks;
 
 const friend: Friend = {
   id: "friend-1",

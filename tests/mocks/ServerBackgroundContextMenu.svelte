@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  type ActionHandler = (act: string) => void;
+  type ActionHandler = (action: string) => void;
   type ChildrenRenderer = () => any;
 
   let {

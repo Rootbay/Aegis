@@ -9,10 +9,10 @@
     onMobileOpenChange = () => {},
   } = $props<{
     members?: unknown[];
-    openDetailedProfileModal?: (mem: unknown) => void;
+    openDetailedProfileModal?: (member: unknown) => void;
     variant?: "desktop" | "mobile";
     mobileOpen?: boolean;
-    onMobileOpenChange?: (openState: boolean) => void;
+    onMobileOpenChange?: (open: boolean) => void;
   }>();
   void members;
   void openDetailedProfileModal;

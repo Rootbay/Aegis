@@ -190,11 +190,12 @@ describe("chatStore read receipts and typing indicators", () => {
     serverStoreStateRef.reset();
     invokeMock.mockReset();
     connectivityMocks.reset();
-    invokeMock.mockImplementation(async (command, payload: any) => {
+    invokeMock.mockImplementation(async (command, payload: unknown) => {
       if (command === "decrypt_chat_payload") {
+        const p = payload as { content?: string; attachments?: unknown[] };
         return {
-          content: payload?.content ?? "",
-          attachments: payload?.attachments ?? [],
+          content: p?.content ?? "",
+          attachments: p?.attachments ?? [],
           wasEncrypted: false,
         };
       }

@@ -44,90 +44,84 @@ const {
   setActiveChannelForServerMock: vi.fn(),
 }));
 
-const {
-  callStoreMock,
-  startCallMock,
-  joinVoiceChannelMock,
-  resetCallStoreState,
-  setCallStoreState,
-  createInitialCallState,
-  getCallStoreState,
-} = vi.hoisted(() => {
-  const subscribers: Array<(value: CallState) => void> = [];
-
-  const startCallMock = vi.fn();
-  const joinVoiceChannelMock = vi.fn(async () => undefined);
-  const setCallModalOpenMock = vi.fn();
-  const initializeMock = vi.fn();
-
-  const createInitialCallState = (): CallState => ({
-    activeCall: null,
-    deviceAvailability: { audioInput: true, videoInput: true },
-    permissions: {
-      audio: "granted",
-      video: "granted",
-      checking: false,
-    },
-    localMedia: {
-      audioEnabled: true,
-      videoEnabled: true,
-      audioAvailable: true,
-      videoAvailable: true,
-      screenSharing: false,
-      screenShareAvailable: true,
-    },
-    showCallModal: false,
-    pushToTalk: {
-      enabled: false,
-      isPressing: false,
-    },
-  });
-
-  let state: CallState = createInitialCallState();
-
-  const notify = () => {
-    subscribers.forEach((run) => run(state));
-  };
-
-  const subscribe = (run: (value: CallState) => void) => {
-    run(state);
-    subscribers.push(run);
-    return () => {
-      const index = subscribers.indexOf(run);
-      if (index !== -1) {
-        subscribers.splice(index, 1);
-      }
-    };
-  };
-
-  console.log(startCallMock); // use startCallMock
-
-  return {
-    callStoreMock: {
-      subscribe,
-      startCall: startCallMock,
-      joinVoiceChannel: joinVoiceChannelMock,
-      setCallModalOpen: setCallModalOpenMock,
-      initialize: initializeMock,
-    },
-    startCallMock,
+  const {
+    callStoreMock,
     joinVoiceChannelMock,
-    resetCallStoreState: () => {
-      state = createInitialCallState();
-      notify();
-      startCallMock.mockReset();
-      joinVoiceChannelMock.mockReset();
-      setCallModalOpenMock.mockReset();
-      initializeMock.mockReset();
-    },
-    setCallStoreState: (nextState: CallState) => {
-      state = nextState;
-      notify();
-    },
+    resetCallStoreState,
+    setCallStoreState,
     createInitialCallState,
-    getCallStoreState: () => state,
-  };
-});
+    getCallStoreState,
+  } = vi.hoisted(() => {
+    const subscribers: Array<(value: CallState) => void> = [];
+
+    const joinVoiceChannelMock = vi.fn(async () => undefined);
+    const setCallModalOpenMock = vi.fn();
+    const initializeMock = vi.fn();
+
+    const createInitialCallState = (): CallState => ({
+      activeCall: null,
+      deviceAvailability: { audioInput: true, videoInput: true },
+      permissions: {
+        audio: "granted",
+        video: "granted",
+        checking: false,
+      },
+      localMedia: {
+        audioEnabled: true,
+        videoEnabled: true,
+        audioAvailable: true,
+        videoAvailable: true,
+        screenSharing: false,
+        screenShareAvailable: true,
+      },
+      showCallModal: false,
+      pushToTalk: {
+        enabled: false,
+        isPressing: false,
+      },
+    });
+
+    let state: CallState = createInitialCallState();
+
+    const notify = () => {
+      subscribers.forEach((run) => run(state));
+    };
+
+    const subscribe = (run: (value: CallState) => void) => {
+      run(state);
+      subscribers.push(run);
+      return () => {
+        const index = subscribers.indexOf(run);
+        if (index !== -1) {
+          subscribers.splice(index, 1);
+        }
+      };
+    };
+
+    return {
+      callStoreMock: {
+        subscribe,
+        startCall: vi.fn(),
+        joinVoiceChannel: joinVoiceChannelMock,
+        setCallModalOpen: setCallModalOpenMock,
+        initialize: initializeMock,
+      },
+      joinVoiceChannelMock,
+      resetCallStoreState: () => {
+        state = createInitialCallState();
+        notify();
+        joinVoiceChannelMock.mockReset();
+        setCallModalOpenMock.mockReset();
+        initializeMock.mockReset();
+      },
+      setCallStoreState: (nextState: CallState) => {
+        state = nextState;
+        notify();
+      },
+      createInitialCallState,
+      getCallStoreState: () => state,
+    };
+  });
 
 const mutedChannelsModule = vi.hoisted(() => {
   type Subscriber = (value: Set<string>) => void;
@@ -1065,9 +1059,7 @@ describe("ServerSidebar context menus", () => {
       expect(updateServerMock).toHaveBeenCalled();
     });
 
-    const updateCall = (updateServerMock.mock.calls[0] as unknown)?.[1] as {
-      channels: Channel[];
-    };
+    const updateCall = (updateServerMock.mock.calls[0] as unknown as [string, { channels: Channel[] }])[1];
     expect(updateCall).toBeDefined();
     const updatedChannels = updateCall.channels;
 
@@ -1246,9 +1238,8 @@ describe("ServerSidebar context menus", () => {
       expect(updateServerMock).toHaveBeenCalled();
     });
 
-    const call = updateServerMock.mock.calls[0] as unknown;
-    expect(call?.[0]).toBe("server-1");
-    const patch = call?.[1] as { categories?: ChannelCategory[] };
+    const [serverId, patch] = updateServerMock.mock.calls[0] as unknown as [string, { categories?: ChannelCategory[] }];
+    expect(serverId).toBe("server-1");
     expect(patch?.categories).toBeDefined();
     expect(patch?.categories?.find((cat) => cat.id === "category-1")?.name).toBe(
       "Logistics",

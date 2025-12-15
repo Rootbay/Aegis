@@ -581,6 +581,7 @@ describe("chatStore plaintext encryption fallbacks", () => {
 
   it("sends plaintext content to fallback command when encrypted send fails", async () => {
     const store = await setupActiveDm();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     invokeMock.mockImplementation(async (command: string, _payload: InvokePayload) => {
       if (command === "get_messages") {
         return [];
@@ -701,6 +702,7 @@ describe("chatStore offline queueing", () => {
   it("queues messages while offline and flushes when connectivity returns", async () => {
     const store = createChatStore();
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     invokeMock.mockImplementation(async (command: string, _payload?: InvokePayload) => {
       switch (command) {
         case "get_messages":
@@ -826,7 +828,7 @@ describe("chatStore history loading", () => {
 
   it("prevents duplicate fetches when a history load is already running", async () => {
     const store = createChatStore();
-    const deferred = createDeferred<any[]>();
+    const deferred = createDeferred<unknown[]>();
 
     invokeMock.mockImplementation(async (command: string, payload: InvokePayload) => {
       const args = (payload ?? {}) as {

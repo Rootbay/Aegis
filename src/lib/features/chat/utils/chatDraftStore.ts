@@ -247,7 +247,8 @@ export async function clearChatDraft(chatId: string): Promise<void> {
     return;
   }
 
-  const { [chatId]: _removed, ...rest } = drafts;
+  const rest = { ...drafts };
+  delete rest[chatId];
   drafts = rest;
   backingStore.set(rest);
 }

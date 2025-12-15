@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/svelte";
 import {
+  afterAll,
   afterEach,
   beforeAll,
   beforeEach,
@@ -22,6 +23,8 @@ import type { Message } from "../../src/lib/features/chat/models/Message";
 import type { Chat } from "../../src/lib/features/chat/models/Chat";
 import type { Friend } from "../../src/lib/features/friends/models/Friend";
 import type { User } from "../../src/lib/features/auth/models/User";
+
+type FrameRequestCallback = (time: number) => void;
 
 const messagesStore = writable(new Map<string, Message[]>());
 const hasMoreStore = writable(new Map<string, boolean>());

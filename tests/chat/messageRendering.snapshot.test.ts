@@ -39,7 +39,7 @@ describe("message rendering pipeline", () => {
     const html = segmentsToHtml(segments);
 
     expect(html).toMatchInlineSnapshot(
-      `"Hello <strong>world</strong> <span class=\"mention\" data-mention-id=\"123\">@Ada</span>! Visit <a class=\"link\" href=\"https://example.com/docs\">https://example.com/docs</a>.<br /><br /><pre><code class=\"language-ts\">const value = 42;</code></pre>"`,
+      `"Hello <strong>world</strong> <span class="mention" data-mention-id="123">@Ada</span>! Visit <a class="link" href="https://example.com/docs">https://example.com/docs</a>.<br /><br /><pre><code class="language-ts">const value = 42;</code></pre>"`,
     );
   });
 });

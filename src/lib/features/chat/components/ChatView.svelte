@@ -118,7 +118,7 @@
     TooltipProvider,
     TooltipTrigger,
   } from "$lib/components/ui/tooltip";
-  import { Skeleton } from "$lib/components/ui/skeleton";
+
   import {
     aggregateChannelPermissions,
     allowAllChannelPermissions,
@@ -2565,20 +2565,7 @@
     toasts.addToast("Poll creation is coming soon.", "info");
   }
 
-  function micButtonClasses() {
-    const base =
-      "flex items-center justify-center p-2 text-muted-foreground rounded-full transition-colors";
-    const states = [];
-    if (voiceMemoControlEnabled()) {
-      states.push("cursor-pointer", "hover:text-white");
-    } else {
-      states.push("opacity-50", "cursor-not-allowed");
-    }
-    if (isRecording) {
-      states.push("text-red-400");
-    }
-    return [base, ...states].join(" ");
-  }
+
 
   function popoverVoiceButtonClasses() {
     const base = "justify-start w-full transition";
@@ -4289,7 +4276,7 @@
                     {:else}
                       <Mic size={16} />
                     {/if}
-                    Record Voice
+                    {isRecording ? `Recording ${formatRecordingDuration(recordingDuration)}` : "Record Voice"}
                   </Button>
                   <Button
                     variant="ghost"

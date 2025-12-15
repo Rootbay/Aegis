@@ -47,8 +47,9 @@ describe("presenceStore", () => {
   });
 
   it("rejects an invalid preset status", async () => {
+    // @ts-ignore Testing invalid status
     await expect(
-      presenceStore.broadcastPresence({ statusKey: "invalid" as any }),
+      presenceStore.broadcastPresence({ statusKey: "invalid" }),
     ).rejects.toThrow("Invalid presence status");
     expect(invokeMock).not.toHaveBeenCalled();
     expect(get(presenceStore).statusKey).toBe(DEFAULT_PRESENCE_STATUS_KEY);

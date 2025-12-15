@@ -78,11 +78,12 @@ vi.mock("$lib/stores/userStore", () => {
   };
 });
 
+type ServerState = {
+  activeServerId: string | null;
+  servers: unknown[];
+};
+
 function ensureServerStoreStateRef() {
-  type ServerState = {
-    activeServerId: string | null;
-    servers: any[];
-  };
   const key = Symbol.for("chatStoreTestServerState");
   const globalAny = globalThis as Record<
     symbol,
@@ -114,7 +115,7 @@ function ensureServerStoreStateRef() {
 vi.mock("$lib/features/servers/stores/serverStore", () => ({
   serverStore: {
     subscribe: ensureServerStoreStateRef().state.subscribe,
-    __setState: (next: unknown) => ensureServerStoreStateRef().set(next as any),
+    __setState: (next: unknown) => ensureServerStoreStateRef().set(next as ServerState),
   },
   activeServerEmojiCategories: {
     subscribe: (run: (value: unknown) => void) => {

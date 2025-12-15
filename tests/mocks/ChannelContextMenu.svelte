@@ -3,7 +3,7 @@
 <script lang="ts">
   import type { Channel } from "$lib/features/channels/models/Channel";
 
-  type ChannelActionHandler = (act: string, chanId: string) => void;
+  type ChannelActionHandler = (action: string, channelId: string) => void;
   type CloseHandler = () => void;
 
   let {

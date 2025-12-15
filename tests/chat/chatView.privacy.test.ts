@@ -187,9 +187,7 @@ type MutedFriendsModule = {
 
 type FriendStoreModule = {
   friendStore: {
-    removeFriend: Mock<
-      (friendshipId: string, friendId: string) => Promise<void>
-    >;
+    removeFriend: Mock<() => Promise<void>>;
     initialize: Mock<() => Promise<void>>;
     subscribe: WritableStore<{ friends: Friend[] }>["subscribe"];
   };
@@ -240,7 +238,7 @@ function createFileList(...files: File[]): FileList {
   };
 
   files.forEach((file, index) => {
-    (fileList as any)[index] = file;
+    (fileList as Record<number, File>)[index] = file;
   });
 
   return fileList as FileList;
@@ -248,10 +246,7 @@ function createFileList(...files: File[]): FileList {
 
 function triggerLatestContextAction(action: string) {
   const registry =
-    ((globalThis as any).__contextMenuRegistry as Array<{
-      trigger: (action: string) => void;
-      hasAction: (action: string) => boolean;
-    }>) ?? [];
+    ((globalThis as { __contextMenuRegistry?: Array<{ trigger: (action: string) => void; hasAction: (action: string) => boolean; }> }).__contextMenuRegistry) ?? [];
   for (let i = registry.length - 1; i >= 0; i -= 1) {
     const entry = registry[i];
     if (entry?.hasAction(action)) {
@@ -1130,9 +1125,7 @@ function getFriendStoreModule(): FriendStoreModule {
     __friendStoreModule?: FriendStoreModule;
   };
   if (!globals.__friendStoreModule) {
-    const removeFriend = vi.fn(
-      async (_friendshipId: string, _friendId: string) => {},
-    );
+    const removeFriend = vi.fn(async () => {});
     const initialize = vi.fn(async () => Promise.resolve());
     const state = createWritable<{ friends: Friend[] }>({ friends: [] });
 
@@ -1280,7 +1273,6 @@ vi.mock("../../src/lib/features/collaboration/collabDocumentStore", () =>
 import {
   defaultSettings,
   settings,
-  setMessageDensity,
   setShowMessageAvatars,
   setShowMessageTimestamps,
 } from "$lib/features/settings/stores/settings";

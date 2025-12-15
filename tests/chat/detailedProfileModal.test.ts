@@ -26,9 +26,9 @@ const mocks = vi.hoisted(() => {
         already_member: boolean;
       };
 
-  type MockInvoke = (command: string, args?: any) => Promise<InvokeResult>;
+  type MockInvoke = (command: string, args?: unknown) => Promise<InvokeResult>;
 
-  const defaultInvoke: MockInvoke = async (command: string, args?: any) => {
+  const defaultInvoke: MockInvoke = async (command: string, args?: unknown) => {
     switch (command) {
       case "get_friendships":
         return [] as FriendshipRecord[];
@@ -335,7 +335,7 @@ describe("Detailed profile modal integration", () => {
   it("renders DetailedProfileModal via AppModals and handles actions", async () => {
     const closeModal = vi.fn();
 
-    const { getByLabelText, getByText, findByText, queryByText } = render(
+    const { getByLabelText, getByText, findByText } = render(
       AppModals,
       {
         props: {
@@ -504,7 +504,7 @@ describe("Detailed profile modal integration", () => {
     mocks.invoke.mockImplementation(async (command, args) => {
       switch (command) {
         case "get_friendships":
-          if (args?.current_user_id === "current-user") {
+          if ((args as { current_user_id?: string })?.current_user_id === "current-user") {
             return [
               {
                 id: "friendship-1",

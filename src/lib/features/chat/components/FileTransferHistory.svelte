@@ -16,7 +16,6 @@
   import {
     fileTransferStore,
     type FileTransferRecord,
-    type FileTransferStatus,
   } from "$lib/features/chat/stores/fileTransferStore";
 
   const historyStore = fileTransferStore.history;

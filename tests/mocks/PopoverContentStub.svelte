@@ -6,7 +6,7 @@
     children,
   } = $props<{
     class?: string;
-    children?: (renderProps: { close: (closeFlag?: boolean) => void }) => unknown;
+    children?: (props: { close: (flag?: boolean) => void }) => unknown;
   }>();
 
   function close() {}

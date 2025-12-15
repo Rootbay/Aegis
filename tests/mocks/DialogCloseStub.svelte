@@ -10,7 +10,7 @@
     children,
   }: {
     asChild?: boolean;
-    children?: Snippet<[{ close: (value?: boolean) => void }]>;
+    children?: Snippet<[{ close: (val?: boolean) => void }]>;
   } = $props();
 
   const dialog = getContext<{ close: (value?: boolean) => void } | undefined>(

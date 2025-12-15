@@ -37,7 +37,7 @@ function createMutedChannelsStore(): MutedChannelsStore {
   };
 
   return {
-    subscribe(run, invalidate) {
+    subscribe(run) {
       return backing.subscribe((ids) => run(normalizeChannelIds(ids ?? [])));
     },
     mute(channelId: string) {

@@ -35,7 +35,7 @@ function createMutedCategoriesStore(): MutedCategoriesStore {
   };
 
   return {
-    subscribe(run, invalidate) {
+    subscribe(run) {
       return backing.subscribe((ids = []) => run(normalizeCategoryIds(ids)));
     },
     mute(categoryId: string) {

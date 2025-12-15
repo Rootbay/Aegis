@@ -273,7 +273,7 @@ describe("chatStore group chat management", () => {
     const store = createChatStore();
     const { createdAt } = seedGroup(store);
 
-    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+    invokeMock.mockImplementationOnce(async (command, payload: unknown) => {
       expect(command).toBe("rename_group_dm");
       expect(payload).toMatchObject({
         groupId: "group-1",
@@ -300,9 +300,9 @@ describe("chatStore group chat management", () => {
     const store = createChatStore();
     const { createdAt, summary } = seedGroup(store);
 
-    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+    invokeMock.mockImplementationOnce(async (command, payload: unknown) => {
       expect(command).toBe("rename_group_dm");
-      expect(payload?.name).toBe("Updated title");
+      expect((payload as { name: string })?.name).toBe("Updated title");
       return {
         id: "group-1",
         name: "Updated title",
@@ -322,7 +322,7 @@ describe("chatStore group chat management", () => {
     const store = createChatStore();
     const { createdAt } = seedGroup(store);
 
-    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+    invokeMock.mockImplementationOnce(async (command, payload: unknown) => {
       expect(command).toBe("add_group_dm_member");
       expect(payload).toMatchObject({
         groupId: "group-1",
@@ -353,7 +353,7 @@ describe("chatStore group chat management", () => {
     const store = createChatStore();
     const { createdAt } = seedGroup(store);
 
-    invokeMock.mockImplementationOnce(async (command, payload: any) => {
+    invokeMock.mockImplementationOnce(async (command, payload: unknown) => {
       expect(command).toBe("remove_group_dm_member");
       expect(payload).toMatchObject({
         groupId: "group-1",

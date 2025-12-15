@@ -13,8 +13,8 @@
     className?: string;
     chatType?: string;
     channelId?: string | null;
-    onNameClick?: (mouseEvt: MouseEvent) => void;
-    onNameContextMenu?: (mouseEvt: MouseEvent) => void;
+    onNameClick?: (event: MouseEvent) => void;
+    onNameContextMenu?: (event: MouseEvent) => void;
   }>();
   void chatType;
   void channelId;
