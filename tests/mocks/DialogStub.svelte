@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { setContext } from "svelte";
+  import type { Snippet } from "svelte";
   import { dialogContextKey } from "./ui-dialog-context";
 
   let {
@@ -11,7 +12,7 @@
   }: {
     open?: boolean;
     onOpenChange?: (value: boolean) => void;
-    children?: () => unknown;
+    children?: Snippet;
   } = $props();
 
   function closeDialog(nextOpen = false) {

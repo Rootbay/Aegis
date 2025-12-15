@@ -84,7 +84,7 @@
     editingChannel = { ...channel };
     editingChannelName = channel.name;
     editingChannelType = channel.channel_type;
-    editingChannelSlowmode = channel.rate_limit_per_user ?? 0;
+    editingChannelSlowmode = normalizeSlowmodeValue(channel.rate_limit_per_user ?? 0);
   }
 
   function saveEditChannel() {
@@ -148,10 +148,11 @@
 
   {#if newChannelType === "text"}
     <div class="flex items-center gap-2 mb-4">
-      <label class="text-xs font-semibold uppercase text-muted-foreground">
+      <label for="newChannelSlowmode" class="text-xs font-semibold uppercase text-muted-foreground">
         Slowmode
       </label>
       <select
+        id="newChannelSlowmode"
         class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         onchange={(event) => {
           const target = event.target as HTMLSelectElement;
@@ -223,10 +224,11 @@
           </div>
           {#if editingChannelType === "text"}
             <div class="flex items-center gap-4">
-              <label class="text-sm font-medium text-muted-foreground w-24">
+              <label for="editingChannelSlowmode" class="text-sm font-medium text-muted-foreground w-24">
                 Slowmode
               </label>
               <select
+                id="editingChannelSlowmode"
                 class="flex-1 bg-muted border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 onchange={(event) => {
                   const target = event.target as HTMLSelectElement;

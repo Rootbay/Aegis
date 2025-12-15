@@ -16,7 +16,7 @@
     hideVoiceCallView,
     voiceCallViewStore,
   } from "$lib/features/calls/stores/voiceCallViewStore";
-  import type { Chat } from "$lib/features/chat/models/Chat";
+  import type { Chat, ChannelChat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
   import { getContext } from "svelte";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
@@ -201,7 +201,7 @@
 
 {#if shouldShowVoiceCallView()}
   <div class="flex flex-1 min-h-0 flex-col">
-    <VoiceCallView {chat} />
+    <VoiceCallView chat={chat as ChannelChat} />
   </div>
 {:else}
   <div class="flex flex-1 min-h-0 flex-col">

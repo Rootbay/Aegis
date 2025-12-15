@@ -44,7 +44,7 @@
     server: Server;
   };
 
-  type IconComponent = ComponentType<{ size?: number; class?: string }>;
+  type IconComponent = typeof UserPlus;
 
   type MenuActionItem = {
     type: "item";

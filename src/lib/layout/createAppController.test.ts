@@ -422,7 +422,7 @@ describe("AppMainContent DM fallback rendering", () => {
     serverStore.setActiveServer(null);
     userCache.clear();
     localStorage.clear();
-    (page as Writable<{ url: URL }>).set({
+    (page as unknown as Writable<{ url: URL }>).set({
       url: new URL("https://app.local/"),
     });
   });
@@ -435,7 +435,7 @@ describe("AppMainContent DM fallback rendering", () => {
     serverStore.setActiveServer(null);
     userCache.clear();
     localStorage.clear();
-    (page as Writable<{ url: URL }>).set({
+    (page as unknown as Writable<{ url: URL }>).set({
       url: new URL("https://app.local/"),
     });
   });
@@ -452,7 +452,7 @@ describe("AppMainContent DM fallback rendering", () => {
     };
 
     chatStore.handleMessagesUpdate(dmId, [message]);
-    (page as Writable<{ url: URL }>).set({
+    (page as unknown as Writable<{ url: URL }>).set({
       url: new URL(`https://app.local/dm/${dmId}`),
     });
 

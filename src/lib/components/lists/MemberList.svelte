@@ -41,7 +41,7 @@
 
   const collectRoleIds = (member: User): string[] => {
     const ids = new Set<string>();
-    const record = member as Record<string, unknown>;
+    const record = member as unknown as Record<string, unknown>;
     const candidates = [record.roleIds, record.role_ids, record.roles];
     for (const candidate of candidates) {
       if (!Array.isArray(candidate)) {

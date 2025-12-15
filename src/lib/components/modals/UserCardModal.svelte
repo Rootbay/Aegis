@@ -94,9 +94,6 @@
     Invisible: "bg-gray-500",
   };
   let isMyProfile = $derived(profileUser.id === $userStore.me?.id);
-  let headerStatusLabel = $state<string | null>(
-    resolvePresenceStatusLabel(profileUser.statusMessage),
-  );
   let statusPopoverOpen = $state(false);
   let accountsPopoverOpen = $state(false);
   let showStatusEditDialog = $state(false);
@@ -125,28 +122,29 @@
       : []
   );
 
-  let selectedPresenceOption: OnlineStatusOption =
-    profileUser.online ? "Online" : "Invisible";
-
-  let statusIndicatorColorClass = $state(
-    STATUS_COLOR_MAP[selectedPresenceOption],
+  let selectedPresenceOption = $state<OnlineStatusOption>(
+    profileUser.online ? "Online" : "Invisible"
   );
-  let statusDisplayLabel = $state(
+
+  let statusLabel = $state<string | null>(
+    resolvePresenceStatusLabel(profileUser.statusMessage)
+  );
+
+  let statusIndicatorColorClass = $derived(() =>
+    STATUS_COLOR_MAP[selectedPresenceOption]
+  );
+
+  let statusDisplayLabel = $derived(() =>
     selectedPresenceOption !== "Invisible"
       ? selectedPresenceOption
-      : headerStatusLabel ?? "Invisible",
+      : statusLabel ?? "Invisible"
   );
 
   $effect(() => {
     const resolvedLabel = resolvePresenceStatusLabel(profileUser.statusMessage);
     const effectiveLabel =
       statusOverride === "" ? null : statusOverride ?? resolvedLabel;
-    headerStatusLabel = effectiveLabel;
-    statusIndicatorColorClass = STATUS_COLOR_MAP[selectedPresenceOption];
-    statusDisplayLabel =
-      selectedPresenceOption !== "Invisible"
-        ? selectedPresenceOption
-        : headerStatusLabel ?? "Invisible";
+    statusLabel = effectiveLabel;
   });
 
   $effect(() => {
@@ -235,9 +233,6 @@
     statusPopoverOpen = false;
     toasts.addToast(`Set status to ${status}.`, "success");
     selectedPresenceOption = status;
-    statusIndicatorColorClass = STATUS_COLOR_MAP[status];
-    statusDisplayLabel =
-      status !== "Invisible" ? status : headerStatusLabel ?? "Invisible";
   }
 
   function handleSendEmojiQuickAction() {
@@ -250,7 +245,7 @@
   }
 
   function openStatusEditorDialog() {
-    statusDraftInput = headerStatusLabel ?? "";
+    statusDraftInput = statusLabel ?? "";
     clearAfterSelection = "dontClear";
     showStatusEditDialog = true;
   }
@@ -357,7 +352,7 @@
         ></span>
       </div>
     </div>
-    {#if headerStatusLabel}
+    {#if statusLabel}
       <div
         role="list"
         class="absolute bottom-2 left-4 flex items-start"
@@ -366,7 +361,7 @@
       >
         <div class="relative">
           <p class="text-xs font-medium text-muted-foreground bg-muted/70 rounded-xl px-3 py-1">
-            {headerStatusLabel}
+            {statusLabel}
           </p>
           <div
             class={`absolute -top-9 right-0 flex items-center gap-1 rounded-full transition-opacity duration-150 ${statusLabelHovered ? "opacity-100" : "opacity-0"}`}
@@ -781,7 +776,7 @@
           </div>
         </div>
         <div class="mt-3 rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground">
-          {statusDraftInput.trim() || headerStatusLabel || "No status set"}
+          {statusDraftInput.trim() || statusLabel || "No status set"}
         </div>
       </div>
 

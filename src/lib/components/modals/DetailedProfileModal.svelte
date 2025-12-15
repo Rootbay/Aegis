@@ -844,8 +844,8 @@
       <div class="flex-1 p-6">
         <Tabs
           value={selectedTab}
-          onValueChange={(value: "friends" | "servers" | "groups") =>
-            (selectedTab = value)
+          onValueChange={(value) =>
+            (selectedTab = value as "friends" | "servers" | "groups")
           }
         >
           <TabsList>

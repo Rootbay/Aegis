@@ -31,7 +31,7 @@ describe("EmojiPicker with provided categories", () => {
     });
 
     const selectHandler = vi.fn();
-    component.$on("select", selectHandler);
+    (component as any).$on("select", selectHandler);
 
     const trigger = getByRole("button", { name: "React with :wave:" });
     const image = getByAltText(":wave:");

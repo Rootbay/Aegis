@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { getContext } from "svelte";
+  import type { Snippet } from "svelte";
   import { dialogContextKey } from "./ui-dialog-context";
 
   let {
@@ -9,7 +10,7 @@
     children,
   }: {
     asChild?: boolean;
-    children?: (args: { close: (value?: boolean) => void }) => unknown;
+    children?: Snippet<[{ close: (value?: boolean) => void }]>;
   } = $props();
 
   const dialog = getContext<{ close: (value?: boolean) => void } | undefined>(

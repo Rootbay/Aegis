@@ -1,6 +1,8 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import type { Snippet } from "svelte";
+
   let {
     tag = "div",
     class: className = "",
@@ -8,7 +10,7 @@
   }: {
     tag?: keyof HTMLElementTagNameMap;
     class?: string;
-    children?: () => unknown;
+    children?: Snippet;
   } = $props();
 </script>
 

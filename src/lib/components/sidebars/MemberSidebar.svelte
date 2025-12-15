@@ -404,6 +404,17 @@
   }
 </script>
 
+{#snippet userCardSnippet({ member }: { member: MemberWithRoles })}
+  <UserCardModal
+    profileUser={member}
+    {openDetailedProfileModal}
+    isServerMemberContext={isServerContext}
+    serverId={isServerContext ? (resolvedServerId ?? undefined) : undefined}
+    memberRoles={isServerContext ? getMemberRoleObjects(member) : []}
+    onAddRoles={isServerContext ? handleAddRolesClick : undefined}
+  />
+{/snippet}
+
 {#if variant === "desktop"}
   <Sidebar
     class="hidden lg:flex relative"
@@ -430,32 +441,8 @@
         variant="desktop"
         isServerContext={isServerContext}
         resolvedServerId={resolvedServerId}
-      >
-        <svelte:fragment
-          slot="user-card"
-          let:member
-          let:close
-          let:isServerContext
-          let:resolvedServerId
-        >
-            {@const serverContextValue = isServerContext()}
-            <UserCardModal
-              profileUser={member}
-              {openDetailedProfileModal}
-              isServerMemberContext={serverContextValue}
-              {close}
-              serverId={
-                serverContextValue ? (resolvedServerId ?? undefined) : undefined
-              }
-              memberRoles={
-                serverContextValue ? getMemberRoleObjects(member) : []
-              }
-              onAddRoles={
-                serverContextValue ? handleAddRolesClick : undefined
-              }
-            />
-        </svelte:fragment>
-      </MemberListContent>
+        userCard={userCardSnippet} 
+      />
     {:else}
       <MemberListContent
         members={members}
@@ -470,32 +457,8 @@
         variant="desktop"
         isServerContext={isServerContext}
         resolvedServerId={resolvedServerId}
-      >
-        <svelte:fragment
-          slot="user-card"
-          let:member
-          let:close
-          let:isServerContext
-          let:resolvedServerId
-        >
-            {@const serverContextValue = isServerContext()}
-            <UserCardModal
-              profileUser={member}
-              {openDetailedProfileModal}
-              isServerMemberContext={serverContextValue}
-              {close}
-              serverId={
-                serverContextValue ? (resolvedServerId ?? undefined) : undefined
-              }
-              memberRoles={
-                serverContextValue ? getMemberRoleObjects(member) : []
-              }
-              onAddRoles={
-                serverContextValue ? handleAddRolesClick : undefined
-              }
-            />
-        </svelte:fragment>
-      </MemberListContent>
+        userCard={userCardSnippet}
+      />
     {/if}
     <button
       type="button"
@@ -548,32 +511,8 @@
           variant="mobile"
           isServerContext={isServerContext}
           resolvedServerId={resolvedServerId}
-        >
-          <svelte:fragment
-            slot="user-card"
-            let:member
-            let:close
-            let:isServerContext
-            let:resolvedServerId
-          >
-            {@const serverContextValue = isServerContext()}
-            <UserCardModal
-              profileUser={member}
-              {openDetailedProfileModal}
-              isServerMemberContext={serverContextValue}
-              {close}
-              serverId={
-                serverContextValue ? (resolvedServerId ?? undefined) : undefined
-              }
-              memberRoles={
-                serverContextValue ? getMemberRoleObjects(member) : []
-              }
-              onAddRoles={
-                serverContextValue ? handleAddRolesClick : undefined
-              }
-            />
-          </svelte:fragment>
-        </MemberListContent>
+          userCard={userCardSnippet}
+        />
       </div>
     </DialogContent>
   </Dialog>

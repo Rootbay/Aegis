@@ -38,8 +38,7 @@ async function instantiateFilePreview(
   const source = readFileSync(filePreviewPath, "utf-8");
   const { js } = compile(source, {
     filename: filePreviewPath,
-    generate: "dom",
-    hydratable: true,
+    generate: "client",
   });
 
   const discloseVersionPath = require.resolve("svelte/internal/disclose-version");

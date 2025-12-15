@@ -107,7 +107,7 @@ describe("friendStore.initialize", () => {
       name: "Existing Friend",
       avatar: "https://example.com/friend-existing.png",
       online: false,
-      status: "Offline",
+      status: "Offline" as const,
       timestamp: new Date().toISOString(),
       messages: [],
     };

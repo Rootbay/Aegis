@@ -51,7 +51,7 @@
     isServerContext?: boolean;
     resolvedServerId?: string | null;
     variant?: "desktop" | "mobile";
-    userCard?: Snippet<[MemberWithRoles, boolean, string | null, () => void]>;
+    userCard?: Snippet<[{member: MemberWithRoles; isServerContext: boolean; resolvedServerId: string | null;}]>;
   }>();
 
   function openMemberUserCard(
@@ -182,9 +182,7 @@
                             align="start"
                             class="w-auto border-none p-0"
                           >
-                            {#if userCard}
-                              {@render userCard(member, isServerContext, resolvedServerId, close)}
-                            {/if}
+                            {@render userCard?.({member, isServerContext, resolvedServerId})}
                           </Popover.Content>
                         </Popover.Root>
                         {#if typeof member.id === "string" && canRemoveMember(member)}
@@ -214,6 +212,6 @@
 
 <style>
   :global([data-mobile]) {
-    @apply max-h-[min(70vh,30rem)];
+    max-height: min(70vh, 30rem);
   }
 </style>

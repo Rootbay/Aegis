@@ -80,13 +80,11 @@
         return canonical;
       }
 
-      if (user.source) {
-        return user;
-      }
+      const source = user.source === "friend" || user.source === "recentDm" ? user.source : (user.isFriend ? "friend" : "recentDm");
 
       return {
         ...user,
-        source: user.isFriend ? "friend" : "recentDm",
+        source,
       };
     });
   }

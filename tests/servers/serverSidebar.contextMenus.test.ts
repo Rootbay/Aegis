@@ -77,6 +77,10 @@ const {
       screenShareAvailable: true,
     },
     showCallModal: false,
+    pushToTalk: {
+      enabled: false,
+      isPressing: false,
+    },
   });
 
   let state: CallState = createInitialCallState();
@@ -99,8 +103,8 @@ const {
   return {
     callStoreMock: {
       subscribe,
-      startCall: (...args: unknown[]) => startCallMock(...args),
-      joinVoiceChannel: (...args: unknown[]) => joinVoiceChannelMock(...args),
+      startCall: startCallMock,
+      joinVoiceChannel: joinVoiceChannelMock,
       setCallModalOpen: setCallModalOpenMock,
       initialize: initializeMock,
     },
@@ -458,7 +462,6 @@ vi.mock(
 );
 
 import ServerSidebar from "$lib/components/sidebars/ServerSidebar.svelte";
-import { tick } from "svelte";
 
 describe("ServerSidebar context menus", () => {
   const createDataTransfer = () => {
@@ -953,8 +956,8 @@ describe("ServerSidebar context menus", () => {
       ],
       categories: [],
       members: [
-        { id: "user-2", name: "Echo Leader", avatar: "" },
-        { id: "user-3", name: "Sierra", avatar: "" },
+        { id: "user-2", name: "Echo Leader", avatar: "", online: true },
+        { id: "user-3", name: "Sierra", avatar: "", online: true },
       ],
       roles: [],
       invites: [],
@@ -1060,7 +1063,7 @@ describe("ServerSidebar context menus", () => {
       expect(updateServerMock).toHaveBeenCalled();
     });
 
-    const updateCall = updateServerMock.mock.calls[0]?.[1] as {
+    const updateCall = (updateServerMock.mock.calls[0] as any)?.[1] as {
       channels: Channel[];
     };
     expect(updateCall).toBeDefined();
@@ -1090,6 +1093,7 @@ describe("ServerSidebar context menus", () => {
           name: "general",
           channel_type: "text" as const,
           private: false,
+          position: 0,
         },
       ],
       categories: [],
@@ -1240,7 +1244,7 @@ describe("ServerSidebar context menus", () => {
       expect(updateServerMock).toHaveBeenCalled();
     });
 
-    const call = updateServerMock.mock.calls[0];
+    const call = updateServerMock.mock.calls[0] as any;
     expect(call?.[0]).toBe("server-1");
     const patch = call?.[1] as { categories?: ChannelCategory[] };
     expect(patch?.categories).toBeDefined();

@@ -41,11 +41,11 @@
 
   const hasTextChannels = $derived(() => {
     if (!currentServerId) {
-      return null;
+      return false;
     }
     const server = $serverStore.servers.find((candidate) => candidate.id === currentServerId);
     if (!server || !server.channels) {
-      return null;
+      return false;
     }
     return server.channels.some((channel) => channel.channel_type === "text");
   });
@@ -100,7 +100,7 @@
   <div class="grow min-w-0">
     <ChatView chat={currentChat} />
   </div>
-{:else if hasTextChannels === false}
+{:else if !hasTextChannels}
   <div class="flex flex-col h-full w-full items-center justify-center bg-card">
     <p class="text-muted-foreground text-center mt-4">
       Either you do not have permission to any text channels or there are none in this
