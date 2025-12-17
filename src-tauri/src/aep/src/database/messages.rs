@@ -69,17 +69,14 @@ pub struct MessageMetadata {
 }
 
 pub async fn insert_message(
-    pool: &Pool<Sqlite>, 
-    message: &Message, 
-    attachment_data: &[AttachmentWithData]
+    pool: &Pool<Sqlite>,
+    message: &Message,
+    attachment_data: &[AttachmentWithData],
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
     let timestamp_str = message.timestamp.to_rfc3339();
     let edited_at_str = message.edited_at.map(|value| value.to_rfc3339());
     let expires_at_str = message.expires_at.map(|value| value.to_rfc3339());
-    let reply_to_id = message.reply_to_message_id.clone();
-    let reply_snapshot_author = message.reply_snapshot_author.clone();
-    let reply_snapshot_snippet = message.reply_snapshot_snippet.clone();
 
     sqlx::query!(
         "INSERT INTO messages (id, chat_id, sender_id, content, timestamp, read, pinned, reply_to_message_id, reply_snapshot_author, reply_snapshot_snippet, edited_at, edited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -90,9 +87,9 @@ pub async fn insert_message(
         timestamp_str,
         message.read,
         message.pinned,
-        reply_to_id,
-        reply_snapshot_author,
-        reply_snapshot_snippet,
+        message.reply_to_message_id,
+        message.reply_snapshot_author,
+        message.reply_snapshot_snippet,
         edited_at_str,
         message.edited_by,
         expires_at_str,
@@ -100,23 +97,21 @@ pub async fn insert_message(
     .execute(&mut *tx)
     .await?;
 
-    for attachment in attachment_data {
-        if attachment.metadata.size > i64::MAX as u64 {
-            return Err(sqlx::Error::Protocol("attachment size too large".into()));
-        }
-        let size_i64 = attachment.metadata.size as i64;
+    if !attachment_data.is_empty() {
+        let mut query_builder = QueryBuilder::<Sqlite>::new(
+            "INSERT INTO attachments (id, message_id, name, content_type, size, data) ",
+        );
 
-        sqlx::query!(
-            "INSERT INTO attachments (id, message_id, name, content_type, size, data) VALUES (?, ?, ?, ?, ?, ?)",
-            attachment.metadata.id,
-            attachment.metadata.message_id,
-            attachment.metadata.name,
-            attachment.metadata.content_type,
-            size_i64,
-            attachment.data,
-        )
-        .execute(&mut *tx)
-        .await?;
+        query_builder.push_values(attachment_data, |mut b, attachment| {
+            b.push_bind(attachment.metadata.id.clone())
+                .push_bind(attachment.metadata.message_id.clone())
+                .push_bind(attachment.metadata.name.clone())
+                .push_bind(attachment.metadata.content_type.clone())
+                .push_bind(attachment.metadata.size as i64)
+                .push_bind(attachment.data.clone());
+        });
+
+        query_builder.build().execute(&mut *tx).await?;
     }
 
     tx.commit().await?;
@@ -155,20 +150,31 @@ async fn hydrate_messages_from_rows(
 ) -> Result<Vec<Message>, sqlx::Error> {
     let mut messages = Vec::with_capacity(message_rows.len());
     let mut message_ids: Vec<String> = Vec::with_capacity(message_rows.len());
-    
+
     for row in message_rows {
         let timestamp = DateTime::parse_from_rfc3339(&row.timestamp)
             .map(|dt| dt.with_timezone(&Utc))
             .map_err(|e| sqlx::Error::Decode(format!("Failed to parse timestamp: {}", e).into()))?;
-        
-        let edited_at = match row.edited_at {
-             Some(v) => Some(DateTime::parse_from_rfc3339(&v).map(|dt| dt.with_timezone(&Utc)).map_err(|e| sqlx::Error::Decode(format!("{}", e).into()))?),
-             None => None,
-        };
-        let expires_at = match row.expires_at {
-             Some(v) => Some(DateTime::parse_from_rfc3339(&v).map(|dt| dt.with_timezone(&Utc)).map_err(|e| sqlx::Error::Decode(format!("{}", e).into()))?),
-             None => None,
-        };
+
+        let edited_at = row
+            .edited_at
+            .as_deref()
+            .map(|v| {
+                DateTime::parse_from_rfc3339(v)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| sqlx::Error::Decode(format!("{}", e).into()))
+            })
+            .transpose()?;
+
+        let expires_at = row
+            .expires_at
+            .as_deref()
+            .map(|v| {
+                DateTime::parse_from_rfc3339(v)
+                    .map(|dt| dt.with_timezone(&Utc))
+                    .map_err(|e| sqlx::Error::Decode(format!("{}", e).into()))
+            })
+            .transpose()?;
 
         message_ids.push(row.id.clone());
         messages.push(Message {
@@ -210,13 +216,14 @@ async fn hydrate_messages_from_rows(
             }
         }
         query_builder.push(") ORDER BY id");
-        
+
         let attachment_rows = query_builder
             .build_query_as::<AttachmentRow>()
             .fetch_all(pool)
             .await?;
 
-        let mut attachments_map: HashMap<String, Vec<Attachment>> = HashMap::new();
+        let mut attachments_map: HashMap<String, Vec<Attachment>> =
+            HashMap::with_capacity(message_ids.len());
         for row in attachment_rows {
             let size_u64 = if row.size < 0 { 0 } else { row.size as u64 };
             attachments_map
@@ -231,32 +238,44 @@ async fn hydrate_messages_from_rows(
                 });
         }
 
-        for message in &mut messages {
-            if let Some(mut attachments) = attachments_map.remove(&message.id) {
-                attachments.sort_by(|a, b| a.id.cmp(&b.id));
-                message.attachments = attachments;
-            }
+        #[derive(FromRow)]
+        struct ReactionRow {
+            message_id: String,
+            user_id: String,
+            emoji: String,
         }
 
-        #[derive(FromRow)]
-        struct ReactionRow { message_id: String, user_id: String, emoji: String }
-        
         let mut reactions_query = QueryBuilder::<Sqlite>::new(
             "SELECT message_id, user_id, emoji FROM message_reactions WHERE message_id IN (",
         );
         {
             let mut separated = reactions_query.separated(", ");
-            for message_id in &message_ids { separated.push_bind(message_id); }
+            for message_id in &message_ids {
+                separated.push_bind(message_id);
+            }
         }
         reactions_query.push(")");
-        let reaction_rows = reactions_query.build_query_as::<ReactionRow>().fetch_all(pool).await?;
+        let reaction_rows = reactions_query
+            .build_query_as::<ReactionRow>()
+            .fetch_all(pool)
+            .await?;
 
-        let mut reaction_map: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+        let mut reaction_map: HashMap<String, HashMap<String, Vec<String>>> =
+            HashMap::with_capacity(message_ids.len());
         for row in reaction_rows {
-            reaction_map.entry(row.message_id).or_default().entry(row.emoji).or_default().push(row.user_id);
+            reaction_map
+                .entry(row.message_id)
+                .or_default()
+                .entry(row.emoji)
+                .or_default()
+                .push(row.user_id);
         }
 
         for message in &mut messages {
+            if let Some(mut attachments) = attachments_map.remove(&message.id) {
+                attachments.sort_by(|a, b| a.id.cmp(&b.id));
+                message.attachments = attachments;
+            }
             if let Some(reactions) = reaction_map.remove(&message.id) {
                 message.reactions = reactions;
             }
@@ -424,7 +443,7 @@ pub async fn search_messages(
         let trimmed = q.trim();
         if !trimmed.is_empty() {
             builder.push(" AND messages_fts MATCH ");
-            builder.push_bind(format!("\"{}\"", trimmed)); 
+            builder.push_bind(format!("\"{}\"", trimmed));
         }
     }
 
@@ -434,8 +453,10 @@ pub async fn search_messages(
     }
 
     if let Some(ids) = sender_ids {
-        let valid_sender_ids: Vec<&String> =
-            ids.iter().filter(|value| !value.trim().is_empty()).collect();
+        let valid_sender_ids: Vec<&String> = ids
+            .iter()
+            .filter(|value| !value.trim().is_empty())
+            .collect();
         if !valid_sender_ids.is_empty() {
             builder.push(" AND m.sender_id IN (");
             {
@@ -467,7 +488,7 @@ pub async fn search_messages(
         .build_query_as::<MessageRow>()
         .fetch_all(pool)
         .await?;
-        
+
     hydrate_messages_from_rows(pool, rows).await
 }
 

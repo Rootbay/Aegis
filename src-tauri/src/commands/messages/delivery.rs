@@ -159,17 +159,17 @@ pub(super) async fn persist_and_broadcast_message(
             size,
             data,
         } = descriptor;
+
         if data.is_empty() {
             return Err(format!("Attachment '{name}' is missing binary data"));
         }
 
         let attachment_id = Scu128::new().to_string();
         let data_len = data.len() as u64;
-        let effective_size = if size == 0 { data_len } else { size };
-        let sanitized_size = if effective_size == data_len {
-            effective_size
-        } else {
+        let sanitized_size = if size == 0 || size != data_len {
             data_len
+        } else {
+            size
         };
 
         let attachment = database::Attachment {
@@ -179,10 +179,11 @@ pub(super) async fn persist_and_broadcast_message(
             content_type: content_type.clone(),
             size: sanitized_size,
         };
+
         db_attachments.push(attachment.clone());
         attachment_data.push(database::AttachmentWithData {
             metadata: attachment,
-            data: data.clone(),
+            data: data.clone(), // Still need one clone for DB
         });
 
         protocol_attachments.push(aegis_protocol::AttachmentPayload {
@@ -190,7 +191,7 @@ pub(super) async fn persist_and_broadcast_message(
             name,
             content_type,
             size: sanitized_size,
-            data,
+            data, // Move original data
         });
     }
 
@@ -199,7 +200,7 @@ pub(super) async fn persist_and_broadcast_message(
         chat_id: chat_id_local,
         sender_id: peer_id.clone(),
         content: message.clone(),
-        timestamp: timestamp,
+        timestamp,
         read: false,
         pinned: false,
         attachments: db_attachments,
@@ -211,41 +212,14 @@ pub(super) async fn persist_and_broadcast_message(
         edited_by: None,
         expires_at: expires_at.clone(),
     };
+
     database::insert_message(&state.db_pool, &new_local_message, &attachment_data)
         .await
         .map_err(|e| e.to_string())?;
 
     let chat_message_data = aegis_protocol::ChatMessageData {
-        id: message_id.clone(),
-        timestamp: new_local_message.timestamp.clone(),
-        sender: peer_id.clone(),
-        content: message.clone(),
-        channel_id: channel_id.clone(),
-        server_id: server_id.clone(),
-        conversation_id: payload_conversation_id.clone(),
-        attachments: protocol_attachments.clone(),
-        expires_at: expires_at.clone(),
-        reply_to_message_id: reply_to_message_id.clone(),
-        reply_snapshot_author: reply_snapshot_author.clone(),
-        reply_snapshot_snippet: reply_snapshot_snippet.clone(),
-    };
-
-    let identity = state.identity.clone();
-    let signature = tokio::task::spawn_blocking(move || {
-        let chat_message_bytes =
-            bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
-        let signature = identity
-            .keypair()
-            .sign(&chat_message_bytes)
-            .map_err(|e| e.to_string())?;
-        Ok::<_, String>(signature)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-
-    let aep_message = AepMessage::ChatMessage {
         id: message_id,
-        timestamp: new_local_message.timestamp,
+        timestamp,
         sender: peer_id,
         content: message,
         channel_id,
@@ -256,11 +230,38 @@ pub(super) async fn persist_and_broadcast_message(
         reply_to_message_id,
         reply_snapshot_author,
         reply_snapshot_snippet,
-        signature: Some(signature),
     };
 
-    let serialized_final = tokio::task::spawn_blocking(move || {
-        bincode::serialize(&aep_message).map_err(|e| e.to_string())
+    let identity = state.identity.clone();
+    let (signature, serialized_final) = tokio::task::spawn_blocking(move || {
+        let chat_message_bytes =
+            bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
+
+        let signature = identity
+            .keypair()
+            .sign(&chat_message_bytes)
+            .map_err(|e| e.to_string())?;
+
+        // Construct AepMessage by moving fields from chat_message_data to avoid re-serializing large attachments if possible.
+        // Actually, we still need to serialize the final AepMessage once, but we avoid building intermediate large structs.
+        let aep_message = AepMessage::ChatMessage {
+            id: chat_message_data.id,
+            timestamp: chat_message_data.timestamp,
+            sender: chat_message_data.sender,
+            content: chat_message_data.content,
+            channel_id: chat_message_data.channel_id,
+            server_id: chat_message_data.server_id,
+            conversation_id: chat_message_data.conversation_id,
+            attachments: chat_message_data.attachments,
+            expires_at: chat_message_data.expires_at,
+            reply_to_message_id: chat_message_data.reply_to_message_id,
+            reply_snapshot_author: chat_message_data.reply_snapshot_author,
+            reply_snapshot_snippet: chat_message_data.reply_snapshot_snippet,
+            signature: Some(signature.clone()),
+        };
+
+        let serialized = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
+        Ok::<_, String>((signature, serialized))
     })
     .await
     .map_err(|e| e.to_string())??;
