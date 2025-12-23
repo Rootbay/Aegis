@@ -17,7 +17,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
   import { friendInvitesStore } from "$lib/features/friends/stores/friendInvitesStore";
-  import { Check, Clock, Loader2, Search, UserPlus } from "@lucide/svelte";
+  import { Check, Clock, LoaderCircle, Search, UserPlus } from "@lucide/svelte";
 
   const store = friendInvitesStore;
   let searchQuery = $state("");
@@ -71,7 +71,7 @@
         type="search"
       />
       {#if $store.searchLoading}
-        <Loader2 class="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+        <LoaderCircle class="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
       {/if}
     </div>
 
@@ -146,7 +146,7 @@
                     onclick={() => store.sendRequest(user.id)}
                   >
                     {#if $store.sendingRequestIds.includes(user.id)}
-                      <Loader2 class="mr-2 size-4 animate-spin" />
+                      <LoaderCircle class="mr-2 size-4 animate-spin" />
                       Sending
                     {:else if result.relationship === "friend"}
                       <Check class="mr-2 size-4" />
