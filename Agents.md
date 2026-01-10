@@ -1,12 +1,15 @@
-\# Project Overview
+Start: say hi + 1 motivating line.
+Work style: telegraph; noun-phrases ok; drop grammar; min tokens.
+
+# Project Overview
 
 This repository represent:
 
-A \*\*desktop application\*\* built with \*\*Tauri v2\*\*, \*\*Svelte 5 runes mode\*\*, \*\*TypeScript\*\*, \*\*TailwindCSS v4\*\*, \*\*shadcn-svelte\*\*, and \*\*lucide\*\* for icons.
+A **desktop application** built with **Tauri v2**, **Svelte 5 runes mode**, **TypeScript**, **TailwindCSS v4**, **shadcn-svelte**, and **lucide** for icons.
 
-\*\*Bun\*\* is used as the runtime, package manager, and task runner across all projects.
+**Bun** is used as the runtime, package manager, and task runner across all projects.
 
-\# Setup / Build \& Run
+# Setup / Build & Run
 
 Install dependencies:
 
@@ -18,11 +21,11 @@ bun install
 
 Development:
 
-\*\*Desktop App (Tauri v2)\*\*: `bun tauri dev`
+**Desktop App (Tauri v2)**: `bun tauri dev`
 
 Production Build:
 
-\*\*Desktop App (Tauri v2)\*\*: `bun tauri build`
+**Desktop App (Tauri v2)**: `bun tauri build`
 
 Type-check the project:
 
@@ -32,7 +35,7 @@ bun tsc --noEmit
 
 ```
 
-\# File-scoped Checks
+# File-scoped Checks
 
 Type-check a single file:
 
@@ -66,31 +69,38 @@ bun test <path/to/file.test.ts>
 
 ```
 
-\# Code Style \& Conventions
+## Critical Thinking
+- Fix root cause (not band-aid).
+- Unsure: read more code; if still stuck, ask w/ short options.
+- Conflicts: call out; pick safer path.
+- Unrecognized changes: assume other agent; keep going; focus your changes. If it causes issues, stop + ask user.
+- Leave breadcrumb notes in thread.
 
-\*\*Language\*\*: TypeScript in strict mode.
+# Code Style & Conventions
 
-\*\*Svelte\*\*: use `<script lang="ts">` in components.
+**Language**: TypeScript in strict mode.
 
-\*\*TailwindCSS v4\*\*: prefer utility-first classes over custom CSS.
+**Svelte**: use `<script lang="ts">` in components.
 
-\*\*shadcn-svelte\*\*: use provided UI primitives/components consistently.
+**TailwindCSS v4**: prefer utility-first classes over custom CSS.
 
-\*\*Icons\*\*: use \*\*lucide\*\* icons.
+**shadcn-svelte**: use provided UI primitives/components consistently.
 
-\*\*Formatting\*\*: run `bun prettier --write .` before commits.
+**Icons**: use **lucide** icons.
 
-\*\*Imports\*\*:
+**Formatting**: run `bun prettier --write .` before commits.
+
+**Imports**:
 
 Prefer absolute imports from `src/` over long relative paths.
 
-\*\*Naming\*\*:
+**Naming**:
 
 Components: PascalCase (e.g. `MyButton.svelte`).
 
 Utilities, stores: camelCase or kebab-case as appropriate.
 
-\# Project Structure
+# Project Structure
 
 `src/` – main application code (Svelte + TypeScript).
 
@@ -104,9 +114,9 @@ Utilities, stores: camelCase or kebab-case as appropriate.
 
 `tests/` – unit/integration tests.
 
-\# Testing Guidelines
+# Testing Guidelines
 
-Use \*\*Vitest\*\* (or compatible runner with Bun).
+Use **Vitest** (or compatible runner with Bun).
 
 Add unit tests for new logic.
 
@@ -130,35 +140,35 @@ Run tests before committing:
 
   ```
 
-\# Do’s \& Don’ts
+# Do’s & Don’ts
 
-\## Do:
+## Do:
 
-\- Use TailwindCSS utilities instead of custom CSS.
+- Use TailwindCSS utilities instead of custom CSS.
 
-\- Use shadcn-svelte components for UI consistency.
+- Use shadcn-svelte components for UI consistency.
 
-\- Keep components small and modular.
+- Keep components small and modular.
 
-\- Use lucide icons consistently.
+- Use lucide icons consistently.
 
-\## Don’t:
+## Don’t:
 
-\- Don’t use `any` unless unavoidable (add `TODO` if used).
+- Don’t use `any` unless unavoidable (add `TODO` if used).
 
-\- Don’t hardcode secrets; use environment variables or config files.
+- Don’t hardcode secrets; use environment variables or config files.
 
-\- Don’t add dependencies without reviewing size and compatibility.
+- Don’t add dependencies without reviewing size and compatibility.
 
-\# Security
+# Security
 
-\- Exclude `.env` and secrets from version control.
+- Exclude `.env` and secrets from version control.
 
-\- For desktop apps, keep secrets in the \*\*Tauri (Rust) backend\*\*, not the frontend.
+- For desktop apps, keep secrets in the **Tauri (Rust) backend**, not the frontend.
 
-\- Never expose private APIs or keys in client-side code.
+- Never expose private APIs or keys in client-side code.
 
-\# External References
+# External References
 
 General project docs: see `README.md` and/or `docs`.
 
