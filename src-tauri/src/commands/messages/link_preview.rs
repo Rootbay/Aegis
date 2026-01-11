@@ -142,7 +142,7 @@ async fn persist_link_preview_cache(
             .map_err(|error| format!("failed to prepare cache directory: {error}"))?;
     }
 
-    let bytes = rkyv::to_bytes::<_, 1024>(cache)
+    let bytes = rkyv::to_bytes::<_, 65536>(cache)
         .map_err(|error| format!("failed to serialize link preview cache: {:?}", error))?;
 
     fs::write(path, &bytes)

@@ -19,9 +19,9 @@
     SidebarHeader,
   } from "$lib/components/ui/sidebar";
   import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
-  import { messagesByChatId } from "$lib/features/chat/stores/chatStore";
+  import { messagesByChatId } from "$lib/features/chat/stores/chatStore.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import type { Message } from "$lib/features/chat/models/Message";
   import type { User } from "$lib/features/auth/models/User";
   import {

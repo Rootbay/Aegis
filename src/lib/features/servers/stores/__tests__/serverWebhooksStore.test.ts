@@ -135,7 +135,7 @@ describe("serverWebhooksStore", () => {
     fetchMock.mockResolvedValueOnce(success([existing]));
     updateMock.mockImplementation(async (_input, options) => {
       const rollback = options?.optimisticUpdate?.();
-      rollback && rollback();
+      rollback?.();
       return failure("Unable to update");
     });
 
@@ -169,7 +169,7 @@ describe("serverWebhooksStore", () => {
     fetchMock.mockResolvedValueOnce(success([existing]));
     deleteMock.mockImplementation(async (_input, options) => {
       const rollback = options?.optimisticUpdate?.();
-      rollback && rollback();
+      rollback?.();
       return failure("Delete failed");
     });
 

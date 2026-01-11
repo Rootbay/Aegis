@@ -9,9 +9,9 @@
     DropdownMenuSeparator,
   } from "$lib/components/ui/dropdown-menu";
 
-  // eslint-disable-next-line no-unused-vars
+   
   type SizeHandler = (detail: { size: number }) => void;
-  // eslint-disable-next-line no-unused-vars
+   
   type ZoomHandler = (detail: { zoom: number }) => void;
 
   type MagnifierContextMenuProps = {

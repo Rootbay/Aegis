@@ -1,5 +1,3 @@
-<svelte:options runes={true} />
-
 <script lang="ts">
   import ChatSummary from "$lib/components/navigation/ChatSummary.svelte";
   import CallControls from "$lib/components/navigation/CallControls.svelte";
@@ -7,10 +5,9 @@
   import ChatSearch from "$lib/components/navigation/ChatSearch.svelte";
   import { Button } from "$lib/components/ui/button/index.js";
   import { Users } from "@lucide/svelte";
-  import { userStore } from "$lib/stores/userStore";
-  import { activeChatTypingUsers } from "$lib/features/chat/stores/chatStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
+  import { activeChatTypingUsers } from "$lib/features/chat/stores/chatStore.svelte";
   import { getTypingStatusLabel } from "$lib/features/chat/utils/typingStatus";
-
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
   import type { Component } from "svelte";
@@ -24,9 +21,7 @@
     onToggleMemberPanel = () => {},
   } = $props<{
     chat: Chat;
-    // eslint-disable-next-line no-unused-vars
     openUserCardModal?: (user: User, x: number, y: number, isServerMemberContext: boolean) => void;
-    // eslint-disable-next-line no-unused-vars
     onOpenDetailedProfile: (user: User) => void;
     showMemberPanelToggle?: boolean;
     mobileMemberPanelOpen?: boolean;

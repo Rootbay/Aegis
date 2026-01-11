@@ -32,7 +32,7 @@ vi.mock("$lib/utils/nativeNotification", () => ({
     showNativeNotificationMock(payload),
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: (run: (value: { me: { id: string } | null }) => void) => {
       run({ me: { id: "user-1" } });
@@ -318,7 +318,7 @@ describe("chatStore attachment lifecycle", () => {
     expect(
       JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]"),
     ).toEqual([["server-1", "channel-2"]]);
-    expect(get(store.activeChannelId)).toBe("channel-2");
+    expect(store.activeChannelId).toBe("channel-2");
     expect(get(store.activeServerChannelId)).toBe("channel-2");
 
     await store.setActiveChat("server-1", "server");
@@ -326,7 +326,7 @@ describe("chatStore attachment lifecycle", () => {
     expect(
       JSON.parse(localStorage.getItem("serverChannelSelections") ?? "[]"),
     ).toEqual([["server-1", "channel-2"]]);
-    expect(get(store.activeChannelId)).toBe("channel-2");
+    expect(store.activeChannelId).toBe("channel-2");
     expect(get(store.activeServerChannelId)).toBe("channel-2");
   });
 
@@ -529,7 +529,7 @@ describe("chatStore attachment lifecycle", () => {
       if (command === "get_messages") {
         const params = payload as { chatId?: string; chat_id?: string };
         const chatId = params.chatId ?? params.chat_id ?? "";
-        const deferred = createDeferred<any>();
+        const deferred = createDeferred<unknown>();
         deferredByChat.set(chatId, deferred);
         return deferred.promise;
       }
@@ -573,7 +573,7 @@ describe("chatStore attachment lifecycle", () => {
       if (command === "get_messages") {
         const params = payload as { chatId?: string; chat_id?: string };
         const chatId = params.chatId ?? params.chat_id ?? "";
-        const deferred = createDeferred<any>();
+        const deferred = createDeferred<unknown>();
         deferreds.push({ chatId, deferred });
         return deferred.promise;
       }

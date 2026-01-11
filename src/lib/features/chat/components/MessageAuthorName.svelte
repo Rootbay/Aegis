@@ -34,12 +34,12 @@
     hideNames ? hiddenMemberLabel : (senderName ?? hiddenMemberLabel),
   );
 
-  function handleClick(event: MouseEvent) {
-    onNameClick?.(event);
+  function handleClick(_event: MouseEvent) {
+    onNameClick?.(_event);
   }
 
-  function handleContextMenu(event: MouseEvent) {
-    onNameContextMenu?.(event);
+  function handleContextMenu(_event: MouseEvent) {
+    onNameContextMenu?.(_event);
   }
 </script>
 

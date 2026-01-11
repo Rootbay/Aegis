@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { Ban, Check, LoaderCircle, Minus } from "@lucide/svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import type { User } from "$lib/features/auth/models/User";
@@ -9,11 +10,11 @@
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { toasts } from "$lib/stores/ToastStore";
 
-  type OpenUserCardModal = (...args: [User, number, number, boolean]) => void; // eslint-disable-line no-unused-vars
+  type OpenUserCardModal = (...args: [User, number, number, boolean]) => void;  
   const noopOpenUserCard: OpenUserCardModal = () => {};
-  type MemberRemovedHandler = (member: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
+  type MemberRemovedHandler = (member: User) => void | Promise<void>;  
   const noopMemberRemoved: MemberRemovedHandler = () => {};
-  type MemberBannedHandler = (member: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
+  type MemberBannedHandler = (member: User) => void | Promise<void>;  
   const noopMemberBanned: MemberBannedHandler = () => {};
 
   let {
@@ -40,7 +41,7 @@
   );
 
   const collectRoleIds = (member: User): string[] => {
-    const ids = new Set<string>();
+    const ids = new SvelteSet<string>();
     const record = member as unknown as Record<string, unknown>;
     const candidates = [record.roleIds, record.role_ids, record.roles];
     for (const candidate of candidates) {
@@ -204,7 +205,7 @@
       return;
     }
 
-    const currentRoles = new Set(collectRoleIds(member));
+    const currentRoles = new SvelteSet(collectRoleIds(member));
     const wasAssigned = currentRoles.has(role.id);
     if (wasAssigned) {
       currentRoles.delete(role.id);

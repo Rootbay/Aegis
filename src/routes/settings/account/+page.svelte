@@ -1,6 +1,6 @@
 <script lang="ts">
   import QRCode from "qrcode";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import {
     authStore,
     authPersistenceStore,

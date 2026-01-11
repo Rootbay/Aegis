@@ -22,7 +22,7 @@ function createIgnoredUsersStore(): IgnoredUsersStore {
   };
 
   return {
-    subscribe(run, invalidate) {
+    subscribe(run, _invalidate) {
       return backing.subscribe((ids) => run(deriveSet(ids)));
     },
     ignore(userId: string) {

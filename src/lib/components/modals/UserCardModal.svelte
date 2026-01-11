@@ -2,8 +2,8 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { toasts } from "$lib/stores/ToastStore";
-  import { userStore } from "$lib/stores/userStore";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import EmojiPicker from "$lib/components/emoji/EmojiPicker.svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import type { User } from "$lib/features/auth/models/User";
@@ -48,7 +48,7 @@
   import { resolvePresenceStatusLabel } from "$lib/features/presence/statusPresets";
   import { tick } from "svelte";
 
-  type OpenDetailedProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
+  type OpenDetailedProfileHandler = (user: User) => void;  
 
   let {
     profileUser,
@@ -432,7 +432,7 @@
         {#if profileUser.tag}
           <Badge>{profileUser.tag}</Badge>
         {/if}
-        {#each badgeLabels as badge}
+        {#each badgeLabels as badge (badge)}
           <Badge variant="secondary">{badge}</Badge>
         {/each}
       </div>
@@ -463,7 +463,7 @@
       <div class="flex flex-col gap-3">
         <div class="flex flex-wrap items-center gap-2">
           {#if memberRoles.length > 0}
-            {#each memberRoles as role}
+            {#each memberRoles as role (role.id)}
               <span
                 class="flex items-center gap-2 rounded-full border border-muted/50 bg-muted/60 px-3 py-1 text-xs font-semibold text-foreground"
               >
@@ -531,8 +531,8 @@
                   id="user-card-emoji-picker"
                 >
                   <EmojiPicker
-                    on:select={(event) => handleEmojiSelect(event.detail.emoji)}
-                    on:close={closeEmojiPicker}
+                    onselect={(payload) => handleEmojiSelect(payload.emoji)}
+                    onclose={closeEmojiPicker}
                   />
                 </div>
               {/if}
@@ -596,7 +596,7 @@
                   onmouseenter={() => handleStatusHover(true)}
                   onmouseleave={() => handleStatusHover(false)}
                 >
-                {#each onlineStatusOptions as option}
+                {#each onlineStatusOptions as option (option)}
                   <Button
                     class="w-full justify-start items-center gap-2 h-8"
                     variant="ghost"
@@ -651,7 +651,7 @@
                     {#if displayAccounts.length === 0}
                       <p class="text-xs text-muted-foreground">No linked accounts yet.</p>
                     {/if}
-                  {#each displayAccounts as account}
+                  {#each displayAccounts as account (account.id)}
                     <Button
                       variant="ghost"
                       class="w-full justify-start items-center gap-2 h-8"
@@ -730,8 +730,8 @@
                   id="user-card-emoji-picker"
                 >
                   <EmojiPicker
-                    on:select={(event) => handleEmojiSelect(event.detail.emoji)}
-                    on:close={closeEmojiPicker}
+                    onselect={(payload) => handleEmojiSelect(payload.emoji)}
+                    onclose={closeEmojiPicker}
                   />
                 </div>
               {/if}
@@ -802,10 +802,10 @@
             {#if statusEditorEmojiPickerOpen}
               <div class="absolute bottom-full right-0 z-40 mb-2">
                 <EmojiPicker
-                  on:select={(event) =>
-                    handleStatusEditorEmojiSelect(event.detail.emoji)
+                  onselect={(payload) =>
+                    handleStatusEditorEmojiSelect(payload.emoji)
                   }
-                  on:close={() => (statusEditorEmojiPickerOpen = false)}
+                  onclose={() => (statusEditorEmojiPickerOpen = false)}
                 />
               </div>
             {/if}

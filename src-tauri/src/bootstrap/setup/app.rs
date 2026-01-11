@@ -14,7 +14,7 @@ use super::identity::initialize_identity_state;
 use super::network::initialize_network;
 use super::state::build_app_state;
 use super::swarm::spawn_swarm_processing;
-use super::tasks::{spawn_event_dispatcher, spawn_group_key_rotation};
+use super::tasks::{spawn_e2ee_persistence, spawn_event_dispatcher, spawn_group_key_rotation};
 
 pub(crate) async fn initialize_app_state<R: Runtime>(
     app: AppHandle<R>,
@@ -64,6 +64,8 @@ pub(crate) async fn initialize_app_state<R: Runtime>(
     initialize_identity_state(&identity, &db_pool, &directories, &app_state).await?;
 
     spawn_event_dispatcher(app.clone(), event_rx);
+
+    spawn_e2ee_persistence();
 
     spawn_group_key_rotation(
         db_pool.clone(),

@@ -56,7 +56,6 @@
   <div class="relative flex h-full">
     <Sidebar
       onCreateJoinServerClick={() => openModal("serverManagement")}
-      {openDetailedProfileModal}
     />
 
     {#if activeServer()}

@@ -124,8 +124,14 @@ impl RequestResponseCodec for FileTransferCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        let mut buf = Vec::new();
-        AsyncReadExt::read_to_end(io, &mut buf).await?;
+        let mut len_buf = [0u8; 4];
+        AsyncReadExt::read_exact(io, &mut len_buf).await?;
+        let len = u32::from_be_bytes(len_buf) as usize;
+        if len > 10 * 1024 * 1024 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Request too large"));
+        }
+        let mut buf = vec![0u8; len];
+        AsyncReadExt::read_exact(io, &mut buf).await?;
         deserialize(&buf)
     }
 
@@ -137,8 +143,14 @@ impl RequestResponseCodec for FileTransferCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        let mut buf = Vec::new();
-        AsyncReadExt::read_to_end(io, &mut buf).await?;
+        let mut len_buf = [0u8; 4];
+        AsyncReadExt::read_exact(io, &mut len_buf).await?;
+        let len = u32::from_be_bytes(len_buf) as usize;
+        if len > 10 * 1024 * 1024 {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Response too large"));
+        }
+        let mut buf = vec![0u8; len];
+        AsyncReadExt::read_exact(io, &mut buf).await?;
         deserialize(&buf)
     }
 
@@ -152,6 +164,8 @@ impl RequestResponseCodec for FileTransferCodec {
         T: AsyncWrite + Unpin + Send,
     {
         let bytes = serialize(&req)?;
+        let len = bytes.len() as u32;
+        AsyncWriteExt::write_all(io, &len.to_be_bytes()).await?;
         AsyncWriteExt::write_all(io, &bytes).await
     }
 
@@ -165,6 +179,8 @@ impl RequestResponseCodec for FileTransferCodec {
         T: AsyncWrite + Unpin + Send,
     {
         let bytes = serialize(&res)?;
+        let len = bytes.len() as u32;
+        AsyncWriteExt::write_all(io, &len.to_be_bytes()).await?;
         AsyncWriteExt::write_all(io, &bytes).await
     }
 }

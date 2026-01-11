@@ -2,8 +2,10 @@
 
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import type { Role } from "$lib/features/servers/models/Role";
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { browser } from "$app/environment";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { Separator } from "$lib/components/ui/separator";
@@ -21,9 +23,9 @@
   import UserCardModal from "$lib/components/modals/UserCardModal.svelte";
   import GroupMemberPicker from "$lib/components/users/GroupMemberPicker.svelte";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import { toasts } from "$lib/stores/ToastStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import {
@@ -39,7 +41,7 @@
   } from "$lib/components/sidebars/memberSidebar/types";
   import { onMount } from "svelte";
 
-  /* eslint-disable no-unused-vars */
+   
   type MemberSidebarProps = {
     members?: MemberWithRoles[];
     isSettingsPage?: boolean;
@@ -54,7 +56,7 @@
     mobileOpen?: boolean;
     onMobileOpenChange?: (arg0: boolean) => void;
   };
-  /* eslint-enable no-unused-vars */
+   
 
   let {
     members = [],
@@ -110,7 +112,7 @@
     if (identifiers.length === 0) {
       return [];
     }
-    const normalized = new Set(
+    const normalized = new SvelteSet(
       identifiers.map((value) => value.toLowerCase()),
     );
     return resolvedRoles.filter((role) => {
@@ -126,7 +128,7 @@
 
   function handleAddRolesClick() {
     if (!resolvedServerId) return;
-    goto(`/channels/${resolvedServerId}/settings?tab=members`);
+    void goto(resolve(`/channels/${resolvedServerId}/settings?tab=members`));
   }
 
   const resolvedGroupId = $derived(
@@ -139,10 +141,10 @@
 
   const currentUserId = $derived($userStore.me?.id ?? null);
 
-  let inviteeSelection = $state(new Set<string>());
+  let inviteeSelection = $state(new SvelteSet<string>());
   let showInviteMembersDialog = $state(false);
   let inviteMembersPending = $state(false);
-  let removingMembers = $state(new Set<string>());
+  let removingMembers = $state(new SvelteSet<string>());
 
   const canInviteMembers = $derived(
     context === "group" && resolvedGroupId !== null,
@@ -156,7 +158,7 @@
   );
 
   const memberIdSet = $derived.by(() => {
-    const set = new Set<string>();
+    const set = new SvelteSet<string>();
     for (const member of members) {
       if (typeof member.id === "string") {
         set.add(member.id);
@@ -194,7 +196,7 @@
   );
 
   function resetInviteSelection() {
-    inviteeSelection = new Set();
+    inviteeSelection = new SvelteSet();
   }
 
   function openInviteMembersDialog() {
@@ -203,7 +205,7 @@
   }
 
   function toggleInviteeSelection(userId: string) {
-    const next = new Set(inviteeSelection);
+    const next = new SvelteSet(inviteeSelection);
     if (next.has(userId)) {
       next.delete(userId);
     } else {
@@ -284,7 +286,7 @@
       return;
     }
 
-    const next = new Set(removingMembers);
+    const next = new SvelteSet(removingMembers);
     next.add(member.id);
     removingMembers = next;
 
@@ -298,7 +300,7 @@
       console.error("Failed to remove group member", error);
       toasts.addToast("Failed to remove member from the group.", "error");
     } finally {
-      const cleanup = new Set(removingMembers);
+      const cleanup = new SvelteSet(removingMembers);
       cleanup.delete(member.id);
       removingMembers = cleanup;
     }

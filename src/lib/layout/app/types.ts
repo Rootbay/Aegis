@@ -4,7 +4,7 @@ import type { Chat } from "$lib/features/chat/models/Chat";
 import type {
   GroupChatSummary,
   messagesByChatId,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 import type { DirectMessageListEntry } from "$lib/features/chat/stores/directMessageRoster";
 import type { Friend } from "$lib/features/friends/models/Friend";
 import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";

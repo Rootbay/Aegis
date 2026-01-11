@@ -10,7 +10,7 @@
     itemData: Friend | User | null;
   };
 
-  type ContextMenuHandler = (detail: ContextMenuDetail) => void; // eslint-disable-line no-unused-vars
+  type ContextMenuHandler = (detail: ContextMenuDetail) => void;  
 
   type ContextMenuProps = {
     x?: number;

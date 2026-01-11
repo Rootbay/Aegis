@@ -14,7 +14,7 @@ import {
   generateBackupCodes,
   type DeviceHandshakePayload,
 } from "$lib/utils/security";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 import { toasts } from "$lib/stores/ToastStore";
 import {
   authPersistenceStore,

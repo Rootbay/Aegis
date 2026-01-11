@@ -19,6 +19,20 @@ pub(super) fn spawn_event_dispatcher<R: Runtime>(
     });
 }
 
+pub(super) fn spawn_e2ee_persistence() {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            let arc = e2ee::init_global_manager();
+            let mut mgr = arc.lock().await;
+            if let Err(e) = mgr.save_if_needed() {
+                eprintln!("Failed to periodically save E2EE state: {}", e);
+            }
+        }
+    });
+}
+
 pub(super) fn spawn_group_key_rotation(
     db_pool: sqlx::Pool<sqlx::Sqlite>,
     identity: Identity,

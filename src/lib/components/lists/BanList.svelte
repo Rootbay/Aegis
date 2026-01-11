@@ -6,7 +6,7 @@
   type Props = {
     bannedUsers?: User[];
     serverId?: string;
-    onUnban?: (user: User) => void | Promise<void>; // eslint-disable-line no-unused-vars
+    onUnban?: (user: User) => void | Promise<void>;  
   };
 
   const noopOnUnban = () => {};
@@ -17,7 +17,8 @@
     onUnban = noopOnUnban,
   }: Props = $props();
 
-  let bans = $state<User[]>(Array.isArray(bannedUsers) ? bannedUsers : []);
+  let fetchedBans = $state<User[] | null>(null);
+  let bans = $derived(fetchedBans ?? (Array.isArray(bannedUsers) ? bannedUsers : []));
   let isLoading = $state(false);
   let errorMessage = $state<string | null>(null);
   let unbanningStates = $state<Record<string, boolean>>({});
@@ -45,7 +46,7 @@
 
     try {
       const fetched = await serverStore.fetchBans(serverToLoad, { force });
-      bans = fetched;
+      fetchedBans = fetched;
       return fetched;
     } catch (error) {
       const message =
@@ -56,7 +57,7 @@
             : defaultErrorMessage;
       errorMessage = message;
       toasts.addToast(message, "error");
-      bans = [];
+      fetchedBans = [];
       return [] as User[];
     } finally {
       isLoading = false;
@@ -64,13 +65,9 @@
   }
 
   $effect(() => {
-    bans = Array.isArray(bannedUsers) ? bannedUsers : [];
-  });
-
-  $effect(() => {
     const targetServerId = resolvedServerId;
     if (!targetServerId) {
-      bans = [];
+      fetchedBans = [];
       errorMessage = null;
       return;
     }

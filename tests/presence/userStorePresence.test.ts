@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { get } from "svelte/store";
-import { userStore } from "../../src/lib/stores/userStore";
+import { userStore } from "../../src/lib/stores/userStore.svelte";
 import { presenceStore } from "../../src/lib/features/presence/presenceStore";
 import { DEFAULT_PRESENCE_STATUS_KEY } from "../../src/lib/features/presence/statusPresets";
 import type { User } from "../../src/lib/features/auth/models/User";

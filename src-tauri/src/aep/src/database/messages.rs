@@ -442,8 +442,9 @@ pub async fn search_messages(
     if let Some(q) = query {
         let trimmed = q.trim();
         if !trimmed.is_empty() {
+            let escaped_query = trimmed.replace("\"", "\"\"");
             builder.push(" AND messages_fts MATCH ");
-            builder.push_bind(format!("\"{}\"", trimmed));
+            builder.push_bind(format!("\"{}\"", escaped_query));
         }
     }
 
@@ -504,4 +505,11 @@ pub async fn get_attachment_data(
         Some(row) => Ok(row.data),
         None => Err(sqlx::Error::RowNotFound),
     }
+}
+
+pub async fn mark_chat_read(pool: &Pool<Sqlite>, chat_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("UPDATE messages SET read = 1 WHERE chat_id = ?", chat_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }

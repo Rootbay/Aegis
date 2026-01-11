@@ -150,7 +150,7 @@
     info: "What's New?",
   };
 
-  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (..._args: [string | URL]) => void;  
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 

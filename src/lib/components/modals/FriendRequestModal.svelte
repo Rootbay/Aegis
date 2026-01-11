@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import * as Dialog from "$lib/components/ui/dialog/index.js";
   import { Button } from "$lib/components/ui/button/index.js";

@@ -12,12 +12,6 @@
   }: PopoverPrimitive.ContentProps & {
     portalProps?: PopoverPrimitive.PortalProps;
   } = $props();
-
-  interface $$Slots {
-    default: {
-      close: () => void;
-    };
-  }
 </script>
 
 <PopoverPrimitive.Portal {...portalProps}>

@@ -4,7 +4,7 @@ import type { Message } from "$lib/features/chat/models/Message";
 import type {
   ChatMetadata,
   GroupChatSummary,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 
 export interface DirectMessageListEntry {
   id: string;

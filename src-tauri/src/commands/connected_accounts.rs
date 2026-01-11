@@ -38,7 +38,7 @@ fn load_accounts(app: &AppHandle) -> Result<Vec<ExternalAccount>, String> {
 
 fn persist_accounts(app: &AppHandle, accounts: &Vec<ExternalAccount>) -> Result<(), String> {
     let path = get_accounts_path(app)?;
-    let bytes = rkyv::to_bytes::<_, 1024>(accounts).map_err(|e| format!("Serialization error: {:?}", e))?;
+    let bytes = rkyv::to_bytes::<_, 65536>(accounts).map_err(|e| format!("Serialization error: {:?}", e))?;
     fs::write(path, &bytes).map_err(|e| e.to_string())?;
     Ok(())
 }

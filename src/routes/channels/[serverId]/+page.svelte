@@ -9,7 +9,7 @@
     activeChatType,
     activeServerChannelId,
     messagesByChatId,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import type { ChannelChat } from "$lib/features/chat/models/Chat";
   import type { Message } from "$lib/features/chat/models/Message";

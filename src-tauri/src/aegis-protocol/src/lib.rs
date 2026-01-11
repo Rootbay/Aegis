@@ -33,6 +33,7 @@ pub enum AepMessage {
         signature: Option<Vec<u8>>,
     },
     GroupKeyUpdate {
+        issuer_id: String,
         server_id: String,
         channel_id: Option<String>,
         epoch: u64,

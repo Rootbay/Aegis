@@ -11,7 +11,7 @@ import type { Chat } from "$lib/features/chat/models/Chat";
 import type {
   GroupChatSummary,
   messagesByChatId,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 import type { ModalManager } from "./modalManager";
 import type { PageState } from "./types";

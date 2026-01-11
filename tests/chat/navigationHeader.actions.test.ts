@@ -113,7 +113,7 @@ vi.mock("$lib/features/chat/stores/memberSidebarVisibilityStore", () => ({
   },
 }));
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   activeChatTypingUsers: {
     subscribe: (run: (value: string[]) => void) => {
       run([]);
@@ -122,7 +122,7 @@ vi.mock("$lib/features/chat/stores/chatStore", () => ({
   },
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: (
       run: (value: { me: { id: string; name: string } | null }) => void,

@@ -2,7 +2,7 @@
   import { Html5Qrcode } from "html5-qrcode";
   import { X } from "@lucide/svelte";
 
-  type ScanSuccessHandler = (value: string) => void; // eslint-disable-line no-unused-vars
+  type ScanSuccessHandler = (value: string) => void;  
 
   type Props = {
     onscanSuccess?: ScanSuccessHandler;

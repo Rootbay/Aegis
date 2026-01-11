@@ -14,7 +14,7 @@
   import {
     chatStore,
     type BackendGroupChat,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import type {
     GroupModalOptions,
     GroupModalUser,

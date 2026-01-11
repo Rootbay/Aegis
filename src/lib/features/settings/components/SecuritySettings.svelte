@@ -118,7 +118,7 @@
           </span>
         </SelectTrigger>
         <SelectContent>
-          {#each sessionTimeoutOptions as option}
+          {#each sessionTimeoutOptions as option (option.value)}
             <SelectItem value={`${option.value}`}>{option.label}</SelectItem>
           {/each}
         </SelectContent>

@@ -3,8 +3,8 @@ import { friendStore } from "$lib/features/friends/stores/friendStore";
 import {
   chatMetadataByChatId,
   groupChats,
-} from "$lib/features/chat/stores/chatStore";
-import { userStore } from "$lib/stores/userStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
+import { userStore } from "$lib/stores/userStore.svelte";
 import {
   mergeDirectMessageRoster as mergeRosterEntries,
   type DirectMessageListEntry,

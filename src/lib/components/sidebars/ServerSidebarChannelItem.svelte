@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Button } from "$lib/components/ui/button/index.js";
   import { Badge } from "$lib/components/ui/badge";
   import {
     Tooltip,
@@ -9,7 +8,7 @@
   } from "$lib/components/ui/tooltip/index.js";
   import { Hash, Volume2, Lock, Plus, Settings, MessageCircle } from "@lucide/svelte";
   import type { Channel } from "$lib/features/channels/models/Channel";
-  import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
+  import type { ChatMetadata } from "$lib/features/chat/stores/chatStore.svelte";
 
   const {
     channel,
@@ -18,15 +17,15 @@
     channelType = "text",
     active = false,
     activeClass = "bg-card/80 text-white",
-    primaryAction = (channel: Channel) => {},
-    inviteHandler = (channel: Channel, event: MouseEvent) => {},
-    settingsHandler = (channel: Channel, event: MouseEvent) => {},
-    messageHandler = (channel: Channel, event: MouseEvent) => {},
-    dragStartHandler = (event: DragEvent, channel: Channel) => {},
-    dragEndHandler = (event: DragEvent) => {},
-    dragOverHandler = (event: DragEvent) => {},
-    dropHandler = (event: DragEvent) => {},
-    contextMenuHandler = (event: MouseEvent, channel: Channel) => {},
+    primaryAction = (_channel: Channel) => {},
+    inviteHandler = (_channel: Channel, _event: MouseEvent) => {},
+    settingsHandler = (_channel: Channel, _event: MouseEvent) => {},
+    messageHandler = (_channel: Channel, _event: MouseEvent) => {},
+    dragStartHandler = (_event: DragEvent, _channel: Channel) => {},
+    dragEndHandler = (_event: DragEvent) => {},
+    dragOverHandler = (_event: DragEvent) => {},
+    dropHandler = (_event: DragEvent) => {},
+    contextMenuHandler = (_event: MouseEvent, _channel: Channel) => {},
     voiceActive = false,
     dataActive,
   } = $props<{

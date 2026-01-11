@@ -7,13 +7,13 @@
     voiceCallViewStore,
   } from "$lib/features/calls/stores/voiceCallViewStore";
   import { goto } from "$app/navigation";
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
 
   type Props = {
     children?: Snippet;
   };
 
-  type NavigationFn = (value: string | URL) => void; // eslint-disable-line no-unused-vars
+  type NavigationFn = (value: string | URL) => void;  
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
@@ -35,13 +35,15 @@
   });
 
   $effect(() => {
-    if (serverId && !currentPathname.includes("/settings")) {
-      const server = $serverStore.servers.find((s) => s.id === serverId);
-      if (!server || !server.channels || !server.members) {
-        serverStore.fetchServerDetails(serverId);
+    untrack(() => {
+      if (serverId && !currentPathname.includes("/settings")) {
+        const server = $serverStore.servers.find((s) => s.id === serverId);
+        if (!server || !server.channels || !server.members) {
+          serverStore.fetchServerDetails(serverId);
+        }
+        serverStore.setActiveServer(serverId);
       }
-      serverStore.setActiveServer(serverId);
-    }
+    });
   });
 
   $effect(() => {

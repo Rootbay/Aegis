@@ -2,7 +2,7 @@ import { derived, get, writable, type Readable } from "svelte/store";
 import * as Y from "yjs";
 import { getInvoke } from "$lib/services/tauri";
 import type { InvokeFn } from "$lib/services/tauri";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 
 type CollaborationSessionKind = "document" | "whiteboard";
 

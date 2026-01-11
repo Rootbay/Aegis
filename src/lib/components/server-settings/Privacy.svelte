@@ -4,7 +4,7 @@
   import { Switch } from "$lib/components/ui/switch/index.js";
   import type { Server } from "$lib/features/servers/models/Server";
 
-  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+  type UnaryHandler<T> = (value: T) => void;  
 
   type Props = {
     server: Server;

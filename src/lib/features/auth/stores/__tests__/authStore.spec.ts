@@ -29,7 +29,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     initialize: (...args: Parameters<typeof initializeMock>) =>
       initializeMock(...args),

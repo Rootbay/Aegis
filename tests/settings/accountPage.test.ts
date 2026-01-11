@@ -69,7 +69,7 @@ vi.mock("qrcode", () => ({
   toDataURL: vi.fn(async () => "data:image/png;base64,qr"),
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: userState.subscribe,
     updateProfile,

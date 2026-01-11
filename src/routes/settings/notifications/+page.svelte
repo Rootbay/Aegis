@@ -124,7 +124,7 @@
         </span>
       </SelectTrigger>
       <SelectContent>
-        {#each soundOptions as option}
+        {#each soundOptions as option (option.value)}
           <SelectItem value={option.value}>{option.label}</SelectItem>
         {/each}
       </SelectContent>

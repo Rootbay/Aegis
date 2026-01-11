@@ -58,7 +58,6 @@
   let unlockTotp = $state("");
   let unlockPending = $state(false);
   let securityQuestionAnswers = $state<Record<string, string>>({});
-  let recoveryPhrase = $state("");
   let recoveryTotp = $state("");
   let recoveryPassword = $state("");
   let recoveryPasswordConfirm = $state("");
@@ -396,43 +395,6 @@
     }
   }
 
-  async function handleRecoveryLogin(event: Event) {
-    event.preventDefault();
-
-    if (recoveryPassword !== recoveryPasswordConfirm) {
-      toasts.showErrorToast("Passwords do not match.");
-      return;
-    }
-
-    const validation = validatePassword(
-      recoveryPassword,
-      unicodeRequired,
-      true,
-    );
-
-    if (validation) {
-      toasts.showErrorToast(validation);
-      return;
-    }
-
-    try {
-      await authStore.loginWithRecovery({
-        phrase: recoveryPhrase,
-        newPassword: recoveryPassword,
-        totpCode: requireTotpOnUnlock ? recoveryTotp : undefined,
-      });
-      securityQuestionAnswers = {};
-      recoveryPhrase = "";
-      recoveryTotp = "";
-      recoveryPassword = "";
-      recoveryPasswordConfirm = "";
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Recovery failed.";
-      toasts.showErrorToast(message);
-    }
-  }
-
   async function handleDeviceLogin(event: Event) {
     event.preventDefault();
     try {
@@ -460,7 +422,6 @@
 
   function resetRecoveryFormFields() {
     securityQuestionAnswers = {};
-    recoveryPhrase = "";
     recoveryTotp = "";
     recoveryPassword = "";
     recoveryPasswordConfirm = "";
@@ -691,7 +652,7 @@
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
-          {#each pendingRecovery?.newRecoveryPhrase ?? [] as word, index (index)}
+          {#each pendingRecovery?.newRecoveryPhrase ?? [] as word, index (`recovery-word-${index}`)}
             <div
               class="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-zinc-200"
             >
@@ -960,7 +921,7 @@
             <div
               class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono"
             >
-              {#each $authStore.onboarding.recoveryPhrase as word, index (index)}
+              {#each $authStore.onboarding.recoveryPhrase as word, index (`onboarding-word-${index}`)}
                 <div
                   class="rounded-lg border border-zinc-800/70 bg-zinc-950/70 px-3 py-2 text-zinc-100"
                 >
@@ -1058,7 +1019,7 @@
 
                 {#if passwordStrength.feedback.length > 0}
                   <ul class="text-xs text-zinc-500 space-y-1">
-                    {#each passwordStrength.feedback as feedback}
+                    {#each passwordStrength.feedback as feedback, index (`strength-feedback-${index}`)}
                       <li>{feedback}</li>
                     {/each}
                   </ul>
@@ -1136,7 +1097,7 @@
                 class="rounded-xl border border-zinc-800/70 bg-zinc-950/60 p-4"
               >
                 <div class="grid grid-cols-2 gap-2 text-sm font-mono">
-                  {#each backupCodes as code}
+                  {#each backupCodes as code, index (`backup-code-${index}`)}
                     <span
                       class="rounded-md bg-zinc-900/70 px-3 py-2 text-center text-zinc-100"
                     >

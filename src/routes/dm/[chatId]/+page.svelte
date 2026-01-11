@@ -3,7 +3,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { page } from "$app/stores";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
 
   $effect(() => {

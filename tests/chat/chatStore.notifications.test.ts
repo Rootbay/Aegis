@@ -69,7 +69,7 @@ vi.mock("$lib/features/friends/stores/friendStore", () => ({
   },
 }));
 
-vi.mock("$lib/stores/userStore", () => {
+vi.mock("$lib/stores/userStore.svelte", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
   return {
     userStore: {

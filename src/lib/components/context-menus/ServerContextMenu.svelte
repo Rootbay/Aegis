@@ -2,7 +2,7 @@
 
 <script lang="ts">
   import type { Server } from "$lib/features/servers/models/Server";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import {
     ContextMenu,
     ContextMenuTrigger,
@@ -17,7 +17,7 @@
     server: Server;
   };
 
-  type ServerContextMenuHandler = (_payload: ServerContextMenuAction) => void; // eslint-disable-line no-unused-vars
+  type ServerContextMenuHandler = (_payload: ServerContextMenuAction) => void;  
 
   type MenuEntry =
     | { type: "separator"; id: string }

@@ -80,6 +80,7 @@ describe("mergeDirectMessageRoster", () => {
       [
         "friend-1",
         {
+          id: "friend-1",
           chatId: "friend-1",
           lastMessage: friendMessage,
           lastActivityAt: friendMessage.timestamp,
@@ -89,6 +90,7 @@ describe("mergeDirectMessageRoster", () => {
       [
         "group-1",
         {
+          id: "group-1",
           chatId: "group-1",
           lastMessage: groupMessage,
           lastActivityAt: groupMessage.timestamp,
@@ -170,13 +172,14 @@ describe("mergeDirectMessageRoster", () => {
       [
         "conversation-42",
         {
+          id: "conversation-42",
           chatId: "conversation-42",
           lastMessage,
           lastActivityAt: lastMessage.timestamp,
-          unreadCount: 4,
+          unreadCount: 0,
           fallbackUserId: "user-42",
-          fallbackName: "Mystery Contact",
-          fallbackAvatar: "https://example.com/user-42.png",
+          fallbackName: "Stranger",
+          fallbackAvatar: "https://example.com/avatar.png",
         },
       ],
     ]);
@@ -208,11 +211,12 @@ describe("mergeDirectMessageRoster", () => {
       [
         "conversation-77",
         {
+          id: "conversation-77",
           chatId: "conversation-77",
           lastMessage,
           lastActivityAt: lastMessage.timestamp,
           unreadCount: 0,
-          fallbackUserId: "user-77",
+          fallbackUserId: "me-id",
         },
       ],
     ]);

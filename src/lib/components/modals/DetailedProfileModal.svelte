@@ -4,13 +4,13 @@
   import { invoke } from "@tauri-apps/api/core";
   import UserOptionsMenu from "$lib/components/context-menus/UserOptionsMenu.svelte";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import { ignoredUsersStore } from "$lib/features/friends/stores/ignoredUsersStore";
   import { userNotesStore } from "$lib/features/friends/stores/userNotesStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import type { Server } from "$lib/features/servers/models/Server";
   import type { User } from "$lib/features/auth/models/User";

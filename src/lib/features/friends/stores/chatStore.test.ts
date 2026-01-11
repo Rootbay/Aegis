@@ -22,7 +22,7 @@ vi.mock("$services/tauri", () => ({
   getInvoke: () => getInvokeMock(),
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: (run: (value: { me: { id: string } | null }) => void) => {
       run({ me: { id: "user-1" } });

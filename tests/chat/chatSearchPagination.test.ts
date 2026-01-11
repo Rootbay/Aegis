@@ -163,7 +163,7 @@ vi.mock("$lib/features/settings/stores/settings", () => ({
   }),
 }));
 
-vi.mock("$lib/stores/userStore", () => {
+vi.mock("$lib/stores/userStore.svelte", () => {
   const store = writable<{ me: User | null }>({
     me: {
       id: "user-1",
@@ -282,7 +282,7 @@ const searchMessagesMock = vi.fn(async ({
   };
 });
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     markActiveChatViewed: vi.fn(),
     sendTypingIndicator: vi.fn(async () => {}),

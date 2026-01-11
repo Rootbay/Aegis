@@ -5,7 +5,7 @@
   import { Textarea } from "$lib/components/ui/textarea/index.js";
   import type { Server } from "$lib/features/servers/models/Server";
 
-  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+  type UnaryHandler<T> = (value: T) => void;  
 
   type Props = {
     server: Server;

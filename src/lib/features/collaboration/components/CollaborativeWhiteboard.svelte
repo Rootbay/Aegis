@@ -22,7 +22,7 @@
     CollaborationSessionView,
   } from "../collabDocumentStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { toasts } from "$lib/stores/ToastStore";
 
   type StrokePoint = { x: number; y: number };

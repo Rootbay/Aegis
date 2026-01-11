@@ -59,7 +59,7 @@ async fn broadcast_profile(
     user: &aegis_shared_types::User,
     network_tx: &TokioSender<Vec<u8>>,
 ) -> Result<(), String> {
-    let user_bytes = rkyv::to_bytes::<_, 1024>(user).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
+    let user_bytes = rkyv::to_bytes::<_, 65536>(user).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
     let signature = identity
         .keypair()
         .sign(&user_bytes)
@@ -84,7 +84,13 @@ async fn broadcast_prekey_bundle(
     if !e2ee_dir.exists() {
         std::fs::create_dir_all(&e2ee_dir).map_err(|e| e.to_string())?;
     }
-    let mgr_arc = e2ee::init_with_dir(&e2ee_dir);
+    let secret = identity
+        .to_secret_bytes()
+        .ok_or_else(|| "Could not get secret bytes for E2EE initialization".to_string())?;
+    let mut pickle_key = [0u8; 32];
+    pickle_key.copy_from_slice(&secret[..32]);
+
+    let mgr_arc = e2ee::init_with_dir(&e2ee_dir, pickle_key);
     let bundle_bytes = {
         let mut mgr = mgr_arc.lock().await;
         let bundle = mgr.generate_prekey_bundle(8).map_err(|e| e.to_string())?;

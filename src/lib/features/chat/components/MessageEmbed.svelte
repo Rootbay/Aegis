@@ -1,6 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import { resolve } from "$app/paths";
   import type { MessageEmbed } from "$lib/features/chat/models/Message";
 
   let { embed } = $props<{ embed: MessageEmbed }>();
@@ -56,7 +57,7 @@
             {#if embed.url}
               <a
                 class="block text-sm font-semibold text-white no-underline hover:underline"
-                href={embed.url}
+                href={resolve(embed.url)}
                 rel="noreferrer noopener"
                 target="_blank"
               >
@@ -74,7 +75,7 @@
           {#if !embed.title && embed.url}
             <a
               class="text-xs text-cyan-300 underline underline-offset-2 hover:text-cyan-200"
-              href={embed.url}
+              href={resolve(embed.url)}
               rel="noreferrer noopener"
               target="_blank"
             >

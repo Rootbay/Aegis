@@ -3,6 +3,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -33,26 +34,21 @@
     SlidersHorizontal,
     Users,
   } from "@lucide/svelte";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import {
     hasMoreByChatId,
     messagesByChatId,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
   import { channelDisplayPreferencesStore } from "$lib/features/channels/stores/channelDisplayPreferencesStore";
   import { toasts } from "$lib/stores/ToastStore";
   import { settings } from "$lib/features/settings/stores/settings";
   import type { Chat } from "$lib/features/chat/models/Chat";
 
-  // eslint-disable-next-line no-unused-vars
-  type NavigationFn = (..._args: [string | URL]) => void;
-
   let { chat, applyPinnedFilter } = $props<{
     chat: Chat | null;
     applyPinnedFilter: () => Promise<void> | void;
   }>();
-
-  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 
   let leaveGroupPending = $state(false);
   let showRenameGroupModal = $state(false);
@@ -69,7 +65,7 @@
 
   const hasChatOverrides = $derived.by(() => {
     if (!chat?.id) return false;
-    const overrides = $chatPreferenceOverridesStore.get(chat.id);
+    const overrides = $chatPreferenceOverridesStore[chat.id];
     if (!overrides) {
       return false;
     }
@@ -90,7 +86,6 @@
       return;
     }
 
-    // Access stores to keep the effect reactive when global or overrides change.
     $chatPreferenceOverridesStore;
     $settingsStore;
 
@@ -118,7 +113,7 @@
   });
 
   function openNotificationSettings() {
-    gotoUnsafe("/settings/notifications");
+    void goto(resolve("/settings/notifications"));
   }
 
   function toggleMemberSidebarVisibility() {

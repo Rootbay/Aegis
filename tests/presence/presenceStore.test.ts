@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import {
   DEFAULT_PRESENCE_STATUS_KEY,
   PRESENCE_STATUS_OPTIONS,
+  type PresenceStatusKey,
 } from "../../src/lib/features/presence/statusPresets";
 
 const invokeMock = vi.fn(async (...args: unknown[]) => {
@@ -47,9 +48,8 @@ describe("presenceStore", () => {
   });
 
   it("rejects an invalid preset status", async () => {
-    // @ts-ignore Testing invalid status
     await expect(
-      presenceStore.broadcastPresence({ statusKey: "invalid" }),
+      presenceStore.broadcastPresence({ statusKey: "invalid" as unknown as PresenceStatusKey }),
     ).rejects.toThrow("Invalid presence status");
     expect(invokeMock).not.toHaveBeenCalled();
     expect(get(presenceStore).statusKey).toBe(DEFAULT_PRESENCE_STATUS_KEY);

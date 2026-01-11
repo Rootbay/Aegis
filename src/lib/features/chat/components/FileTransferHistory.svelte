@@ -178,8 +178,7 @@
             </Badge>
           </div>
           <CardDescription class="text-xs text-muted-foreground">
-            {entry.direction === "outgoing" ? "To" : "From"}
-            {" "}{resolveDisplayName(entry.senderId)}
+            {entry.direction === "outgoing" ? "To" : "From"} {resolveDisplayName(entry.senderId)}
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-1 text-xs text-muted-foreground">

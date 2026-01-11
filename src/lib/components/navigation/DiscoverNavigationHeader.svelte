@@ -27,7 +27,7 @@
         class="w-full"
       >
         <TabsList class="flex w-full flex-wrap gap-2 bg-transparent">
-          {#each topics as topic}
+          {#each topics as topic (topic)}
             <TabsTrigger
               value={topic}
               class="px-3 py-1 text-sm font-semibold cursor-pointer"

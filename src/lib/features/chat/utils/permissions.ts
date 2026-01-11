@@ -237,18 +237,7 @@ export function collectMemberRoleIds({
   if (!me) {
     return [];
   }
-
   const roleIds = new Set<string>();
-  const addRoleIds = (values?: string[] | null) => {
-    if (!Array.isArray(values)) {
-      return;
-    }
-    for (const value of values) {
-      if (typeof value === "string" && value.trim().length > 0) {
-        roleIds.add(value);
-      }
-    }
-  };
 
   for (const id of collectRoleIdsFromUser(me)) {
     roleIds.add(id);

@@ -5,62 +5,109 @@ import type { Chat } from "$lib/features/chat/models/Chat";
 import type { Message } from "$lib/features/chat/models/Message";
 import type { Friend } from "$lib/features/friends/models/Friend";
 
-const overridesStore = writable(
-  new Map<string, { readReceiptsEnabled?: boolean; typingIndicatorsEnabled?: boolean }>(),
-);
-const messagesStore = writable(new Map<string, unknown[]>());
-const hasMoreStore = writable(new Map<string, boolean>());
-const basePreferences = writable({
-  readReceiptsEnabled: false,
-  typingIndicatorsEnabled: false,
-});
+const {
+  overridesStore,
+  messagesStore,
+  hasMoreStore,
+  basePreferences,
+  setChatPreferenceOverride,
+  clearChatPreferenceOverride,
+  getResolvedChatPreferences,
+} = vi.hoisted(() => {
+  const createStore = <T>(initialValue: T) => {
+    let value = initialValue;
+    const subscribers = new Set<(v: T) => void>();
+    return {
+      subscribe: (run: (v: T) => void) => {
+        subscribers.add(run);
+        run(value);
+        return () => subscribers.delete(run);
+      },
+      set: (newValue: T) => {
+        value = newValue;
+        subscribers.forEach((run) => run(value));
+      },
+      update: (fn: (v: T) => T) => {
+        value = fn(value);
+        subscribers.forEach((run) => run(value));
+      },
+      get: () => value,
+    };
+  };
 
-const setChatPreferenceOverride = vi.fn(
-  (
-    chatId: string,
-    overrides: Partial<{ readReceiptsEnabled: boolean; typingIndicatorsEnabled: boolean }>,
-  ) => {
+  const overridesStore = createStore(
+    new Map<
+      string,
+      { readReceiptsEnabled?: boolean; typingIndicatorsEnabled?: boolean }
+    >(),
+  );
+  const messagesStore = createStore(new Map<string, unknown[]>());
+  const hasMoreStore = createStore(new Map<string, boolean>());
+  const basePreferences = createStore({
+    readReceiptsEnabled: false,
+    typingIndicatorsEnabled: false,
+  });
+
+  const setChatPreferenceOverride = vi.fn(
+    (
+      chatId: string,
+      overrides: Partial<{
+        readReceiptsEnabled: boolean;
+        typingIndicatorsEnabled: boolean;
+      }>,
+    ) => {
+      overridesStore.update((map) => {
+        const next = new Map(map);
+        const existing = next.get(chatId) ?? {};
+        const merged = { ...existing, ...overrides };
+        if (
+          typeof merged.readReceiptsEnabled !== "boolean" &&
+          typeof merged.typingIndicatorsEnabled !== "boolean"
+        ) {
+          next.delete(chatId);
+        } else {
+          next.set(chatId, merged);
+        }
+        return next;
+      });
+    },
+  );
+
+  const clearChatPreferenceOverride = vi.fn((chatId: string) => {
     overridesStore.update((map) => {
       const next = new Map(map);
-      const existing = next.get(chatId) ?? {};
-      const merged = { ...existing, ...overrides };
-      if (
-        typeof merged.readReceiptsEnabled !== "boolean" &&
-        typeof merged.typingIndicatorsEnabled !== "boolean"
-      ) {
-        next.delete(chatId);
-      } else {
-        next.set(chatId, merged);
-      }
+      next.delete(chatId);
       return next;
     });
-  },
-);
-
-const clearChatPreferenceOverride = vi.fn((chatId: string) => {
-  overridesStore.update((map) => {
-    const next = new Map(map);
-    next.delete(chatId);
-    return next;
   });
-});
 
-const getResolvedChatPreferences = vi.fn((chatId: string) => {
-  const overrides = get(overridesStore).get(chatId);
-  const fallback = get(basePreferences);
+  const getResolvedChatPreferences = vi.fn((chatId: string) => {
+    const overrides = overridesStore.get().get(chatId);
+    const fallback = basePreferences.get();
+    return {
+      readReceiptsEnabled:
+        typeof overrides?.readReceiptsEnabled === "boolean"
+          ? overrides.readReceiptsEnabled
+          : fallback.readReceiptsEnabled,
+      typingIndicatorsEnabled:
+        typeof overrides?.typingIndicatorsEnabled === "boolean"
+          ? overrides.typingIndicatorsEnabled
+          : fallback.typingIndicatorsEnabled,
+    };
+  });
+
   return {
-    readReceiptsEnabled:
-      typeof overrides?.readReceiptsEnabled === "boolean"
-        ? overrides.readReceiptsEnabled
-        : fallback.readReceiptsEnabled,
-    typingIndicatorsEnabled:
-      typeof overrides?.typingIndicatorsEnabled === "boolean"
-        ? overrides.typingIndicatorsEnabled
-        : fallback.typingIndicatorsEnabled,
+    overridesStore,
+    messagesStore,
+    hasMoreStore,
+    basePreferences,
+    setChatPreferenceOverride,
+    clearChatPreferenceOverride,
+    getResolvedChatPreferences,
   };
 });
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     chatPreferenceOverrides: { subscribe: overridesStore.subscribe },
     getResolvedChatPreferences,

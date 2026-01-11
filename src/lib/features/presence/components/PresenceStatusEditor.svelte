@@ -2,7 +2,7 @@
 
 <script lang="ts">
   import { presenceStore } from "$lib/features/presence/presenceStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { Button } from "$lib/components/ui/button";
   import {
     Popover,
@@ -100,7 +100,7 @@
       <div class="space-y-2">
         <Label for="presence-status-message">Status</Label>
         <div class="grid gap-2" id="presence-status-message">
-          {#each PRESENCE_STATUS_OPTIONS as option}
+          {#each PRESENCE_STATUS_OPTIONS as option (option.key)}
             <Button
               type="button"
               variant={statusDraft === option.key ? "default" : "outline"}

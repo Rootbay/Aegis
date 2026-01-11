@@ -1,6 +1,6 @@
 import { get, writable, type Readable } from "svelte/store";
 import { toasts } from "$lib/stores/ToastStore";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 import { friendStore } from "./friendStore";
 import type { Friend } from "../models/Friend";
 import {

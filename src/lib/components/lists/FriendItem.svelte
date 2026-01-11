@@ -2,11 +2,12 @@
 
 <script lang="ts">
   import { onMount } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import { invoke } from "@tauri-apps/api/core";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { toasts } from "$lib/stores/ToastStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import {
     CircleCheck,
     MessageCircle,
@@ -41,16 +42,16 @@
     avatarUrl?: string;
   };
 
-  type FriendshipCache = Map<string, FriendshipRecord>;
+  type FriendshipCache = SvelteMap<string, FriendshipRecord>;
 
   const FRIENDSHIP_PAIR_PREFIX = "friendship-pair:";
-  const friendshipCacheByUser = new Map<string, FriendshipCache>();
-  const friendshipFetchPromisesByUser = new Map<string, Promise<void>>();
+  const friendshipCacheByUser = new SvelteMap<string, FriendshipCache>();
+  const friendshipFetchPromisesByUser = new SvelteMap<string, Promise<void>>();
 
   function getFriendshipCache(userId: string): FriendshipCache {
     let cache = friendshipCacheByUser.get(userId);
     if (!cache) {
-      cache = new Map();
+      cache = new SvelteMap();
       friendshipCacheByUser.set(userId, cache);
     }
     return cache;

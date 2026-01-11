@@ -44,11 +44,11 @@ const storeMocks = vi.hoisted(() => {
   serverState: WritableStore<{ activeServerId: string | null; servers: never[] }>;
 };
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   messagesByChatId: { subscribe: storeMocks.messagesStore.subscribe },
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: { subscribe: storeMocks.userState.subscribe },
 }));
 

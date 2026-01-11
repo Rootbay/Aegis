@@ -22,8 +22,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 describe("webhookService", () => {
   const createService = () =>
-    createWebhookService(((command: string, args?: Record<string, unknown>) =>
-      invokeMock(command, args)) as any);
+    createWebhookService((command: string, args?: Record<string, unknown>) =>
+      invokeMock(command, args),
+    );
 
   beforeEach(() => {
     invokeMock.mockReset();

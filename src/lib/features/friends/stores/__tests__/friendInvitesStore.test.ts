@@ -38,7 +38,7 @@ vi.mock("$lib/stores/ToastStore", () => ({
   },
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: (run: (value: { me: { id: string } | null }) => void) => {
       run({ me: { id: "user-1" } });

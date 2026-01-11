@@ -20,6 +20,7 @@
 
   let pendingTransfers = $derived($pendingStore);
   let activeRequest = $derived(pendingTransfers[0] ?? null);
+  // eslint-disable-next-line svelte/prefer-writable-derived
   let dialogOpen = $state(false);
   let actionInFlight = $state<"approve" | "reject" | null>(null);
   let autoDownloadMediaEnabled = $state(get(settings).autoDownloadMedia);

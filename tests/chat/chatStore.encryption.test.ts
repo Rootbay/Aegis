@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { get, writable } from "svelte/store";
 import { createMockConnectivityStore } from "./connectivityStore.mock";
 
-vi.mock("$lib/stores/userStore", () => {
+vi.mock("$lib/stores/userStore.svelte", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
   return {
     userStore: {

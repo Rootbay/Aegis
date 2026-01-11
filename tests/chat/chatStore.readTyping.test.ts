@@ -49,7 +49,7 @@ vi.mock("$lib/stores/persistentStore", () => ({
   persistentStore: <T>(_key: string, initialValue: T) => writable(initialValue),
 }));
 
-vi.mock("$lib/stores/userStore", () => {
+vi.mock("$lib/stores/userStore.svelte", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
   return {
     userStore: {

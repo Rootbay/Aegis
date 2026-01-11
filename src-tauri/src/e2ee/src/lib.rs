@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use rkyv::{Archive, Deserialize as RkyvDeserialize, Serialize as RkyvSerialize};
+use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD as BASE64};
 
 use vodozemac::megolm::{
     GroupSession, GroupSessionPickle, InboundGroupSession, InboundGroupSessionPickle,
@@ -18,10 +19,7 @@ use vodozemac::olm::{
 };
 use vodozemac::{Curve25519PublicKey};
 
-
-const PICKLE_KEY: &[u8; 32] = b"aegis_local_storage_key_32_bytes";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PrekeyBundle {
     pub identity_key: String,
     pub signed_prekey: String,
@@ -29,20 +27,20 @@ pub struct PrekeyBundle {
     pub one_time_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptedPacket {
     pub init: Option<Vec<u8>>,
     pub enc_header: Vec<u8>,
     pub enc_content: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptedGroupPacket {
     pub session_id: String,
     pub ciphertext: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptedDmPacket {
     pub init: Option<Vec<u8>>,
     pub enc_header: Vec<u8>,
@@ -51,12 +49,12 @@ pub struct EncryptedDmPacket {
 
 #[derive(Archive, RkyvDeserialize, RkyvSerialize)]
 #[archive(check_bytes)]
-struct StoredState {
-    account_pickle: String,
-    sessions: HashMap<String, String>,
-    outbound_group_sessions: HashMap<String, String>,
-    inbound_group_sessions: HashMap<String, String>,
-    group_keys: HashMap<String, (u64, String)>,
+pub struct StoredState {
+    pub account_pickle: String,
+    pub sessions: HashMap<String, String>,
+    pub outbound_group_sessions: HashMap<String, String>,
+    pub inbound_group_sessions: HashMap<String, String>,
+    pub group_keys: HashMap<String, (u64, String)>,
 }
 
 pub struct Manager {
@@ -66,10 +64,12 @@ pub struct Manager {
     inbound_group: HashMap<String, InboundGroupSession>,
     group_keys: HashMap<String, (u64, String)>,
     storage_dir: Option<PathBuf>,
+    pickle_key: [u8; 32],
+    needs_save: bool,
 }
 
 impl Manager {
-    pub fn new() -> Self {
+    pub fn new(pickle_key: [u8; 32]) -> Self {
         Self {
             account: Account::new(),
             sessions: HashMap::new(),
@@ -77,6 +77,8 @@ impl Manager {
             inbound_group: HashMap::new(),
             group_keys: HashMap::new(),
             storage_dir: None,
+            pickle_key,
+            needs_save: false,
         }
     }
 
@@ -100,7 +102,7 @@ impl Manager {
             one_time_key,
         };
 
-        self.save_all()?;
+        self.needs_save = true;
         Ok(bundle)
     }
 
@@ -120,7 +122,7 @@ impl Manager {
         );
 
         self.sessions.insert(peer_id.to_string(), session);
-        self.save_all()?;
+        self.needs_save = true;
         Ok(())
     }
 
@@ -131,7 +133,7 @@ impl Manager {
             .ok_or_else(|| anyhow!("No session found for peer {}", peer_id))?;
 
         let msg = session.encrypt(plaintext);
-        self.save_all()?;
+        self.needs_save = true;
 
         match msg {
             OlmMessage::PreKey(m) => Ok(EncryptedPacket {
@@ -171,7 +173,7 @@ impl Manager {
             session.decrypt(&OlmMessage::Normal(Message::from_base64(body_str)?))?
         };
 
-        self.save_all()?;
+        self.needs_save = true;
         Ok(decrypted_bytes)
     }
     
@@ -181,7 +183,7 @@ impl Manager {
         let result = self.account.create_inbound_session(peer_key, &prekey_msg)?;
         
         self.sessions.insert(peer_id.to_string(), result.session);
-        self.save_all()?;
+        self.needs_save = true;
         
         Ok(String::from_utf8(result.plaintext)?)
     }
@@ -191,7 +193,7 @@ impl Manager {
         let session_key = session.session_key().to_base64();
 
         self.outbound_group.insert(group_id.to_string(), session);
-        self.save_all()?;
+        self.needs_save = true;
 
         Ok(session_key)
     }
@@ -202,7 +204,7 @@ impl Manager {
         
         let session_id = session.session_id();
         self.inbound_group.insert(session_id, session);
-        self.save_all()?;
+        self.needs_save = true;
         Ok(())
     }
 
@@ -221,7 +223,7 @@ impl Manager {
             (session.session_id(), ciphertext_obj.to_base64())
         };
 
-        self.save_all()?;
+        self.needs_save = true;
 
         Ok(EncryptedGroupPacket {
             session_id,
@@ -238,7 +240,7 @@ impl Manager {
         let msg = vodozemac::megolm::MegolmMessage::from_base64(&packet.ciphertext)?;
         let res = session.decrypt(&msg)?;
 
-        self.save_all()?;
+        self.needs_save = true;
         Ok(String::from_utf8(res.plaintext)?)
     }
 
@@ -251,24 +253,30 @@ impl Manager {
 
     pub fn set_group_key(&mut self, server_id: &str, channel_id: &Option<String>, epoch: u64, key: &[u8]) {
         let group_id = self.format_group_id(server_id, channel_id);
-        let session_key_b64 = String::from_utf8(key.to_vec()).unwrap_or_default();
+        let session_key_b64 = BASE64.encode(key);
         self.group_keys.insert(group_id, (epoch, session_key_b64));
-        let _ = self.save_all();
+        self.needs_save = true;
     }
 
     pub fn get_group_key(&self, server_id: &str, channel_id: &Option<String>) -> Option<(u64, Vec<u8>)> {
         let group_id = self.format_group_id(server_id, channel_id);
-        self.group_keys.get(&group_id).map(|(e, k)| (*e, k.as_bytes().to_vec()))
+        let res = self.group_keys.get(&group_id).and_then(|(e, k)| {
+            BASE64.decode(k).ok().map(|bytes| (*e, bytes))
+        });
+        if res.is_none() {
+            eprintln!("DEBUG: get_group_key failed for group_id: {}. Available keys: {:?}", group_id, self.group_keys.keys().collect::<Vec<_>>());
+        }
+        res
     }
 
     pub fn generate_and_set_group_key(&mut self, server_id: &str, channel_id: &Option<String>, epoch: u64) -> Vec<u8> {
         let session = GroupSession::new(MegolmSessionConfig::default());
-        let session_key = session.session_key().to_base64();
+        let session_key_b64 = session.session_key().to_base64();
         let group_id = self.format_group_id(server_id, channel_id);
         self.outbound_group.insert(group_id.clone(), session);
-        self.group_keys.insert(group_id, (epoch, session_key.clone()));
-        let _ = self.save_all();
-        session_key.into_bytes()
+        self.group_keys.insert(group_id, (epoch, session_key_b64.clone()));
+        self.needs_save = true;
+        BASE64.decode(&session_key_b64).unwrap_or_default()
     }
 
     pub fn encrypt_for(&mut self, peer_id: &str, plaintext: &[u8]) -> Result<EncryptedDmPacket> {
@@ -317,7 +325,7 @@ impl Manager {
         self.storage_dir.as_ref().map(|d| d.join("state.e2ee"))
     }
 
-    pub fn save_all(&self) -> Result<()> {
+    pub fn save_all(&mut self) -> Result<()> {
         let path = self
             .storage_path()
             .ok_or_else(|| anyhow!("Storage path not set"))?;
@@ -325,23 +333,23 @@ impl Manager {
         let sessions_map: HashMap<String, String> = self
             .sessions
             .iter()
-            .map(|(k, v)| (k.clone(), v.pickle().encrypt(PICKLE_KEY)))
+            .map(|(k, v)| (k.clone(), v.pickle().encrypt(&self.pickle_key)))
             .collect();
 
         let outbound_map: HashMap<String, String> = self
             .outbound_group
             .iter()
-            .map(|(k, v)| (k.clone(), v.pickle().encrypt(PICKLE_KEY)))
+            .map(|(k, v)| (k.clone(), v.pickle().encrypt(&self.pickle_key)))
             .collect();
 
         let inbound_map: HashMap<String, String> = self
             .inbound_group
             .iter()
-            .map(|(k, v)| (k.clone(), v.pickle().encrypt(PICKLE_KEY)))
+            .map(|(k, v)| (k.clone(), v.pickle().encrypt(&self.pickle_key)))
             .collect();
 
         let state = StoredState {
-            account_pickle: self.account.pickle().encrypt(PICKLE_KEY),
+            account_pickle: self.account.pickle().encrypt(&self.pickle_key),
             sessions: sessions_map,
             outbound_group_sessions: outbound_map,
             inbound_group_sessions: inbound_map,
@@ -352,15 +360,23 @@ impl Manager {
             std::fs::create_dir_all(parent)?;
         }
 
-        let bytes = rkyv::to_bytes::<_, 1024>(&state).expect("Failed to serialize");
+        let bytes = rkyv::to_bytes::<_, 65536>(&state).expect("Failed to serialize");
         std::fs::write(path, &bytes)?;
+        self.needs_save = false;
+        Ok(())
+    }
+
+    pub fn save_if_needed(&mut self) -> Result<()> {
+        if self.needs_save {
+            self.save_all()?;
+        }
         Ok(())
     }
 }
 
 static GLOBAL: OnceCell<Arc<TokioMutex<Manager>>> = OnceCell::new();
 
-pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
+pub fn init_with_dir(path: impl AsRef<Path>, pickle_key: [u8; 32]) -> Arc<TokioMutex<Manager>> {
     let dir = path.as_ref().to_path_buf();
     let state_file = dir.join("state.e2ee");
 
@@ -369,7 +385,7 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
             Ok(bytes) => {
                 if let Ok(archived) = rkyv::check_archived_root::<StoredState>(&bytes) {
                     let st: StoredState = archived.deserialize(&mut rkyv::Infallible).expect("Infallible");
-                    let account = AccountPickle::from_encrypted(&st.account_pickle, PICKLE_KEY)
+                    let account = AccountPickle::from_encrypted(&st.account_pickle, &pickle_key)
                         .map(Account::from_pickle)
                         .unwrap_or_else(|_| Account::new());
 
@@ -377,7 +393,7 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
                         .sessions
                         .into_iter()
                         .filter_map(|(k, v)| {
-                            SessionPickle::from_encrypted(&v, PICKLE_KEY)
+                            SessionPickle::from_encrypted(&v, &pickle_key)
                                 .ok()
                                 .map(|p| (k, Session::from_pickle(p)))
                         })
@@ -387,7 +403,7 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
                         .outbound_group_sessions
                         .into_iter()
                         .filter_map(|(k, v)| {
-                            GroupSessionPickle::from_encrypted(&v, PICKLE_KEY)
+                            GroupSessionPickle::from_encrypted(&v, &pickle_key)
                                 .map(|p| (k, GroupSession::from_pickle(p)))
                                 .ok()
                         })
@@ -397,7 +413,7 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
                         .inbound_group_sessions
                         .into_iter()
                         .filter_map(|(k, v)| {
-                            InboundGroupSessionPickle::from_encrypted(&v, PICKLE_KEY)
+                            InboundGroupSessionPickle::from_encrypted(&v, &pickle_key)
                                 .map(|p| (k, InboundGroupSession::from_pickle(p)))
                                 .ok()
                         })
@@ -410,15 +426,17 @@ pub fn init_with_dir(path: impl AsRef<Path>) -> Arc<TokioMutex<Manager>> {
                         inbound_group,
                         group_keys: st.group_keys,
                         storage_dir: Some(dir.clone()),
+                        pickle_key,
+                        needs_save: false,
                     }
                 } else {
-                    Manager::new()
+                    Manager::new(pickle_key)
                 }
             }
-            Err(_) => Manager::new(),
+            Err(_) => Manager::new(pickle_key),
         }
     } else {
-        Manager::new()
+        Manager::new(pickle_key)
     };
 
     let wrapper = Arc::new(TokioMutex::new(manager));

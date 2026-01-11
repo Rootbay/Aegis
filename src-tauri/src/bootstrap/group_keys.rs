@@ -10,41 +10,42 @@ pub(super) async fn broadcast_group_key_update(
     server_id: &str,
     channel_id: &Option<String>,
 ) -> Result<(), String> {
-    let (epoch, key_bytes) = {
-        let arc = e2ee::init_global_manager();
-        let mgr = arc.lock().await;
-        mgr.get_group_key(server_id, channel_id)
-            .ok_or_else(|| "Missing group key for broadcast".to_string())?
-    };
-    let issuer_id = identity.peer_id().to_base58();
-
+    let issuer_id = identity.peer_id_base58();
     let members = aep::database::get_server_members(db_pool, server_id)
         .await
         .map_err(|e| e.to_string())?;
     let mut slots: Vec<EncryptedDmSlot> = Vec::new();
-    for m in members {
-        if m.id == issuer_id {
-            continue;
-        }
+
+    let epoch = {
         let arc = e2ee::init_global_manager();
         let mut mgr = arc.lock().await;
-        if let Ok(pkt) = mgr.encrypt_for(&m.id, &key_bytes) {
-            slots.push(EncryptedDmSlot {
-                recipient: m.id,
-                init: pkt.init,
-                enc_header: pkt.enc_header,
-                enc_content: pkt.enc_content,
-            });
-        }
-    }
+        let (epoch, key_bytes) = mgr.get_group_key(server_id, channel_id)
+            .ok_or_else(|| "Missing group key for broadcast".to_string())?;
 
-    let payload = rkyv::to_bytes::<_, 1024>(&(issuer_id.clone(), server_id.to_string(), channel_id.clone(), epoch, slots.clone())).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
+        for m in members {
+            if m.id == issuer_id {
+                continue;
+            }
+            if let Ok(pkt) = mgr.encrypt_for(&m.id, &key_bytes) {
+                slots.push(EncryptedDmSlot {
+                    recipient: m.id,
+                    init: pkt.init,
+                    enc_header: pkt.enc_header,
+                    enc_content: pkt.enc_content,
+                });
+            }
+        }
+        epoch
+    };
+
+    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots)).map_err(|e| e.to_string())?;
     let signature = identity
         .keypair()
         .sign(&payload)
         .map_err(|e| e.to_string())?;
 
     let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        issuer_id,
         server_id: server_id.to_string(),
         channel_id: channel_id.clone(),
         epoch,
@@ -63,40 +64,40 @@ pub(super) async fn rotate_and_broadcast_group_key(
     channel_id: &Option<String>,
     epoch: u64,
 ) -> Result<(), String> {
-    let key = {
-        let arc = e2ee::init_global_manager();
-        let mut mgr = arc.lock().await;
-        mgr.generate_and_set_group_key(server_id, channel_id, epoch)
-    };
-    let issuer_id = identity.peer_id().to_base58();
-
+    let issuer_id = identity.peer_id_base58();
     let members = aep::database::get_server_members(db_pool, server_id)
         .await
         .map_err(|e| e.to_string())?;
     let mut slots: Vec<EncryptedDmSlot> = Vec::new();
-    for m in members {
-        if m.id == issuer_id {
-            continue;
-        }
+
+    {
         let arc = e2ee::init_global_manager();
         let mut mgr = arc.lock().await;
-        if let Ok(pkt) = mgr.encrypt_for(&m.id, &key) {
-            slots.push(EncryptedDmSlot {
-                recipient: m.id,
-                init: pkt.init,
-                enc_header: pkt.enc_header,
-                enc_content: pkt.enc_content,
-            });
-        }
-    }
+        let key = mgr.generate_and_set_group_key(server_id, channel_id, epoch);
 
-    let payload = rkyv::to_bytes::<_, 1024>(&(issuer_id.clone(), server_id.to_string(), channel_id.clone(), epoch, slots.clone())).map(|v| v.to_vec()).map_err(|e| e.to_string())?;
+        for m in members {
+            if m.id == issuer_id {
+                continue;
+            }
+            if let Ok(pkt) = mgr.encrypt_for(&m.id, &key) {
+                slots.push(EncryptedDmSlot {
+                    recipient: m.id,
+                    init: pkt.init,
+                    enc_header: pkt.enc_header,
+                    enc_content: pkt.enc_content,
+                });
+            }
+        }
+    };
+
+    let payload = bincode::serialize(&(issuer_id.clone(), server_id, channel_id, epoch, &slots)).map_err(|e| e.to_string())?;
     let signature = identity
         .keypair()
         .sign(&payload)
         .map_err(|e| e.to_string())?;
 
     let msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+        issuer_id,
         server_id: server_id.to_string(),
         channel_id: channel_id.clone(),
         epoch,

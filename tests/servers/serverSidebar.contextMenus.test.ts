@@ -405,7 +405,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   },
 }));
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     activeServerChannelId: {
       subscribe: (run: (value: string | null) => void) => {

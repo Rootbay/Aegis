@@ -8,6 +8,7 @@ use chrono::{TimeZone, Utc};
 use serde::Deserialize;
 use tauri::State;
 
+use crate::commands::error::{AppError, AppResult};
 use crate::commands::state::AppStateContainer;
 use scu128::Scu128;
 
@@ -42,13 +43,13 @@ fn timestamp_from_millis(millis: i64) -> Option<String> {
 pub async fn search_messages(
     payload: SearchMessagesPayload,
     state_container: State<'_, AppStateContainer>,
-) -> Result<SearchMessagesResponse, String> {
+) -> AppResult<SearchMessagesResponse> {
     let chat_id = payload
         .chat_id
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "chat_id is required".to_string())?
+        .ok_or_else(|| AppError::InvalidInput("chat_id is required".to_string()))?
         .to_string();
 
     let filters = payload.filters.unwrap_or_default();
@@ -83,7 +84,7 @@ pub async fn search_messages(
     let fetch_limit = limit + 1;
 
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?;
 
     let mut results = aep::database::search_messages(
         &state.db_pool,
@@ -96,8 +97,7 @@ pub async fn search_messages(
         before_iso.as_deref(),
         after_iso.as_deref(),
     )
-    .await
-    .map_err(|e| e.to_string())?;
+    .await?;
 
     let has_more = (results.len() as i64) > limit;
     if has_more {
@@ -129,7 +129,7 @@ pub(super) async fn persist_and_broadcast_message(
     reply_snapshot_author: Option<String>,
     reply_snapshot_snippet: Option<String>,
     expires_at: Option<chrono::DateTime<Utc>>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let peer_id = state.identity.peer_id().to_base58();
 
     let chat_id_local = conversation_id
@@ -149,7 +149,7 @@ pub(super) async fn persist_and_broadcast_message(
 
     let voice_memos_enabled = state.voice_memos_enabled.load(Ordering::Relaxed);
     if !voice_memos_enabled && attachments.iter().any(is_voice_memo_attachment) {
-        return Err("Voice memo attachments are disabled by your settings.".to_string());
+        return Err(AppError::PermissionDenied("Voice memo attachments are disabled by your settings.".to_string()));
     }
 
     for descriptor in attachments {
@@ -161,7 +161,7 @@ pub(super) async fn persist_and_broadcast_message(
         } = descriptor;
 
         if data.is_empty() {
-            return Err(format!("Attachment '{name}' is missing binary data"));
+            return Err(AppError::InvalidInput(format!("Attachment '{name}' is missing binary data")));
         }
 
         let attachment_id = Scu128::new().to_string();
@@ -214,8 +214,7 @@ pub(super) async fn persist_and_broadcast_message(
     };
 
     database::insert_message(&state.db_pool, &new_local_message, &attachment_data)
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     let chat_message_data = aegis_protocol::ChatMessageData {
         id: message_id,
@@ -233,14 +232,14 @@ pub(super) async fn persist_and_broadcast_message(
     };
 
     let identity = state.identity.clone();
-    let (signature, serialized_final) = tokio::task::spawn_blocking(move || {
+    let serialized_final = tokio::task::spawn_blocking(move || {
         let chat_message_bytes =
-            bincode::serialize(&chat_message_data).map_err(|e| e.to_string())?;
+            bincode::serialize(&chat_message_data).map_err(|e| AppError::Internal(e.to_string()))?;
 
         let signature = identity
             .keypair()
             .sign(&chat_message_bytes)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| AppError::Internal(e.to_string()))?;
 
         // Construct AepMessage by moving fields from chat_message_data to avoid re-serializing large attachments if possible.
         // Actually, we still need to serialize the final AepMessage once, but we avoid building intermediate large structs.
@@ -257,20 +256,19 @@ pub(super) async fn persist_and_broadcast_message(
             reply_to_message_id: chat_message_data.reply_to_message_id,
             reply_snapshot_author: chat_message_data.reply_snapshot_author,
             reply_snapshot_snippet: chat_message_data.reply_snapshot_snippet,
-            signature: Some(signature.clone()),
+            signature: Some(signature),
         };
 
-        let serialized = bincode::serialize(&aep_message).map_err(|e| e.to_string())?;
-        Ok::<_, String>((signature, serialized))
+        bincode::serialize(&aep_message).map_err(|e| AppError::Internal(e.to_string()))
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(|e| AppError::Internal(e.to_string()))??;
 
     state
         .network_tx
         .send(serialized_final)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -283,11 +281,11 @@ pub async fn send_message(
     reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
 
-    let expires_at = parse_optional_datetime(expires_at)?;
+    let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
         state,
@@ -315,11 +313,11 @@ pub async fn send_message_with_attachments(
     reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
 
-    let expires_at = parse_optional_datetime(expires_at)?;
+    let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
         state,
@@ -345,11 +343,11 @@ pub async fn send_direct_message(
     reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
 
-    let expires_at = parse_optional_datetime(expires_at)?;
+    let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
         state,
@@ -376,11 +374,11 @@ pub async fn send_direct_message_with_attachments(
     reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
 
-    let expires_at = parse_optional_datetime(expires_at)?;
+    let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
         state,
@@ -403,22 +401,22 @@ pub async fn get_messages(
     limit: i64,
     offset: i64,
     state_container: State<'_, AppStateContainer>,
-) -> Result<Vec<database::Message>, String> {
+) -> AppResult<Vec<database::Message>> {
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?;
     database::get_messages_for_chat(&state.db_pool, &chat_id, limit, offset)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Database)
 }
 
 #[tauri::command]
 pub async fn get_attachment_bytes(
     attachment_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<Vec<u8>, String> {
+) -> AppResult<Vec<u8>> {
     let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = state.as_ref().ok_or(AppError::NotInitialized)?;
     database::get_attachment_data(&state.db_pool, &attachment_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Database)
 }

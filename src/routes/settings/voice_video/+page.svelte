@@ -57,7 +57,7 @@
 
   const mediaDevices = browser
     ? (navigator.mediaDevices as MediaDevices & {
-        selectAudioOutput?: (deviceId?: string) => Promise<MediaDeviceInfo>;
+        selectAudioOutput?: (_?: string) => Promise<MediaDeviceInfo>;
       })
     : null;
 
@@ -110,6 +110,7 @@
   }
 
   function toConfigs(editables: EditableTurnServer[]): TurnServerConfig[] {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const seen = new Set<string>();
     const result: TurnServerConfig[] = [];
 
@@ -241,7 +242,7 @@
     );
   }
 
-  function mapDevices(devices: MediaDeviceInfo[], kind: MediaDeviceKind) {
+  function mapDevices(devices: MediaDeviceInfo[], kind: MediaDeviceInfo["kind"]) {
     let unnamedCount = 0;
     return devices
       .filter((device) => device.kind === kind)
@@ -303,7 +304,7 @@
     try {
       await callStore.initialize();
       await callStore.refreshDevices();
-      const constraints: MediaStreamConstraints = {
+      const constraints = {
         audio: false,
         video: videoInputId
           ? { deviceId: { exact: videoInputId } }
@@ -413,7 +414,7 @@
         try {
           await (
             audio as HTMLMediaElement & {
-              setSinkId?: (id: string) => Promise<void>;
+              setSinkId?: (sinkId: string) => Promise<void>;
             }
           ).setSinkId?.(audioOutputId);
         } catch (error) {
@@ -585,7 +586,7 @@
               No microphones detected.
             </div>
           {:else}
-            {#each audioInputDevices as device}
+            {#each audioInputDevices as device (device.deviceId)}
               <SelectItem value={device.deviceId}>{device.label}</SelectItem>
             {/each}
           {/if}
@@ -663,7 +664,7 @@
                 : "This browser cannot enumerate audio outputs."}
             </div>
           {:else}
-            {#each audioOutputDevices as device}
+            {#each audioOutputDevices as device (device.deviceId)}
               <SelectItem value={device.deviceId}>{device.label}</SelectItem>
             {/each}
           {/if}
@@ -727,10 +728,9 @@
                 No cameras detected.
               </div>
             {:else}
-              {#each videoInputDevices as device}
-                <SelectItem value={device.deviceId}>{device.label}</SelectItem>
-              {/each}
-            {/if}
+                          {#each videoInputDevices as device (device.deviceId)}
+                            <SelectItem value={device.deviceId}>{device.label}</SelectItem>
+                          {/each}            {/if}
           </SelectContent>
         </Select>
       </div>

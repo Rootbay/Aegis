@@ -199,20 +199,13 @@
   });
 </script>
 
+<div class="flex-1 min-h-0 flex flex-col">
 {#if shouldShowVoiceCallView()}
   <div class="flex flex-1 min-h-0 flex-col">
     <VoiceCallView chat={chat as ChannelChat} />
   </div>
 {:else}
   <div class="flex flex-1 min-h-0 flex-col">
-    <NavigationHeader
-      {chat}
-      onOpenDetailedProfile={openDetailedProfileModal}
-      showMemberPanelToggle={!isLgViewport && canShowMembers()}
-      mobileMemberPanelOpen={mobileMemberPanelOpen}
-      onToggleMemberPanel={handleToggleMemberPanel}
-    />
-
     <div class="flex flex-1 min-h-0">
       <div class="flex flex-1 flex-col min-w-0">
         <ChatView {chat} />
@@ -261,3 +254,4 @@
     </DialogContent>
   </Dialog>
 {/if}
+</div>

@@ -31,7 +31,7 @@
     option?: ContextMenuOption;
   };
 
-  // eslint-disable-next-line no-unused-vars
+   
   type CategoryContextMenuHandler = (detail: CategoryContextMenuDetail) => void;
 
   type CategoryContextMenuProps = {
@@ -88,7 +88,7 @@
     ];
   }
 
-  let baseMenuItems = $state(buildBaseMenuItems());
+  const baseMenuItems = $derived(buildBaseMenuItems());
 
   const muteSubmenuItems = buildSubmenuItems(
     MUTE_OPTIONS,
@@ -112,10 +112,6 @@
     if (!showMenu) {
       onclose?.();
     }
-  });
-
-  $effect(() => {
-    baseMenuItems = buildBaseMenuItems();
   });
 
   function closeAllMenus() {

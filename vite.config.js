@@ -41,6 +41,7 @@ export default defineConfig(async () => ({
     alias: {
       sveltejs: resolve("node_modules/@sveltejs"),
     },
+    extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json", ".svelte.ts"],
   },
 
   optimizeDeps: {

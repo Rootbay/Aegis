@@ -41,7 +41,7 @@
   } from "$lib/features/chat/utils/chatSearchConfig";
   import type { Chat } from "$lib/features/chat/models/Chat";
   import type { User } from "$lib/features/auth/models/User";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { Search, Trash2, X, BadgeQuestionMark } from "@lucide/svelte";
 
   let { chat } = $props<{ chat: Chat | null }>();

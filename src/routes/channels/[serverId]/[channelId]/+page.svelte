@@ -8,7 +8,7 @@
     activeChatType,
     activeServerChannelId,
     messagesByChatId,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { page } from "$app/stores";
   import type { ChannelChat } from "$lib/features/chat/models/Chat";
@@ -51,7 +51,7 @@
 </script>
 
 {#if currentChat}
-  <div class="grow min-w-0">
+  <div class="grow min-w-0 flex flex-col">
     <ChatView chat={currentChat} />
   </div>
 {:else}

@@ -4,7 +4,7 @@ import type { User } from "$lib/features/auth/models/User";
 import { persistentStore } from "$lib/stores/persistentStore";
 import { getInvoke } from "$services/tauri";
 import type { InvokeFn } from "$services/tauri";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 import { userCache } from "$lib/utils/cache";
 import { spamClassifier } from "$lib/features/security/spamClassifier";
 import { mutedFriendsStore } from "./mutedFriendsStore";

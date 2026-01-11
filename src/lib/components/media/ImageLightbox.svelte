@@ -3,7 +3,7 @@
   import MagnifierContextMenu from "$lib/components/context-menus/MagnifierContextMenu.svelte";
   import { onMount, onDestroy } from "svelte";
 
-  type SaveHandler = (url: string) => void; // eslint-disable-line no-unused-vars
+  type SaveHandler = (url: string) => void;  
 
   type ImageLightboxProps = {
     imageUrl?: string;

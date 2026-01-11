@@ -2,7 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { X, ArrowLeft, Upload } from "@lucide/svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import {
     Dialog,

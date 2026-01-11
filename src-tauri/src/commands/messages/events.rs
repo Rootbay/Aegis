@@ -135,3 +135,32 @@ pub async fn send_typing_indicator(
 
     broadcast_typing_indicator(state, chat_id, is_typing).await
 }
+
+#[tauri::command]
+pub async fn mark_chat_read(
+    chat_id: String,
+    _server_id: Option<String>,
+    state_container: State<'_, AppStateContainer>,
+) -> Result<(), String> {
+    let state_guard = state_container.0.lock().await;
+    let state = state_guard
+        .as_ref()
+        .ok_or_else(|| "State not initialized".to_string())?
+        .clone();
+    drop(state_guard);
+
+    aep::database::mark_chat_read(&state.db_pool, &chat_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Optionally broadcast a read receipt for the most recent message
+    let last_messages = aep::database::get_messages_for_chat(&state.db_pool, &chat_id, 1, 0)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some(last_msg) = last_messages.first() {
+        broadcast_read_receipt(state, chat_id, last_msg.id.clone()).await?;
+    }
+
+    Ok(())
+}

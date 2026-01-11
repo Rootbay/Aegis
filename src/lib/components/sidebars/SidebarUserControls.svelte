@@ -13,7 +13,7 @@
   import { Separator } from "$lib/components/ui/separator";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { cn } from "$lib/utils";
   import {
@@ -41,13 +41,13 @@
     onSettingsClick,
     settingsTooltip = "Settings",
     isServerMemberContext = false,
-    serverId = null
+    _serverId = null
   }: {
     openDetailedProfileModal?: OpenProfileHandler;
     onSettingsClick?: () => void;
     settingsTooltip?: string;
     isServerMemberContext?: boolean;
-    serverId?: string | null;
+    _serverId?: string | null;
   } = $props();
 
   let overlayHovered = $state(false);
@@ -281,7 +281,7 @@
                       {#each [
                         { text: "Voice Connected", visible: !voiceLabelHovered },
                         { text: "Voice Details",   visible: voiceLabelHovered }
-                      ] as item}
+                      ] as item (item.text)}
                         <span
                           class="absolute inset-0 text-[16px] font-semibold text-green-500 leading-none transition-opacity duration-200"
                           style:opacity={item.visible ? 1 : 0}
@@ -313,7 +313,7 @@
                       Voice Details
                     </p>
                     <div class="flex h-20 items-end gap-1">
-                      {#each history as ping}
+                      {#each history as ping, index (index)}
                         <div class="flex-1 text-center">
                           <div class="mx-auto flex h-full items-end justify-center">
                             <div
@@ -542,7 +542,6 @@
                 profileUser={$userStore.me}
                 openDetailedProfileModal={openProfileHandler}
                 {isServerMemberContext}
-                serverId={serverId}
               />
             {/if}
           </Popover.Content>

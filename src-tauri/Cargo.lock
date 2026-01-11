@@ -69,6 +69,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-store",
  "tempfile",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
 ]
@@ -6247,6 +6248,10 @@ dependencies = [
 [[package]]
 name = "scu128"
 version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "seahash"

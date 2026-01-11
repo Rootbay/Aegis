@@ -122,7 +122,7 @@ export function createServerWebhooksStore(
       if (serverStoreUnsubscribe) {
         return;
       }
-      serverStoreUnsubscribe = serverStore.subscribe(handleServerUpdate as any);
+      serverStoreUnsubscribe = serverStore.subscribe(handleServerUpdate);
       update((state) => ({ ...state, initialized: true }));
       const activeId = getActiveServerId();
       if (activeId) {

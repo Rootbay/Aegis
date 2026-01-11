@@ -629,9 +629,7 @@
               <p class="text-xs text-muted-foreground">
                 {device.platform} · Linked {new Date(
                   device.addedAt,
-                ).toLocaleString()} · Last seen
-                {" "}
-                {new Date(device.lastSeen).toLocaleString()}
+                ).toLocaleString()} · Last seen {new Date(device.lastSeen).toLocaleString()}
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">

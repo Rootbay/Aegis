@@ -1,14 +1,16 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import { SvelteURLSearchParams } from "svelte/reactivity";
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import type { Friend } from "$lib/features/friends/models/Friend";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import { page } from "$app/state";
   import { Plus, Users, Map } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button/index.js";
@@ -48,7 +50,7 @@
     skipNavigation?: boolean;
   };
 
-  type SelectChatHandler = (params: SelectChatParams) => void; // eslint-disable-line no-unused-vars
+  type SelectChatHandler = (params: SelectChatParams) => void;  
 
   let {
     entries = [],
@@ -112,14 +114,14 @@
   function focusFriendsPage() {
     serverStore.setActiveServer(null);
     chatStore.clearActiveChat();
-    const params = new URLSearchParams(page.url.search);
+    const params = new SvelteURLSearchParams(page.url.search);
     params.set("tab", "All");
     const query = params.toString();
     const target = query ? `/?${query}` : "/";
     if ($friendStore.friends.length > 0) {
-      void goto(target);
+      void goto((resolve as any)(target));
     } else {
-      void goto("/friends/add");
+      void goto((resolve as any)("/friends/add"));
     }
     onSelect({ chatId: null });
   }
@@ -140,8 +142,7 @@
     }
     onSelect({ chatId, type, skipNavigation: true });
     const target = type === "group" ? `/groups/${chatId}` : `/dm/${chatId}`;
-    // eslint-disable-next-line svelte/no-navigation-without-resolve
-    goto(target);
+    void goto((resolve as any)(target));
   }
 
   function clampDirectMessageListWidth(value: number) {
@@ -389,7 +390,7 @@
       variant="ghost"
       class="w-full justify-start text-sm font-semibold mb-2 data-[active=true]:bg-muted/50 data-[active=true]:text-foreground"
       data-active={page.url.pathname.startsWith("/discover-servers")}
-      onclick={() => goto("/discover-servers")}
+      onclick={() => goto((resolve as any)("/discover-servers"))}
     >
       <Map size={16} />
       Discover

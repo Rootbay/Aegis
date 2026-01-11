@@ -20,7 +20,7 @@ import {
   hasMoreByChatId as hasMoreByChatIdReadable,
   loadingStateByChat as loadingStateByChatReadable,
   slowmodeByChannelId as slowmodeByChannelIdReadable,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 import { chatSearchStore } from "$lib/features/chat/stores/chatSearchStore";
 import {
   loadChatDraft,
@@ -987,7 +987,7 @@ function getChatStoreModule(): ChatStoreModule {
   return globals.__chatStoreModule;
 }
 
-vi.mock("$lib/features/chat/stores/chatStore", () => getChatStoreModule());
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => getChatStoreModule());
 vi.mock("../../src/lib/features/chat/stores/chatStore", () =>
   getChatStoreModule(),
 );
@@ -1081,8 +1081,8 @@ function getUserStoreModule(): UserStoreModule {
   return globals.__userStoreModule;
 }
 
-vi.mock("$lib/stores/userStore", () => getUserStoreModule());
-vi.mock("../../src/lib/stores/userStore", () => getUserStoreModule());
+vi.mock("$lib/stores/userStore.svelte", () => getUserStoreModule());
+vi.mock("../../src/lib/stores/userStore.svelte", () => getUserStoreModule());
 
 function getMutedFriendsModule(): MutedFriendsModule {
   const globals = globalThis as typeof globalThis & {
@@ -1647,7 +1647,7 @@ describe("ChatView friend removal", () => {
   });
 
   it("shows an error toast when removal fails", async () => {
-    vi.mocked(invoke).mockImplementation(async (command, args) => {
+    vi.mocked(invoke).mockImplementation(async (command, _args) => {
       if (command === "remove_friendship") {
         throw new Error("Removal failed");
       }

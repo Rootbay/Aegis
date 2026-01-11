@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { page } from "$app/stores";
   import { invoke } from "@tauri-apps/api/core";
   import { Button } from "$lib/components/ui/button/index.js";
@@ -49,8 +50,7 @@
       );
       const server = serverStore.upsertServerFromBackend(response.server);
       serverStore.setActiveServer(server.id);
-      // eslint-disable-next-line svelte/no-navigation-without-resolve
-      await goto(`/channels/${server.id}`);
+      await goto(resolve(`/channels/${server.id}`));
     } catch (error) {
       console.error("Failed to redeem invite:", error);
       errorMessage =
@@ -63,7 +63,7 @@
   }
 
   async function goHome() {
-    await goto("/");
+    await goto(resolve("/"));
   }
 </script>
 
@@ -96,7 +96,7 @@
         </Button>
         <Button
           type="button"
-          onclick={async () => await goto("/channels")}
+          onclick={async () => await goto(resolve("/channels"))}
           variant="secondary"
         >
           Browse servers

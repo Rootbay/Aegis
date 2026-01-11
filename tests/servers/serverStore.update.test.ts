@@ -45,7 +45,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: invokeMockRef,
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: (run: (value: unknown) => void) => {
       run({ me: { id: "user-1" } });

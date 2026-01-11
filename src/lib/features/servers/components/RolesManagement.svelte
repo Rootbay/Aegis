@@ -14,7 +14,7 @@
   } from "@lucide/svelte";
   import { Checkbox } from "$lib/components/ui/checkbox/index";
 
-  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+  type UnaryHandler<T> = (value: T) => void;
 
   type RolesManagementProps = {
     roles?: Role[];

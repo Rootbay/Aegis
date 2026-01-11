@@ -1,9 +1,9 @@
 import { writable, get } from "svelte/store";
 import { toasts } from "$lib/stores/ToastStore";
 import { getInvoke, getListen, type InvokeFn } from "$lib/services/tauri";
-import { groupChats } from "$lib/features/chat/stores/chatStore";
+import { groupChats } from "$lib/features/chat/stores/chatStore.svelte";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 import { settings } from "$lib/features/settings/stores/settings";
 import { getIceServersFromConfig } from "$lib/features/calls/utils/iceServers";
 import { pushToTalkStore, type PushToTalkState } from "./pushToTalkStore";

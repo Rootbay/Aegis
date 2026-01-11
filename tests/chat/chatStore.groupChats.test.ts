@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createMockConnectivityStore } from "./connectivityStore.mock";
 import { get, writable } from "svelte/store";
 
-vi.mock("$lib/stores/userStore", () => {
+vi.mock("$lib/stores/userStore.svelte", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
   return {
     userStore: {
@@ -10,7 +10,7 @@ vi.mock("$lib/stores/userStore", () => {
     },
   };
 });
-vi.mock("../../src/lib/stores/userStore", () => {
+vi.mock("../../src/lib/stores/userStore.svelte", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
   return {
     userStore: {
@@ -344,7 +344,7 @@ describe("chatStore group chat management", () => {
       "user-789",
     ]);
 
-    expect(summary.memberIds).toContain("user-789");
+    expect(summary!.memberIds).toContain("user-789");
     const entry = get(store.groupChats).get("group-1");
     expect(entry?.memberIds).toEqual(["user-123", "user-456", "user-789"]);
   });

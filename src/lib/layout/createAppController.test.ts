@@ -118,7 +118,7 @@ vi.mock("$lib/features/friends/stores/friendStore", async () => {
   };
 });
 
-vi.mock("$lib/stores/userStore", async () => {
+vi.mock("$lib/stores/userStore.svelte", async () => {
   const { writable } =
     await vi.importActual<typeof import("svelte/store")>("svelte/store");
   const state = writable({
@@ -189,7 +189,7 @@ import {
   activeChatId,
   activeChatType,
   activeServerChannelId,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import type { Server } from "$lib/features/servers/models/Server";
 import type { Message } from "$lib/features/chat/models/Message";

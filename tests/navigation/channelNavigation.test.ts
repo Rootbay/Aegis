@@ -115,7 +115,7 @@ vi.mock("$lib/features/navigation/commandPaletteStore", () => ({
   commandPaletteStore: commandPaletteStoreMock,
 }));
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     setActiveChat: setActiveChatMock,
   },

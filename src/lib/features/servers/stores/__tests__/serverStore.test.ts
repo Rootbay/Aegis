@@ -8,7 +8,7 @@ import {
 import type { Server } from "$lib/features/servers/models/Server";
 import type { Channel } from "$lib/features/channels/models/Channel";
 import { serverCache } from "$lib/utils/cache";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 
 const baseServer: Server = {
   id: "server-1",

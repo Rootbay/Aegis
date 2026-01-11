@@ -2,7 +2,7 @@ import { page } from "$app/stores";
 import { onDestroy, onMount } from "svelte";
 import { derived } from "svelte/store";
 import { authStore } from "$lib/features/auth/stores/authStore";
-import { userStore } from "$lib/stores/userStore";
+import { userStore } from "$lib/stores/userStore.svelte";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { fileTransferStore } from "$lib/features/chat/stores/fileTransferStore";
@@ -15,7 +15,7 @@ import {
   chatStore,
   groupChats,
   messagesByChatId,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 import { directMessageRoster } from "$lib/features/chat/stores/directMessageRoster";
 import type { GroupModalUser } from "$lib/features/chat/utils/contextMenu";
 import { getListen } from "$services/tauri";

@@ -31,8 +31,7 @@
 
   const { layout = "full" } = $props<{ layout?: DiscoverPanelLayout }>();
 
-  const statusLabels = ["Verified", "Partner", "Official", "Top1", "Trending"] as const;
-  type ServerStatus = (typeof statusLabels)[number];
+  type ServerStatus = "Verified" | "Partner" | "Official" | "Top1" | "Trending";
 
   const statusIcons: Record<ServerStatus, typeof Hash> = {
     Verified: BadgeCheck,
@@ -255,7 +254,7 @@
               <p class="text-xs uppercase tracking-[0.4em] text-muted-foreground">Channels</p>
               <ul class="mt-3 space-y-2 text-sm text-foreground">
                 {#if previewChannels.length > 0}
-                  {#each previewChannels.slice(0, 5) as channel}
+                  {#each previewChannels.slice(0, 5) as channel (channel.id)}
                     <li class="flex items-center justify-between">
                       <span class="text-muted-foreground/80">#{channel.name}</span>
                       <span class="text-[10px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
@@ -287,7 +286,7 @@
             <div class="rounded-2xl border border-border/60 bg-muted/30 p-4">
               <p class="text-xs uppercase tracking-[0.4em] text-muted-foreground">Chat view</p>
               <div class="mt-3 space-y-3">
-                {#each previewMessages as message}
+                {#each previewMessages as message (message.id)}
                   <div class="rounded-xl bg-background/60 p-3 shadow-inner">
                     <p class="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                       {message.author}

@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
 
   type MockInvoke = (command: string, args?: unknown) => Promise<InvokeResult>;
 
-  const defaultInvoke: MockInvoke = async (command: string, args?: unknown) => {
+  const defaultInvoke: MockInvoke = async (command: string, _args?: unknown) => {
     switch (command) {
       case "get_friendships":
         return [] as FriendshipRecord[];
@@ -261,7 +261,7 @@ vi.mock("$lib/stores/ToastStore", () => ({
   toasts: { addToast: mocks.addToast },
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: mocks.userStoreMock,
 }));
 
@@ -287,7 +287,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   },
 }));
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: mocks.chatStoreMock,
 }));
 
@@ -584,7 +584,6 @@ describe("UserCardModal", () => {
         profileUser,
         openDetailedProfileModal,
         isServerMemberContext: true,
-        serverId: "server-123",
         close,
       },
     });

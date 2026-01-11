@@ -18,13 +18,11 @@
   } from "@lucide/svelte";
   import {
     callStore,
-    describeCallStatus,
     type CallParticipant,
-    type ParticipantStatus,
   } from "$lib/features/calls/stores/callStore";
   import type { ChannelChat } from "$lib/features/chat/models/Chat";
   import { toasts } from "$lib/stores/ToastStore";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { userCache } from "$lib/utils/cache";
 
   let { chat }: { chat: ChannelChat } = $props();
@@ -63,13 +61,6 @@
       call.status !== "error" &&
       call.status !== "ending"
     );
-  });
-
-  const statusLabel = $derived.by(() => {
-    if (!callForChat) {
-      return "Connecting to voice channel…";
-    }
-    return describeCallStatus(callForChat);
   });
 
   const localMedia = $derived($callStore.localMedia);
@@ -146,25 +137,6 @@
       return name;
     }
     return `User-${participant.userId.slice(0, 4) || "anon"}`;
-  }
-
-  function formatParticipantStatus(status: ParticipantStatus) {
-    switch (status) {
-      case "connected":
-        return "Connected";
-      case "connecting":
-        return "Connecting…";
-      case "invited":
-        return "Invited";
-      case "left":
-        return "Left";
-      case "disconnected":
-        return "Disconnected";
-      case "error":
-        return "Error";
-      default:
-        return "Unknown";
-    }
   }
 
   function getAvatarForUser(userId: string) {
@@ -526,7 +498,7 @@
           <Button
             variant="ghost"
             class="cursor-pointer"
-            aria-label={"More Options"}
+            aria-label="More Options"
           >
             <Ellipsis size={20} />
           </Button>

@@ -25,7 +25,7 @@
     chatStore,
     groupChats,
     type GroupChatSummary,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import { callStore } from "$lib/features/calls/stores/callStore";
   import {
     hideVoiceCallView,
@@ -42,15 +42,15 @@
   import type { Server } from "$lib/features/servers/models/Server";
   import { getContext, onDestroy, onMount } from "svelte";
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { browser } from "$app/environment";
-  import { SvelteURLSearchParams } from "svelte/reactivity";
   import { Button } from "$lib/components/ui/button/index";
   import {
     Avatar,
     AvatarImage,
     AvatarFallback,
   } from "$lib/components/ui/avatar/index";
-  import { SvelteSet } from "svelte/reactivity";
+  import { SvelteSet, SvelteMap } from "svelte/reactivity";
   import {
     Collapsible,
     CollapsibleTrigger,
@@ -92,30 +92,24 @@
   } from "$lib/features/channels/stores/categoryNotificationPreferencesStore";
   import { CREATE_GROUP_CONTEXT_KEY } from "$lib/contextKeys";
   import type { CreateGroupContext } from "$lib/contextTypes";
-  import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
-  import { userStore } from "$lib/stores/userStore";
+  import type { ChatMetadata } from "$lib/features/chat/stores/chatStore.svelte";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import {
-    SLOWMODE_PRESETS,
-    buildSlowmodeOptions,
     normalizeSlowmodeValue,
   } from "$lib/features/channels/utils/slowmode";
   import {
     type ChannelPermissionOverrides,
     type ChannelPermissionOverrideEntry,
-    type KnownChannelPermissionKey,
   } from "$lib/features/chat/utils/permissions";
   import {
     clonePermissionOverrides,
-    createEmptyPermissionMatrixRow,
     createEmptyPermissionOverridesState,
     createPermissionMatrixRowFromEntry,
     rowHasOverrides,
     serializePermissionOverridesState,
   } from "$lib/features/chat/utils/channelPermissionMatrix";
   import type {
-    PermissionMatrixRow,
     PermissionMatrixState,
-    PermissionOverrideChoice,
   } from "$lib/features/chat/utils/channelPermissionMatrix";
   import {
     applyChannelMove,
@@ -135,11 +129,7 @@
     type ServerInviteResponse,
   } from "$lib/components/sidebars/serverSidebarHelpers";
 
-  type NavigationFn = (..._args: [string | URL]) => void; // eslint-disable-line no-unused-vars
-  type ChannelSelectHandler = (..._args: [string, string]) => void; // eslint-disable-line no-unused-vars
-  type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
-
-  const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
+  type ChannelSelectHandler = (..._args: [string, string]) => void;  
 
   type DropIndicator = {
     categoryId: string | null;
@@ -184,7 +174,7 @@
 
   const { activeServerChannelId } = chatStore;
 
-  let channelMetadataLookup = $state(new Map<string, ChatMetadata>());
+  let channelMetadataLookup = $state(new SvelteMap<string, ChatMetadata>());
 
   let voiceCallDuration = $state(0);
   let voiceCallTimer: ReturnType<typeof setInterval> | null = null;
@@ -226,7 +216,7 @@
 
   const unsubscribeChatMetadata = chatMetadataByChatId.subscribe(
     (metadataMap) => {
-      channelMetadataLookup = new Map(metadataMap);
+      channelMetadataLookup = new SvelteMap(metadataMap);
     },
   );
 
@@ -236,9 +226,7 @@
   const openProfileReviewsModal = createGroupContext?.openProfileReviewsModal;
   const openUserCardModal = createGroupContext?.openUserCardModal;
 
-  $effect(() => {
-    serverRawJson = JSON.stringify(server ?? {}, null, 2);
-  });
+  const serverRawJson = $derived(JSON.stringify(server ?? {}, null, 2));
 
   function handleVoiceParticipantClick(
     event: MouseEvent,
@@ -333,91 +321,10 @@
   let permissionOverrides = $state<PermissionMatrixState>(
     createEmptyPermissionOverridesState(),
   );
-  let pendingRoleOverrideSelection = $state("");
-  let pendingMemberOverrideSelection = $state("");
   let showServerRawDialog = $state(false);
-  let serverRawJson = $state("");
 
   function resetPermissionOverrides() {
     permissionOverrides = createEmptyPermissionOverridesState();
-    pendingRoleOverrideSelection = "";
-    pendingMemberOverrideSelection = "";
-  }
-
-  function addPermissionOverrideTarget(
-    target: keyof PermissionMatrixState,
-    id: string | null | undefined,
-  ) {
-    if (!id) return;
-    const trimmed = id.trim();
-    if (!trimmed || permissionOverrides[target][trimmed]) {
-      return;
-    }
-    const row = createEmptyPermissionMatrixRow();
-    permissionOverrides = {
-      ...permissionOverrides,
-      [target]: {
-        ...permissionOverrides[target],
-        [trimmed]: row,
-      },
-    };
-  }
-
-  function removeOverrideTarget(
-    target: keyof PermissionMatrixState,
-    id: string,
-  ) {
-    const trimmed = id.trim();
-    if (!trimmed || !permissionOverrides[target][trimmed]) {
-      return;
-    }
-    const nextTarget = { ...permissionOverrides[target] };
-    delete nextTarget[trimmed];
-    permissionOverrides = {
-      ...permissionOverrides,
-      [target]: nextTarget,
-    };
-  }
-
-  function setOverrideChoice(
-    target: keyof PermissionMatrixState,
-    id: string,
-    permission: KnownChannelPermissionKey,
-    choice: PermissionOverrideChoice,
-  ) {
-    const trimmed = id.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    const existing = permissionOverrides[target][trimmed];
-    const updatedRow: PermissionMatrixRow = {
-      ...(existing ?? createEmptyPermissionMatrixRow()),
-      [permission]: choice,
-    };
-
-    if (!rowHasOverrides(updatedRow)) {
-      removeOverrideTarget(target, trimmed);
-      return;
-    }
-
-    permissionOverrides = {
-      ...permissionOverrides,
-      [target]: {
-        ...permissionOverrides[target],
-        [trimmed]: updatedRow,
-      },
-    };
-  }
-
-  function getOverrideChoice(
-    target: keyof PermissionMatrixState,
-    id: string,
-    permission: KnownChannelPermissionKey,
-  ): PermissionOverrideChoice {
-    return (
-      permissionOverrides[target][id]?.[permission] ?? ("inherit" as const)
-    );
   }
 
   function loadPermissionOverridesFromChannel(
@@ -448,13 +355,7 @@
     applyEntries("users", overrides?.users ?? undefined);
 
     permissionOverrides = next;
-    pendingRoleOverrideSelection = "";
-    pendingMemberOverrideSelection = "";
   }
-
-  const slowmodeOptions = $derived(() =>
-    buildSlowmodeOptions([...SLOWMODE_PRESETS, newChannelSlowmode]),
-  );
 
   let showCategoryContextMenu = $state(false);
   let contextMenuX = $state(0);
@@ -469,15 +370,12 @@
   let dropIndicator = $state<DropIndicator | null>(null);
   let dragPreviewElement: HTMLElement | null = null;
 
-  let textChannelsCollapsed = false;
-  let voiceChannelsCollapsed = false;
-
-  let collapsedCategoryIds = new SvelteSet<string>();
+  let collapsedCategoryIds = $state(new SvelteSet<string>());
   let lastCollapsedServerId = $state<string | null>(null);
   const HIDE_MUTED_PREFERENCE_KEY = "serverSidebar.hideMuted";
   let hideMutedChannels = $state(false);
-  let mutedChannelIds = new SvelteSet<string>();
-  let mutedCategoryIds = new SvelteSet<string>();
+  let mutedChannelIds = $state(new SvelteSet<string>());
+  let mutedCategoryIds = $state(new SvelteSet<string>());
   let lastLoadedPreferencesKey = $state<string | null>(null);
 
   let isResizing = $state(false);
@@ -495,7 +393,7 @@
   });
 
   const rolesById = $derived.by(() => {
-    const map = new Map<string, Role>();
+    const map = new SvelteMap<string, Role>();
     for (const role of server?.roles ?? []) {
       if (role?.id) {
         map.set(role.id, role);
@@ -511,7 +409,7 @@
   });
 
   const membersById = $derived.by(() => {
-    const map = new Map<string, Server["members"][number]>();
+    const map = new SvelteMap<string, Server["members"][number]>();
     if (!server?.members) {
       return map;
     }
@@ -535,14 +433,6 @@
       member.name.toLowerCase().includes(term),
     );
   });
-
-  const availableRoleOverrideOptions = $derived.by(() =>
-    sortedRoles.filter((role) => !permissionOverrides.roles[role.id]),
-  );
-
-  const availableMemberOverrideOptions = $derived.by(() =>
-    sortedMembers.filter((member) => !permissionOverrides.users[member.id]),
-  );
 
   function clearAccessSelections() {
     selectedRoleIds = new SvelteSet<string>();
@@ -972,19 +862,7 @@
   }
 
   function gotoResolved(path: string) {
-    // eslint-disable-next-line svelte/no-navigation-without-resolve
-    gotoUnsafe(path);
-  }
-
-  function gotoServerSettings(serverId: string, tab?: string) {
-    const params = new SvelteURLSearchParams();
-    if (tab) params.set("tab", tab);
-
-    const query = params.toString();
-    const href = query
-      ? `/channels/${serverId}/settings?${query}`
-      : `/channels/${serverId}/settings`;
-    gotoResolved(href);
+    void goto((resolve as any)(path));
   }
 
   function startResize(e: MouseEvent) {
@@ -1506,8 +1384,8 @@
       ? toUniqueIdList(selectedRoleIds)
       : [];
     const aggregatedMemberIds = newChannelPrivate
-      ? new Set<string>(toUniqueIdList(selectedMemberIds))
-      : new Set<string>();
+      ? new SvelteSet<string>(toUniqueIdList(selectedMemberIds))
+      : new SvelteSet<string>();
 
     if (newChannelPrivate) {
       const defaults = [server.owner_id ?? null, $userStore.me?.id ?? null];
@@ -1970,7 +1848,6 @@
         handleViewReviews();
         break;
       case "view_raw":
-        serverRawJson = JSON.stringify(server ?? {}, null, 2);
         showServerRawDialog = true;
         break;
       case "hide_muted_channels": {

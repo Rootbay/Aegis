@@ -1,7 +1,7 @@
 import { goto } from "$app/navigation";
 import { page } from "$app/stores";
 import { get } from "svelte/store";
-import { chatStore } from "$lib/features/chat/stores/chatStore";
+import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { commandPaletteStore } from "$lib/features/navigation/commandPaletteStore";
 import type { ModalManager } from "./modalManager";

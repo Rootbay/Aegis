@@ -42,7 +42,7 @@ pub(crate) fn persist_outgoing_metadata(
     path: &Path,
     metadata: &OutgoingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = rkyv::to_bytes::<_, 1024>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    let bytes = rkyv::to_bytes::<_, 65536>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
     std::fs::write(path, &bytes).map_err(|e| e.to_string())
 }
 
@@ -82,7 +82,7 @@ pub(crate) fn persist_incoming_metadata(
     path: &Path,
     metadata: &IncomingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = rkyv::to_bytes::<_, 1024>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    let bytes = rkyv::to_bytes::<_, 65536>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
     std::fs::write(path, &bytes).map_err(|e| e.to_string())
 }
 

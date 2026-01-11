@@ -35,7 +35,7 @@
     option?: ContextMenuOption;
   };
 
-  // eslint-disable-next-line no-unused-vars
+   
   type ChannelContextMenuHandler = (detail: ChannelContextMenuDetail) => void;
 
   type ChannelContextMenuProps = {
@@ -112,11 +112,7 @@
     return items;
   }
 
-  let menuItems = $state<ContextMenuItemConfig<null>[]>([]);
-
-  $effect(() => {
-    menuItems = buildMenuItems();
-  });
+  const menuItems = $derived(buildMenuItems());
 
   const muteSubmenuItems = buildSubmenuItems(
     MUTE_OPTIONS,

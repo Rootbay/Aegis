@@ -4,7 +4,6 @@
   import { onMount, tick } from "svelte";
   import { loadEmojiData, type EmojiLoadResult } from "./emojiData";
   import type { EmojiCategory, EmojiEntry } from "./types";
-  import { createEventDispatcher } from "svelte";
   import type { Component } from "svelte";
   import {
     ChevronDown,
@@ -29,15 +28,14 @@
     emojiCategories,
     fallbackUsed,
     searchTerm = "",
+    onselect,
+    onclose,
   } = $props<{
     emojiCategories?: EmojiCategory[] | null;
     fallbackUsed?: boolean | null;
     searchTerm?: string | null;
-  }>();
-
-  const dispatch = createEventDispatcher<{
-    select: { emoji: string };
-    close: void;
+    onselect?: (payload: { emoji: string }) => void;
+    onclose?: () => void;
   }>();
 
   const GRID_COLUMNS = 8;
@@ -78,7 +76,7 @@
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        dispatch("close");
+        onclose?.();
       }
     };
 
@@ -167,7 +165,7 @@
 
     if (event.key === "Escape") {
       event.preventDefault();
-      dispatch("close");
+      onclose?.();
       return;
     }
 
@@ -222,7 +220,7 @@
   }
 
   function handleSelect(emoji: string) {
-    dispatch("select", { emoji });
+    onselect?.({ emoji });
   }
 
   function getEmojiKey(emoji: EmojiEntry, index: number): string {

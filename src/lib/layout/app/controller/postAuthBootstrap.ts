@@ -10,8 +10,8 @@ import type {
   FileReceivedPayload,
 } from "$lib/features/chat/stores/fileTransferStore";
 import type { AepMessage } from "$lib/features/chat/models/AepMessage";
-import type { MessageReadReceiptEvent } from "$lib/features/chat/stores/chatStore";
-import type { TypingIndicatorEvent } from "$lib/features/chat/stores/chatStore";
+import type { MessageReadReceiptEvent } from "$lib/features/chat/stores/chatStore.svelte";
+import type { TypingIndicatorEvent } from "$lib/features/chat/stores/chatStore.svelte";
 import type {
   ChatStoreType,
   CollaborationStoreType,

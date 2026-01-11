@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { resolve } from "$app/paths";
 
   import type { LinkPreviewMetadata } from "$lib/features/chat/utils/linkPreviews";
   import { getLinkPreviewMetadata } from "$lib/features/chat/utils/linkPreviews";
@@ -65,7 +66,7 @@
 {#if status === "loaded" && metadata}
   <a
     class="block rounded-lg border border-border bg-muted/50 p-3 text-left no-underline transition-colors hover:bg-muted"
-    href={metadata.url ?? url}
+    href={(resolve as any)(metadata.url ?? url)}
     rel="noreferrer noopener"
     target="_blank"
   >

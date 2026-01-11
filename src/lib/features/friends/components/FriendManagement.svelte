@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from "svelte/store";
   import { invoke } from "@tauri-apps/api/core";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";

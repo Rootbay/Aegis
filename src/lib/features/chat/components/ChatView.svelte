@@ -22,8 +22,10 @@
     Search
   } from "@lucide/svelte";
   import { browser } from "$app/environment";
+  import { SvelteSet, SvelteMap } from "svelte/reactivity";
   import { invoke } from "@tauri-apps/api/core";
   import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import ImageLightbox from "$lib/components/media/ImageLightbox.svelte";
   import FilePreview from "$lib/components/media/FilePreview.svelte";
   import FileTransferApprovals from "$lib/features/chat/components/FileTransferApprovals.svelte";
@@ -46,7 +48,7 @@
     TabsContent,
   } from "$lib/components/ui/tabs";
 
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import { mutedFriendsStore } from "$lib/features/friends/stores/mutedFriendsStore";
   import {
@@ -55,7 +57,7 @@
     hasMoreByChatId,
     loadingStateByChat,
     slowmodeByChannelId,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import { normalizeSlowmodeValue } from "$lib/features/channels/utils/slowmode";
   import {
     getContext,
@@ -737,10 +739,88 @@
   let msgMenuX = $state(0);
   let msgMenuY = $state(0);
   let selectedMsg: Message | null = $state(null);
-  let memberById = $state<Map<string, User>>(new Map());
-  let channelById = $state<Map<string, Channel>>(new Map());
-  let roleById = $state<Map<string, Role>>(new Map());
-  let friendById = $state<Map<string, Friend>>(new Map());
+
+  const friendById: Map<string, Friend> = $derived(
+    mapFriendsById($friendStore.friends ?? []),
+  );
+
+  const memberById: Map<string, User> = $derived.by(() => {
+    if ((chat?.type === "channel" || chat?.type === "group") && chat.members) {
+      return new Map(chat.members.map((member: User) => [member.id, member]));
+    }
+    return new Map<string, User>();
+  });
+
+  const channelById: Map<string, Channel> = $derived.by(() => {
+    if (chat?.type === "channel") {
+      const server = $serverStore.servers.find(
+        (entry) => entry.id === chat.serverId,
+      );
+      if (server) {
+        return new Map(
+          (server.channels ?? []).map((channel: Channel) => [
+            channel.id,
+            channel,
+          ]),
+        );
+      }
+    }
+    return new Map<string, Channel>();
+  });
+
+  const roleById: Map<string, Role> = $derived.by(() => {
+    if (chat?.type === "channel") {
+      const server = $serverStore.servers.find(
+        (entry) => entry.id === chat.serverId,
+      );
+      if (server) {
+        return new Map(
+          (server.roles ?? []).map((role: Role) => [role.id, role]),
+        );
+      }
+    }
+    return new Map<string, Role>();
+  });
+
+  const contextMenuItems = $derived.by(() => {
+    const base: ContextMenuEntry[] = [
+      { label: "View Profile", action: "view_profile" },
+    ];
+    if (chat?.type === "dm") {
+      base.push({ label: "Remove Friend", action: "remove_friend" });
+    }
+    if (canBanMembers()) {
+      base.push({
+        label: "Ban Member",
+        action: "ban_member",
+        isDestructive: true,
+      });
+    }
+    base.push(
+      { isSeparator: true },
+      { label: "Block", action: "block_user", isDestructive: true },
+      { label: "Mute", action: "mute_user" },
+      { label: "Report User", action: "report_user", isDestructive: true },
+      { isSeparator: true },
+    );
+    if (chat?.type === "channel") {
+      base.push({ label: "Add to Group", action: "add_to_group" });
+    } else {
+      base.push({ label: "Invite to Server", action: "invite_to_server" });
+    }
+    base.push(
+      {
+        label: "Share Collaborative Document",
+        action: "open_collaboration_document",
+      },
+      {
+        label: "Open Shared Whiteboard",
+        action: "open_collaboration_whiteboard",
+      },
+    );
+    return base;
+  });
+
   let editingMessageId = $state<string | null>(null);
   let editingDraft = $state("");
   let editingSaving = $state(false);
@@ -784,7 +864,7 @@
       return null;
     }
 
-    const seen = new Set<string>();
+    const seen = new SvelteSet<string>();
     const merged: EmojiCategory[] = [];
 
     for (const category of combinedSources) {
@@ -910,7 +990,9 @@
   });
 
   const notifyMessagesViewed = () => {
-    if (!chat) return;
+    if (!chat || chat.messages.length === 0) return;
+    const hasUnread = chat.messages.some((m) => !m.read);
+    if (!hasUnread) return;
     void chatStore.markActiveChatViewed();
   };
 
@@ -1482,46 +1564,6 @@
     })();
   });
 
-  const unsubscribeFriends = friendStore.subscribe((state) => {
-    friendById = mapFriendsById(state.friends ?? []);
-  });
-
-  onDestroy(() => {
-    unsubscribeFriends();
-  });
-
-  $effect(() => {
-    if ((chat?.type === "channel" || chat?.type === "group") && chat.members) {
-      memberById = new Map(
-        chat.members.map((member: User) => [member.id, member]),
-      );
-    } else {
-      memberById = new Map();
-    }
-  });
-
-  $effect(() => {
-    if (chat?.type === "channel") {
-      const server = $serverStore.servers.find(
-        (entry) => entry.id === chat.serverId,
-      );
-      if (server) {
-        channelById = new Map(
-          (server.channels ?? []).map((channel: Channel) => [
-            channel.id,
-            channel,
-          ]),
-        );
-        roleById = new Map(
-          (server.roles ?? []).map((role: Role) => [role.id, role]),
-        );
-        return;
-      }
-    }
-    channelById = new Map();
-    roleById = new Map();
-  });
-
   $effect(() => {
     if (!replyTargetMessageId) {
       return;
@@ -1692,43 +1734,6 @@
     isDestructive?: boolean;
     isSeparator?: boolean;
   };
-
-  let contextMenuItems = $state<ContextMenuEntry[]>([]);
-
-  $effect(() => {
-    const base: ContextMenuEntry[] = [
-      { label: "View Profile", action: "view_profile" },
-    ];
-    if (chat?.type === "dm") {
-      base.push({ label: "Remove Friend", action: "remove_friend" });
-    }
-    if (canBanMembers()) {
-      base.push({ label: "Ban Member", action: "ban_member", isDestructive: true });
-    }
-    base.push(
-      { isSeparator: true },
-      { label: "Block", action: "block_user", isDestructive: true },
-      { label: "Mute", action: "mute_user" },
-      { label: "Report User", action: "report_user", isDestructive: true },
-      { isSeparator: true },
-    );
-    if (chat?.type === "channel") {
-      base.push({ label: "Add to Group", action: "add_to_group" });
-    } else {
-      base.push({ label: "Invite to Server", action: "invite_to_server" });
-    }
-    base.push(
-      {
-        label: "Share Collaborative Document",
-        action: "open_collaboration_document",
-      },
-      {
-        label: "Open Shared Whiteboard",
-        action: "open_collaboration_whiteboard",
-      },
-    );
-    contextMenuItems = base;
-  });
 
   function handleContextMenu(event: MouseEvent, user: User | Friend) {
     event.preventDefault();
@@ -2763,14 +2768,14 @@
     return (currentChatMessages?.length ?? 0) === 0;
   });
 
-  const messageContentCache: MessageContentCache = new Map();
+  const messageContentCache: MessageContentCache = new SvelteMap();
 
   let normalizedMessages = $derived(
     buildLowercaseContent(currentChatMessages || [], messageContentCache),
   );
 
   const searchUsers = $derived(() => {
-    const entries = new Map<
+    const entries = new SvelteMap<
       string,
       { id: string; name?: string | null; tag?: string | null }
     >();
@@ -3441,7 +3446,7 @@
     if (!chat?.serverId || chat.type !== "channel") {
       return;
     }
-    void goto(`/channels/${chat.serverId}/settings?tab=channels`);
+    void goto(resolve(`/channels/${chat.serverId}/settings?tab=channels`));
   }
 </script>
 
@@ -3771,10 +3776,10 @@
                             {#if part.match}
                               <mark class="bg-yellow-500/60 text-white">
                                 {#each segments as segment, segIndex (segIndex)}
-                                  {#if segment.type === "text"}
-                                    {@html segment.html}
-                                  {:else if segment.type === "mention"}
-                                    <span
+                                                                  {#if segment.type === "text"}
+                                                                    <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+                                                                    {@html segment.html}
+                                                                  {:else if segment.type === "mention"}                                    <span
                                       class="font-semibold text-white"
                                       data-mention-id={segment.id}
                                     >
@@ -3803,7 +3808,7 @@
                                     </span>
                                   {:else if segment.type === "link"}
                                     <a
-                                      href={segment.url}
+                                      href={(resolve as any)(segment.url)}
                                       rel="noreferrer noopener"
                                       target="_blank"
                                       class="underline wrap-break-word text-cyan-200 hover:text-white"
@@ -3816,6 +3821,7 @@
                             {:else}
                               {#each segments as segment, segIndex (segIndex)}
                                 {#if segment.type === "text"}
+                                  <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                                   {@html segment.html}
                                 {:else if segment.type === "mention"}
                                   <span
@@ -3845,17 +3851,16 @@
                                   >
                                     {segment.name}
                                   </span>
-                                {:else if segment.type === "link"}
-                                  <a
-                                    href={segment.url}
-                                    rel="noreferrer noopener"
-                                    target="_blank"
-                                    class="underline wrap-break-word text-cyan-200 hover:text-white"
-                                  >
-                                    {segment.label}
-                                  </a>
-                                {/if}
-                              {/each}
+                                                                  {:else if segment.type === "link"}
+                                                                    <a
+                                                                      href={(resolve as any)(segment.url)}
+                                                                      rel="noreferrer noopener"
+                                                                      target="_blank"
+                                                                      class="underline wrap-break-word text-cyan-200 hover:text-white"
+                                                                    >
+                                                                      {segment.label}
+                                                                    </a>
+                                                                  {/if}                              {/each}
                             {/if}
                           {/each}
                         </p>
@@ -3866,6 +3871,7 @@
                         >
                           {#each segments as segment, segIndex (segIndex)}
                             {#if segment.type === "text"}
+                              <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                               {@html segment.html}
                             {:else if segment.type === "mention"}
                               <span
@@ -3895,17 +3901,16 @@
                               >
                                 {segment.name}
                               </span>
-                            {:else if segment.type === "link"}
-                              <a
-                                href={segment.url}
-                                rel="noreferrer noopener"
-                                target="_blank"
-                                class="underline wrap-break-word text-cyan-200 hover:text-white"
-                              >
-                                {segment.label}
-                              </a>
-                            {/if}
-                          {/each}
+                                                              {:else if segment.type === "link"}
+                                                                <a
+                                                                  href={(resolve as any)(segment.url)}
+                                                                  rel="noreferrer noopener"
+                                                                  target="_blank"
+                                                                  class="underline wrap-break-word text-cyan-200 hover:text-white"
+                                                                >
+                                                                  {segment.label}
+                                                                </a>
+                                                              {/if}                          {/each}
                         </p>
                         {#if $settings.enableLinkPreviews}
                           {@const previewUrl = extractFirstLink(
@@ -3991,9 +3996,9 @@
                               <EmojiPicker
                                 emojiCategories={emojiPickerCategories() ?? undefined}
                                 fallbackUsed={emojiPickerFallbackUsed()}
-                                on:select={(event) =>
-                                  handleReactionSelect(event.detail.emoji)}
-                                on:close={closeReactionPicker}
+                                onselect={(payload) =>
+                                  handleReactionSelect(payload.emoji)}
+                                onclose={closeReactionPicker}
                               />
                             </div>
                           {/if}
@@ -4023,9 +4028,9 @@
                             <EmojiPicker
                               emojiCategories={emojiPickerCategories() ?? undefined}
                               fallbackUsed={emojiPickerFallbackUsed()}
-                              on:select={(event) =>
-                                handleReactionSelect(event.detail.emoji)}
-                              on:close={closeReactionPicker}
+                              onselect={(payload) =>
+                                handleReactionSelect(payload.emoji)}
+                              onclose={closeReactionPicker}
                             />
                           </div>
                         {/if}
@@ -4196,8 +4201,7 @@
           >
             <Timer class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span class="flex-1">
-              Slowmode enabled. You can send another message in
-              {" "}{formatSlowmodeCountdown(slowmodeRemainingSeconds)}.
+              Slowmode enabled. You can send another message in {formatSlowmodeCountdown(slowmodeRemainingSeconds)}.
             </span>
           </div>
         {/if}
@@ -4314,7 +4318,7 @@
                   adjustTextareaHeight();
                   handleComposerInput(event);
                 }}
-                onfocus={(event) => {
+                onfocus={(_event) => {
                   adjustTextareaHeight();
                   handleComposerFocus();
                 }}
@@ -4464,9 +4468,9 @@
                           emojiCategories={emojiPickerCategories() ?? undefined}
                           fallbackUsed={emojiPickerFallbackUsed()}
                           searchTerm={emojiSearchTerm}
-                          on:select={(event) =>
-                            handleComposerEmojiSelect(event.detail.emoji)}
-                          on:close={() =>
+                          onselect={(payload) =>
+                            handleComposerEmojiSelect(payload.emoji)}
+                          onclose={() =>
                             closeComposerPicker({ focusComposer: true })}
                         />
                       </TabsContent>

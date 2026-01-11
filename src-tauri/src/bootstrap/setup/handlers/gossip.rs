@@ -60,7 +60,7 @@ pub async fn handle_gossip_event<R: Runtime>(
 
         if let Some(bytes) = payload_opt {
             if let Ok(msg) = bincode::deserialize::<AepMessage>(&bytes) {
-                let _ = application::handle_message(ctx, msg, propagation_source).await;
+                let _ = application::handle_message(ctx, msg).await;
             }
         }
     }

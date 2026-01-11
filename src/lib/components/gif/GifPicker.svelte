@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { GIF_CATEGORIES, GIF_MAP } from "./gifData";
   import type { GifCategory, GifEntry } from "./gifData";
 
@@ -16,7 +17,7 @@
     categoryChange: GifCategory | null;
   }>();
 
-  let favoriteGifIds = $state<Set<string>>(new Set());
+  let favoriteGifIds = $state(new SvelteSet<string>());
   let lastDispatchedCategoryId = $state<string | null>(null);
 
   const selectedCategory = $derived(() => {
@@ -51,7 +52,7 @@
   }
 
   function toggleFavorite(gif: GifEntry) {
-    const updated = new Set(favoriteGifIds);
+    const updated = new SvelteSet(favoriteGifIds);
     if (updated.has(gif.id)) {
       updated.delete(gif.id);
     } else {

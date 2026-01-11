@@ -1,5 +1,4 @@
 use tauri::{Emitter, Runtime};
-use libp2p::PeerId;
 use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData, EncryptedDmSlot};
 use super::super::context::AppContext;
 use scu128::Scu128;
@@ -7,8 +6,7 @@ use std::sync::Arc;
 
 pub async fn handle_message<R: Runtime>(
     ctx: &Arc<AppContext<R>>,
-    message: AepMessage,
-    propagation_source: PeerId
+    message: AepMessage
 ) -> Result<(), anyhow::Error> {
     
     match &message {
@@ -18,8 +16,8 @@ pub async fn handle_message<R: Runtime>(
         AepMessage::EncryptedChatMessage { sender, recipient, init, enc_header, enc_content, signature } => {
             process_chat(ctx, sender, recipient, init, enc_header, enc_content, signature).await;
         }
-        AepMessage::GroupKeyUpdate { server_id, channel_id, epoch, slots, signature } => {
-            process_group_key(ctx, &propagation_source, server_id, channel_id, epoch, slots, signature).await;
+        AepMessage::GroupKeyUpdate { issuer_id, server_id, channel_id, epoch, slots, signature } => {
+            process_group_key(ctx, issuer_id, server_id, channel_id, epoch, slots, signature).await;
         }
         AepMessage::ReadReceipt { chat_id, message_id, reader_id, timestamp, signature } => {
             process_read_receipt(ctx, chat_id, message_id, reader_id, timestamp, signature).await;
@@ -69,15 +67,14 @@ async fn process_chat<R: Runtime>(ctx: &Arc<AppContext<R>>, sender: &String, rec
     }
 }
 
-async fn process_group_key<R: Runtime>(ctx: &Arc<AppContext<R>>, source: &PeerId, server: &String, channel: &Option<String>, epoch: &u64, slots: &[EncryptedDmSlot], signature: &Option<Vec<u8>>) {
-    let issuer = source.to_base58();
-    let payload = bincode::serialize(&(issuer.clone(), server, channel, *epoch, slots)).unwrap_or_default();
-    if !verify_sig(ctx, &issuer, &payload, signature.as_deref()).await { return; }
+async fn process_group_key<R: Runtime>(ctx: &Arc<AppContext<R>>, issuer_id: &String, server: &String, channel: &Option<String>, epoch: &u64, slots: &[EncryptedDmSlot], signature: &Option<Vec<u8>>) {
+    let payload = bincode::serialize(&(issuer_id.clone(), server, channel, *epoch, slots)).unwrap_or_default();
+    if !verify_sig(ctx, issuer_id, &payload, signature.as_deref()).await { return; }
 
     let my_id = ctx.app_state.identity.peer_id().to_base58();
     if let Some(slot) = slots.iter().find(|s| s.recipient == my_id) {
         let packet = e2ee::EncryptedPacket { init: slot.init.clone(), enc_header: slot.enc_header.clone(), enc_content: slot.enc_content.clone() };
-        if let Ok(key_bytes) = e2ee::init_global_manager().lock().await.decrypt_from(&my_id, &packet) {
+        if let Ok(key_bytes) = e2ee::init_global_manager().lock().await.decrypt_from(issuer_id, &packet) {
             e2ee::init_global_manager().lock().await.set_group_key(server.as_str(), channel, *epoch, &key_bytes);
         }
     }

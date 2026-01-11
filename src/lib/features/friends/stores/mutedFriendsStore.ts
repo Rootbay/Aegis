@@ -22,7 +22,7 @@ function createMutedFriendsStore(): MutedFriendsStore {
   };
 
   return {
-    subscribe(run, invalidate) {
+    subscribe(run, _invalidate) {
       return backing.subscribe((ids) => run(deriveSet(ids)));
     },
     mute(friendId: string) {

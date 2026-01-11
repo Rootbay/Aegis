@@ -24,15 +24,6 @@
 </script>
 
 <div class="flex flex-1 min-h-0 flex-col">
-  <NavigationHeader
-    {chat}
-    onOpenDetailedProfile={openDetailedProfileModal}
-    isFriendsOrRootPage={true}
-    friendsActiveTab={friendsActiveTab}
-    onFriendsTabSelect={onFriendsTabSelect}
-    onFriendsAddClick={onFriendsAddClick}
-  />
-
   <section class="flex-1 min-h-0 flex flex-col">
     {#if children}
       {@render children()}

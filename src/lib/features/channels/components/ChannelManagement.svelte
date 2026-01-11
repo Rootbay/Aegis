@@ -8,7 +8,7 @@
     normalizeSlowmodeValue,
   } from "$lib/features/channels/utils/slowmode";
 
-  type UnaryHandler<T> = (value: T) => void; // eslint-disable-line no-unused-vars
+  type UnaryHandler<T> = (value: T) => void;
 
   type ChannelManagementProps = {
     channels?: Channel[];
@@ -32,22 +32,12 @@
   let editingChannelType = $state<"text" | "voice">("text");
   let editingChannelSlowmode = $state(0);
 
-  let newChannelSlowmodeOptions = $state(buildSlowmodeOptions());
-  let editingChannelSlowmodeOptions = $state(buildSlowmodeOptions());
-
-  $effect(() => {
-    newChannelSlowmodeOptions = buildSlowmodeOptions([
-      ...SLOWMODE_PRESETS,
-      newChannelSlowmode,
-    ]);
-  });
-
-  $effect(() => {
-    editingChannelSlowmodeOptions = buildSlowmodeOptions([
-      ...SLOWMODE_PRESETS,
-      editingChannelSlowmode,
-    ]);
-  });
+  const newChannelSlowmodeOptions = $derived(
+    buildSlowmodeOptions([...SLOWMODE_PRESETS, newChannelSlowmode]),
+  );
+  const editingChannelSlowmodeOptions = $derived(
+    buildSlowmodeOptions([...SLOWMODE_PRESETS, editingChannelSlowmode]),
+  );
 
   $effect(() => {
     if (newChannelType === "voice") {

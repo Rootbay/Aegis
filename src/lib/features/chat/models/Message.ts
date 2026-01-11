@@ -70,3 +70,8 @@ export interface Message {
   replySnapshot?: ReplySnapshot;
   embeds?: MessageEmbed[];
 }
+
+export interface SendMessageOptions {
+  replyToMessageId?: string;
+  expiresAt?: string;
+}

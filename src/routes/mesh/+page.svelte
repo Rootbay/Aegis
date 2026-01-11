@@ -6,10 +6,7 @@
   import { resolve } from "$app/paths";
 
   onMount(() => {
-    const meshExplorerUrl = `${resolve("/settings/network")}#mesh-explorer` as Parameters<
-      typeof goto
-    >[0];
-    void goto(meshExplorerUrl);
+    void goto((resolve as any)("/settings/network#mesh-explorer"));
   });
 </script>
 

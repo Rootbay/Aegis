@@ -1,12 +1,15 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import { onMount } from "svelte";
   import { page } from "$app/stores";
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import NetworkStatusIndicator from "$lib/components/NetworkStatusIndicator.svelte";
+  import NavigationHeader from "$lib/components/NavigationHeader.svelte";
   import ActiveChatContent from "./ActiveChatContent.svelte";
   import FriendsContent from "./FriendsContent.svelte";
+  import { memberSidebarVisibilityStore } from "$lib/features/chat/stores/memberSidebarVisibilityStore";
   import type { AppController } from "./types";
   import type { Snippet } from "svelte";
 
@@ -35,6 +38,42 @@
   const shouldRenderFriendsView = $derived(
     () => !$isAnySettingsPage && $isFriendsOrRootPage,
   );
+
+  const LG_BREAKPOINT = 1024;
+  let isLgViewport = $state(true);
+
+  function updateViewportMatch() {
+    if (typeof window === "undefined") {
+      return;
+    }
+    isLgViewport = window.innerWidth >= LG_BREAKPOINT;
+  }
+
+  onMount(() => {
+    updateViewportMatch();
+    const handler = () => updateViewportMatch();
+    window.addEventListener("resize", handler);
+    return () => {
+      window.removeEventListener("resize", handler);
+    };
+  });
+
+  const mobileMemberPanelOpen = $derived(() => {
+    const chat = $currentChat;
+    if (!chat) return false;
+    return $memberSidebarVisibilityStore.get(chat.id) ?? false;
+  });
+
+  const canShowMembers = $derived(() => {
+    const chat = $currentChat;
+    return chat && chat.type !== "dm";
+  });
+
+  function handleToggleMemberPanel() {
+    const chat = $currentChat;
+    if (!chat) return;
+    memberSidebarVisibilityStore.toggleVisibility(chat.id);
+  }
 
   function decodeSegment(value: string | undefined): string | null {
     if (!value) {
@@ -82,7 +121,19 @@
 </script>
 
 <main class="flex-1 min-h-0 flex flex-col overflow-hidden">
-  <NetworkStatusIndicator connectivity={connectivity} />
+  {#if !$isAnySettingsPage}
+    <NavigationHeader
+      chat={$currentChat}
+      onOpenDetailedProfile={openDetailedProfileModal}
+      isFriendsOrRootPage={shouldRenderFriendsView()}
+      friendsActiveTab={$activeTab}
+      onFriendsTabSelect={handleFriendsTabSelect}
+      onFriendsAddClick={handleFriendsAddClick}
+      showMemberPanelToggle={!isLgViewport && canShowMembers()}
+      mobileMemberPanelOpen={mobileMemberPanelOpen()}
+      onToggleMemberPanel={handleToggleMemberPanel}
+    />
+  {/if}
   {#if $isAnySettingsPage}
     {#if children}
       {@render children()}
@@ -99,6 +150,8 @@
   {:else if $currentChat}
     <ActiveChatContent chat={$currentChat} {openDetailedProfileModal} />
   {:else if children}
-    {@render children()}
+    <div class="flex-1 min-h-0 flex flex-col">
+      {@render children()}
+    </div>
   {/if}
 </main>

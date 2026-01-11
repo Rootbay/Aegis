@@ -10,11 +10,11 @@
   } from "@lucide/svelte";
   import { onDestroy } from "svelte";
 
-  import { chatStore } from "$lib/features/chat/stores/chatStore";
+  import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
   import type { AttachmentMeta } from "$lib/features/chat/models/Message";
   import { toasts } from "$lib/stores/ToastStore";
 
-  type FileRemoveHandler = (file: File) => void; // eslint-disable-line no-unused-vars
+  type FileRemoveHandler = (file: File) => void;  
 
   interface FilePreviewProps {
     variant?: "composer" | "message";
@@ -23,7 +23,7 @@
     chatId?: string;
     messageId?: string;
     onRemove?: FileRemoveHandler;
-    onOpen?: (url: string) => void; // eslint-disable-line no-unused-vars
+    onOpen?: (url: string) => void;  
   }
 
   let {
@@ -118,32 +118,18 @@
       return null;
     }
     try {
-      attachment = {
-        ...attachment,
-        isLoading: true,
-        loadError: undefined,
-      };
       const url = await chatStore.loadAttachmentForMessage(
         chatId,
         messageId,
         attachment.id,
       );
-      attachment = {
-        ...attachment,
-        objectUrl: url,
-        isLoaded: true,
-        isLoading: false,
-        loadError: undefined,
-      };
-      return url;
+      if (url) {
+        // We can't easily update the prop, but we can return the url
+        return url;
+      }
+      return null;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      attachment = {
-        ...attachment,
-        isLoading: false,
-        isLoaded: false,
-        loadError: message,
-      };
       toasts.showErrorToast(`Failed to load ${attachment.name}: ${message}`);
       return null;
     }

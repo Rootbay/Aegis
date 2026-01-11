@@ -19,7 +19,7 @@ class ResizeObserverMock {
 
 vi.stubGlobal("ResizeObserver", ResizeObserverMock);
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     handleGroupChatCreated: vi.fn(() => ({
       id: "group-1",
@@ -44,7 +44,7 @@ vi.mock("$lib/stores/ToastStore", () => ({
 }));
 
 import CreateGroupModal from "../../src/lib/components/modals/CreateGroupModal.svelte";
-import { chatStore } from "$lib/features/chat/stores/chatStore";
+import { chatStore } from "$lib/features/chat/stores/chatStore.svelte";
 import { toasts } from "$lib/stores/ToastStore";
 import { invoke } from "@tauri-apps/api/core";
 

@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { tick, createEventDispatcher } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import { X, Search } from "@lucide/svelte";
   import {
     commandPaletteStore,
@@ -26,7 +27,7 @@
       title: CommandPaletteSection;
       items: Array<{ command: CommandPaletteCommand; index: number }>;
     }> = [];
-    const map = new Map<
+    const map = new SvelteMap<
       CommandPaletteSection,
       {
         title: CommandPaletteSection;

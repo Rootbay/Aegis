@@ -14,7 +14,7 @@
   import { Label } from "$lib/components/ui/label";
   import { ScrollArea } from "$lib/components/ui/scroll-area";
   import { Textarea } from "$lib/components/ui/textarea";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import { LoaderCircle, Star } from "@lucide/svelte";
   import type {
     Review,

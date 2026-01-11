@@ -1,15 +1,16 @@
 import { goto } from "$app/navigation";
+import { resolve } from "$app/paths";
 import { get, derived, writable, type Readable } from "svelte/store";
 import {
   chatStore,
   chatMetadataByChatId,
-} from "$lib/features/chat/stores/chatStore";
+} from "$lib/features/chat/stores/chatStore.svelte";
 import { directMessageRoster } from "$lib/features/chat/stores/directMessageRoster";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { settings } from "$lib/features/settings/stores/settings";
 import type { DirectMessageListEntry } from "$lib/features/chat/stores/directMessageRoster";
 import type { Server } from "$lib/features/servers/models/Server";
-import type { ChatMetadata } from "$lib/features/chat/stores/chatStore";
+import type { ChatMetadata } from "$lib/features/chat/stores/chatStore.svelte";
 
 export type CommandPaletteSection =
   | "Recent Chats"
@@ -79,7 +80,7 @@ const ACTION_COMMANDS: CommandPaletteCommand[] = [
     keywords: ["home", "direct messages", "dm"],
     perform: () => {
       serverStore.setActiveServer(null);
-      void goto("/friends?tab=All");
+      void goto((resolve as any)("/friends?tab=All"));
     },
   },
   {
@@ -89,7 +90,7 @@ const ACTION_COMMANDS: CommandPaletteCommand[] = [
     description: "Navigate to the main settings page",
     keywords: ["preferences", "configuration"],
     perform: () => {
-      void goto("/settings");
+      void goto((resolve as any)("/settings"));
     },
   },
   {
@@ -99,7 +100,7 @@ const ACTION_COMMANDS: CommandPaletteCommand[] = [
     description: "Inspect mesh connectivity",
     keywords: ["network", "connectivity"],
     perform: () => {
-      void goto("/settings/network#mesh-explorer");
+      void goto((resolve as any)("/settings/network#mesh-explorer"));
     },
   },
 ];
@@ -130,7 +131,7 @@ function buildRecentChatCommands(
       serverStore.setActiveServer(null);
       const target =
         entry.type === "group" ? `/groups/${entry.id}` : `/dm/${entry.id}`;
-      void goto(target);
+      void goto((resolve as any)(target));
       void chatStore.setActiveChat(entry.id, entry.type);
     },
   }));
@@ -157,7 +158,7 @@ function buildServerCommands(
         sortKey: meta?.lastActivityAt ?? null,
         perform: () => {
           serverStore.setActiveServer(server.id);
-          void goto(`/channels/${server.id}`);
+              void goto((resolve as any)(`/channels/${server.id}`));
           void chatStore.setActiveChat(server.id, "server", channel.id);
         },
       });
@@ -177,7 +178,7 @@ function buildSettingsCommands(): CommandPaletteCommand[] {
     description: section.description,
     keywords: [section.label, section.path.replace("/settings", "")],
     perform: () => {
-      void goto(section.path);
+      void goto((resolve as any)(section.path));
     },
   }));
 }

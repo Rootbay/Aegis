@@ -34,6 +34,7 @@ pub async fn run() {
             commands::messages::send_encrypted_dm,
             commands::messages::send_encrypted_dm_with_attachments,
             commands::messages::send_read_receipt,
+            commands::messages::mark_chat_read,
             commands::messages::send_typing_indicator,
             commands::messages::send_encrypted_group_message,
             commands::chats::create_group_dm,

@@ -4,13 +4,12 @@
   import { goto } from "$app/navigation";
   import { SvelteURLSearchParams } from "svelte/reactivity";
   import { page } from "$app/stores";
-  import { userStore } from "$lib/stores/userStore";
   import { serverStore } from "$lib/features/servers/stores/serverStore";
   import { friendStore } from "$lib/features/friends/stores/friendStore";
   import {
     chatStore,
     serverUnreadCountByServerId,
-  } from "$lib/features/chat/stores/chatStore";
+  } from "$lib/features/chat/stores/chatStore.svelte";
   import { toasts } from "$lib/stores/ToastStore";
   import ServerContextMenu from "$lib/components/context-menus/ServerContextMenu.svelte";
   import type { Server } from "$lib/features/servers/models/Server";
@@ -25,7 +24,6 @@
     AvatarFallback,
   } from "$lib/components/ui/avatar/index.js";
   import { ScrollArea } from "$lib/components/ui/scroll-area/index.js";
-  import { Separator } from "$lib/components/ui/separator/index.js";
   import {
     Sidebar,
     SidebarHeader,
@@ -41,15 +39,11 @@
   } from "$lib/components/ui/tooltip/index.js";
   import ServerEventModal from "$lib/components/modals/ServerEventModal.svelte";
   import { cn } from "$lib/utils";
-  import type { User } from "$lib/features/auth/models/User";
 
-  type OpenProfileHandler = (user: User) => void; // eslint-disable-line no-unused-vars
   let {
     onCreateJoinServerClick,
-    openDetailedProfileModal,
   }: {
     onCreateJoinServerClick: () => void;
-    openDetailedProfileModal: OpenProfileHandler;
   } = $props();
   const MUTED_SERVERS_STORAGE_KEY = "sidebar.mutedServers";
   let mutedServerIds = $state<SvelteSet<string>>(loadMutedServers());
@@ -60,7 +54,7 @@
     return value > 99 ? "99+" : `${value}`;
   };
 
-  type NavigationFn = (..._args: [string | URL]) => Promise<void>; // eslint-disable-line no-unused-vars
+  type NavigationFn = (..._args: [string | URL]) => Promise<void>;  
 
   const gotoUnsafe: NavigationFn = goto as unknown as NavigationFn;
 

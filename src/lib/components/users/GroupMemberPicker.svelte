@@ -8,7 +8,7 @@
   type Props = {
     users?: GroupModalUser[];
     selectedUserIds: Set<string>;
-    onToggleUser?: (userId: string) => void; // eslint-disable-line no-unused-vars
+    onToggleUser?: (userId: string) => void;  
     emptyStateMessage?: string;
     searchPlaceholder?: string;
   };

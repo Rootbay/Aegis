@@ -162,7 +162,7 @@ fn persist_incoming_metadata_file(
     metadata_path: &Path,
     metadata: &IncomingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = rkyv::to_bytes::<_, 1024>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    let bytes = rkyv::to_bytes::<_, 65536>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
     std::fs::write(metadata_path, &bytes).map_err(|e| e.to_string())
 }
 

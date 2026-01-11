@@ -16,13 +16,11 @@ import type { ChannelCategory } from "../../channels/models/ChannelCategory";
 import type { Role } from "../models/Role";
 import { reindexRoles } from "../models/Role";
 import type { ServerInvite } from "../models/ServerInvite";
-import { userStore } from "../../../stores/userStore";
+import { userStore } from "../../../stores/userStore.svelte";
 import { serverCache } from "../../../utils/cache";
-import type { RelayRecord, RelayStatus } from "../../settings/models/relay";
+import type { RelayRecord } from "../../settings/models/relay";
 import {
   voicePresenceStore,
-  type VoiceChannelPresenceEntry,
-  type VoicePresenceState,
 } from "$lib/features/calls/stores/voicePresenceStore";
 import {
   aggregateChannelPermissions,
@@ -1736,7 +1734,7 @@ export function createServerStore(): ServerStore {
 
   const removeServer = (serverId: string) => {
     update((s) => {
-      const { [serverId]: _removed, ...restBans } = s.bansByServer;
+      const { [serverId]: _, ...restBans } = s.bansByServer;
       return {
         ...s,
         servers: s.servers.filter((sv) => sv.id !== serverId),
@@ -1993,8 +1991,8 @@ export function createServerStore(): ServerStore {
 
     try {
       await invoke("ban_server_member", {
-        server_id: serverId,
-        user_id: memberId,
+        serverId,
+        userId: memberId,
         reason: options.reason,
       });
 
@@ -2117,8 +2115,8 @@ export function createServerStore(): ServerStore {
       await invoke("remove_server_member", {
         serverId,
         server_id: serverId,
-        memberId,
-        member_id: memberId,
+        userId: memberId,
+        user_id: memberId,
       });
 
       removeMemberFromServer(serverId, memberId);

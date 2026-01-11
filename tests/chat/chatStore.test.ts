@@ -46,7 +46,7 @@ vi.mock("../../src/lib/stores/connectivityStore", () => ({
 }));
 import { get, writable } from "svelte/store";
 
-vi.mock("$lib/stores/userStore", () => {
+vi.mock("$lib/stores/userStore.svelte", () => {
   const state = writable({ me: { id: "user-123", name: "Test User" } });
   return {
     userStore: {
@@ -513,14 +513,14 @@ describe("chatStore encrypted message refresh", () => {
   it("hydrates chat history for encrypted direct message events", async () => {
     const store = createChatStore();
 
-    expect(get(store.activeChatId)).toBeNull();
+    expect(store.activeChatId).toBeNull();
 
     await store.refreshChatFromStorage("friend-456", "dm");
 
     const messages = get(store.messagesByChatId).get("friend-456") ?? [];
     expect(messages).toHaveLength(1);
     expect(messages[0]?.content).toBe("Encrypted hello");
-    expect(get(store.activeChatId)).toBeNull();
+    expect(store.activeChatId).toBeNull();
     expect(invokeMock).toHaveBeenCalledWith("get_messages", {
       chatId: "friend-456",
       chat_id: "friend-456",
@@ -581,7 +581,7 @@ describe("chatStore plaintext encryption fallbacks", () => {
 
   it("sends plaintext content to fallback command when encrypted send fails", async () => {
     const store = await setupActiveDm();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     invokeMock.mockImplementation(async (command: string, _payload: InvokePayload) => {
       if (command === "get_messages") {
         return [];
@@ -702,7 +702,7 @@ describe("chatStore offline queueing", () => {
   it("queues messages while offline and flushes when connectivity returns", async () => {
     const store = createChatStore();
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     invokeMock.mockImplementation(async (command: string, _payload?: InvokePayload) => {
       switch (command) {
         case "get_messages":

@@ -78,7 +78,7 @@ class MockRTCPeerConnection {
   onconnectionstatechange: (() => void) | null = null;
   connectionState: RTCPeerConnectionState = "new";
   senders: RTCRtpSender[] = [];
-  addTrack = vi.fn((track: MediaStreamTrack, stream: MediaStream) => {
+  addTrack = vi.fn((track: MediaStreamTrack, _stream: MediaStream) => {
     const sender = {
       track,
       transport: null,
@@ -124,7 +124,7 @@ vi.mock("$lib/stores/ToastStore", () => ({
   },
 }));
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   groupChats: {
     subscribe: groupChatsStore.subscribe,
   },
@@ -136,7 +136,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
   },
 }));
 
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: {
     subscribe: userStoreState.subscribe,
     getUser: (...args: Parameters<typeof getUserMock>) => getUserMock(...args),

@@ -47,7 +47,7 @@ vi.mock("$lib/features/chat/stores/directMessageRoster", () => ({
   directMessageRoster: { subscribe: directMessageEntries.subscribe },
 }));
 
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     setActiveChat: setActiveChatMock,
     searchMessages: async () => ({

@@ -24,15 +24,14 @@ describe("EmojiPicker with provided categories", () => {
       },
     ];
 
-    const { component, getByAltText, getByRole } = render(EmojiPicker, {
+    const selectHandler = vi.fn();
+
+    const { getByAltText, getByRole } = render(EmojiPicker, {
       props: {
         emojiCategories: categories,
+        onselect: selectHandler,
       },
     });
-
-    type SelectEvent = CustomEvent<{ emoji: string }>;
-    const selectHandler = vi.fn<(event: SelectEvent) => void>();
-    (component as { $on(event: string, handler: (event: SelectEvent) => void): () => void }).$on("select", selectHandler);
 
     const trigger = getByRole("button", { name: "React with :wave:" });
     const image = getByAltText(":wave:");
@@ -42,7 +41,7 @@ describe("EmojiPicker with provided categories", () => {
     await fireEvent.click(trigger);
 
     expect(selectHandler).toHaveBeenCalledTimes(1);
-    expect(selectHandler.mock.calls[0][0]?.detail).toEqual({
+    expect(selectHandler.mock.calls[0][0]).toEqual({
       emoji: "<emoji:emoji-1>",
     });
   });

@@ -93,7 +93,7 @@ const userState = vi.hoisted(() =>
 const serverStoreState = vi.hoisted(() =>
   createMockStore({ activeServerId: null, servers: [] as unknown[] }),
 );
-vi.mock("$lib/stores/userStore", () => ({
+vi.mock("$lib/stores/userStore.svelte", () => ({
   userStore: { subscribe: userState.subscribe },
 }));
 
@@ -109,7 +109,7 @@ vi.mock("$lib/features/servers/stores/serverStore", () => ({
 
 const addMembersToGroupChatMock = vi.hoisted(() => vi.fn());
 const removeGroupChatMemberMock = vi.hoisted(() => vi.fn());
-vi.mock("$lib/features/chat/stores/chatStore", () => ({
+vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {
     addMembersToGroupChat: addMembersToGroupChatMock,
     removeGroupChatMember: removeGroupChatMemberMock,

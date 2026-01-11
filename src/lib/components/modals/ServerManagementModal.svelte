@@ -21,13 +21,13 @@
   } from "@lucide/svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { v4 as uuidv4 } from "uuid";
-  import { userStore } from "$lib/stores/userStore";
+  import { userStore } from "$lib/stores/userStore.svelte";
   import type { Server } from "$lib/features/servers/models/Server";
   import type { Channel } from "$lib/features/channels/models/Channel";
   import type { ChannelCategory } from "$lib/features/channels/models/ChannelCategory";
   import { serverInvitesStore } from "$lib/features/servers/stores/serverInvitesStore";
 
-  // eslint-disable-next-line no-unused-vars
+   
   type UnaryHandler<T> = (value: T) => void;
 
   type ServerManagementModalProps = {
@@ -294,7 +294,7 @@
                 START FROM A TEMPLATE
               </p>
               <div class="space-y-2">
-                {#each templateOptions as template}
+                {#each templateOptions as template (template.id)}
                   <Button
                     variant="outline"
                     class="flex h-[52px] w-full items-center justify-between font-semibold text-foreground transition"
@@ -346,7 +346,7 @@
               Invites should look like
             </p>
             <div class="flex flex-wrap gap-2">
-              {#each exampleInvites as invite}
+              {#each exampleInvites as invite (invite)}
                 <button
                   type="button"
                   class="flex items-center gap-2 rounded-xl border border-border/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground transition hover:bg-muted/20"

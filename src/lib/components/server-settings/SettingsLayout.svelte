@@ -79,7 +79,7 @@
   type SidebarItem = SidebarLinkItem | SidebarSeparator;
   type EventHandler<T> = T extends void
     ? (() => void) | undefined
-    : ((detail: T) => void) | undefined; // eslint-disable-line no-unused-vars
+    : ((detail: T) => void) | undefined;  
 
   let {
     title,

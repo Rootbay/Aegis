@@ -7,7 +7,7 @@
     href: string;
   };
 
-  type NavigateHandler = (..._args: [string]) => void; // eslint-disable-line no-unused-vars
+  type NavigateHandler = (..._args: [string]) => void;
 
   let {
     title,

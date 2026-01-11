@@ -33,22 +33,28 @@ pub async fn rotate_group_key(
 
             let my_id = state.identity.peer_id().to_base58();
             let mut slots = Vec::new();
-            for member in members {
-                if member.id == my_id {
-                    continue;
-                }
 
+            {
                 let arc = e2ee::init_global_manager();
                 let mut mgr = arc.lock().await;
-                let pkt = mgr
-                    .encrypt_for(&member.id, &key)
-                    .map_err(|e| format!("E2EE encrypt error: {e}"))?;
-                slots.push(aegis_protocol::EncryptedDmSlot {
-                    recipient: member.id,
-                    init: pkt.init,
-                    enc_header: pkt.enc_header,
-                    enc_content: pkt.enc_content,
-                });
+                
+                mgr.set_group_key(&server_id, &channel_id, epoch, &key);
+
+                for member in members {
+                    if member.id == my_id {
+                        continue;
+                    }
+
+                    let pkt = mgr
+                        .encrypt_for(&member.id, &key)
+                        .map_err(|e| format!("E2EE encrypt error: {e}"))?;
+                    slots.push(aegis_protocol::EncryptedDmSlot {
+                        recipient: member.id,
+                        init: pkt.init,
+                        enc_header: pkt.enc_header,
+                        enc_content: pkt.enc_content,
+                    });
+                }
             }
 
             let identity = state.identity.clone();
@@ -58,7 +64,7 @@ pub async fn rotate_group_key(
 
             let bytes = tokio::task::spawn_blocking(move || {
                 let payload = bincode::serialize(&(
-                    issuer_id,
+                    issuer_id.clone(),
                     &server_id_clone,
                     &channel_id_clone,
                     epoch,
@@ -71,6 +77,7 @@ pub async fn rotate_group_key(
                     .map_err(|e| e.to_string())?;
 
                 let aep_msg = aegis_protocol::AepMessage::GroupKeyUpdate {
+                    issuer_id,
                     server_id: server_id_clone,
                     channel_id: channel_id_clone,
                     epoch,
@@ -112,9 +119,9 @@ pub async fn send_encrypted_group_message(
             let payload = EncryptedDmPayload {
                 content: message,
                 attachments: Vec::new(),
-                reply_to_message_id,
-                reply_snapshot_author,
-                reply_snapshot_snippet,
+                reply_to_message_id: reply_to_message_id.clone(),
+                reply_snapshot_author: reply_snapshot_author.clone(),
+                reply_snapshot_snippet: reply_snapshot_snippet.clone(),
             };
 
             let identity = state.identity.clone();
@@ -135,6 +142,28 @@ pub async fn send_encrypted_group_message(
                 )
                 .map_err(|e| format!("Group E2EE: {e}"))?
             };
+
+            let chat_id = channel_id.clone().unwrap_or_else(|| server_id.clone());
+            let new_local_message = aep::database::Message {
+                id: scu128::Scu128::new().to_string(),
+                chat_id,
+                sender_id: my_id.clone(),
+                content: payload.content.clone(),
+                timestamp: chrono::Utc::now(),
+                read: true,
+                pinned: false,
+                attachments: Vec::new(),
+                reactions: std::collections::HashMap::new(),
+                reply_to_message_id,
+                reply_snapshot_author,
+                reply_snapshot_snippet,
+                edited_at: None,
+                edited_by: None,
+                expires_at: None,
+            };
+            aep::database::insert_message(&state.db_pool, &new_local_message, &[])
+                .await
+                .map_err(|e| e.to_string())?;
 
             let bytes = tokio::task::spawn_blocking(move || {
                 let payload_bytes = bincode::serialize(&(
