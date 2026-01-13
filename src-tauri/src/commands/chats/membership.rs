@@ -1,4 +1,5 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use crate::commands::error::{AppError, AppResult};
 use aegis_protocol::{
     AddGroupChatMembersData, AepMessage, LeaveGroupChatData, RemoveGroupChatMemberData,
 };
@@ -11,7 +12,7 @@ use super::helpers::GroupChatPayload;
 pub async fn leave_group_dm(
     group_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     with_state_async(state_container, move |state| {
         let group_id = group_id.clone();
         async move { leave_group_dm_internal(state, group_id).await }
@@ -19,15 +20,15 @@ pub async fn leave_group_dm(
     .await
 }
 
-async fn leave_group_dm_internal(state: AppState, group_id: String) -> Result<(), String> {
+async fn leave_group_dm_internal(state: AppState, group_id: String) -> AppResult<()> {
     let user_id = state.identity.peer_id().to_base58();
 
     let removed = aep::database::remove_group_chat_member(&state.db_pool, &group_id, &user_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     if !removed {
-        return Err("You are not a member of this group.".to_string());
+        return Err(AppError::from("You are not a member of this group.".to_string()));
     }
 
     let payload = LeaveGroupChatData {
@@ -52,7 +53,7 @@ async fn leave_group_dm_internal(state: AppState, group_id: String) -> Result<()
         .network_tx
         .send(serialized)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -60,9 +61,9 @@ pub async fn add_group_dm_member(
     group_id: String,
     member_ids: Vec<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<GroupChatPayload, String> {
+) -> AppResult<GroupChatPayload> {
     if member_ids.is_empty() {
-        return Err("Please select at least one member to add.".to_string());
+        return Err(AppError::from("Please select at least one member to add.".to_string()));
     }
 
     with_state_async(state_container, move |state| {
@@ -77,22 +78,22 @@ async fn add_group_dm_member_internal(
     state: AppState,
     group_id: String,
     member_ids: Vec<String>,
-) -> Result<GroupChatPayload, String> {
+) -> AppResult<GroupChatPayload> {
     let adder_id = state.identity.peer_id().to_base58();
 
     let added_members =
         aep::database::add_group_chat_members(&state.db_pool, &group_id, &member_ids)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
 
     if added_members.is_empty() {
-        return Err("No new members were added.".to_string());
+        return Err(AppError::from("No new members were added.".to_string()));
     }
 
     let record = aep::database::get_group_chat_record(&state.db_pool, &group_id)
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Group not found.".to_string())?;
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::from("Group not found.".to_string()))?;
 
     let payload = GroupChatPayload::from_record(record.clone());
 
@@ -119,7 +120,7 @@ async fn add_group_dm_member_internal(
         .network_tx
         .send(serialized)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     Ok(payload)
 }
@@ -129,7 +130,7 @@ pub async fn remove_group_dm_member(
     group_id: String,
     member_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<Option<GroupChatPayload>, String> {
+) -> AppResult<Option<GroupChatPayload>> {
     with_state_async(state_container, move |state| {
         let group_id = group_id.clone();
         let member_id = member_id.clone();
@@ -142,15 +143,15 @@ async fn remove_group_dm_member_internal(
     state: AppState,
     group_id: String,
     member_id: String,
-) -> Result<Option<GroupChatPayload>, String> {
+) -> AppResult<Option<GroupChatPayload>> {
     let remover_id = state.identity.peer_id().to_base58();
 
     let removed = aep::database::remove_group_chat_member(&state.db_pool, &group_id, &member_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     if !removed {
-        return Err("Member was not part of the group.".to_string());
+        return Err(AppError::from("Member was not part of the group.".to_string()));
     }
 
     let signing_payload = RemoveGroupChatMemberData {
@@ -176,11 +177,11 @@ async fn remove_group_dm_member_internal(
         .network_tx
         .send(serialized)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     let record = aep::database::get_group_chat_record(&state.db_pool, &group_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     Ok(record.map(GroupChatPayload::from_record))
 }

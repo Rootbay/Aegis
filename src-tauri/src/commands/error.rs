@@ -25,6 +25,24 @@ pub enum AppError {
     NotFound(String),
 }
 
+impl From<String> for AppError {
+    fn from(err: String) -> Self {
+        AppError::Internal(err)
+    }
+}
+
+impl From<tokio::task::JoinError> for AppError {
+    fn from(err: tokio::task::JoinError) -> Self {
+        AppError::Internal(err.to_string())
+    }
+}
+
+impl<T> From<tokio::sync::mpsc::error::SendError<T>> for AppError {
+    fn from(err: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        AppError::Network(err.to_string())
+    }
+}
+
 impl Serialize for AppError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

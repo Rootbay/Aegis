@@ -26,29 +26,134 @@ import type { User } from "../../src/lib/features/auth/models/User";
 
 type FrameRequestCallback = (time: number) => void;
 
-const messagesStore = writable(new Map<string, Message[]>());
-const hasMoreStore = writable(new Map<string, boolean>());
-const loadingStateStore = writable(new Map<string, boolean>());
+const {
+  messagesStore,
+  hasMoreStore,
+  loadingStateStore,
+  searchMessagesMock,
+  resetPages,
+  pageMap,
+  IconMock,
+} = vi.hoisted(() => {
+  // Simple div component for mocking
+  const IconMock = () => ({
+    render: () => ({ html: "<div></div>" }),
+  });
+  const createStore = <T>(initialValue: T) => {
+    let value = initialValue;
+    const subscribers = new Set<(v: T) => void>();
+    return {
+      subscribe: (run: (v: T) => void) => {
+        subscribers.add(run);
+        run(value);
+        return () => subscribers.delete(run);
+      },
+      set: (newValue: T) => {
+        value = newValue;
+        subscribers.forEach((run) => run(value));
+      },
+      update: (fn: (v: T) => T) => {
+        value = fn(value);
+        subscribers.forEach((run) => run(value));
+      },
+      get: () => value,
+    };
+  };
+
+  const mStore = createStore(new Map<string, Message[]>());
+  const hStore = createStore(new Map<string, boolean>());
+  const lStore = createStore(new Map<string, boolean>());
+
+  const basePages = () => {
+    const makeMessage = (index: number): Message => {
+      const timestamp = new Date(2024, 0, index).toISOString();
+      return {
+        id: `msg-${index}`,
+        chatId: "chat-1",
+        senderId: "friend-1",
+        content: `Page ${index} result`,
+        timestamp,
+        timestampMs: Date.parse(timestamp),
+        read: true,
+      } as Message;
+    };
+    return [
+      {
+        cursor: null as string | null,
+        messages: [makeMessage(1)],
+        nextCursor: "cursor-1",
+        hasMore: true,
+      },
+      {
+        cursor: "cursor-1",
+        messages: [makeMessage(2)],
+        nextCursor: "cursor-2",
+        hasMore: true,
+      },
+      {
+        cursor: "cursor-2",
+        messages: [makeMessage(3)],
+        nextCursor: "cursor-3",
+        hasMore: true,
+      },
+      {
+        cursor: "cursor-3",
+        messages: [makeMessage(4)],
+        nextCursor: null,
+        hasMore: false,
+      },
+    ];
+  };
+
+  let pMap = new Map<string | null, ReturnType<typeof basePages>[number]>();
+
+  const reset = () => {
+    pMap = new Map(basePages().map((page) => [page.cursor, page]));
+  };
+
+  const sMock = vi.fn(
+    async ({ chatId, cursor }: { chatId: string; cursor?: string | null }) => {
+      const key = cursor ?? null;
+      const page = pMap.get(key);
+      if (!page) {
+        throw new Error(`Unexpected cursor: ${key}`);
+      }
+
+      mStore.update((current) => {
+        const next = new Map(current);
+        const existing = next.get(chatId) ?? [];
+        const existingIds = new Set(existing.map((msg) => msg.id));
+        const merged = [...existing];
+        page.messages.forEach((message) => {
+          if (!existingIds.has(message.id)) {
+            merged.push(message);
+          }
+        });
+        next.set(chatId, merged);
+        return next;
+      });
+
+      return {
+        received: page.messages.length,
+        hasMore: page.hasMore,
+        nextCursor: page.nextCursor,
+      };
+    },
+  );
+
+  return {
+    messagesStore: mStore,
+    hasMoreStore: hStore,
+    loadingStateStore: lStore,
+    searchMessagesMock: sMock,
+    resetPages: reset,
+    pageMap: pMap,
+    IconMock,
+  };
+});
 
 vi.mock("@lucide/svelte", () => {
-  const component = Passthrough;
-  return {
-    CircleAlert: component,
-    Link: component,
-    LoaderCircle: component,
-    Mic: component,
-    RadioTower: component,
-    SendHorizontal: component,
-    Smile: component,
-    Square: component,
-    Timer: component,
-    Users: component,
-    Wifi: component,
-    ArrowDown: component,
-    ArrowUp: component,
-    Search: component,
-    X: component,
-  };
+  return new Proxy({}, { get: () => IconMock });
 });
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -220,67 +325,6 @@ vi.mock("$lib/features/chat/stores/mentionSuggestions", () => ({
     open: vi.fn(() => mentionSuggestionsState.set({ active: true, suggestions: [], activeIndex: 0 })),
   }),
 }));
-
-const basePages = () => {
-  const makeMessage = (index: number): Message => {
-    const timestamp = new Date(2024, 0, index).toISOString();
-    return {
-      id: `msg-${index}`,
-      chatId: "chat-1",
-      senderId: "friend-1",
-      content: `Page ${index} result`,
-      timestamp,
-      timestampMs: Date.parse(timestamp),
-      read: true,
-    } as Message;
-  };
-  return [
-    { cursor: null as string | null, messages: [makeMessage(1)], nextCursor: "cursor-1", hasMore: true },
-    { cursor: "cursor-1", messages: [makeMessage(2)], nextCursor: "cursor-2", hasMore: true },
-    { cursor: "cursor-2", messages: [makeMessage(3)], nextCursor: "cursor-3", hasMore: true },
-    { cursor: "cursor-3", messages: [makeMessage(4)], nextCursor: null, hasMore: false },
-  ];
-};
-
-let pageMap = new Map<string | null, ReturnType<typeof basePages>[number]>();
-
-const resetPages = () => {
-  pageMap = new Map(basePages().map((page) => [page.cursor, page]));
-};
-
-const searchMessagesMock = vi.fn(async ({
-  chatId,
-  cursor,
-}: {
-  chatId: string;
-  cursor?: string | null;
-}) => {
-  const key = cursor ?? null;
-  const page = pageMap.get(key);
-  if (!page) {
-    throw new Error(`Unexpected cursor: ${key}`);
-  }
-
-  messagesStore.update((current) => {
-    const next = new Map(current);
-    const existing = next.get(chatId) ?? [];
-    const existingIds = new Set(existing.map((msg) => msg.id));
-    const merged = [...existing];
-    page.messages.forEach((message) => {
-      if (!existingIds.has(message.id)) {
-        merged.push(message);
-      }
-    });
-    next.set(chatId, merged);
-    return next;
-  });
-
-  return {
-    received: page.messages.length,
-    hasMore: page.hasMore,
-    nextCursor: page.nextCursor,
-  };
-});
 
 vi.mock("$lib/features/chat/stores/chatStore.svelte", () => ({
   chatStore: {

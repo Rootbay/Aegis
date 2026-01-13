@@ -9,8 +9,7 @@ use crate::commands::state::AppStateContainer;
 pub async fn get_connectivity_snapshot(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Option<ConnectivityEventPayload>, String> {
-    let state_guard = state_container.0.lock().await;
-    if let Some(state) = state_guard.as_ref() {
+    if let Some(state) = state_container.0.load_full() {
         let snapshot_guard = state.connectivity_snapshot.lock().await;
         Ok(snapshot_guard.clone())
     } else {

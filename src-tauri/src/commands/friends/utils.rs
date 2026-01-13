@@ -2,6 +2,7 @@ use aegis_protocol::{AepMessage, FriendRequestResponseData};
 use aegis_shared_types::AppState;
 use aep::database;
 
+use crate::commands::error::AppError;
 use super::models::CommandResult;
 
 pub fn ensure_caller_identity(state: &AppState, current_user_id: &str) -> CommandResult<String> {
@@ -9,12 +10,12 @@ pub fn ensure_caller_identity(state: &AppState, current_user_id: &str) -> Comman
     if current_user_id == my_id {
         Ok(my_id)
     } else {
-        Err("Caller identity mismatch".to_string())
+        Err(AppError::from("Caller identity mismatch".to_string()))
     }
 }
 
 pub fn serialize<T: serde::Serialize>(value: &T) -> CommandResult<Vec<u8>> {
-    bincode::serialize(value).map_err(|e| e.to_string())
+    bincode::serialize(value).map_err(|e| e.to_string()).map_err(AppError::from)
 }
 
 pub async fn send_friend_request_response(
@@ -28,7 +29,7 @@ pub async fn send_friend_request_response(
     } else if friendship.user_b_id == my_id {
         friendship.user_a_id.clone()
     } else {
-        return Err("Caller identity mismatch".to_string());
+        return Err(AppError::from("Caller identity mismatch".to_string()));
     };
 
     let friend_request_response_data = FriendRequestResponseData {
@@ -41,7 +42,8 @@ pub async fn send_friend_request_response(
         .identity
         .keypair()
         .sign(&friend_request_response_bytes)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+        .map_err(AppError::from)?;
 
     let aep_message = AepMessage::FriendRequestResponse {
         sender_id: my_id.clone(),
@@ -54,5 +56,5 @@ pub async fn send_friend_request_response(
         .network_tx
         .send(serialized_message)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }

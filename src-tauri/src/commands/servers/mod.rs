@@ -45,13 +45,13 @@ pub(super) fn parse_schedule(value: &str) -> Result<DateTime<Utc>, String> {
         .map_err(|error| format!("Invalid scheduled time: {error}"))
 }
 
-pub(super) async fn get_initialized_state(
+pub(super) fn get_initialized_state(
     state_container: &State<'_, AppStateContainer>,
 ) -> Result<AppState, String> {
-    let state_guard = state_container.0.lock().await;
-    state_guard
-        .as_ref()
-        .cloned()
+    state_container
+        .0
+        .load_full()
+        .map(|state| (*state).clone())
         .ok_or_else(|| "State not initialized".to_string())
 }
 

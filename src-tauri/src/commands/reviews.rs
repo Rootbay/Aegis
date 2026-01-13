@@ -78,11 +78,7 @@ pub async fn list_user_reviews(
         return Err("User ID is required.".to_string());
     }
 
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let reviews = database::list_reviews_by_subject(
         &state.db_pool,
@@ -106,11 +102,7 @@ pub async fn list_server_reviews(
         return Err("Server ID is required.".to_string());
     }
 
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let reviews = database::list_reviews_by_subject(
         &state.db_pool,
@@ -149,13 +141,10 @@ pub async fn submit_review(
         }
     }
 
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let author_id = state.identity.peer_id().to_base58();
+
 
     if matches!(subject_type, ReviewSubject::User) && author_id == trimmed_subject_id {
         return Err("You cannot review your own profile.".to_string());

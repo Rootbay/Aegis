@@ -507,6 +507,18 @@ pub async fn get_attachment_data(
     }
 }
 
+pub async fn delete_expired_messages(pool: &Pool<Sqlite>) -> Result<u64, sqlx::Error> {
+    let now = Utc::now().to_rfc3339();
+    let result = sqlx::query!(
+        "DELETE FROM messages WHERE expires_at IS NOT NULL AND expires_at < ?",
+        now
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 pub async fn mark_chat_read(pool: &Pool<Sqlite>, chat_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("UPDATE messages SET read = 1 WHERE chat_id = ?", chat_id)
         .execute(pool)

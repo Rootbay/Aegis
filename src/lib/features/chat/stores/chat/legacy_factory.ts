@@ -1,4 +1,4 @@
-import { ChatStore } from "./ChatStore";
+import { ChatStore } from "./ChatStore.svelte";
 
 /**
  * Legacy factory function for tests that expect a fresh store instance.

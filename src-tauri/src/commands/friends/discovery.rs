@@ -1,9 +1,9 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use crate::commands::error::AppError;
 use aegis_shared_types::User;
 use aep::database::{self, FriendshipStatus};
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Sqlite};
-use std::collections::HashSet;
 use tauri::State;
 
 use super::models::CommandResult;
@@ -77,13 +77,13 @@ pub async fn list_pending_friend_invites(
         )
         .fetch_all(&state.db_pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
         let mut invites = Vec::with_capacity(pending_rows.len());
         for row in pending_rows {
             let mutual_friends = mutual_friend_count(&state.db_pool, &my_id, &row.user_a_id)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(AppError::from)?;
             invites.push(PendingFriendInvite {
                 id: row.friendship_id,
                 from_user: Some(User {
@@ -142,7 +142,7 @@ pub async fn list_recent_friend_peers(
         )
         .fetch_all(&state.db_pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
         let peers = recent_rows
             .into_iter()
@@ -203,8 +203,8 @@ pub async fn search_users(
                 (f.user_a_id = ? AND f.user_b_id = u.id) OR (f.user_b_id = ? AND f.user_a_id = u.id)
             )
             WHERE u.id != ? AND (
-                lower(u.username) LIKE ?
-                OR lower(u.tag) LIKE ?
+                lower(coalesce(u.username, '')) LIKE ?
+                OR lower(coalesce(u.tag, '')) LIKE ?
                 OR lower(u.id) LIKE ?
             )
             ORDER BY u.username
@@ -219,7 +219,7 @@ pub async fn search_users(
         )
         .fetch_all(&state.db_pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
         let mut results = Vec::with_capacity(rows.len());
         for row in rows {
@@ -238,7 +238,7 @@ pub async fn search_users(
 
             let mutual_friends = mutual_friend_count(&state.db_pool, &my_id, &row.id)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(AppError::from)?;
 
             let note = match relationship {
                 "incoming" => Some("Sent you an invite.".to_string()),
@@ -280,11 +280,11 @@ pub async fn accept_friend_invite(
         let my_id = state.identity.peer_id().to_base58();
         let friendship = database::get_friendship_by_id(&state.db_pool, &invite_id)
             .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Friendship not found.".to_string())?;
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::from("Friendship not found.".to_string()))?;
 
         if friendship.status != FriendshipStatus::Pending.to_string() {
-            return Err("Friendship is not pending.".to_string());
+            return Err(AppError::from("Friendship is not pending.".to_string()));
         }
 
         database::update_friendship_status(
@@ -293,13 +293,15 @@ pub async fn accept_friend_invite(
             FriendshipStatus::Accepted,
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
-        send_friend_request_response(&state, &friendship, true).await?;
+        send_friend_request_response(&state, &friendship, true)
+            .await
+            .map_err(AppError::from)?;
 
         database::get_friendship_with_profile_for_user(&state.db_pool, &friendship.id, &my_id)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(AppError::from)
     })
     .await
 }
@@ -312,18 +314,20 @@ pub async fn decline_friend_invite(
     with_state_async(state_container, move |state| async move {
         let friendship = database::get_friendship_by_id(&state.db_pool, &invite_id)
             .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Friendship not found.".to_string())?;
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::from("Friendship not found.".to_string()))?;
 
         if friendship.status != FriendshipStatus::Pending.to_string() {
-            return Err("Friendship is not pending.".to_string());
+            return Err(AppError::from("Friendship is not pending.".to_string()));
         }
 
-        send_friend_request_response(&state, &friendship, false).await?;
+        send_friend_request_response(&state, &friendship, false)
+            .await
+            .map_err(AppError::from)?;
 
         database::delete_friendship(&state.db_pool, &friendship.id)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(AppError::from)
     })
     .await
 }
@@ -334,42 +338,28 @@ async fn mutual_friend_count(
     other_id: &str,
 ) -> Result<i64, sqlx::Error> {
     let status = FriendshipStatus::Accepted.to_string();
-    let user_status = status.clone();
-    let other_status = status;
 
-    let user_rows = sqlx::query!(
+    let count = sqlx::query_scalar!(
         r#"
-        SELECT CASE WHEN user_a_id = ? THEN user_b_id ELSE user_a_id END as friend_id
-        FROM friendships
-        WHERE (user_a_id = ? OR user_b_id = ?) AND status = ?
+        WITH my_friends AS (
+            SELECT CASE WHEN user_a_id = ? THEN user_b_id ELSE user_a_id END as friend_id
+            FROM friendships
+            WHERE (user_a_id = ? OR user_b_id = ?) AND status = ?
+        ),
+        other_friends AS (
+            SELECT CASE WHEN user_a_id = ? THEN user_b_id ELSE user_a_id END as friend_id
+            FROM friendships
+            WHERE (user_a_id = ? OR user_b_id = ?) AND status = ?
+        )
+        SELECT COUNT(*) 
+        FROM my_friends f1
+        JOIN other_friends f2 ON f1.friend_id = f2.friend_id
         "#,
-        user_id,
-        user_id,
-        user_id,
-        user_status,
+        user_id, user_id, user_id, status,
+        other_id, other_id, other_id, status
     )
-    .fetch_all(pool)
+    .fetch_one(pool)
     .await?;
 
-    let other_rows = sqlx::query!(
-        r#"
-        SELECT CASE WHEN user_a_id = ? THEN user_b_id ELSE user_a_id END as friend_id
-        FROM friendships
-        WHERE (user_a_id = ? OR user_b_id = ?) AND status = ?
-        "#,
-        other_id,
-        other_id,
-        other_id,
-        other_status,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    let user_friend_ids: HashSet<String> = user_rows.into_iter().map(|row| row.friend_id).collect();
-    let other_friend_ids: HashSet<String> =
-        other_rows.into_iter().map(|row| row.friend_id).collect();
-
-    let common = user_friend_ids.intersection(&other_friend_ids).count() as i64;
-
-    Ok(common)
+    Ok(count as i64)
 }

@@ -1,7 +1,7 @@
 import { describe, beforeEach, afterEach, it, expect, vi } from "vitest";
 import type { MockInstance } from "vitest";
 import { get } from "svelte/store";
-import { createChatStore, SlowmodeError } from "./chatStore";
+import { createChatStore, SlowmodeError } from "./chatStore.svelte";
 import { serverStore } from "$lib/features/servers/stores/serverStore";
 import { friendStore } from "$lib/features/friends/stores/friendStore";
 import { settings } from "$lib/features/settings/stores/settings";

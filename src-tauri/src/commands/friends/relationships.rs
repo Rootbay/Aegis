@@ -1,4 +1,5 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use crate::commands::error::{AppError, AppResult};
 use aegis_protocol::{AepMessage, RemoveFriendshipData};
 use aegis_shared_types::AppState;
 use aep::database::{self, FriendshipStatus};
@@ -19,12 +20,12 @@ pub async fn remove_friendship(
     .await
 }
 
-async fn remove_friendship_internal(state: AppState, friendship_id: String) -> CommandResult<()> {
+async fn remove_friendship_internal(state: AppState, friendship_id: String) -> AppResult<()> {
     let my_id = state.identity.peer_id().to_base58();
 
     let friendship = database::get_friendship_by_id(&state.db_pool, &friendship_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     if let Some(friendship) = friendship {
         let (remover_id, removed_id) = if friendship.user_a_id == my_id {
@@ -32,37 +33,38 @@ async fn remove_friendship_internal(state: AppState, friendship_id: String) -> C
         } else if friendship.user_b_id == my_id {
             (friendship.user_b_id.clone(), friendship.user_a_id.clone())
         } else {
-            return Err("Caller identity mismatch".into());
+            return Err(AppError::from("Caller identity mismatch".to_string()));
         };
 
         let remove_friendship_data = RemoveFriendshipData {
             remover_id: remover_id.clone(),
             removed_id: removed_id.clone(),
         };
-        let remove_friendship_bytes = serialize(&remove_friendship_data)?;
+        let remove_friendship_bytes = serialize(&remove_friendship_data).map_err(AppError::from)?;
         let signature = state
             .identity
             .keypair()
             .sign(&remove_friendship_bytes)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())
+            .map_err(AppError::from)?;
 
         let aep_message = AepMessage::RemoveFriendship {
             remover_id,
             removed_id,
             signature: Some(signature),
         };
-        let serialized_message = serialize(&aep_message)?;
+        let serialized_message = serialize(&aep_message).map_err(AppError::from)?;
         state
             .network_tx
             .send(serialized_message)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
 
         database::delete_friendship(&state.db_pool, &friendship.id)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(AppError::from)
     } else {
-        Err("Friendship not found.".to_string())
+        Err(AppError::from("Friendship not found.".to_string()))
     }
 }
 
@@ -74,10 +76,10 @@ pub async fn get_friendships(
     with_state_async(state_container, move |state| {
         let current_user_id = current_user_id.clone();
         async move {
-            let my_id = ensure_caller_identity(&state, &current_user_id)?;
+            let my_id = ensure_caller_identity(&state, &current_user_id).map_err(AppError::from)?;
             database::get_friendships_with_profiles(&state.db_pool, &my_id)
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(AppError::from)
         }
     })
     .await
@@ -101,28 +103,28 @@ pub(super) async fn get_friendships_for_user_internal(
     state: AppState,
     current_user_id: String,
     target_user_id: String,
-) -> CommandResult<Vec<String>> {
-    let my_id = ensure_caller_identity(&state, &current_user_id)?;
+) -> AppResult<Vec<String>> {
+    let my_id = ensure_caller_identity(&state, &current_user_id).map_err(AppError::from)?;
 
     let accepted_status = FriendshipStatus::Accepted.to_string();
 
     if target_user_id != my_id {
         let maybe_friendship = database::get_friendship(&state.db_pool, &my_id, &target_user_id)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
 
         let friendship = maybe_friendship.ok_or_else(|| {
-            "You do not have permission to view this user's friendships.".to_string()
+            AppError::from("You do not have permission to view this user's friendships.".to_string())
         })?;
 
         if friendship.status != accepted_status {
-            return Err("You do not have permission to view this user's friendships.".into());
+            return Err(AppError::from("You do not have permission to view this user's friendships.".to_string()));
         }
     }
 
     let friendships = database::get_all_friendships_for_user(&state.db_pool, &target_user_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     let mut sanitized_ids: Vec<String> = friendships
         .into_iter()

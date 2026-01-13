@@ -126,7 +126,7 @@ impl Manager {
         Ok(())
     }
 
-    pub fn encrypt_direct(&mut self, peer_id: &str, plaintext: &str) -> Result<EncryptedPacket> {
+    pub fn encrypt_direct(&mut self, peer_id: &str, plaintext: &[u8]) -> Result<EncryptedPacket> {
         let session = self
             .sessions
             .get_mut(peer_id)
@@ -153,7 +153,7 @@ impl Manager {
         if !self.sessions.contains_key(peer_id) {
             if let Some(identity_key) = peer_identity_key {
                 if let Some(init_bytes) = &packet.init {
-                    let packet_body = std::str::from_utf8(init_bytes).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
+                    let packet_body = std::str::from_utf8(init_bytes).map_err(|e| anyhow!("Invalid UTF-8 in handshake: {}", e))?;
                     self.create_inbound_session_from_packet(peer_id, identity_key, packet_body)?;
                 } else {
                     return Err(anyhow!("No session exists for {} and no initiation packet provided.", peer_id));
@@ -166,10 +166,10 @@ impl Manager {
         let session = self.sessions.get_mut(peer_id).unwrap();
 
         let decrypted_bytes = if let Some(init_bytes) = &packet.init {
-            let body_str = std::str::from_utf8(init_bytes).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
+            let body_str = std::str::from_utf8(init_bytes).map_err(|e| anyhow!("Invalid UTF-8 in handshake: {}", e))?;
             session.decrypt(&OlmMessage::PreKey(PreKeyMessage::from_base64(body_str)?))?
         } else {
-            let body_str = std::str::from_utf8(&packet.enc_header).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
+            let body_str = std::str::from_utf8(&packet.enc_header).map_err(|e| anyhow!("Invalid UTF-8 in packet header: {}", e))?;
             session.decrypt(&OlmMessage::Normal(Message::from_base64(body_str)?))?
         };
 
@@ -177,7 +177,7 @@ impl Manager {
         Ok(decrypted_bytes)
     }
     
-    pub fn create_inbound_session_from_packet(&mut self, peer_id: &str, peer_identity_key_b64: &str, packet_body: &str) -> Result<String> {
+    pub fn create_inbound_session_from_packet(&mut self, peer_id: &str, peer_identity_key_b64: &str, packet_body: &str) -> Result<Vec<u8>> {
         let peer_key = Curve25519PublicKey::from_base64(peer_identity_key_b64)?;
         let prekey_msg = PreKeyMessage::from_base64(packet_body)?;
         let result = self.account.create_inbound_session(peer_key, &prekey_msg)?;
@@ -185,7 +185,7 @@ impl Manager {
         self.sessions.insert(peer_id.to_string(), result.session);
         self.needs_save = true;
         
-        Ok(String::from_utf8(result.plaintext)?)
+        Ok(result.plaintext)
     }
 
     pub fn create_group_session(&mut self, group_id: &str) -> Result<String> {
@@ -211,7 +211,7 @@ impl Manager {
     pub fn encrypt_group(
         &mut self,
         group_id: &str,
-        plaintext: &str,
+        plaintext: &[u8],
     ) -> Result<EncryptedGroupPacket> {
         let (session_id, ciphertext) = {
             let session = self
@@ -231,7 +231,7 @@ impl Manager {
         })
     }
 
-    pub fn decrypt_group(&mut self, packet: &EncryptedGroupPacket) -> Result<String> {
+    pub fn decrypt_group(&mut self, packet: &EncryptedGroupPacket) -> Result<Vec<u8>> {
         let session = self
             .inbound_group
             .get_mut(&packet.session_id)
@@ -241,7 +241,7 @@ impl Manager {
         let res = session.decrypt(&msg)?;
 
         self.needs_save = true;
-        Ok(String::from_utf8(res.plaintext)?)
+        Ok(res.plaintext)
     }
 
     fn format_group_id(&self, server_id: &str, channel_id: &Option<String>) -> String {
@@ -280,8 +280,7 @@ impl Manager {
     }
 
     pub fn encrypt_for(&mut self, peer_id: &str, plaintext: &[u8]) -> Result<EncryptedDmPacket> {
-        let plaintext_str = String::from_utf8(plaintext.to_vec()).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
-        let packet = self.encrypt_direct(peer_id, &plaintext_str)?;
+        let packet = self.encrypt_direct(peer_id, plaintext)?;
         Ok(EncryptedDmPacket {
             init: packet.init,
             enc_header: packet.enc_header,
@@ -292,8 +291,7 @@ impl Manager {
     pub fn encrypt_group_message(&mut self, server_id: &str, channel_id: &Option<String>, plaintext: &[u8]) -> Result<(u64, Vec<u8>, Vec<u8>)> {
         let group_id = self.format_group_id(server_id, channel_id);
         let session = self.outbound_group.get_mut(&group_id).ok_or_else(|| anyhow!("No outbound session for group {}", group_id))?;
-        let plaintext_str = String::from_utf8(plaintext.to_vec()).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
-        let ciphertext_obj = session.encrypt(&plaintext_str);
+        let ciphertext_obj = session.encrypt(plaintext);
         let epoch = self.group_keys.get(&group_id).map(|(e,_)| *e).unwrap_or(0);
         let mut nonce = [0u8; 16];
         rand::rngs::OsRng.fill_bytes(&mut nonce);
@@ -311,7 +309,7 @@ impl Manager {
     pub fn decrypt_group_message(&mut self, server_id: &str, channel_id: &Option<String>, ciphertext: &[u8]) -> Result<Vec<u8>> {
         let group_id = self.format_group_id(server_id, channel_id);
         let session = self.inbound_group.get_mut(&group_id).ok_or_else(|| anyhow!("No inbound session for group {}", group_id))?;
-        let ciphertext_b64 = std::str::from_utf8(ciphertext).map_err(|e| anyhow!("Invalid UTF-8: {}", e))?;
+        let ciphertext_b64 = std::str::from_utf8(ciphertext).map_err(|e| anyhow!("Invalid UTF-8 in group ciphertext: {}", e))?;
         let msg = MegolmMessage::from_base64(ciphertext_b64)?;
         let res = session.decrypt(&msg)?;
         Ok(res.plaintext)

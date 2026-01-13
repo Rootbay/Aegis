@@ -1,4 +1,5 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use crate::commands::error::{AppError, AppResult};
 use scu128::Scu128;
 use aegis_protocol::{AepMessage, CreateGroupChatData};
 use aegis_shared_types::AppState;
@@ -13,7 +14,7 @@ pub async fn create_group_dm(
     member_ids: Vec<String>,
     name: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<GroupChatPayload, String> {
+) -> AppResult<GroupChatPayload> {
     with_state_async(state_container, move |state| {
         let member_ids = member_ids.clone();
         let name = name.clone();
@@ -26,7 +27,7 @@ async fn create_group_dm_internal(
     state: AppState,
     member_ids: Vec<String>,
     name: Option<String>,
-) -> Result<GroupChatPayload, String> {
+) -> AppResult<GroupChatPayload> {
     let creator_id = state.identity.peer_id().to_base58();
 
     let mut participants = Vec::with_capacity(member_ids.len() + 1);
@@ -42,7 +43,7 @@ async fn create_group_dm_internal(
     }
 
     if participants.len() < 2 {
-        return Err("Please select at least one additional member.".to_string());
+        return Err(AppError::from("Please select at least one additional member.".to_string()));
     }
 
     let group_id = Scu128::new().to_string();
@@ -67,7 +68,7 @@ async fn create_group_dm_internal(
 
     database::upsert_group_chat(&state.db_pool, &chat, &members)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     let payload = GroupChatPayload::from_chat(&chat, participants.clone());
 
@@ -98,7 +99,7 @@ async fn create_group_dm_internal(
         .network_tx
         .send(serialized)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     Ok(payload)
 }

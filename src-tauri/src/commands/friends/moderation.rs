@@ -1,4 +1,5 @@
 use crate::commands::state::{with_state_async, AppStateContainer};
+use crate::commands::error::{AppError, AppResult};
 use scu128::Scu128;
 use aegis_protocol::{AepMessage, BlockUserData, UnblockUserData};
 use aegis_shared_types::AppState;
@@ -31,8 +32,8 @@ pub(super) async fn block_user_internal(
     current_user_id: String,
     target_user_id: String,
     spam_score: Option<f32>,
-) -> CommandResult<BlockUserResult> {
-    let my_id = ensure_caller_identity(&state, &current_user_id)?;
+) -> AppResult<BlockUserResult> {
+    let my_id = ensure_caller_identity(&state, &current_user_id).map_err(AppError::from)?;
 
     if let Some(score) = spam_score {
         tracing::info!(
@@ -45,7 +46,7 @@ pub(super) async fn block_user_internal(
     let now = Utc::now();
     let friendship_option = database::get_friendship(&state.db_pool, &my_id, &target_user_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     let (friendship_id, newly_created) = if let Some(friendship) = friendship_option {
         let new_status = if friendship.user_a_id == my_id {
@@ -55,7 +56,7 @@ pub(super) async fn block_user_internal(
         };
         database::update_friendship_status(&state.db_pool, &friendship.id, new_status)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
         (friendship.id, false)
     } else {
         let friendship = Friendship {
@@ -69,38 +70,39 @@ pub(super) async fn block_user_internal(
         let friendship_id = friendship.id.clone();
         database::insert_friendship(&state.db_pool, &friendship)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
         (friendship_id, true)
     };
 
     let friendship =
         database::get_friendship_with_profile_for_user(&state.db_pool, &friendship_id, &my_id)
             .await
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Failed to load friendship details.".to_string())?;
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::from("Failed to load friendship details.".to_string()))?;
 
     let block_user_data = BlockUserData {
         blocker_id: my_id.clone(),
         blocked_id: target_user_id.clone(),
     };
-    let block_user_bytes = serialize(&block_user_data)?;
+    let block_user_bytes = serialize(&block_user_data).map_err(AppError::from)?;
     let signature = state
         .identity
         .keypair()
         .sign(&block_user_bytes)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+        .map_err(AppError::from)?;
 
     let aep_message = AepMessage::BlockUser {
         blocker_id: my_id,
         blocked_id: target_user_id,
         signature: Some(signature),
     };
-    let serialized_message = serialize(&aep_message)?;
+    let serialized_message = serialize(&aep_message).map_err(AppError::from)?;
     state
         .network_tx
         .send(serialized_message)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     Ok(BlockUserResult {
         friendship,
@@ -127,16 +129,16 @@ pub(super) async fn unblock_user_internal(
     state: AppState,
     current_user_id: String,
     friendship_id: String,
-) -> CommandResult<UnblockUserResult> {
-    let my_id = ensure_caller_identity(&state, &current_user_id)?;
+) -> AppResult<UnblockUserResult> {
+    let my_id = ensure_caller_identity(&state, &current_user_id).map_err(AppError::from)?;
 
     let friendship = database::get_friendship_by_id(&state.db_pool, &friendship_id)
         .await
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "Friendship not found.".to_string())?;
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::from("Friendship not found.".to_string()))?;
 
     if friendship.user_a_id != my_id && friendship.user_b_id != my_id {
-        return Err("Caller identity mismatch".to_string());
+        return Err(AppError::from("Caller identity mismatch".to_string()));
     }
 
     let target_user_id = if friendship.user_a_id == my_id {
@@ -147,30 +149,31 @@ pub(super) async fn unblock_user_internal(
 
     database::delete_friendship(&state.db_pool, &friendship.id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     let unblock_user_data = UnblockUserData {
         unblocker_id: my_id.clone(),
         unblocked_id: target_user_id.clone(),
     };
-    let unblock_user_bytes = serialize(&unblock_user_data)?;
+    let unblock_user_bytes = serialize(&unblock_user_data).map_err(AppError::from)?;
     let signature = state
         .identity
         .keypair()
         .sign(&unblock_user_bytes)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+        .map_err(AppError::from)?;
 
     let aep_message = AepMessage::UnblockUser {
         unblocker_id: my_id,
         unblocked_id: target_user_id.clone(),
         signature: Some(signature),
     };
-    let serialized_message = serialize(&aep_message)?;
+    let serialized_message = serialize(&aep_message).map_err(AppError::from)?;
     state
         .network_tx
         .send(serialized_message)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
 
     Ok(UnblockUserResult {
         removed_friendship_id: friendship_id,
@@ -217,11 +220,11 @@ pub(super) async fn mute_user_internal(
     target_user_id: String,
     muted: bool,
     spam_score: Option<f32>,
-) -> CommandResult<MuteUserResult> {
-    let my_id = ensure_caller_identity(&state, &current_user_id)?;
+) -> AppResult<MuteUserResult> {
+    let my_id = ensure_caller_identity(&state, &current_user_id).map_err(AppError::from)?;
 
     if my_id == target_user_id {
-        return Err("Cannot mute yourself.".to_string());
+        return Err(AppError::from("Cannot mute yourself.".to_string()));
     }
 
     if let Some(score) = spam_score {
@@ -244,11 +247,11 @@ pub(super) async fn ignore_user_internal(
     current_user_id: String,
     target_user_id: String,
     ignored: bool,
-) -> CommandResult<IgnoreUserResult> {
-    let my_id = ensure_caller_identity(&state, &current_user_id)?;
+) -> AppResult<IgnoreUserResult> {
+    let my_id = ensure_caller_identity(&state, &current_user_id).map_err(AppError::from)?;
 
     if my_id == target_user_id {
-        return Err("Cannot ignore yourself.".to_string());
+        return Err(AppError::from("Cannot ignore yourself.".to_string()));
     }
 
     Ok(IgnoreUserResult {

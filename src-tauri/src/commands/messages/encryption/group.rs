@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::commands::state::{with_state_async, AppStateContainer};
+use crate::commands::error::{AppError, AppResult};
 
 use super::super::helpers::parse_optional_datetime;
 use super::super::types::EncryptedDmPayload;
@@ -11,7 +12,7 @@ pub async fn rotate_group_key(
     channel_id: Option<String>,
     epoch: u64,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     with_state_async(state_container, move |state| {
         let server_id = server_id.clone();
         let channel_id = channel_id.clone();
@@ -29,7 +30,7 @@ pub async fn rotate_group_key(
 
             let members = aep::database::get_server_members(&state.db_pool, &server_id)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(AppError::from)?;
 
             let my_id = state.identity.peer_id().to_base58();
             let mut slots = Vec::new();
@@ -47,7 +48,8 @@ pub async fn rotate_group_key(
 
                     let pkt = mgr
                         .encrypt_for(&member.id, &key)
-                        .map_err(|e| format!("E2EE encrypt error: {e}"))?;
+                        .map_err(|e| format!("E2EE encrypt error: {e}"))
+                        .map_err(AppError::from)?;
                     slots.push(aegis_protocol::EncryptedDmSlot {
                         recipient: member.id,
                         init: pkt.init,
@@ -87,13 +89,13 @@ pub async fn rotate_group_key(
                 bincode::serialize(&aep_msg).map_err(|e| e.to_string())
             })
             .await
-            .map_err(|e| e.to_string())??;
+            .map_err(AppError::from)??;
 
             state
                 .network_tx
                 .send(bytes)
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(AppError::from)
         }
     })
     .await
@@ -109,13 +111,13 @@ pub async fn send_encrypted_group_message(
     reply_snapshot_snippet: Option<String>,
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
+) -> AppResult<()> {
     with_state_async(state_container, move |state| {
         let server_id = server_id.clone();
         let channel_id = channel_id.clone();
         let message = message.clone();
         async move {
-            let _ = parse_optional_datetime(expires_at)?;
+            let expires_at_dt = parse_optional_datetime(expires_at).map_err(AppError::from)?;
             let payload = EncryptedDmPayload {
                 content: message,
                 attachments: Vec::new(),
@@ -140,7 +142,8 @@ pub async fn send_encrypted_group_message(
                     &channel_id_clone,
                     &serialized_payload,
                 )
-                .map_err(|e| format!("Group E2EE: {e}"))?
+                .map_err(|e| format!("Group E2EE: {e}"))
+                .map_err(AppError::from)?
             };
 
             let chat_id = channel_id.clone().unwrap_or_else(|| server_id.clone());
@@ -159,11 +162,11 @@ pub async fn send_encrypted_group_message(
                 reply_snapshot_snippet,
                 edited_at: None,
                 edited_by: None,
-                expires_at: None,
+                expires_at: expires_at_dt,
             };
             aep::database::insert_message(&state.db_pool, &new_local_message, &[])
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(AppError::from)?;
 
             let bytes = tokio::task::spawn_blocking(move || {
                 let payload_bytes = bincode::serialize(&(
@@ -193,13 +196,13 @@ pub async fn send_encrypted_group_message(
                 bincode::serialize(&msg).map_err(|e| e.to_string())
             })
             .await
-            .map_err(|e| e.to_string())??;
+            .map_err(AppError::from)??;
 
             state
                 .network_tx
                 .send(bytes)
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(AppError::from)
         }
     })
     .await

@@ -33,10 +33,7 @@ pub struct RelayHealthUpdate {
 pub async fn list_relays(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<RelayRecord>, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?;
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let relays = state.relays.lock().await.clone();
     Ok(relays)
 }
@@ -47,12 +44,7 @@ pub async fn register_relay(
     payload: RelayRegistration,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<RelayRecord, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let mut config = payload.config;
     if config.label.trim().is_empty() {
@@ -101,12 +93,7 @@ pub async fn remove_relay(
     relay_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let mut relays_guard = state.relays.lock().await;
     let initial_len = relays_guard.len();
@@ -131,12 +118,7 @@ pub async fn update_relay_health(
     payload: RelayHealthUpdate,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<RelayRecord, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let mut relays_guard = state.relays.lock().await;
     let record = relays_guard

@@ -84,6 +84,25 @@
       );
     }
   }
+
+  async function panicWipe() {
+    const confirmed = confirm(
+      "CRITICAL: This will PERMANENTLY WIPE all local data, identities, and settings. This cannot be undone. Are you absolutely sure?",
+    );
+    if (!confirmed) return;
+
+    try {
+      await invoke("panic_wipe");
+      // The app should ideally close or restart after this
+      toasts.addToast("Panic wipe initiated. Application will now exit.", "warning");
+    } catch (error) {
+      console.error("Failed to initiate panic wipe", error);
+      toasts.addToast(
+        `Panic wipe failed: ${getErrorMessage(error)}`,
+        "error",
+      );
+    }
+  }
 </script>
 
 <h2 class="text-2xl font-semibold text-zinc-50 mb-4">
@@ -91,6 +110,16 @@
 </h2>
 
 <div class="space-y-6">
+  <div class="rounded-xl border border-red-900/50 bg-red-950/20 p-4">
+    <h3 class="text-lg font-semibold text-red-400">Panic Button</h3>
+    <p class="text-sm text-red-300/70 mt-1">
+      In case of emergency, use this to instantly and securely wipe all local application data, including your identity and keys.
+    </p>
+    <Button class="mt-4 bg-red-600 hover:bg-red-700 text-white border-none" onclick={panicWipe}>
+      Wipe All Local Data
+    </Button>
+  </div>
+
   <div
     class="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-4"
   >

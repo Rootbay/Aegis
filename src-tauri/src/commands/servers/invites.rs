@@ -55,7 +55,7 @@ pub async fn send_server_invite(
     user_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<SendServerInviteResult, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
         .await
@@ -112,7 +112,7 @@ pub async fn generate_server_invite(
     max_uses: Option<i64>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ServerInviteResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -148,7 +148,7 @@ pub async fn list_server_invites(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ServerInviteResponse>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -179,7 +179,7 @@ pub async fn revoke_server_invite(
     invite_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
 
     let requester_id = state.identity.peer_id().to_base58();
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -211,7 +211,7 @@ pub async fn redeem_server_invite(
     code: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<RedeemServerInviteResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
     let redemption = database::redeem_server_invite_by_code(&state.db_pool, &code, &my_id)
         .await

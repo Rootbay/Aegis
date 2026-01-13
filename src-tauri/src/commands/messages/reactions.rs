@@ -52,12 +52,7 @@ pub async fn add_reaction(
     emoji: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let user_id = state.identity.peer_id().to_base58();
 
@@ -65,7 +60,7 @@ pub async fn add_reaction(
         .await
         .map_err(|e| e.to_string())?;
 
-    broadcast_reaction(state, chat_id, message_id, emoji, ReactionAction::Add).await
+    broadcast_reaction((*state).clone(), chat_id, message_id, emoji, ReactionAction::Add).await
 }
 
 #[tauri::command]
@@ -75,12 +70,7 @@ pub async fn remove_reaction(
     emoji: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let user_id = state.identity.peer_id().to_base58();
 
@@ -88,5 +78,5 @@ pub async fn remove_reaction(
         .await
         .map_err(|e| e.to_string())?;
 
-    broadcast_reaction(state, chat_id, message_id, emoji, ReactionAction::Remove).await
+    broadcast_reaction((*state).clone(), chat_id, message_id, emoji, ReactionAction::Remove).await
 }

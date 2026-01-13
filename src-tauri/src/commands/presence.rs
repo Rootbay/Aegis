@@ -10,10 +10,10 @@ pub async fn send_presence_update(
     location: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let peer_id = state.identity.peer_id().to_base58();
+
 
     let status_message = status_message.and_then(|value| {
         let trimmed = value.trim().to_string();
@@ -76,9 +76,9 @@ pub async fn mark_self_presence_local(
     is_online: bool,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?;
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let peer_id = state.identity.peer_id().to_base58();
+
     user_service::update_user_presence(&state.db_pool, &peer_id, is_online, None, None)
         .await
         .map_err(|e| e.to_string())

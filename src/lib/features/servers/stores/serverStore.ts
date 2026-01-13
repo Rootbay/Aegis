@@ -1991,8 +1991,8 @@ export function createServerStore(): ServerStore {
 
     try {
       await invoke("ban_server_member", {
-        serverId,
-        userId: memberId,
+        server_id: serverId,
+        user_id: memberId,
         reason: options.reason,
       });
 
@@ -2039,9 +2039,7 @@ export function createServerStore(): ServerStore {
 
     try {
       await invoke("unban_server_member", {
-        serverId,
         server_id: serverId,
-        userId,
         user_id: userId,
       });
 
@@ -2113,10 +2111,8 @@ export function createServerStore(): ServerStore {
 
     try {
       await invoke("remove_server_member", {
-        serverId,
         server_id: serverId,
-        userId: memberId,
-        user_id: memberId,
+        member_id: memberId,
       });
 
       removeMemberFromServer(serverId, memberId);

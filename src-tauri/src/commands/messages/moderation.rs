@@ -126,12 +126,7 @@ pub async fn pin_message(
     message_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let metadata = database::get_message_metadata(&state.db_pool, &message_id)
         .await
@@ -159,12 +154,7 @@ pub async fn unpin_message(
     message_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let metadata = database::get_message_metadata(&state.db_pool, &message_id)
         .await
@@ -193,14 +183,9 @@ pub async fn edit_message(
     content: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
-    edit_message_internal(state, chat_id, message_id, content).await
+    edit_message_internal((*state).clone(), chat_id, message_id, content).await
 }
 
 #[tauri::command]
@@ -209,12 +194,18 @@ pub async fn delete_message(
     message_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
-    delete_message_internal(state, chat_id, message_id, MessageDeletionScope::Everyone).await
+    delete_message_internal((*state).clone(), chat_id, message_id, MessageDeletionScope::Everyone).await
+}
+
+#[tauri::command]
+pub async fn override_spam_decision(
+    _chat_id: String,
+    _message_id: String,
+    _decision: String,
+) -> Result<(), String> {
+    // This is currently a no-op stub to satisfy the frontend call.
+    // In the future, this should persist the decision to the database.
+    Ok(())
 }

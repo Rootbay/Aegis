@@ -14,14 +14,18 @@ use super::identity::initialize_identity_state;
 use super::network::initialize_network;
 use super::state::build_app_state;
 use super::swarm::spawn_swarm_processing;
-use super::tasks::{spawn_e2ee_persistence, spawn_event_dispatcher, spawn_group_key_rotation};
+use super::tasks::{
+    spawn_e2ee_persistence, spawn_event_dispatcher, spawn_group_key_rotation,
+    spawn_message_cleanup,
+};
 
 pub(crate) async fn initialize_app_state<R: Runtime>(
     app: AppHandle<R>,
     password: &str,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let identity = crate::commands::identity::get_or_create_identity(&app, password)?;
+    let identity = crate::commands::identity::get_or_create_identity(&app, password)
+        .map_err(|e| e.to_string())?;
 
     aep::initialize_aep();
 
@@ -49,9 +53,10 @@ pub(crate) async fn initialize_app_state<R: Runtime>(
         &persisted_settings,
     );
 
-    *state_container.0.lock().await = Some(app_state.clone());
+    state_container.0.store(Some(Arc::new(app_state.clone())));
 
     set_relay_store(app_state.relays.clone());
+
 
     spawn_connectivity_task(
         app.clone(),
@@ -66,6 +71,8 @@ pub(crate) async fn initialize_app_state<R: Runtime>(
     spawn_event_dispatcher(app.clone(), event_rx);
 
     spawn_e2ee_persistence();
+
+    spawn_message_cleanup(db_pool.clone());
 
     spawn_group_key_rotation(
         db_pool.clone(),

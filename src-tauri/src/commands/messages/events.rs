@@ -5,6 +5,7 @@ use tauri::State;
 use aegis_protocol::{AepMessage, ReadReceiptData, TypingIndicatorData};
 use aegis_shared_types::AppState;
 
+use crate::commands::error::{AppError, AppResult};
 use crate::commands::state::AppStateContainer;
 
 #[derive(Clone, Debug, Serialize)]
@@ -33,7 +34,7 @@ pub(super) async fn broadcast_read_receipt(
     state: AppState,
     chat_id: String,
     message_id: String,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let reader_id = state.identity.peer_id().to_base58();
     let timestamp = Utc::now();
 
@@ -43,12 +44,12 @@ pub(super) async fn broadcast_read_receipt(
         reader_id: reader_id.clone(),
         timestamp,
     };
-    let bytes = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+    let bytes = bincode::serialize(&payload).map_err(|e| AppError::Internal(e.to_string()))?;
     let signature = state
         .identity
         .keypair()
         .sign(&bytes)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let message = AepMessage::ReadReceipt {
         chat_id,
@@ -58,19 +59,19 @@ pub(super) async fn broadcast_read_receipt(
         signature: Some(signature),
     };
 
-    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+    let serialized = bincode::serialize(&message).map_err(|e| AppError::Internal(e.to_string()))?;
     state
         .network_tx
         .send(serialized)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::Internal(e.to_string()))
 }
 
 pub(super) async fn broadcast_typing_indicator(
     state: AppState,
     chat_id: String,
     is_typing: bool,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let user_id = state.identity.peer_id().to_base58();
     let timestamp = Utc::now();
 
@@ -80,12 +81,12 @@ pub(super) async fn broadcast_typing_indicator(
         is_typing,
         timestamp,
     };
-    let bytes = bincode::serialize(&payload).map_err(|e| e.to_string())?;
+    let bytes = bincode::serialize(&payload).map_err(|e| AppError::Internal(e.to_string()))?;
     let signature = state
         .identity
         .keypair()
         .sign(&bytes)
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let message = AepMessage::TypingIndicator {
         chat_id,
@@ -94,12 +95,12 @@ pub(super) async fn broadcast_typing_indicator(
         timestamp,
         signature: Some(signature),
     };
-    let serialized = bincode::serialize(&message).map_err(|e| e.to_string())?;
+    let serialized = bincode::serialize(&message).map_err(|e| AppError::Internal(e.to_string()))?;
     state
         .network_tx
         .send(serialized)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| AppError::Internal(e.to_string()))
 }
 
 #[tauri::command]
@@ -108,15 +109,10 @@ pub async fn send_read_receipt(
     chat_id: String,
     message_id: String,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+) -> AppResult<()> {
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
-    broadcast_read_receipt(state, chat_id, message_id).await
+    broadcast_read_receipt((*state).clone(), chat_id, message_id).await
 }
 
 #[tauri::command]
@@ -125,15 +121,10 @@ pub async fn send_typing_indicator(
     chat_id: String,
     is_typing: bool,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+) -> AppResult<()> {
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
-    broadcast_typing_indicator(state, chat_id, is_typing).await
+    broadcast_typing_indicator((*state).clone(), chat_id, is_typing).await
 }
 
 #[tauri::command]
@@ -141,25 +132,20 @@ pub async fn mark_chat_read(
     chat_id: String,
     _server_id: Option<String>,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
-    drop(state_guard);
+) -> AppResult<()> {
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
     aep::database::mark_chat_read(&state.db_pool, &chat_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::Database)?;
 
     // Optionally broadcast a read receipt for the most recent message
     let last_messages = aep::database::get_messages_for_chat(&state.db_pool, &chat_id, 1, 0)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::Database)?;
 
     if let Some(last_msg) = last_messages.first() {
-        broadcast_read_receipt(state, chat_id, last_msg.id.clone()).await?;
+        broadcast_read_receipt((*state).clone(), chat_id, last_msg.id.clone()).await?;
     }
 
     Ok(())

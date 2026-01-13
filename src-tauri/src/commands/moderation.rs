@@ -69,12 +69,12 @@ pub async fn submit_user_report(
     }
 
     let (reporter_id, pool) = {
-        let state_guard = state_container.0.lock().await;
-        let state = state_guard.as_ref().ok_or_else(|| {
+        let state = state_container.0.load_full().ok_or_else(|| {
             "Application state not initialized. Please unlock your identity.".to_string()
         })?;
         (state.identity.peer_id().to_base58(), state.db_pool.clone())
     };
+
 
     if reporter_id == target_user_id {
         return Err("You cannot report yourself.".to_string());
@@ -200,12 +200,12 @@ pub async fn report_message_internal(
         .filter(|ids| !ids.is_empty());
 
     let (reporter_id, pool) = {
-        let state_guard = state_container.0.lock().await;
-        let state = state_guard.as_ref().ok_or_else(|| {
+        let state = state_container.0.load_full().ok_or_else(|| {
             "Application state not initialized. Please unlock your identity.".to_string()
         })?;
         (state.identity.peer_id().to_base58(), state.db_pool.clone())
     };
+
 
     let now = Utc::now().to_rfc3339();
     let report_id = Scu128::new().to_string();

@@ -341,7 +341,7 @@ async fn voice_memo_attachments_blocked_when_disabled() {
     .await;
 
     assert!(
-        matches!(result, Err(message) if message.contains("Voice memo attachments are disabled")),
+        matches!(result, Err(e) if e.to_string().contains("Voice memo attachments are disabled")),
         "Voice memo attachments should be rejected when disabled"
     );
 }

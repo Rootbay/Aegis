@@ -119,10 +119,10 @@ async fn delete_channel_category_internal(
 
 #[tauri::command]
 pub async fn create_channel(
-    channel: Channel,
+    mut channel: Channel,
     state_container: State<'_, AppStateContainer>,
-) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+) -> Result<Channel, String> {
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &channel.server_id)
@@ -133,6 +133,7 @@ pub async fn create_channel(
         return Err("Only server owners can create channels.".into());
     }
 
+    channel.id = Scu128::new().to_string();
     let channel_payload = channel.clone();
     let create_channel_data = aegis_protocol::CreateChannelData {
         channel: channel_payload.clone(),
@@ -158,7 +159,9 @@ pub async fn create_channel(
 
     database::insert_channel(&state.db_pool, &channel)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    Ok(channel)
 }
 
 #[tauri::command]
@@ -167,7 +170,7 @@ pub async fn create_channel_category(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ChannelCategoryResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let category = create_channel_category_internal(state, request).await?;
     let response: ChannelCategoryResponse = category.clone().into();
     app.emit("server-category-created", response.clone())
@@ -181,7 +184,7 @@ pub async fn delete_channel_category(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ChannelCategoryResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let category = delete_channel_category_internal(state, request).await?;
     let response: ChannelCategoryResponse = category.clone().into();
     app.emit("server-category-deleted", response.clone())
@@ -194,7 +197,7 @@ pub async fn get_channels_for_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<Channel>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     database::get_channels_for_server(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
@@ -205,7 +208,7 @@ pub async fn get_channel_categories_for_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ChannelCategoryResponse>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let categories = database::get_channel_categories_for_server(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -220,7 +223,7 @@ pub async fn get_channel_display_preferences(
     server_id: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ChannelDisplayPreferenceResponse>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let user_id = state.identity.peer_id().to_base58();
 
     let prefs = database::get_channel_display_preferences_for_user(
@@ -243,7 +246,7 @@ pub async fn set_channel_display_preferences(
     hide_member_names: bool,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<ChannelDisplayPreferenceResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let user_id = state.identity.peer_id().to_base58();
 
     let preference = database::upsert_channel_display_preference(
@@ -263,7 +266,7 @@ pub async fn delete_channel(
     channel_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
 
     let channel = database::get_channel_by_id(&state.db_pool, &channel_id)

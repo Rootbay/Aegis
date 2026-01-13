@@ -8,8 +8,7 @@ use tauri::State;
 pub async fn get_file_acl_policy(
     state_container: State<'_, AppStateContainer>,
 ) -> Result<String, String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?;
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let policy = state.file_acl_policy.lock().await.clone();
     Ok(match policy {
         aegis_shared_types::FileAclPolicy::Everyone => "everyone".to_string(),
@@ -23,8 +22,7 @@ pub async fn set_file_acl_policy(
     policy: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?;
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let mut guard = state.file_acl_policy.lock().await;
     *guard = match policy.as_str() {
         "friends_only" => aegis_shared_types::FileAclPolicy::FriendsOnly,
@@ -46,8 +44,7 @@ pub async fn set_voice_memos_enabled(
     enabled: bool,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard.as_ref().ok_or("State not initialized")?;
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     state.voice_memos_enabled.store(enabled, Ordering::Relaxed);
     Ok(())
 }

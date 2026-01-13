@@ -24,9 +24,8 @@ pub async fn run() {
             commands::messages::send_message_with_attachments,
             commands::messages::send_direct_message,
             commands::messages::send_direct_message_with_attachments,
-            commands::messages::encrypt_chat_payload,
-            commands::messages::decrypt_chat_payload,
             commands::messages::delete_message,
+
             commands::messages::pin_message,
             commands::messages::unpin_message,
             commands::messages::add_reaction,
@@ -137,6 +136,7 @@ pub async fn run() {
             commands::connectivity::set_wifi_direct_enabled,
             commands::connectivity::set_routing_config,
             commands::collaboration::send_collaboration_update,
+            commands::messages::override_spam_decision,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

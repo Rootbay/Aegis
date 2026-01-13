@@ -15,13 +15,10 @@ pub async fn send_call_signal(
     payload: CallSignalCommand,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let sender_id = state.identity.peer_id().to_base58();
+
     let message = AepMessage::CallSignal {
         sender_id,
         recipient_id: payload.recipient_id,

@@ -1484,11 +1484,11 @@
     };
 
     try {
-      await invoke("create_channel", { channel: newChannel });
-      serverStore.addChannelToServer(server.id, newChannel);
+      const createdChannel: Channel = await invoke("create_channel", { channel: newChannel });
+      serverStore.addChannelToServer(server.id, createdChannel);
       toasts.addToast("Channel created.", "success");
-      if (newChannel.channel_type === "text") {
-        onSelectChannel(server.id, newChannel.id);
+      if (createdChannel.channel_type === "text") {
+        onSelectChannel(server.id, createdChannel.id);
       }
       closeChannelModal();
       triggerServerRefresh();
@@ -1749,12 +1749,12 @@
               ? { permission_overrides: duplicateOverrides }
               : {}),
           };
-          try {
-            await invoke("create_channel", { channel: dup });
-            serverStore.addChannelToServer(server.id, dup);
-            toasts.addToast("Channel duplicated.", "success");
-            triggerServerRefresh();
-          } catch (e) {
+    try {
+      const created: Channel = await invoke("create_channel", { channel: dup });
+      serverStore.addChannelToServer(server.id, created);
+      toasts.addToast("Channel duplicated.", "success");
+      triggerServerRefresh();
+    } catch (error) {
             console.error("Failed to duplicate channel:", e);
             toasts.addToast("Failed to duplicate channel.", "error");
           }

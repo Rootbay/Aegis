@@ -95,7 +95,7 @@ async fn report_message_command_persists_report_with_context() {
         pending_device_bundles: Arc::new(AsyncMutex::new(HashMap::new())),
     };
 
-    let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));
+    let state_container = AppStateContainer(arc_swap::ArcSwapOption::new(Some(Arc::new(state))));
 
         let surrounding_ids = vec![Scu128::new().to_string(), Scu128::new().to_string()];
 

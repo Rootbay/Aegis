@@ -9,7 +9,7 @@ pub async fn update_server_metadata(
     metadata: ServerMetadataUpdate,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -35,7 +35,7 @@ pub async fn update_server_roles(
     roles: Vec<database::Role>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Role>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -63,7 +63,7 @@ pub async fn update_server_channels(
     channels: Vec<database::Channel>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Channel>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -96,7 +96,7 @@ pub async fn update_server_moderation_flags(
     moderation: ServerModerationUpdate,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)

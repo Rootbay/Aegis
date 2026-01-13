@@ -223,10 +223,8 @@
     }
 
     try {
-      const newServerId = `server-${Date.now()}`;
-
       const serverForBackend = {
-        id: newServerId,
+        id: "",
         name: trimmedServerName,
         owner_id: $userStore.me.id,
         created_at: new Date().toISOString(),

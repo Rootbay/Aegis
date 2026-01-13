@@ -22,10 +22,10 @@ const CODE_WORD_LIST: &[&str] = &[
 pub(crate) async fn get_app_state(
     state_container: State<'_, AppStateContainer>,
 ) -> CommandResult<AppState> {
-    let guard = state_container.0.lock().await;
-    guard
-        .as_ref()
-        .cloned()
+    state_container
+        .0
+        .load_full()
+        .map(|state| (*state).clone())
         .ok_or_else(|| "State not initialized".to_string())
 }
 

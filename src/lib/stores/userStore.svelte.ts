@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { User } from "../features/auth/models/User";
-import { toasts } from "./ToastStore";
 import { userCache } from "../utils/cache";
 import { presenceStore } from "../features/presence/presenceStore";
+import { errorService } from "../services/errorService";
+import { toasts } from "./ToastStore";
 
 const FALLBACK_AVATAR = (id: string) =>
   `https://api.dicebear.com/8.x/bottts-neutral/svg?seed=${id}`;
@@ -97,7 +98,7 @@ class UserStore {
       }
       return null;
     } catch (error) {
-      console.error(`Failed to get user ${id}:`, error);
+      errorService.handleError(error, { context: "generic", showToast: false });
       return null;
     }
   }
@@ -125,9 +126,9 @@ class UserStore {
             await invoke("initialize_app", { password });
             return;
           } catch (rekeyError) {
+            errorService.handleError(rekeyError, { context: "auth", showToast: false });
             console.info(
-              "Generating a fresh identity after failed rekey attempt.",
-              rekeyError,
+              "Generating a fresh identity after failed rekey attempt."
             );
             await invoke("reset_identity", { password });
             await invoke("initialize_app", { password });
@@ -169,8 +170,7 @@ class UserStore {
       presenceStore.syncFromUser(existingUser);
       return existingUser;
     } catch (error) {
-      console.error("Failed to initialize user:", error);
-      toasts.addToast("Failed to load user profile.", "error");
+      errorService.handleError(error, { context: "auth" });
       this.#me = null;
       this.#loading = false;
       throw error;
@@ -200,11 +200,7 @@ class UserStore {
         "success",
       );
     } catch (error) {
-      console.error("Failed to toggle online status:", error);
-      toasts.addToast(
-        `Failed to set status to ${newStatus ? "Online" : "Offline"}`,
-        "error",
-      );
+      errorService.handleError(error, { context: "generic" });
     }
   }
 
@@ -222,8 +218,7 @@ class UserStore {
       presenceStore.syncFromUser(normalizedUser);
       toasts.addToast("Profile updated successfully!", "success");
     } catch (error) {
-      console.error("Failed to update user profile:", error);
-      toasts.addToast("Failed to update profile.", "error");
+      errorService.handleError(error, { context: "generic" });
       throw error;
     }
   }

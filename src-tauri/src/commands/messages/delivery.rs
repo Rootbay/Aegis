@@ -83,11 +83,11 @@ pub async fn search_messages(
 
     let fetch_limit = limit + 1;
 
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?;
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
     let mut results = aep::database::search_messages(
         &state.db_pool,
+
         &chat_id,
         query.as_deref(),
         fetch_limit,
@@ -282,13 +282,12 @@ pub async fn send_message(
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> AppResult<()> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
     let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
-        state,
+        (*state).clone(),
         message,
         Vec::new(),
         None,
@@ -314,13 +313,12 @@ pub async fn send_message_with_attachments(
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> AppResult<()> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
     let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
-        state,
+        (*state).clone(),
         message,
         attachments,
         None,
@@ -344,13 +342,12 @@ pub async fn send_direct_message(
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> AppResult<()> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
     let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
-        state,
+        (*state).clone(),
         message,
         Vec::new(),
         Some(recipient_id),
@@ -375,13 +372,12 @@ pub async fn send_direct_message_with_attachments(
     expires_at: Option<String>,
     state_container: State<'_, AppStateContainer>,
 ) -> AppResult<()> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?.clone();
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
 
     let expires_at = parse_optional_datetime(expires_at).map_err(AppError::InvalidInput)?;
 
     persist_and_broadcast_message(
-        state,
+        (*state).clone(),
         message,
         attachments,
         Some(recipient_id),
@@ -402,8 +398,7 @@ pub async fn get_messages(
     offset: i64,
     state_container: State<'_, AppStateContainer>,
 ) -> AppResult<Vec<database::Message>> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?;
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
     database::get_messages_for_chat(&state.db_pool, &chat_id, limit, offset)
         .await
         .map_err(AppError::Database)
@@ -414,8 +409,7 @@ pub async fn get_attachment_bytes(
     attachment_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> AppResult<Vec<u8>> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or(AppError::NotInitialized)?;
+    let state = state_container.0.load_full().ok_or(AppError::NotInitialized)?;
     database::get_attachment_data(&state.db_pool, &attachment_id)
         .await
         .map_err(AppError::Database)

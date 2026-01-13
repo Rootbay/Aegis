@@ -163,7 +163,7 @@ pub async fn list_server_webhooks(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ServerWebhookResponse>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     ensure_server_owner(&state, &server_id).await?;
 
     let webhooks = database::list_server_webhooks(&state.db_pool, &server_id)
@@ -181,7 +181,7 @@ pub async fn create_server_webhook(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerWebhookResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let webhook = create_server_webhook_internal(state.clone(), request).await?;
     let response: ServerWebhookResponse = webhook.into();
     app.emit("server-webhook-created", response.clone())
@@ -195,7 +195,7 @@ pub async fn update_server_webhook(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerWebhookResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let webhook = update_server_webhook_internal(state.clone(), request).await?;
     let response: ServerWebhookResponse = webhook.into();
     app.emit("server-webhook-updated", response.clone())
@@ -209,7 +209,7 @@ pub async fn delete_server_webhook(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<DeleteServerWebhookResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let webhook = delete_server_webhook_internal(state.clone(), request).await?;
     let response = DeleteServerWebhookResponse {
         webhook_id: webhook.id,

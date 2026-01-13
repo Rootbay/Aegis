@@ -49,10 +49,8 @@ pub async fn panic_wipe(
     app: tauri::AppHandle,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let maybe_state = {
-        let mut guard = state_container.0.lock().await;
-        guard.take()
-    };
+    let maybe_state = state_container.0.swap(None);
+
 
     if let Some(state) = maybe_state {
         state.db_pool.close().await;
@@ -64,8 +62,6 @@ pub async fn panic_wipe(
             let mut snapshot = state.connectivity_snapshot.lock().await;
             *snapshot = None;
         }
-        drop(state.network_tx);
-        drop(state.file_cmd_tx);
     }
 
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;

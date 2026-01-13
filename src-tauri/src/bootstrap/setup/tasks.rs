@@ -130,3 +130,22 @@ pub(super) fn spawn_group_key_rotation(
         }
     });
 }
+
+pub(super) fn spawn_message_cleanup(db_pool: sqlx::Pool<sqlx::Sqlite>) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            match aep::database::delete_expired_messages(&db_pool).await {
+                Ok(count) => {
+                    if count > 0 {
+                        tracing::debug!("Deleted {} expired messages", count);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to clean up expired messages: {}", e);
+                }
+            }
+        }
+    });
+}

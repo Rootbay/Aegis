@@ -1,7 +1,8 @@
+use crate::commands::error::AppResult;
 use aep::database::FriendshipWithProfile;
 use serde::{Deserialize, Serialize};
 
-pub type CommandResult<T> = Result<T, String>;
+pub type CommandResult<T> = AppResult<T>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockUserResult {

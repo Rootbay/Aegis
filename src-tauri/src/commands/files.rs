@@ -16,8 +16,7 @@ pub async fn send_file(
     resilient: Option<bool>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let mode = if resilient.unwrap_or(false) {
         FileTransferMode::Resilient
     } else {
@@ -41,8 +40,7 @@ pub async fn approve_file_transfer(
     resilient: Option<bool>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let key = format!("{}:{}", sender_id, filename);
     let mut guard = state.incoming_files.lock().await;
     if let Some(f) = guard.get_mut(&key) {
@@ -100,8 +98,7 @@ pub async fn reject_file_transfer(
     filename: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = state_container.0.lock().await;
-    let state = state.as_ref().ok_or("State not initialized")?.clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
     let key = format!("{}:{}", sender_id, filename);
     let mut guard = state.incoming_files.lock().await;
     if let Some(file) = guard.remove(&key) {
@@ -119,8 +116,7 @@ pub async fn reject_file_transfer(
     Ok(())
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Default)]
-#[archive(check_bytes)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
 struct IncomingResilientMetadata {
     file_size: u64,
     chunk_size: usize,
@@ -136,9 +132,9 @@ fn load_resilient_incoming_from_disk(
         return Ok(HashMap::new());
     }
 
-    let bytes = std::fs::read(metadata_path).map_err(|e| e.to_string())?;
+    let content = std::fs::read_to_string(metadata_path).map_err(|e| e.to_string())?;
     let metadata: IncomingResilientMetadata =
-        rkyv::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {:?}", e))?;
+        serde_json::from_str(&content).map_err(|e| format!("Deserialization error: {:?}", e))?;
     let chunk_size = if metadata.chunk_size == 0 {
         DEFAULT_CHUNK_SIZE
     } else {
@@ -162,8 +158,8 @@ fn persist_incoming_metadata_file(
     metadata_path: &Path,
     metadata: &IncomingResilientMetadata,
 ) -> Result<(), String> {
-    let bytes = rkyv::to_bytes::<_, 65536>(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
-    std::fs::write(metadata_path, &bytes).map_err(|e| e.to_string())
+    let content = serde_json::to_string_pretty(metadata).map_err(|e| format!("Serialization error: {:?}", e))?;
+    std::fs::write(metadata_path, content).map_err(|e| e.to_string())
 }
 
 fn sanitize_filename(input: &str) -> String {

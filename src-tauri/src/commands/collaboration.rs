@@ -36,13 +36,10 @@ pub async fn send_collaboration_update(
     payload: CollaborationUpdateCommand,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state_guard = state_container.0.lock().await;
-    let state = state_guard
-        .as_ref()
-        .ok_or_else(|| "State not initialized".to_string())?
-        .clone();
+    let state = state_container.0.load_full().ok_or("State not initialized")?;
 
     let sender_id = state.identity.peer_id().to_base58();
+
     let mut participants: HashSet<String> = payload.participants.into_iter().collect();
     participants.insert(sender_id.clone());
 

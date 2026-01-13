@@ -1,10 +1,10 @@
 import { SvelteMap } from "svelte/reactivity";
 import { invoke } from "@tauri-apps/api/core";
-import { MessageStore } from "./MessageStore";
-import { TypingStore } from "./TypingStore";
-import { GroupChatStore } from "./GroupChatStore";
-import { PreferenceStore } from "./PreferenceStore";
-import { SlowmodeStore } from "./SlowmodeStore";
+import { MessageStore } from "./MessageStore.svelte";
+import { TypingStore } from "./TypingStore.svelte";
+import { GroupChatStore } from "./GroupChatStore.svelte";
+import { PreferenceStore } from "./PreferenceStore.svelte";
+import { SlowmodeStore } from "./SlowmodeStore.svelte";
 import type { Message, SendMessageOptions } from "../../models/Message";
 import type { ChatMessage, MessageReaction, DeleteMessage, EditMessage } from "../../models/AepMessage";
 import { userStore } from "$lib/stores/userStore.svelte";
@@ -268,25 +268,31 @@ export class ChatStore {
     const me = userStore.me;
     if (!me) return;
 
+    const flattenedOptions = {
+      ...options,
+      replySnapshotAuthor: options?.replySnapshot?.author,
+      replySnapshotSnippet: options?.replySnapshot?.snippet,
+    };
+
     try {
       if (this.#activeChatType === "dm") {
         await invoke("send_encrypted_dm", {
           recipientId: this.#activeChatId,
           message: content,
-          ...options
+          ...flattenedOptions
         });
       } else if (this.#activeChatType === "group" || this.#activeChatType === "server") {
         await invoke("send_encrypted_group_message", {
           serverId: this.#activeChatId,
           channelId: this.#activeChannelId,
           message: content,
-          ...options
+          ...flattenedOptions
         });
       } else {
         await invoke("send_message", {
           channelId: this.#activeChannelId || this.#activeChatId,
           message: content,
-          ...options
+          ...flattenedOptions
         });
       }
     } catch (error) {
@@ -435,13 +441,13 @@ export class ChatStore {
 
   async searchMessages(options: any) {
     try {
-      const results = await invoke<any[]>("search_messages", options);
-      const messages = await Promise.all(results.map(m => this.#messages.mapBackendMessage(m, options.chatId)));
+      const response = await invoke<{ messages: any[], has_more: boolean, cursor: string }>("search_messages", { payload: options });
+      const messages = await Promise.all(response.messages.map(m => this.#messages.mapBackendMessage(m, options.chatId)));
       return {
         messages,
-        hasMore: results.length >= (options.limit || 20),
-        received: results.length,
-        nextCursor: results.length > 0 ? results[results.length - 1].id : null
+        hasMore: response.has_more,
+        received: response.messages.length,
+        nextCursor: response.cursor
       };
     } catch (error) {
       console.error("Failed to search messages:", error);
@@ -535,13 +541,19 @@ export class ChatStore {
       recipientId: type === "dm" ? chatId : null,
     });
 
+    const flattenedOptions = {
+      ...options,
+      replySnapshotAuthor: options?.replySnapshot?.author,
+      replySnapshotSnippet: options?.replySnapshot?.snippet,
+    };
+
     try {
       if (type === "dm") {
         await invoke("send_encrypted_dm_with_attachments", {
           message: encrypted.content,
           recipientId: chatId,
           incomingAttachments: encrypted.attachments,
-          ...options
+          ...flattenedOptions
         });
       } else {
         await invoke("send_message_with_attachments", {
@@ -549,7 +561,7 @@ export class ChatStore {
           attachments: encrypted.attachments,
           channelId,
           serverId: chatId,
-          ...options
+          ...flattenedOptions
         });
       }
     } catch (error) {

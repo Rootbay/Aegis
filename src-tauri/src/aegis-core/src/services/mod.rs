@@ -62,7 +62,11 @@ pub async fn send_file(
 ) -> Result<(), String> {
     let path = Path::new(file_path);
     let mut file = File::open(path).map_err(|e| e.to_string())?;
-    let _file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+    let _file_name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("file")
+        .to_string();
     let _file_size = file.metadata().map_err(|e| e.to_string())?.len();
 
     let (key, nonce) = generate_symmetric_key();

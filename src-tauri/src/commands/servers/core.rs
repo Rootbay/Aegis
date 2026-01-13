@@ -4,6 +4,7 @@ use scu128::Scu128;
 use aegis_protocol::{self, AepMessage};
 use aep::{database, user_service};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Runtime, State};
 
@@ -54,9 +55,12 @@ pub async fn create_server(
     icon: Option<CreateServerIconPayload>,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let owner_id = state.identity.peer_id().to_base58();
+    
+    server.id = Scu128::new().to_string();
     server.owner_id = owner_id.clone();
+    server.created_at = Utc::now();
     server.invites = Vec::new();
 
     if let Some(icon_payload) = icon.filter(|payload| !payload.bytes.is_empty()) {
@@ -121,7 +125,7 @@ pub async fn join_server(
     user_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
     if user_id != my_id {
         return Err("Caller identity mismatch".into());
@@ -139,7 +143,7 @@ pub async fn leave_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
 
     database::remove_server_member(&state.db_pool, &server_id, &my_id)
@@ -153,7 +157,7 @@ pub async fn remove_server_member(
     member_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let requester_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -178,7 +182,7 @@ pub async fn get_servers(
     current_user_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::Server>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     database::get_all_servers(&state.db_pool, &current_user_id)
         .await
         .map_err(|e| e.to_string())
@@ -189,7 +193,7 @@ pub async fn get_members_for_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<aegis_shared_types::User>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     database::get_server_members(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
@@ -200,7 +204,7 @@ pub async fn list_server_bans(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<database::User>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     ensure_server_owner(&state, &server_id).await?;
 
     database::get_server_bans(&state.db_pool, &server_id)
@@ -216,7 +220,7 @@ pub async fn ban_server_member<R: Runtime>(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle<R>,
 ) -> Result<ServerBanUpdate, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     ensure_server_owner(&state, &server_id).await?;
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)
@@ -258,7 +262,7 @@ pub async fn unban_server_member<R: Runtime>(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle<R>,
 ) -> Result<ServerBanUpdate, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     ensure_server_owner(&state, &server_id).await?;
 
     database::remove_server_ban(&state.db_pool, &server_id, &user_id)
@@ -281,7 +285,7 @@ pub async fn get_server_details(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<database::Server, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     database::get_server_by_id(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())
@@ -292,7 +296,7 @@ pub async fn delete_server(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<(), String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let my_id = state.identity.peer_id().to_base58();
 
     let server = database::get_server_by_id(&state.db_pool, &server_id)

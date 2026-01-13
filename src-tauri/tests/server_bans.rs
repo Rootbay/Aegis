@@ -98,7 +98,7 @@ async fn ban_command_persists_ban_and_emits_event() {
         >::new())),
     };
 
-    let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));
+    let state_container = AppStateContainer(arc_swap::ArcSwapOption::new(Some(Arc::new(state))));
 
     let app = mock_app();
     app.manage(state_container);
@@ -253,7 +253,7 @@ async fn unban_command_removes_ban_and_emits_event() {
         >::new())),
     };
 
-    let state_container = AppStateContainer(Arc::new(AsyncMutex::new(Some(state))));
+    let state_container = AppStateContainer(arc_swap::ArcSwapOption::new(Some(Arc::new(state))));
 
     let app = mock_app();
     app.manage(state_container);

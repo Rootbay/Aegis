@@ -176,7 +176,7 @@ pub async fn list_server_events(
     server_id: String,
     state_container: State<'_, AppStateContainer>,
 ) -> Result<Vec<ServerEventResponse>, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let events = database::get_server_events(&state.db_pool, &server_id)
         .await
         .map_err(|e| e.to_string())?;
@@ -189,7 +189,7 @@ pub async fn create_server_event(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerEventResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let event = create_server_event_internal(state.clone(), request).await?;
     let response: ServerEventResponse = event.into();
     app.emit("server-event-created", response.clone())
@@ -203,7 +203,7 @@ pub async fn update_server_event(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerEventResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let event = update_server_event_internal(state.clone(), request).await?;
     let response: ServerEventResponse = event.into();
     app.emit("server-event-updated", response.clone())
@@ -217,7 +217,7 @@ pub async fn cancel_server_event(
     state_container: State<'_, AppStateContainer>,
     app: AppHandle,
 ) -> Result<ServerEventResponse, String> {
-    let state = get_initialized_state(&state_container).await?;
+    let state = get_initialized_state(&state_container)?;
     let event = cancel_server_event_internal(state.clone(), request.event_id).await?;
     let response: ServerEventResponse = event.into();
     app.emit("server-event-cancelled", response.clone())
